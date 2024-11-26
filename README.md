@@ -2,11 +2,20 @@
 
 A [signal and slots library](https://en.wikipedia.org/wiki/Signals_and_slots) implemented for the Nim programming language. The signals and slots are type checked and implemented purely in Nim.
 
+> Signals and slots is a language construct introduced in Qt for communication between objects which makes it easy to implement the observer pattern while avoiding boilerplate code. The concept is that GUI widgets, and other objects, can send signals containing event information which can be received by other objects using special member functions known as slots. This is similar to C/C++ function pointers, but the signal/slot system ensures the type-correctness of callback arguments.
+> - Wikipedia
+
 Note that this implementation shares many or most of the limitations you'd see in Qt's implementation. Sigils currently only has rudimentary multi-threading, but I hope to expand them over time.
 
-## Examples
+## Basics
 
-Here's an example usage:
+Only objects inheriting from `Agent` can recieve signals. Slots must take an `Agent` object as the first argument. The rest of the arguments must match that of the `signal` you wish to connect a slot to.
+
+You need to wrap procs with a `slot` to setup the proc to support recieving signals. The proc can still be used as a normal function though. Signals use the proc syntax but don't have a implementation. They just provide the type checking and naming for the signal.
+
+Connecting signals and slots is accomplished using `connect`. Note that `connect` is idempotent, meaning that you can call it on the same objects the multiple times without ill effect.
+
+## Examples
 
 ```nim
 import sigils
@@ -69,3 +78,18 @@ test "signal / slot types":
   doAssert SignalTypes.setValue(Counter[uint]) is (uint, )
 ```
 
+### Void Slots
+
+There's an exception to the type checking. It's common in UI programming to want to trigger a `slot` without caring about the actual values in the signal. To achieve this you can call `connect` like this:
+
+```nim
+proc valueChanged*(tp: Counter, val: int) {.signal.}
+
+proc someAction*(self: Counter) {.slot.} =
+  echo "action"
+
+connect(a, valueChanged, c, someAction, acceptVoidSlot = true)
+emit a.valueChange(42)
+```
+
+Now whenever `valueChanged` is emitted then `someAction` will be triggered.
