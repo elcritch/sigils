@@ -73,9 +73,10 @@ when isMainModule:
       check b.value == 0
       check c.value == 0
 
+      # trigger emit in setValue so we set a's value and then trigger the rest
       a.setValue(42)
-
       check a.value == 42
+
       check b.value == 42
       check c.value == 42
 
