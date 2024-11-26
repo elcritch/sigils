@@ -1,4 +1,4 @@
-import figuro/meta
+import sigils
 import std/os
 
 type Counter* = ref object of Agent
@@ -73,7 +73,7 @@ suite "threaded agent slots":
     check b.value == 1337
     check c.value == 1337
 
-import figuro/meta/asyncHttp
+import sigils/asyncHttp
 
 suite "threaded agent proxy":
 

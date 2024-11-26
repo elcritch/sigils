@@ -9,8 +9,6 @@ import std/strutils
 import std/asyncdispatch
 import std/[asyncdispatch, httpclient, asyncstreams]
 
-import patty
-
 import signals, slots
 import asyncs
 

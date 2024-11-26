@@ -1,5 +1,6 @@
 
-import figuro/meta
+import sigils
+
 type
   Counter*[T] = ref object of Agent
     value: T
