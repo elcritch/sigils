@@ -107,5 +107,7 @@ suite "threaded agent proxy":
     ap.finish()
     ap[].thread.joinThread()
 
+    # TODO: need to document that this needs to be tied
+    #       into whatever event system / main loop
     httpProxy.poll()
     os.sleep(1_000)
