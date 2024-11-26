@@ -78,6 +78,8 @@ test "signal / slot types":
   doAssert SignalTypes.setValue(Counter[uint]) is (uint, )
 ```
 
+## Advanced
+
 ### Void Slots
 
 There's an exception to the type checking. It's common in UI programming to want to trigger a `slot` without caring about the actual values in the signal. To achieve this you can call `connect` like this:
@@ -93,3 +95,11 @@ emit a.valueChange(42)
 ```
 
 Now whenever `valueChanged` is emitted then `someAction` will be triggered.
+
+### WeakRefs
+
+Calling `connect` _does not_ create a new reference of either the target or source agents. This is done primarily to prevent cycles from being created accidentally. This is necessary for easing UI development with _Sigil_.
+
+However, `Agent` objects are still memory safe to use. They have a destructor which removes an `Agent` from any of it's "listeners" connections to ensure freed agents aren't signaled after they're freed. Nifty!
+
+Note however, that means you need to ensure your `Agent`'s aren't destroyed before you're done with them.

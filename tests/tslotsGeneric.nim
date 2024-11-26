@@ -68,6 +68,7 @@ when isMainModule:
               b, Counter[uint].setValue)
       connect(a, valueChanged,
               c, Counter[uint].setValue)
+      connect(a, valueChanged, c, Counter[float].setValue())
 
       check a.value == 0
       check b.value == 0
