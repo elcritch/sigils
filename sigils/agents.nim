@@ -1,7 +1,6 @@
 
 import std/[options, tables, sets, macros, hashes]
 import std/times
-import std/sequtils
 
 import protocol
 
