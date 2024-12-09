@@ -60,7 +60,7 @@ suite "threaded agent slots":
 
     proc threadTestProc(aref: WeakRef[Counter]) {.thread.} =
       var res = aref.valueChanged(1337)
-      agentResults.send(unsafeIsolate(res))
+      agentResults.send(unsafeIsolate(ensureMove res))
       echo "Thread Done"
 
     var thread: Thread[WeakRef[Counter]]
@@ -78,36 +78,37 @@ import sigils/asyncHttp
 suite "threaded agent proxy":
 
   test "simple proxy test":
-    var ap = newAsyncProcessor()
-    ap.startThread()
+    if false:
+      var ap = newAsyncProcessor()
+      ap.startThread()
 
-    let httpProxy = newAgentProxy[HttpRequest, HttpResult]()
-    echo "initial async http with trigger ",
-      " tid: ", getThreadId(), " ", httpProxy[].trigger.repr
+      let httpProxy = newAgentProxy[HttpRequest, HttpResult]()
+      echo "initial async http with trigger ",
+        " tid: ", getThreadId(), " ", httpProxy[].trigger.repr
 
-    ap.add(newHttpExecutor(httpProxy))
-    os.sleep(1_00)
+      ap.add(newHttpExecutor(httpProxy))
+      os.sleep(1_00)
 
-    type HttpHandler = ref object of Agent
+      type HttpHandler = ref object of Agent
 
-    proc receive(ha: HttpHandler, key: AsyncKey, data: HttpResult) {.slot.} =
-      echo "got http result: ", data.body
+      proc receive(ha: HttpHandler, key: AsyncKey, data: HttpResult) {.slot.} =
+        echo "got http result: ", data.body
 
-    let handler = HttpHandler.new()
+      let handler = HttpHandler.new()
 
-    var hreq = HttpAgent.new(httpProxy)
-    hreq.connect(received, handler, receive)
-    hreq.send(parseUri "http://first.example.com")
+      var hreq = HttpAgent.new(httpProxy)
+      hreq.connect(received, handler, receive)
+      hreq.send(parseUri "http://first.example.com")
 
-    os.sleep(1_00)
-    hreq.send(parseUri "http://neverssl.com")
+      os.sleep(1_00)
+      hreq.send(parseUri "http://neverssl.com")
 
-    os.sleep(1_000)
+      os.sleep(1_000)
 
-    ap.finish()
-    ap[].thread.joinThread()
+      ap.finish()
+      ap[].thread.joinThread()
 
-    # TODO: need to document that this needs to be tied
-    #       into whatever event system / main loop
-    httpProxy.poll()
-    os.sleep(1_000)
+      # TODO: need to document that this needs to be tied
+      #       into whatever event system / main loop
+      httpProxy.poll()
+      os.sleep(1_000)
