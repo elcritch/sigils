@@ -73,14 +73,15 @@ proc `=destroy`*(agent: AgentObj) =
 
   # remove myself from agents I'm listening to
   var delSigs: seq[string]
+  var toDel: seq[AgentPairing]
   for obj in agent.subscribed:
     # echo "freeing subscribed: ", obj[].debugId
     delSigs.setLen(0)
     for signal, listenerPairs in obj[].listeners.mpairs():
-      var toDel = initOrderedSet[AgentPairing](listenerPairs.len())
+      toDel.setLen(0)
       for item in listenerPairs:
         if item.tgt == xid:
-          toDel.incl(item)
+          toDel.add(item)
           # echo "agentRemoved: ", "tgt: ", xid.toPtr.repr, " id: ", agent.debugId, " obj: ", obj[].debugId, " name: ", signal
       for item in toDel:
         listenerPairs.excl(item)
