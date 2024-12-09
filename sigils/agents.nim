@@ -42,12 +42,14 @@ proc `$`*[T](obj: WeakRef[T]): string =
   result &= ")"
 
 type
-  Agent* = ref object of RootObj
+  AgentObj = object of RootObj
     debugId*: int = 0
     listeners*: Table[string, OrderedSet[AgentPairing]] ## agents listening to me
     subscribed*: HashSet[WeakRef[Agent]] ## agents I'm listening to
 
-  AgentPairing = tuple[tgt: WeakRef[Agent], fn: AgentProc]
+  Agent* = ref object of AgentObj
+
+  AgentPairing* = tuple[tgt: WeakRef[Agent], fn: AgentProc]
 
   # Context for servicing an RPC call 
   RpcContext* = Agent
@@ -63,7 +65,7 @@ type
   SignalTypes* = distinct object
 
 
-proc `=destroy`*(agent: typeof(Agent()[])) =
+proc `=destroy`*(agent: AgentObj) =
   let xid: WeakRef[Agent] = WeakRef[Agent](pt: cast[Agent](addr agent))
 
   # echo "\ndestroy: agent: ", xid[].debugId, " pt: ", xid.toPtr.repr, " lstCnt: ", xid[].listeners.len(), " subCnt: ", xid[].subscribed.len
