@@ -45,32 +45,6 @@ proc parseError*(ss: Variant): AgentError =
 proc parseParams*[T](ss: Variant, val: var T) = 
   ss.unpack(val)
 
-proc createRpcRouter*(): AgentRouter =
-  result = new(AgentRouter)
-  result.procs = initTable[string, AgentProc]()
-
-proc register*(router: var AgentRouter, path, name: string, call: AgentProc) =
-  router.procs[name] = call
-  echo "registering: ", name
-
-when nimvm:
-  var globalRouter {.compileTime.} = AgentRouter()
-else:
-  when not compiles(globalRouter):
-    var globalRouter {.global.} = AgentRouter()
-
-proc register*(path, name: string, call: AgentProc) =
-  globalRouter.procs[name] = call
-  echo "registering: ", name
-
-proc listMethods*(): seq[string] =
-  globalRouter.listMethods()
-
-proc clear*(router: var AgentRouter) =
-  router.procs.clear
-
-proc hasMethod*(router: AgentRouter, methodName: string): bool =
-  router.procs.hasKey(methodName)
 
 proc callMethod*(
         slot: AgentProc,

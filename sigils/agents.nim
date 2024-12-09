@@ -138,12 +138,6 @@ type
   AgentBindError* = object of ValueError
   AgentAddressUnresolvableError* = object of ValueError
 
-  AgentRouter* = ref object
-    procs*: Table[string, AgentProc]
-    sysprocs*: Table[string, AgentProc]
-    stacktraces*: bool
-    subscriptionTimeout*: Duration
-
 proc pack*[T](ss: var Variant, val: T) =
   # echo "Pack Type: ", getTypeId(T), " <- ", typeof(val)
   ss = newVariant(val)
@@ -153,28 +147,6 @@ proc unpack*[T](ss: Variant, obj: var T) =
     obj = ss.get(T)
   # else:
     # raise newException(ConversionError, "couldn't convert to: " & $(T))
-
-proc newAgentRouter*(
-    inQueueSize = 2,
-    outQueueSize = 2,
-    registerQueueSize = 2,
-): AgentRouter =
-  new(result)
-  result.procs = initTable[string, AgentProc]()
-  result.sysprocs = initTable[string, AgentProc]()
-  result.stacktraces = true
-
-proc listMethods*(rt: AgentRouter): seq[string] =
-  ## list the methods in the given router. 
-  result = newSeqOfCap[string](rt.procs.len())
-  for name in rt.procs.keys():
-    result.add name
-
-proc listSysMethods*(rt: AgentRouter): seq[string] =
-  ## list the methods in the given router. 
-  result = newSeqOfCap[string](rt.sysprocs.len())
-  for name in rt.sysprocs.keys():
-    result.add name
 
 proc rpcPack*(res: RpcParams): RpcParams {.inline.} =
   result = res
