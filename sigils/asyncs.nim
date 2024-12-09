@@ -84,7 +84,7 @@ proc execute*(ap: AsyncProcessor) {.thread.} =
   except CatchableError:
     echo "done"
 
-proc start*(ap: AsyncProcessor) =
+proc startThread*(ap: AsyncProcessor) =
   createThread(ap[].thread, execute, ap)
 
 proc finish*(ap: AsyncProcessor) =

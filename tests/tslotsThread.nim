@@ -79,7 +79,7 @@ suite "threaded agent proxy":
 
   test "simple proxy test":
     var ap = newAsyncProcessor()
-    ap.start()
+    ap.startThread()
 
     let httpProxy = newAgentProxy[HttpRequest, HttpResult]()
     echo "initial async http with trigger ",
