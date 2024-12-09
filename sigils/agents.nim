@@ -15,7 +15,6 @@ elif defined(useJsonSerde):
   export json
 else:
   import pkg/variant
-  import threading/channels
 
 export protocol
 export sets
