@@ -1,4 +1,5 @@
-import std/os
+import std/isolation
+import std/unittest
 import sigils
 import sigils/threads
 
@@ -8,15 +9,7 @@ type Counter* = ref object of Agent
 
 proc valueChanged*(tp: Counter, val: int) {.signal.}
 
-proc avgChanged*(tp: Counter, val: float) {.signal.}
-
 proc setValue*(self: Counter, value: int) {.slot.} =
-  echo "setValue! ", value
-  if self.value != value:
-    self.value = value
-  emit self.valueChanged(value)
-
-proc setSomeValue*(self: Counter, value: int) =
   echo "setValue! ", value
   if self.value != value:
     self.value = value
@@ -27,12 +20,6 @@ proc someAction*(self: Counter) {.slot.} =
 
 proc value*(self: Counter): int =
   self.value
-
-import unittest
-import std/sequtils
-
-import threading/channels
-import std/isolation
 
 suite "threaded agent slots":
   setup:
@@ -78,43 +65,5 @@ suite "threaded agent slots":
     echo "thread runner!"
     let bp = b.moveToThread()
 
+    connect(a, valueChanged, bp, setValue)
 
-import sigils/asyncHttp
-
-suite "threaded agent proxy":
-
-  test "simple proxy test":
-    if false:
-      var ap = newAsyncProcessor()
-      ap.startThread()
-
-      let httpProxy = newAgentProxy[HttpRequest, HttpResult]()
-      echo "initial async http with trigger ",
-        " tid: ", getThreadId(), " ", httpProxy[].trigger.repr
-
-      ap.add(newHttpExecutor(httpProxy))
-      os.sleep(1_00)
-
-      type HttpHandler = ref object of Agent
-
-      proc receive(ha: HttpHandler, key: AsyncKey, data: HttpResult) {.slot.} =
-        echo "got http result: ", data.body
-
-      let handler = HttpHandler.new()
-
-      var hreq = HttpAgent.new(httpProxy)
-      hreq.connect(received, handler, receive)
-      hreq.send(parseUri "http://first.example.com")
-
-      os.sleep(1_00)
-      hreq.send(parseUri "http://neverssl.com")
-
-      os.sleep(1_000)
-
-      ap.finish()
-      ap[].thread.joinThread()
-
-      # TODO: need to document that this needs to be tied
-      #       into whatever event system / main loop
-      httpProxy.poll()
-      os.sleep(1_000)

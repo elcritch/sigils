@@ -1,10 +1,15 @@
 import std/sets
 import agents
 import threading/smartptrs
+import threading/channels
+
+export channels
 
 type
   AgentProxy*[T] = ref object of Agent
     remote*: SharedPtr[T]
+
+  AgentThread* = ref object of Agent
 
 proc moveToThread*[T: Agent](agent: T): AgentProxy[T] =
 
