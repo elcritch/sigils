@@ -52,20 +52,20 @@ suite "agent weak refs":
       # echo "y:subscribed: ", y.subscribed
 
       check y.listeners.len() == 0
-      check y.subscribed.len() == 1
+      check y.subscribedTo.len() == 1
 
       check x.listeners["valueChanged"].len() == 1
-      check x.subscribed.len() == 0
+      check x.subscribedTo.len() == 0
 
       echo "block done"
     
     echo "finishing outer block "
-    # check x.subscribed.len() == 0
+    # check x.subscribedTo.len() == 0
     echo "x:listeners: ", x.listeners
     # echo "x:subscribed: ", x.subscribed
     # check x.listeners["valueChanged"].len() == 0
     check x.listeners.len() == 0
-    check x.subscribed.len() == 0
+    check x.subscribedTo.len() == 0
 
     # check a.value == 0
     # check b.value == 137
@@ -92,20 +92,20 @@ suite "agent weak refs":
       # echo "y:subscribed: ", y.subscribed
 
       check y.listeners.len() == 0
-      check y.subscribed.len() == 1
+      check y.subscribedTo.len() == 1
 
       check x.listeners["valueChanged"].len() == 1
-      check x.subscribed.len() == 0
+      check x.subscribedTo.len() == 0
 
       echo "block done"
     
     echo "finishing outer block "
-    # check x.subscribed.len() == 0
+    # check x.subscribedTo.len() == 0
     echo "y:listeners: ", y.listeners
-    echo "y:subscribed: ", y.subscribed.mapIt(it)
+    echo "y:subscribed: ", y.subscribedTo.mapIt(it)
     # check x.listeners["valueChanged"].len() == 0
     check y.listeners.len() == 0
-    check y.subscribed.len() == 0
+    check y.subscribedTo.len() == 0
 
     # check a.value == 0
     # check b.value == 137
@@ -158,5 +158,5 @@ test "weak refs":
   echo "done with y"
   echo "X::count: ", x.head().count()
   check x.listeners.len() == 0
-  check x.subscribed.len() == 0
+  check x.subscribedTo.len() == 0
   check x.head().count() == 0
