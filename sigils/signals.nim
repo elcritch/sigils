@@ -188,15 +188,6 @@ template connect*[T](
       emit a.valueChanged(137) #=> prints "setValue! 137"
 
   checkSignalTypes(a, signal, b, slot, acceptVoidSlot)
-  # block:
-  #   ## statically verify signal / slot types match
-  #   # echo "TYP: ", repr typeof(SignalTypes.`signal`(typeof(a)))
-  #   var signalType {.used, inject.}: typeof(SignalTypes.`signal`(typeof(a)))
-  #   var slotType {.used, inject.}: typeof(getAgentProcTy(slot))
-  #   when acceptVoidSlot and slotType is tuple[]:
-  #     discard
-  #   else:
-  #     signalType = slotType
   a.addAgentListeners(signalName(signal), b, slot)
 
 template connect*(
@@ -207,15 +198,6 @@ template connect*(
     acceptVoidSlot: static bool = false,
 ): void =
   let agentSlot = `slot`(typeof(b))
-  # block:
-  #   ## statically verify signal / slot types match
-  #   var signalType {.used, inject.}: typeof(SignalTypes.`signal`(typeof(a)))
-  #   var slotType {.used, inject.}: typeof(getAgentProcTy(agentSlot))
-  #   when acceptVoidSlot and slotType is tuple[]:
-  #     discard
-  #   else:
-  #     signalType = slotType
-
   checkSignalTypes(a, signal, b, agentSlot, acceptVoidSlot)
   a.addAgentListeners(signalName(signal), b, agentSlot)
 
