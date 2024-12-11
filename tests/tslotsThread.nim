@@ -1,5 +1,6 @@
-import sigils
 import std/os
+import sigils
+import sigils/threads
 
 type Counter* = ref object of Agent
   value: int
@@ -75,6 +76,7 @@ suite "threaded agent slots":
   
   test "sigil object thread runner":
     echo "thread runner!"
+    let bp = b.moveToThread()
 
 
 import sigils/asyncHttp
