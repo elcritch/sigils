@@ -49,7 +49,7 @@ proc `$`*[T](obj: WeakRef[T]): string =
 type
   AgentObj = object of RootObj
     debugId*: int = 0
-    listeners*: Table[string, OrderedSet[AgentPairing]] ## agents listening to me
+    subscribers*: Table[string, OrderedSet[AgentPairing]] ## agents listening to me
     subscribedTo*: HashSet[WeakRef[Agent]] ## agents I'm listening to
 
   Agent* = ref object of AgentObj
@@ -77,38 +77,38 @@ proc unsubscribe(subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]) =
   for obj in subscribedTo:
     # echo "freeing subscribed: ", obj[].debugId
     delSigs.setLen(0)
-    for signal, listenerPairs in obj[].listeners.mpairs():
+    for signal, subscriberPairs in obj[].subscribers.mpairs():
       toDel.setLen(0)
-      for item in listenerPairs:
+      for item in subscriberPairs:
         if item.tgt == xid:
           toDel.add(item)
           # echo "agentRemoved: ", "tgt: ", xid.toPtr.repr, " id: ", agent.debugId, " obj: ", obj[].debugId, " name: ", signal
       for item in toDel:
-        listenerPairs.excl(item)
-      if listenerPairs.len() == 0:
+        subscriberPairs.excl(item)
+      if subscriberPairs.len() == 0:
         delSigs.add(signal)
     for sig in delSigs:
-      obj[].listeners.del(sig)
+      obj[].subscribers.del(sig)
 
-proc remove(listeners: var Table[string, OrderedSet[AgentPairing]], xid: WeakRef[Agent]) =
+proc remove(subscribers: var Table[string, OrderedSet[AgentPairing]], xid: WeakRef[Agent]) =
   ## remove myself from agents listening to me
-  for signal, listenerPairs in listeners.mpairs():
-    # echo "freeing signal: ", signal, " listeners: ", listenerPairs
-    for listners in listenerPairs:
-      # echo "\tlisterners: ", listners.tgt
-      # echo "\tlisterners:subscribed ", listners.tgt[].subscribed
-      listners.tgt[].subscribedTo.excl(xid)
-      # echo "\tlisterners:subscribed ", listners.tgt[].subscribed
+  for signal, subscriberPairs in subscribers.mpairs():
+    # echo "freeing signal: ", signal, " subscribers: ", subscriberPairs
+    for subscriber in subscriberPairs:
+      # echo "\tlisterners: ", subscriber.tgt
+      # echo "\tlisterners:subscribed ", subscriber.tgt[].subscribed
+      subscriber.tgt[].subscribedTo.excl(xid)
+      # echo "\tlisterners:subscribed ", subscriber.tgt[].subscribed
 
 proc `=destroy`*(agent: AgentObj) =
   let xid: WeakRef[Agent] = WeakRef[Agent](pt: cast[Agent](addr agent))
 
-  # echo "\ndestroy: agent: ", xid[].debugId, " pt: ", xid.toPtr.repr, " lstCnt: ", xid[].listeners.len(), " subCnt: ", xid[].subscribed.len
+  # echo "\ndestroy: agent: ", xid[].debugId, " pt: ", xid.toPtr.repr, " lstCnt: ", xid[].subscribers.len(), " subCnt: ", xid[].subscribed.len
   xid.toRef().subscribedTo.unsubscribe(xid)
-  xid.toRef().listeners.remove(xid)
+  xid.toRef().subscribers.remove(xid)
 
-  # xid[].listeners.clear()
-  `=destroy`(xid[].listeners)
+  # xid[].subscribers.clear()
+  `=destroy`(xid[].subscribers)
   `=destroy`(xid[].subscribedTo)
 
 ## TODO: figure out if we need debugId at all?
@@ -197,9 +197,9 @@ proc initAgentRequest*[S, T](
 proc getAgentListeners*(obj: Agent,
                         sig: string
                         ): OrderedSet[(WeakRef[Agent], AgentProc)] =
-  # echo "FIND:LISTENERS: ", obj.listeners
-  if obj.listeners.hasKey(sig):
-    result = obj.listeners[sig]
+  # echo "FIND:subscribers: ", obj.subscribers
+  if obj.subscribers.hasKey(sig):
+    result = obj.subscribers[sig]
 
 proc unsafeWeakRef*[T: Agent](obj: T): WeakRef[T] =
   result = WeakRef[T](pt: obj)
@@ -216,19 +216,19 @@ proc addAgentListeners*(obj: Agent,
                         ): void =
 
   # echo "add agent listener: ", sig, " obj: ", obj.debugId, " tgt: ", tgt.debugId
-  # if obj.listeners.hasKey(sig):
-  #   echo "listener:count: ", obj.listeners[sig].len()
+  # if obj.subscribers.hasKey(sig):
+  #   echo "listener:count: ", obj.subscribers[sig].len()
   assert slot != nil
 
-  obj.listeners.withValue(sig, agents):
+  obj.subscribers.withValue(sig, agents):
     # if (tgt.unsafeWeakRef(), slot,) notin agents[]:
-    #   echo "addAgentListeners: ", "tgt: ", tgt.unsafeWeakRef().toPtr().pointer.repr, " id: ", tgt.debugId, " obj: ", obj.debugId, " name: ", sig
+    #   echo "addAgentsubscribers: ", "tgt: ", tgt.unsafeWeakRef().toPtr().pointer.repr, " id: ", tgt.debugId, " obj: ", obj.debugId, " name: ", sig
     agents[].incl((tgt.unsafeWeakRef(), slot,))
   do:
-    # echo "addAgentListeners: ", "tgt: ", tgt.unsafeWeakRef().toPtr().pointer.repr, " id: ", tgt.debugId, " obj: ", obj.debugId, " name: ", sig
+    # echo "addAgentsubscribers: ", "tgt: ", tgt.unsafeWeakRef().toPtr().pointer.repr, " id: ", tgt.debugId, " obj: ", obj.debugId, " name: ", sig
     var agents = initOrderedSet[AgentPairing]()
     agents.incl( (tgt.unsafeWeakRef(), slot,) )
-    obj.listeners[sig] = ensureMove agents
+    obj.subscribers[sig] = ensureMove agents
 
   tgt.subscribedTo.incl(obj.unsafeWeakRef())
-  # echo "LISTENERS: ", obj.listeners.len, " SUBSC: ", tgt.subscribed.len
+  # echo "subscribers: ", obj.subscribers.len, " SUBSC: ", tgt.subscribed.len

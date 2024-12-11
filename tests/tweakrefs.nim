@@ -32,7 +32,7 @@ proc `=destroy`*(obj: TestObj) =
 
 
 suite "agent weak refs":
-  test "listeners freed":
+  test "subscribers freed":
     var x = Counter.new()
     
     block:
@@ -46,25 +46,25 @@ suite "agent weak refs":
       check y.value == 0
       emit x.valueChanged(137)
 
-      echo "x:listeners: ", x.listeners
+      echo "x:subscribers: ", x.subscribers
       # echo "x:subscribed: ", x.subscribed
-      echo "y:listeners: ", y.listeners
+      echo "y:subscribers: ", y.subscribers
       # echo "y:subscribed: ", y.subscribed
 
-      check y.listeners.len() == 0
+      check y.subscribers.len() == 0
       check y.subscribedTo.len() == 1
 
-      check x.listeners["valueChanged"].len() == 1
+      check x.subscribers["valueChanged"].len() == 1
       check x.subscribedTo.len() == 0
 
       echo "block done"
     
     echo "finishing outer block "
     # check x.subscribedTo.len() == 0
-    echo "x:listeners: ", x.listeners
+    echo "x:subscribers: ", x.subscribers
     # echo "x:subscribed: ", x.subscribed
-    # check x.listeners["valueChanged"].len() == 0
-    check x.listeners.len() == 0
+    # check x.subscribers["valueChanged"].len() == 0
+    check x.subscribers.len() == 0
     check x.subscribedTo.len() == 0
 
     # check a.value == 0
@@ -86,25 +86,25 @@ suite "agent weak refs":
       emit x.valueChanged(137)
 
 
-      echo "x:listeners: ", x.listeners
+      echo "x:subscribers: ", x.subscribers
       # echo "x:subscribed: ", x.subscribed
-      echo "y:listeners: ", y.listeners
+      echo "y:subscribers: ", y.subscribers
       # echo "y:subscribed: ", y.subscribed
 
-      check y.listeners.len() == 0
+      check y.subscribers.len() == 0
       check y.subscribedTo.len() == 1
 
-      check x.listeners["valueChanged"].len() == 1
+      check x.subscribers["valueChanged"].len() == 1
       check x.subscribedTo.len() == 0
 
       echo "block done"
     
     echo "finishing outer block "
     # check x.subscribedTo.len() == 0
-    echo "y:listeners: ", y.listeners
+    echo "y:subscribers: ", y.subscribers
     echo "y:subscribed: ", y.subscribedTo.mapIt(it)
-    # check x.listeners["valueChanged"].len() == 0
-    check y.listeners.len() == 0
+    # check x.subscribers["valueChanged"].len() == 0
+    check y.subscribers.len() == 0
     check y.subscribedTo.len() == 0
 
     # check a.value == 0
@@ -157,6 +157,6 @@ test "weak refs":
   
   echo "done with y"
   echo "X::count: ", x.head().count()
-  check x.listeners.len() == 0
+  check x.subscribers.len() == 0
   check x.subscribedTo.len() == 0
   check x.head().count() == 0
