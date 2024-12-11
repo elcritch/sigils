@@ -138,6 +138,23 @@ macro signalType*(s: untyped): auto =
 proc getAgentProcTy*[T](tp: AgentProcTy[T]): T =
   discard
 
+template checkSignalTypes*[T](
+    a: Agent,
+    signal: typed,
+    b: Agent,
+    slot: Signal[T],
+    acceptVoidSlot: static bool = false,
+): void =
+  block:
+    ## statically verify signal / slot types match
+    # echo "TYP: ", repr typeof(SignalTypes.`signal`(typeof(a)))
+    var signalType {.used, inject.}: typeof(SignalTypes.`signal`(typeof(a)))
+    var slotType {.used, inject.}: typeof(getAgentProcTy(slot))
+    when acceptVoidSlot and slotType is tuple[]:
+      discard
+    else:
+      signalType = slotType
+
 template connect*[T](
     a: Agent,
     signal: typed,
@@ -170,17 +187,16 @@ template connect*[T](
               b, setValue)
       emit a.valueChanged(137) #=> prints "setValue! 137"
 
-  # let agentSlot: Signal[T] = slot
-  # # static:
-  block:
-    ## statically verify signal / slot types match
-    # echo "TYP: ", repr typeof(SignalTypes.`signal`(typeof(a)))
-    var signalType {.used, inject.}: typeof(SignalTypes.`signal`(typeof(a)))
-    var slotType {.used, inject.}: typeof(getAgentProcTy(slot))
-    when acceptVoidSlot and slotType is tuple[]:
-      discard
-    else:
-      signalType = slotType
+  checkSignalTypes(a, signal, b, slot, acceptVoidSlot)
+  # block:
+  #   ## statically verify signal / slot types match
+  #   # echo "TYP: ", repr typeof(SignalTypes.`signal`(typeof(a)))
+  #   var signalType {.used, inject.}: typeof(SignalTypes.`signal`(typeof(a)))
+  #   var slotType {.used, inject.}: typeof(getAgentProcTy(slot))
+  #   when acceptVoidSlot and slotType is tuple[]:
+  #     discard
+  #   else:
+  #     signalType = slotType
   a.addAgentListeners(signalName(signal), b, slot)
 
 template connect*(
@@ -191,19 +207,16 @@ template connect*(
     acceptVoidSlot: static bool = false,
 ): void =
   let agentSlot = `slot`(typeof(b))
-  block:
-    ## statically verify signal / slot types match
-    var signalType {.used, inject.}: typeof(SignalTypes.`signal`(typeof(a)))
-    var slotType {.used, inject.}: typeof(getAgentProcTy(agentSlot))
-    when acceptVoidSlot and slotType is tuple[]:
-      discard
-    else:
-      signalType = slotType
-  static:
-    echo "TYPE CONNECT:slot: ", typeof(SignalTypes.`signal`(typeof(a)))
-    echo "TYPE CONNECT:st: ", agentSlot.typeof.repr, " " , repr getAgentProcTy(agentSlot).typeof
-    echo ""
+  # block:
+  #   ## statically verify signal / slot types match
+  #   var signalType {.used, inject.}: typeof(SignalTypes.`signal`(typeof(a)))
+  #   var slotType {.used, inject.}: typeof(getAgentProcTy(agentSlot))
+  #   when acceptVoidSlot and slotType is tuple[]:
+  #     discard
+  #   else:
+  #     signalType = slotType
 
+  checkSignalTypes(a, signal, b, agentSlot, acceptVoidSlot)
   a.addAgentListeners(signalName(signal), b, agentSlot)
 
 proc callSlots*(obj: Agent | WeakRef[Agent], req: AgentRequest) {.gcsafe.} =

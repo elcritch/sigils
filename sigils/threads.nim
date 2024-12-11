@@ -17,3 +17,16 @@ proc moveToThread*[T: Agent](agent: T): AgentProxy[T] =
     raise newException(AccessViolationDefect,
             "agent must be unique and not shared to be passed to another thread!")
 
+template connect*[T](
+    a: AgentProxy[T],
+    signal: typed,
+    b: Agent,
+    slot: typed,
+    acceptVoidSlot: static bool = false,
+): void =
+  ## sets up `b` to recieve events from `a`. Both `a` and `b`
+  ## must subtype `Agent`. The `signal` must be a signal proc, 
+  ## while `slot` must be a slot proc.
+  ## 
+  connect(a.remote)
+

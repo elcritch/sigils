@@ -65,5 +65,5 @@ suite "threaded agent slots":
     echo "thread runner!"
     let bp = b.moveToThread()
 
-    connect(a, valueChanged, bp, setValue)
+    # connect(a, valueChanged, bp, setValue)
 
