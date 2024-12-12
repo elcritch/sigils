@@ -8,7 +8,7 @@ export channels, smartptrs
 
 type
   SigilsThread* = ref object of Agent
-    thread*: Thread[void]
+    thread*: Thread[Chan[AgentRequest]]
     inputs*: Chan[AgentRequest]
 
   AgentRouter* = ref object of Agent
@@ -20,6 +20,16 @@ type
 proc newSigilsThread*(): SigilsThread =
   result = SigilsThread()
   result.inputs = newChan[AgentRequest]()
+
+proc runThread*(inputs: Chan[AgentRequest]) =
+  echo "sigil thread waiting!"
+  while true:
+    let req = inputs.recv()
+    echo "thread got request: ", req
+
+proc start*(thread: SigilsThread) =
+  createThread(thread.thread, runThread, thread.inputs)
+
 
 proc moveToThread*[T: Agent](agent: T, thread: SigilsThread): AgentProxy[T] =
 

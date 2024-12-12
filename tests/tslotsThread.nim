@@ -1,5 +1,7 @@
 import std/isolation
 import std/unittest
+import std/os
+
 import sigils
 import sigils/threads
 
@@ -66,6 +68,7 @@ suite "threaded agent slots":
   test "sigil object thread runner":
     echo "thread runner!"
     let thread = newSigilsThread()
+    thread.start()
     let bp: AgentProxy[Counter] = b.moveToThread(thread)
 
     connect(a, valueChanged, bp, setValue)
@@ -75,4 +78,7 @@ suite "threaded agent slots":
     connect(a, valueChanged, bp, Counter.setValue())
 
     emit a.valueChanged(314)
+
+    # thread.thread.joinThread(500)
+    os.sleep(1_000)
 
