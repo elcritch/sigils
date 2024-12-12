@@ -152,9 +152,10 @@ template checkSignalTypes*[T](
     var slotType {.used, inject.}: typeof(getAgentProcTy(slot))
     when acceptVoidSlot and slotType is tuple[]:
       discard
+    elif compiles(signalType = slotType):
+      discard
     else:
-      if false:
-        signalType = slotType
+      signalType = slotType
 
 template connect*[T](
     a: Agent,
