@@ -90,7 +90,7 @@ proc runThread*(inputs: Chan[ThreadSignal]) {.thread.} =
     while true:
       let sig = inputs.recv()
       echo "thread got request: ", sig
-      let res = sig.slot.callMethod(sig.tgt[], sig.req)
+      discard sig.slot.callMethod(sig.tgt[], sig.req)
 
 proc start*(thread: SigilsThread) =
   createThread(thread.thread, runThread, thread.inputs)
