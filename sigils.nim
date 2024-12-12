@@ -84,11 +84,17 @@ proc emit*(call: (Agent | WeakRef[Agent], AgentRequest)) =
   let (obj, req) = call
   callSlots(obj, req)
 
+proc poll*(inputs: Chan[ThreadSignal]) =
+  let sig = inputs.recv()
+  echo "thread got request: ", sig
+  discard sig.slot.callMethod(sig.tgt[], sig.req)
+
+proc poll*(thread: SigilsThread) =
+  thread.inputs.poll()
+
 proc execute*(inputs: Chan[ThreadSignal]) =
   while true:
-    let sig = inputs.recv()
-    echo "thread got request: ", sig
-    discard sig.slot.callMethod(sig.tgt[], sig.req)
+    poll(inputs)
 
 proc execute*(thread: SigilsThread) =
   thread.inputs.execute()

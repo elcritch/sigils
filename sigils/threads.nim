@@ -75,7 +75,8 @@ template connect*[T, S](
   let ct = getCurrentSigilThread()
 
   let proxy = AgentProxy[typeof(b)](
-    chan: ct.inputs
+    chan: ct.inputs,
+    remote: newSharedPtr(unsafeIsolate Agent(b)),
   )
   a.remote[].addAgentListeners(signalName(signal), proxy, slot)
 

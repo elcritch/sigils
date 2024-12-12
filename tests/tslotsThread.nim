@@ -101,6 +101,4 @@ suite "threaded agent slots":
     # thread.thread.joinThread(500)
     os.sleep(500)
     let ct = getCurrentSigilThread()
-    ct.execute()
-    let res = ct.inputs.recv()
-    echo "got: ", res
+    ct.poll()
