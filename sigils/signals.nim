@@ -153,9 +153,9 @@ template checkSignalTypes*[T](
     when acceptVoidSlot and slotType is tuple[]:
       discard
     elif compiles(signalType = slotType):
-      discard
+      discard # don't need compile check when compiles
     else:
-      signalType = slotType
+      signalType = slotType # let the compiler show the type mismatches
 
 template connect*[T](
     a: Agent,
