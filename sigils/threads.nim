@@ -29,8 +29,7 @@ template connect*[T](
 ): void =
   ## connects `AgentProxy[T]` to remote signals
   ## 
-  let rem: T = b.remote[]
-  let agentSlot = `slot`(typeof(rem))
+  let agentSlot = `slot`(typeof(b.remote[]))
   checkSignalTypes(a, signal, b.remote[], agentSlot, acceptVoidSlot)
   a.addAgentListeners(signalName(signal), b, agentSlot)
 
@@ -43,7 +42,6 @@ template connect*[T, S](
 ): void =
   ## connects `AgentProxy[T]` to remote signals
   ## 
-  let rem: T = b.remote[]
   checkSignalTypes(a, signal, b.remote[], slot, acceptVoidSlot)
   a.addAgentListeners(signalName(signal), b, slot)
 
