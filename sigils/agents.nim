@@ -121,9 +121,9 @@ else:
   # proc getAgentProcId*(a: AgentProc): int = cast[int](cast[pointer](a))
   var lastUId: int = 0
 
-proc nextAgentId*(): int =
-  lastUId.inc()
-  lastUId
+# proc nextAgentId*(): int =
+#   lastUId.inc()
+#   lastUId
 
 proc hash*(a: Agent): Hash = hash(a.getId())
 # proc hash*(a: AgentProc): Hash = hash(getAgentProcId(a))
