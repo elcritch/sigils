@@ -66,6 +66,8 @@ suite "threaded agent slots":
     let bp = b.moveToThread()
 
     connect(a, valueChanged, bp, setValue)
-    # connect(a, valueChanged, bp, someAction)
+    check not compiles(
+        connect(a, valueChanged, bp, someAction)
+    )
     connect(a, valueChanged, bp, Counter.setValue())
 
