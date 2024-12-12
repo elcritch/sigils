@@ -82,5 +82,5 @@ suite "threaded agent slots":
     emit a.valueChanged(314)
 
     # thread.thread.joinThread(500)
-    os.sleep(1_000)
+    os.sleep(500)
 
