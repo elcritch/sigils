@@ -4,7 +4,7 @@ import agents
 import threading/smartptrs
 import threading/channels
 
-export channels, smartptrs
+export channels, smartptrs, isolation
 
 type
   ThreadSignal* = object
@@ -24,16 +24,6 @@ type
 proc newSigilsThread*(): SigilsThread =
   result = SigilsThread()
   result.inputs = newChan[ThreadSignal]()
-
-proc runThread*(inputs: Chan[ThreadSignal]) =
-  echo "sigil thread waiting!"
-  while true:
-    let req = inputs.recv()
-    echo "thread got request: ", req
-
-proc start*(thread: SigilsThread) =
-  createThread(thread.thread, runThread, thread.inputs)
-
 
 proc moveToThread*[T: Agent](agent: T, thread: SigilsThread): AgentProxy[T] =
 

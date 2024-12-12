@@ -1,63 +1,11 @@
-import std/[strutils, macros, options]
+import std/[macros, options]
 import std/times
-import std/isolation
 import slots
-import threads
 
 import agents
 
 export agents
 export times
-
-proc wrapResponse*(id: AgentId, resp: RpcParams, kind = Response): AgentResponse = 
-  # echo "WRAP RESP: ", id, " kind: ", kind
-  result.kind = kind
-  result.id = id
-  result.result = resp
-
-proc wrapResponseError*(id: AgentId, err: AgentError): AgentResponse = 
-  echo "WRAP ERROR: ", id, " err: ", err.repr
-  result.kind = Error
-  result.id = id
-  result.result = rpcPack(err)
-
-proc wrapResponseError*(
-    id: AgentId,
-    code: FastErrorCodes,
-    msg: string,
-    err: ref Exception,
-    stacktraces: bool
-): AgentResponse = 
-  raise err
-
-proc parseError*(ss: Variant): AgentError = 
-  ss.unpack(result)
-
-proc parseParams*[T](ss: Variant, val: var T) = 
-  ss.unpack(val)
-
-proc callMethod*(
-    slot: AgentProc,
-    ctx: RpcContext,
-    req: AgentRequest,
-    # clientId: ClientId,
-): AgentResponse {.gcsafe, effectsOf: slot.} =
-  ## Route's an rpc request. 
-
-  if slot.isNil:
-    let msg = req.procName & " is not a registered RPC method."
-    let err = AgentError(code: METHOD_NOT_FOUND, msg: msg)
-    result = wrapResponseError(req.origin, err)
-  else:
-    slot(ctx, req.params)
-    let res = rpcPack(true)
-
-    result = AgentResponse(kind: Response, id: req.origin, result: res)
-
-template packResponse*(res: AgentResponse): Variant =
-  var so = newVariant()
-  so.pack(res)
-  so
 
 proc getSignalName*(signal: NimNode): NimNode =
   # echo "getSignalName: ", signal.treeRepr
@@ -175,43 +123,3 @@ template connect*(
   let agentSlot = `slot`(typeof(b))
   checkSignalTypes(a, signal, b, agentSlot, acceptVoidSlot)
   a.addAgentListeners(signalName(signal), b, agentSlot)
-
-proc callSlots*(obj: Agent | WeakRef[Agent], req: AgentRequest) {.gcsafe.} =
-  {.cast(gcsafe).}:
-    let listeners = obj.toRef().getAgentListeners(req.procName)
-
-    # echo "call slots:req: ", req.repr
-    # echo "call slots:all: ", req.procName, " ", obj.agentId, " :: ", obj.listeners
-
-    for (tgt, slot) in listeners.items():
-      echo ""
-      echo "call listener:tgt: ", tgt, " ", req.procName
-      # echo "call listener:slot: ", repr slot
-      let tgtRef = tgt.toRef()
-
-      var res: AgentResponse
-
-      if tgtRef of AgentRouter:
-        echo "threaded Agent!"
-        let router = AgentRouter(tgtRef)
-        let res = router.chan.trySend(unsafeIsolate ThreadSignal(slot: slot, req: req))
-        if not res:
-          raise newException(AgentSlotError, "error sending signal to thread")
-
-      else:
-        echo "regular Thread!"
-        res = slot.callMethod(tgtRef, req)
-
-      when defined(nimscript) or defined(useJsonSerde):
-        discard
-      else:
-        discard
-        variantMatch case res.result.buf as u
-        of AgentError:
-          raise newException(AgentSlotError, $u.code & " msg: " & u.msg)
-        else:
-          discard
-
-proc emit*(call: (Agent | WeakRef[Agent], AgentRequest)) =
-  let (obj, req) = call
-  callSlots(obj, req)
