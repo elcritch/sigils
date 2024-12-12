@@ -1,5 +1,6 @@
-import strutils, macros, options
+import std/[strutils, macros, options]
 import std/times
+import std/isolation
 import slots
 import threads
 
@@ -192,7 +193,11 @@ proc callSlots*(obj: Agent | WeakRef[Agent], req: AgentRequest) {.gcsafe.} =
 
       if tgtRef of AgentRouter:
         echo "threaded Agent!"
-        # res = slot.callMethod(tgtRef, req)
+        let router = AgentRouter(tgtRef)
+        let res = router.chan.trySend(unsafeIsolate req)
+        if not res:
+          raise newException(AgentSlotError, "error sending signal to thread")
+
       else:
         echo "regular Thread!"
         res = slot.callMethod(tgtRef, req)
