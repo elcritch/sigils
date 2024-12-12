@@ -7,21 +7,25 @@ import threading/channels
 export channels, smartptrs
 
 type
+  ThreadSignal* = object
+    slot*: AgentProc
+    req*: AgentRequest
+
   SigilsThread* = ref object of Agent
-    thread*: Thread[Chan[AgentRequest]]
-    inputs*: Chan[AgentRequest]
+    thread*: Thread[Chan[ThreadSignal]]
+    inputs*: Chan[ThreadSignal]
 
   AgentRouter* = ref object of Agent
     remote*: SharedPtr[Agent]
-    chan*: Chan[AgentRequest]
+    chan*: Chan[ThreadSignal]
 
   AgentProxy*[T] = ref object of AgentRouter
 
 proc newSigilsThread*(): SigilsThread =
   result = SigilsThread()
-  result.inputs = newChan[AgentRequest]()
+  result.inputs = newChan[ThreadSignal]()
 
-proc runThread*(inputs: Chan[AgentRequest]) =
+proc runThread*(inputs: Chan[ThreadSignal]) =
   echo "sigil thread waiting!"
   while true:
     let req = inputs.recv()
