@@ -117,7 +117,6 @@ when defined(nimscript):
 else:
   proc getId*[T: Agent](a: WeakRef[T]): AgentId = cast[int](a.toPtr())
   proc getId*(a: Agent): AgentId = cast[int](cast[pointer](a))
-  var lastUId: int = 0
 
 proc hash*(a: Agent): Hash = hash(a.getId())
 # proc hash*(a: AgentProc): Hash = hash(getAgentProcId(a))

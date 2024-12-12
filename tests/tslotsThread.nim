@@ -73,3 +73,4 @@ suite "threaded agent slots":
         connect(a, valueChanged, bp, someAction)
     )
     connect(a, valueChanged, bp, Counter.setValue())
+
