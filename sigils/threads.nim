@@ -10,9 +10,18 @@ type
   AgentProxy*[T] = ref object of Agent
     remote*: SharedPtr[T]
 
-  AgentThread* = ref object of Agent
+  AgentSignal* = object
+    obj: WeakRef[Agent]
+    req: AgentRequest
 
-proc moveToThread*[T: Agent](agent: T): AgentProxy[T] =
+  AgentThread* = ref object of Agent
+    thread*: Thread[void]
+    inputs*: Chan[AgentRequest]
+
+proc newAgentThread*(): AgentThread =
+  result = AgentThread()
+
+proc moveToThread*[T: Agent](agent: T, thread: AgentThread): AgentProxy[T] =
 
   if not isUniqueRef(agent):
     raise newException(AccessViolationDefect,

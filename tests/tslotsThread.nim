@@ -63,7 +63,8 @@ suite "threaded agent slots":
   
   test "sigil object thread runner":
     echo "thread runner!"
-    let bp = b.moveToThread()
+    let thread = newAgentThread()
+    let bp = b.moveToThread(thread)
 
     connect(a, valueChanged, bp, setValue)
     check not compiles(

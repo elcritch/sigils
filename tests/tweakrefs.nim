@@ -39,7 +39,7 @@ suite "agent weak refs":
       var obj {.used.} = TestObj(val: 100)
       var y = Counter.new()
 
-      echo "Counter.setValue: ", "x: ", x.debugId, " y: ", y.debugId
+      # echo "Counter.setValue: ", "x: ", x.debugId, " y: ", y.debugId
       connect(x, valueChanged,
               y, setValue)
 
@@ -78,7 +78,7 @@ suite "agent weak refs":
       var obj {.used.} = TestObj(val: 100)
       var x = Counter.new()
 
-      echo "Counter.setValue: ", "x: ", x.debugId, " y: ", y.debugId
+      # echo "Counter.setValue: ", "x: ", x.debugId, " y: ", y.debugId
       connect(x, valueChanged,
               y, setValue)
 
@@ -144,7 +144,7 @@ test "weak refs":
     echo "X::count: ", x.head().count()
     check x.head().count() == 0
 
-    echo "Counter.setValue: ", "x: ", x.debugId, " y: ", y.debugId
+    # echo "Counter.setValue: ", "x: ", x.debugId, " y: ", y.debugId
     connect(x, valueChanged,
             y, setValue)
     check x.head().count() == 0

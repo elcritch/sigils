@@ -48,7 +48,6 @@ proc `$`*[T](obj: WeakRef[T]): string =
 
 type
   AgentObj = object of RootObj
-    debugId*: int = 0
     subscribers*: Table[string, OrderedSet[AgentPairing]] ## agents listening to me
     subscribedTo*: HashSet[WeakRef[Agent]] ## agents I'm listening to
 
@@ -125,10 +124,6 @@ else:
 proc nextAgentId*(): int =
   lastUId.inc()
   lastUId
-
-proc new*[T: Agent](tp: typedesc[T]): T =
-  result = T()
-  result.debugId = nextAgentId()
 
 proc hash*(a: Agent): Hash = hash(a.getId())
 # proc hash*(a: AgentProc): Hash = hash(getAgentProcId(a))
