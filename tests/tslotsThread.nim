@@ -19,8 +19,10 @@ proc setValue*(self: Counter, value: int) {.slot.} =
   if self.value != value:
     self.value = value
 
-proc someAction*(self: Counter) {.slot.} =
-  echo "action"
+proc updated*(tp: Counter) {.signal.}
+
+proc completed*(self: SomeAction) {.slot.} =
+  echo "action done"
 
 proc value*(self: Counter): int =
   self.value
@@ -89,11 +91,9 @@ suite "threaded agent slots":
     let bp: AgentProxy[Counter] = b.moveToThread(thread)
 
     connect(a, valueChanged, bp, setValue)
-    connect(a, valueChanged, bp, Counter.setValue())
-    check not compiles( connect(a, valueChanged, bp, someAction))
+    connect(bp, updated, a, SomeAction.completed())
 
     emit a.valueChanged(314)
 
     # thread.thread.joinThread(500)
     os.sleep(500)
-

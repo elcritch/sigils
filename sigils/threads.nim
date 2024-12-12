@@ -62,17 +62,27 @@ template connect*[T](
   checkSignalTypes(a, signal, T(), agentSlot, acceptVoidSlot)
   a.addAgentListeners(signalName(signal), b, agentSlot)
 
-# except ConversionError as err:
-#   result = wrapResponseError(
-#               req.id,
-#               INVALID_PARAMS,
-#               req.procName & " raised an exception",
-#               err,
-#               true)
-# except CatchableError as err:
-#   result = wrapResponseError(
-#               req.id,
-#               INTERNAL_ERROR,
-#               req.procName & " raised an exception: " & err.msg,
-#               err,
-#               true)
+template connect*[T, S](
+    a: AgentProxy[T],
+    signal: typed,
+    b: Agent,
+    slot: Signal[S],
+    acceptVoidSlot: static bool = false,
+): void =
+  ## connects `AgentProxy[T]` to remote signals
+  ## 
+  checkSignalTypes(T(), signal, b, slot, acceptVoidSlot)
+  a.addAgentListeners(signalName(signal), b, slot)
+
+template connect*[T](
+    a: AgentProxy[T],
+    signal: typed,
+    b: Agent,
+    slot: typed,
+    acceptVoidSlot: static bool = false,
+): void =
+  ## connects `AgentProxy[T]` to remote signals
+  ## 
+  let agentSlot = `slot`(T)
+  checkSignalTypes(T(), signal, b, agentSlot, acceptVoidSlot)
+  a.addAgentListeners(signalName(signal), b, agentSlot)
