@@ -20,16 +20,14 @@ proc moveToThread*[T: Agent](agent: T): AgentProxy[T] =
   
   return AgentProxy[T](remote: newSharedPtr(unsafeIsolate(agent)))
 
-template connectRemote*[T](
+template connect*[T](
     a: Agent,
     signal: typed,
     b: AgentProxy[T],
     slot: typed,
     acceptVoidSlot: static bool = false,
 ): void =
-  ## sets up `b` to recieve events from `a`. Both `a` and `b`
-  ## must subtype `Agent`. The `signal` must be a signal proc, 
-  ## while `slot` must be a slot proc.
+  ## connects `AgentProxy[T]` to remote signals
   ## 
   let rem: T = b.remote[]
   let agentSlot = `slot`(typeof(rem))
