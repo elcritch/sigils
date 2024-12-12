@@ -16,14 +16,14 @@ proc valueChanged*(tp: SomeAction, val: int) {.signal.}
 proc updated*(tp: Counter, final: int) {.signal.}
 
 proc setValue*(self: Counter, value: int) {.slot.} =
-  # echo "setValue! ", value, " (th:", getThreadId(), ")"
+  echo "setValue! ", value, " (th:", getThreadId(), ")"
   if self.value != value:
     self.value = value
   # echo "Counter: ", self.subscribers
   emit self.updated(self.value)
 
 proc completed*(self: SomeAction, final: int) {.slot.} =
-  # echo "Action done!", " (th:", getThreadId(), ")"
+  echo "Action done! final: ", final, " (th:", getThreadId(), ")"
   self.value = final
 
 proc value*(self: Counter): int =
@@ -98,7 +98,6 @@ suite "threaded agent slots":
     connect(bp, updated, a, SomeAction.completed())
 
     emit a.valueChanged(314)
-
     # thread.thread.joinThread(500)
     # os.sleep(500)
     let ct = getCurrentSigilThread()
@@ -109,7 +108,7 @@ suite "threaded agent slots":
       a = SomeAction.new()
       b = Counter.new()
 
-    echo "thread runner!", " (th:", getThreadId(), ")"
+    echo "thread runner!", " (main thread:", getThreadId(), ")"
     let thread = newSigilsThread()
     thread.start()
     startLocalThread()
@@ -119,16 +118,16 @@ suite "threaded agent slots":
     connect(a, valueChanged, bp, setValue)
     connect(bp, updated, a, SomeAction.completed())
 
-    emit a.valueChanged(314)
     emit a.valueChanged(271)
+    emit a.valueChanged(628)
 
     # thread.thread.joinThread(500)
     # os.sleep(500)
     let ct = getCurrentSigilThread()
     ct.poll()
-    check a.value == 314
-    ct.poll()
     check a.value == 271
+    ct.poll()
+    check a.value == 628
 
   test "sigil object thread runner (loop)":
     if false:

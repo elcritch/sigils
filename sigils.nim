@@ -90,7 +90,7 @@ proc emit*(call: (Agent | WeakRef[Agent], AgentRequest)) =
 
 proc poll*(inputs: Chan[ThreadSignal]) =
   let sig = inputs.recv()
-  # echo "thread got request: ", sig
+  echo "thread got request: ", sig, " (", getThreadId(), ")"
   discard sig.slot.callMethod(sig.tgt[], sig.req)
 
 proc poll*(thread: SigilsThread) =
@@ -105,7 +105,7 @@ proc execute*(thread: SigilsThread) =
 
 proc runThread*(inputs: Chan[ThreadSignal]) {.thread.} =
   {.cast(gcsafe).}:
-    echo "sigil thread waiting!"
+    echo "sigil thread waiting!", " (", getThreadId(), ")"
     inputs.execute()
 
 proc start*(thread: SigilsThread) =
@@ -113,9 +113,10 @@ proc start*(thread: SigilsThread) =
 
 var sigilThread {.threadVar.}: SigilsThread
 
-proc getCurrentSigilThread*(): SigilsThread =
-  return sigilThread
-
 proc startLocalThread*() =
   if sigilThread.isNil:
     sigilThread = newSigilsThread()
+
+proc getCurrentSigilThread*(): SigilsThread =
+  startLocalThread()
+  return sigilThread
