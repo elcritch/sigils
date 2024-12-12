@@ -65,6 +65,19 @@ suite "threaded agent slots":
     check b.value == 1337
     check c.value == 1337
   
+  test "threaded connect":
+    var
+      a = SomeAction.new()
+      b = Counter.new()
+
+    echo "thread runner!"
+    let thread = newSigilsThread()
+    let bp: AgentProxy[Counter] = b.moveToThread(thread)
+
+    connect(a, valueChanged, bp, setValue)
+    connect(a, valueChanged, bp, Counter.setValue())
+    check not compiles( connect(a, valueChanged, bp, someAction))
+
   test "sigil object thread runner":
     var
       a = SomeAction.new()
