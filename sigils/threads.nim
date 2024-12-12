@@ -16,11 +16,11 @@ type
     thread*: Thread[Chan[ThreadSignal]]
     inputs*: Chan[ThreadSignal]
 
-  AgentRouter* = ref object of Agent
+  AgentProxyInner* = ref object of Agent
     remote*: SharedPtr[Agent]
     chan*: Chan[ThreadSignal]
 
-  AgentProxy*[T] = ref object of AgentRouter
+  AgentProxy*[T] = ref object of AgentProxyInner
 
 proc newSigilsThread*(): SigilsThread =
   result = SigilsThread()
