@@ -34,3 +34,16 @@ template connect*[T](
   checkSignalTypes(a, signal, b.remote[], agentSlot, acceptVoidSlot)
   a.addAgentListeners(signalName(signal), b, agentSlot)
 
+template connect*[T, S](
+    a: Agent,
+    signal: typed,
+    b: AgentProxy[T],
+    slot: Signal[S],
+    acceptVoidSlot: static bool = false,
+): void =
+  ## connects `AgentProxy[T]` to remote signals
+  ## 
+  let rem: T = b.remote[]
+  checkSignalTypes(a, signal, b.remote[], slot, acceptVoidSlot)
+  a.addAgentListeners(signalName(signal), b, slot)
+
