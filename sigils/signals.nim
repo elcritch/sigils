@@ -153,7 +153,8 @@ template checkSignalTypes*[T](
     when acceptVoidSlot and slotType is tuple[]:
       discard
     else:
-      signalType = slotType
+      if false:
+        signalType = slotType
 
 template connect*[T](
     a: Agent,
