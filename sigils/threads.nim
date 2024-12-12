@@ -85,4 +85,4 @@ template connect*[T](
   ## 
   let agentSlot = `slot`(T)
   checkSignalTypes(T(), signal, b, agentSlot, acceptVoidSlot)
-  a.addAgentListeners(signalName(signal), b, agentSlot)
+  a.remote[].addAgentListeners(signalName(signal), b, agentSlot)

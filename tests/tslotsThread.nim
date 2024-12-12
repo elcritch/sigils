@@ -13,16 +13,17 @@ type
     value: int
 
 proc valueChanged*(tp: SomeAction, val: int) {.signal.}
+proc updated*(tp: Counter) {.signal.}
 
 proc setValue*(self: Counter, value: int) {.slot.} =
   echo "setValue! ", value
   if self.value != value:
     self.value = value
-
-proc updated*(tp: Counter) {.signal.}
+  echo "Counter: ", self.subscribers
+  emit self.updated()
 
 proc completed*(self: SomeAction) {.slot.} =
-  echo "action done"
+  echo "Action done!"
 
 proc value*(self: Counter): int =
   self.value
