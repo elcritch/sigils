@@ -58,10 +58,14 @@ proc callSlots*(obj: Agent | WeakRef[Agent], req: AgentRequest) {.gcsafe.} =
 
       var res: AgentResponse
 
-      if tgtRef of AgentProxyInner:
+      if tgtRef of AgentProxyShared:
         echo "threaded Agent!"
-        let router = AgentProxyInner(tgtRef)
-        let sig = ThreadSignal(slot: slot, req: req, tgt: router.remote)
+        let router = AgentProxyShared(tgtRef)
+        let sig = ThreadSignal(
+          slot: slot,
+          req: req,
+          tgt: router.remote
+        )
         let res = router.chan.trySend(unsafeIsolate sig)
         if not res:
           raise newException(AgentSlotError, "error sending signal to thread")
