@@ -7,8 +7,10 @@ import threading/channels
 export channels, smartptrs
 
 type
-  AgentProxy*[T] = ref object of Agent
-    remote*: SharedPtr[T]
+  AgentRouter* = ref object of Agent
+    remote*: SharedPtr[Agent]
+
+  AgentProxy*[T] = ref object of AgentRouter
 
   AgentThread* = ref object of Agent
     thread*: Thread[void]
@@ -23,7 +25,7 @@ proc moveToThread*[T: Agent](agent: T, thread: AgentThread): AgentProxy[T] =
     raise newException(AccessViolationDefect,
             "agent must be unique and not shared to be passed to another thread!")
   
-  return AgentProxy[T](remote: newSharedPtr(unsafeIsolate(agent)))
+  return AgentProxy[T](remote: newSharedPtr(unsafeIsolate(Agent(agent))))
 
 template connect*[T, S](
     a: Agent,
@@ -34,8 +36,8 @@ template connect*[T, S](
 ): void =
   ## connects `AgentProxy[T]` to remote signals
   ## 
-  checkSignalTypes(a, signal, b.remote[], slot, acceptVoidSlot)
-  # a.addAgentListeners(signalName(signal), b, slot)
+  checkSignalTypes(a, signal, T(), slot, acceptVoidSlot)
+  a.addAgentListeners(signalName(signal), b, slot)
 
 template connect*[T](
     a: Agent,
@@ -46,9 +48,9 @@ template connect*[T](
 ): void =
   ## connects `AgentProxy[T]` to remote signals
   ## 
-  let agentSlot = `slot`(typeof(b.remote[]))
-  checkSignalTypes(a, signal, b.remote[], agentSlot, acceptVoidSlot)
-  # a.addAgentListeners(signalName(signal), b, agentSlot)
+  let agentSlot = `slot`(T)
+  checkSignalTypes(a, signal, T(), agentSlot, acceptVoidSlot)
+  a.addAgentListeners(signalName(signal), b, agentSlot)
 
 # except ConversionError as err:
 #   result = wrapResponseError(
