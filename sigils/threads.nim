@@ -7,19 +7,19 @@ import threading/channels
 export channels, smartptrs
 
 type
+  SigilsThread* = ref object of Agent
+    thread*: Thread[void]
+    inputs*: Chan[AgentRequest]
+
   AgentRouter* = ref object of Agent
     remote*: SharedPtr[Agent]
 
   AgentProxy*[T] = ref object of AgentRouter
 
-  AgentThread* = ref object of Agent
-    thread*: Thread[void]
-    inputs*: Chan[AgentRequest]
+proc newSigilsThread*(): SigilsThread =
+  result = SigilsThread()
 
-proc newAgentThread*(): AgentThread =
-  result = AgentThread()
-
-proc moveToThread*[T: Agent](agent: T, thread: AgentThread): AgentProxy[T] =
+proc moveToThread*[T: Agent](agent: T, thread: SigilsThread): AgentProxy[T] =
 
   if not isUniqueRef(agent):
     raise newException(AccessViolationDefect,

@@ -65,7 +65,7 @@ suite "threaded agent slots":
   
   test "sigil object thread runner":
     echo "thread runner!"
-    let thread = newAgentThread()
+    let thread = newSigilsThread()
     let bp: AgentProxy[Counter] = b.moveToThread(thread)
 
     connect(a, valueChanged, bp, setValue)
