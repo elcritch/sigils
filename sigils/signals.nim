@@ -26,18 +26,7 @@ proc wrapResponseError*(
     err: ref Exception,
     stacktraces: bool
 ): AgentResponse = 
-  let errobj = AgentError(code: code, msg: msg)
   raise err
-  # when defined(nimscript):
-  #   discard
-  # else:
-  #   if stacktraces and not err.isNil():
-  #     errobj.trace = @[]
-  #     for se in err.getStackTraceEntries():
-  #       let file: string = rsplit($(se.filename), '/', maxsplit=1)[^1]
-  #       errobj.trace.add( ($se.procname, file, se.line, ) )
-
-  # result = wrapResponseError(id, errobj)
 
 proc parseError*(ss: Variant): AgentError = 
   ss.unpack(result)
@@ -45,41 +34,23 @@ proc parseError*(ss: Variant): AgentError =
 proc parseParams*[T](ss: Variant, val: var T) = 
   ss.unpack(val)
 
-
 proc callMethod*(
-        slot: AgentProc,
-        ctx: RpcContext,
-        req: AgentRequest,
-        # clientId: ClientId,
-      ): AgentResponse {.gcsafe, effectsOf: slot.} =
-    ## Route's an rpc request. 
+    slot: AgentProc,
+    ctx: RpcContext,
+    req: AgentRequest,
+    # clientId: ClientId,
+): AgentResponse {.gcsafe, effectsOf: slot.} =
+  ## Route's an rpc request. 
 
-    if slot.isNil:
-      let msg = req.procName & " is not a registered RPC method."
-      let err = AgentError(code: METHOD_NOT_FOUND, msg: msg)
-      result = wrapResponseError(req.origin, err)
-    else:
-      # try:
-        # Handle rpc request the `context` variable is different
-        # based on whether the rpc request is a system/regular/subscription
-        slot(ctx, req.params)
-        let res = rpcPack(true)
+  if slot.isNil:
+    let msg = req.procName & " is not a registered RPC method."
+    let err = AgentError(code: METHOD_NOT_FOUND, msg: msg)
+    result = wrapResponseError(req.origin, err)
+  else:
+    slot(ctx, req.params)
+    let res = rpcPack(true)
 
-        result = AgentResponse(kind: Response, id: req.origin, result: res)
-      # except ConversionError as err:
-      #   result = wrapResponseError(
-      #               req.id,
-      #               INVALID_PARAMS,
-      #               req.procName & " raised an exception",
-      #               err,
-      #               true)
-      # except CatchableError as err:
-      #   result = wrapResponseError(
-      #               req.id,
-      #               INTERNAL_ERROR,
-      #               req.procName & " raised an exception: " & err.msg,
-      #               err,
-      #               true)
+    result = AgentResponse(kind: Response, id: req.origin, result: res)
 
 template packResponse*(res: AgentResponse): Variant =
   var so = newVariant()

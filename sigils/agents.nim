@@ -110,7 +110,6 @@ proc `=destroy`*(agent: AgentObj) =
   `=destroy`(xid[].subscribers)
   `=destroy`(xid[].subscribedTo)
 
-## TODO: figure out if we need debugId at all?
 when defined(nimscript):
   proc getId*(a: Agent): AgentId = a.debugId
   var lastUId {.compileTime.}: int = 1
@@ -155,18 +154,11 @@ proc rpcPack*[T](res: T): RpcParams =
     result = RpcParams(buf: newVariant(res))
 
 proc rpcUnpack*[T](obj: var T, ss: RpcParams) =
-  # try:
-    when defined(nimscript) or defined(useJsonSerde):
-      obj.fromJson(ss.buf)
-      discard
-    else:
-      ss.buf.unpack(obj)
-  # except ConversionError as err:
-  #   raise newException(ConversionError,
-  #                      "unable to parse parameters: " & err.msg & " res: " & $repr(ss.buf))
-  # except AssertionDefect as err:
-  #   raise newException(ConversionError,
-  #                      "unable to parse parameters: " & err.msg)
+  when defined(nimscript) or defined(useJsonSerde):
+    obj.fromJson(ss.buf)
+    discard
+  else:
+    ss.buf.unpack(obj)
 
 proc initAgentRequest*[S, T](
   procName: string,

@@ -53,3 +53,18 @@ template connect*[T](
   let agentSlot = `slot`(typeof(b.remote[]))
   checkSignalTypes(a, signal, b.remote[], agentSlot, acceptVoidSlot)
   # a.addAgentListeners(signalName(signal), b, agentSlot)
+
+# except ConversionError as err:
+#   result = wrapResponseError(
+#               req.id,
+#               INVALID_PARAMS,
+#               req.procName & " raised an exception",
+#               err,
+#               true)
+# except CatchableError as err:
+#   result = wrapResponseError(
+#               req.id,
+#               INTERNAL_ERROR,
+#               req.procName & " raised an exception: " & err.msg,
+#               err,
+#               true)
