@@ -76,10 +76,8 @@ suite "threaded agent slots":
     let bp: AgentProxy[Counter] = b.moveToThread(thread)
 
     connect(a, valueChanged, bp, setValue)
-    check not compiles(
-        connect(a, valueChanged, bp, someAction)
-    )
     connect(a, valueChanged, bp, Counter.setValue())
+    check not compiles( connect(a, valueChanged, bp, someAction))
 
     emit a.valueChanged(314)
 
