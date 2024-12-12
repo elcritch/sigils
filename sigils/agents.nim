@@ -172,13 +172,13 @@ proc rpcUnpack*[T](obj: var T, ss: RpcParams) =
 proc initAgentRequest*[S, T](
   procName: string,
   args: T,
-  id: AgentId = AgentId(-1),
+  origin: AgentId = AgentId(-1),
   reqKind: AgentType = Request,
 ): AgentRequestTy[S] =
   # echo "AgentRequest: ", procName, " args: ", args.repr
   result = AgentRequestTy[S](
     kind: reqKind,
-    id: id,
+    origin: origin,
     procName: procName,
     params: rpcPack(args)
   )

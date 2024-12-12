@@ -57,7 +57,7 @@ proc callMethod*(
     if slot.isNil:
       let msg = req.procName & " is not a registered RPC method."
       let err = AgentError(code: METHOD_NOT_FOUND, msg: msg)
-      result = wrapResponseError(req.id, err)
+      result = wrapResponseError(req.origin, err)
     else:
       # try:
         # Handle rpc request the `context` variable is different
@@ -65,7 +65,7 @@ proc callMethod*(
         slot(ctx, req.params)
         let res = rpcPack(true)
 
-        result = AgentResponse(kind: Response, id: req.id, result: res)
+        result = AgentResponse(kind: Response, id: req.origin, result: res)
       # except ConversionError as err:
       #   result = wrapResponseError(
       #               req.id,

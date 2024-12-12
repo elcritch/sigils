@@ -45,7 +45,7 @@ type
 
   AgentRequest* = object
     kind*: AgentType
-    id*: AgentId
+    origin*: AgentId
     procName*: string
     params*: RpcParams # - we handle params below
 

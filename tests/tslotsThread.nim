@@ -48,6 +48,8 @@ suite "threaded agent slots":
 
     proc threadTestProc(aref: WeakRef[Counter]) {.thread.} =
       var res = aref.valueChanged(1337)
+      echo "Thread aref: ", aref
+      echo "Thread sending: ", res
       agentResults.send(unsafeIsolate(ensureMove res))
       echo "Thread Done"
 
