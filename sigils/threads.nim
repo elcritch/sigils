@@ -10,6 +10,7 @@ type
   ThreadSignal* = object
     slot*: AgentProc
     req*: AgentRequest
+    tgt*: SharedPtr[Agent]
 
   SigilsThread* = ref object of Agent
     thread*: Thread[Chan[ThreadSignal]]

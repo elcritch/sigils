@@ -61,7 +61,8 @@ proc callSlots*(obj: Agent | WeakRef[Agent], req: AgentRequest) {.gcsafe.} =
       if tgtRef of AgentRouter:
         echo "threaded Agent!"
         let router = AgentRouter(tgtRef)
-        let res = router.chan.trySend(unsafeIsolate ThreadSignal(slot: slot, req: req))
+        let sig = ThreadSignal(slot: slot, req: req, tgt: router.remote)
+        let res = router.chan.trySend(unsafeIsolate sig)
         if not res:
           raise newException(AgentSlotError, "error sending signal to thread")
 
@@ -89,7 +90,7 @@ proc runThread*(inputs: Chan[ThreadSignal]) {.thread.} =
     while true:
       let sig = inputs.recv()
       echo "thread got request: ", sig
-      let res = sig.slot.callMethod(nil, sig.req)
+      let res = sig.slot.callMethod(sig.tgt[], sig.req)
 
 proc start*(thread: SigilsThread) =
   createThread(thread.thread, runThread, thread.inputs)
