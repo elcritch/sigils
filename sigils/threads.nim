@@ -72,17 +72,10 @@ template connect*[T, S](
   ## connects `AgentProxy[T]` to remote signals
   ## 
   checkSignalTypes(T(), signal, b, slot, acceptVoidSlot)
-  a.addAgentListeners(signalName(signal), b, slot)
+  let ct = getCurrentSigilThread()
 
-template connect*[T](
-    a: AgentProxy[T],
-    signal: typed,
-    b: Agent,
-    slot: typed,
-    acceptVoidSlot: static bool = false,
-): void =
-  ## connects `AgentProxy[T]` to remote signals
-  ## 
-  let agentSlot = `slot`(T)
-  checkSignalTypes(T(), signal, b, agentSlot, acceptVoidSlot)
-  a.remote[].addAgentListeners(signalName(signal), b, agentSlot)
+  let proxy = AgentProxy[typeof(b)](
+    chan: ct.inputs
+  )
+  a.remote[].addAgentListeners(signalName(signal), proxy, slot)
+

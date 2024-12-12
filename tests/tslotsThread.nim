@@ -16,14 +16,14 @@ proc valueChanged*(tp: SomeAction, val: int) {.signal.}
 proc updated*(tp: Counter) {.signal.}
 
 proc setValue*(self: Counter, value: int) {.slot.} =
-  echo "setValue! ", value
+  echo "setValue! ", value, " (th:", getThreadId(), ")"
   if self.value != value:
     self.value = value
   echo "Counter: ", self.subscribers
   emit self.updated()
 
 proc completed*(self: SomeAction) {.slot.} =
-  echo "Action done!"
+  echo "Action done!", " (th:", getThreadId(), ")"
 
 proc value*(self: Counter): int =
   self.value
@@ -86,9 +86,11 @@ suite "threaded agent slots":
       a = SomeAction.new()
       b = Counter.new()
 
-    echo "thread runner!"
+    echo "thread runner!", " (th:", getThreadId(), ")"
     let thread = newSigilsThread()
     thread.start()
+    startLocalThread()
+
     let bp: AgentProxy[Counter] = b.moveToThread(thread)
 
     connect(a, valueChanged, bp, setValue)
@@ -98,3 +100,7 @@ suite "threaded agent slots":
 
     # thread.thread.joinThread(500)
     os.sleep(500)
+    let ct = getCurrentSigilThread()
+    ct.execute()
+    let res = ct.inputs.recv()
+    echo "got: ", res

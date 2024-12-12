@@ -84,13 +84,27 @@ proc emit*(call: (Agent | WeakRef[Agent], AgentRequest)) =
   let (obj, req) = call
   callSlots(obj, req)
 
+proc execute*(inputs: Chan[ThreadSignal]) =
+  while true:
+    let sig = inputs.recv()
+    echo "thread got request: ", sig
+    discard sig.slot.callMethod(sig.tgt[], sig.req)
+
+proc execute*(thread: SigilsThread) =
+  thread.inputs.execute()
+
 proc runThread*(inputs: Chan[ThreadSignal]) {.thread.} =
   {.cast(gcsafe).}:
     echo "sigil thread waiting!"
-    while true:
-      let sig = inputs.recv()
-      echo "thread got request: ", sig
-      discard sig.slot.callMethod(sig.tgt[], sig.req)
+    inputs.execute()
 
 proc start*(thread: SigilsThread) =
   createThread(thread.thread, runThread, thread.inputs)
+
+var sigilThread {.threadVar.}: SigilsThread
+
+proc getCurrentSigilThread*(): SigilsThread =
+  return sigilThread
+
+proc startLocalThread*() =
+  sigilThread = newSigilsThread()
