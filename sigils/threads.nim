@@ -10,10 +10,6 @@ type
   AgentProxy*[T] = ref object of Agent
     remote*: SharedPtr[T]
 
-  AgentSignal* = object
-    obj: WeakRef[Agent]
-    req: AgentRequest
-
   AgentThread* = ref object of Agent
     thread*: Thread[void]
     inputs*: Chan[AgentRequest]
