@@ -51,15 +51,15 @@ proc callSlots*(obj: Agent | WeakRef[Agent], req: AgentRequest) {.gcsafe.} =
     # echo "call slots:all: ", req.procName, " ", obj.agentId, " :: ", obj.listeners
 
     for (tgt, slot) in listeners.items():
-      echo ""
-      echo "call listener:tgt: ", tgt, " ", req.procName
+      # echo ""
+      # echo "call listener:tgt: ", tgt, " ", req.procName
       # echo "call listener:slot: ", repr slot
       let tgtRef = tgt.toRef()
 
       var res: AgentResponse
 
       if tgtRef of AgentProxyShared:
-        echo "threaded Agent!"
+        # echo "threaded Agent!"
         let router = AgentProxyShared(tgtRef)
         let sig = ThreadSignal(
           slot: slot,
@@ -71,7 +71,7 @@ proc callSlots*(obj: Agent | WeakRef[Agent], req: AgentRequest) {.gcsafe.} =
           raise newException(AgentSlotError, "error sending signal to thread")
 
       else:
-        echo "regular Thread!"
+        # echo "regular Thread!"
         res = slot.callMethod(tgtRef, req)
 
       when defined(nimscript) or defined(useJsonSerde):
@@ -90,7 +90,7 @@ proc emit*(call: (Agent | WeakRef[Agent], AgentRequest)) =
 
 proc poll*(inputs: Chan[ThreadSignal]) =
   let sig = inputs.recv()
-  echo "thread got request: ", sig
+  # echo "thread got request: ", sig
   discard sig.slot.callMethod(sig.tgt[], sig.req)
 
 proc poll*(thread: SigilsThread) =
@@ -117,4 +117,5 @@ proc getCurrentSigilThread*(): SigilsThread =
   return sigilThread
 
 proc startLocalThread*() =
-  sigilThread = newSigilsThread()
+  if sigilThread.isNil:
+    sigilThread = newSigilsThread()
