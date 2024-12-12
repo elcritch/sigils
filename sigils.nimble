@@ -4,7 +4,7 @@ description   = "A slot and signals implementation for the Nim programming langu
 license       = "MIT"
 srcDir        = "."
 
-requires "nim == 2.0.12"
+requires "nim >= 2.0.12"
 requires "variant >= 0.2.12"
 requires "threading"
 requires "patty >= 0.3.4"
