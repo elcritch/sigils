@@ -60,13 +60,14 @@ proc callSlots*(obj: Agent | WeakRef[Agent], req: AgentRequest) {.gcsafe.} =
 
       if tgtRef of AgentProxyShared:
         # echo "threaded Agent!"
-        let router = AgentProxyShared(tgtRef)
+        let proxy = AgentProxyShared(tgtRef)
         let sig = ThreadSignal(
           slot: slot,
           req: req,
-          tgt: router.remote
+          tgt: proxy.remote
         )
-        let res = router.chan.trySend(unsafeIsolate sig)
+        echo "callMethod:agentProxy: ", "chan: ", proxy.chan
+        let res = proxy.chan.trySend(unsafeIsolate sig)
         if not res:
           raise newException(AgentSlotError, "error sending signal to thread")
 
@@ -90,7 +91,7 @@ proc emit*(call: (Agent | WeakRef[Agent], AgentRequest)) =
 
 proc poll*(inputs: Chan[ThreadSignal]) =
   let sig = inputs.recv()
-  echo "thread got request: ", sig, " (", getThreadId(), ")"
+  # echo "thread got request: ", sig, " (", getThreadId(), ")"
   discard sig.slot.callMethod(sig.tgt[], sig.req)
 
 proc poll*(thread: SigilsThread) =

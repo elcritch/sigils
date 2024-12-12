@@ -88,11 +88,15 @@ suite "threaded agent slots":
       b = Counter.new()
 
     echo "thread runner!", " (th:", getThreadId(), ")"
+    echo "obj a: ", a.unsafeWeakRef
+    echo "obj b: ", b.unsafeWeakRef
     let thread = newSigilsThread()
     thread.start()
     startLocalThread()
 
     let bp: AgentProxy[Counter] = b.moveToThread(thread)
+    echo "obj bp: ", bp.unsafeWeakRef
+    echo "obj bp.remote: ", bp.remote[].unsafeWeakRef
 
     connect(a, valueChanged, bp, setValue)
     connect(bp, updated, a, SomeAction.completed())
@@ -105,16 +109,20 @@ suite "threaded agent slots":
 
   test "sigil object thread runner multiple":
     var
+      aa = SomeAction.new()
       a = SomeAction.new()
       b = Counter.new()
 
     echo "thread runner!", " (main thread:", getThreadId(), ")"
+    echo "obj a: ", a.unsafeWeakRef
+    echo "obj b: ", b.unsafeWeakRef
     let thread = newSigilsThread()
     thread.start()
     startLocalThread()
 
     let bp: AgentProxy[Counter] = b.moveToThread(thread)
-
+    echo "obj bp: ", bp.unsafeWeakRef
+    echo "obj bp.remote: ", bp.remote[].unsafeWeakRef
     connect(a, valueChanged, bp, setValue)
     connect(bp, updated, a, SomeAction.completed())
 
@@ -122,7 +130,6 @@ suite "threaded agent slots":
     emit a.valueChanged(628)
 
     # thread.thread.joinThread(500)
-    # os.sleep(500)
     let ct = getCurrentSigilThread()
     ct.poll()
     check a.value == 271
