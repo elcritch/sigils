@@ -29,10 +29,17 @@ type
 
 template checkThreadSafety(field: object, parent: typed) =
   discard
+
 template checkThreadSafety[T](field: Isolated[T], parent: typed) =
   discard
+
 template checkThreadSafety(field: ref, parent: typed) =
-  {.error: "Signal type with ref's aren't thread safe! Signal type: " & $(typeof(parent)) & ". Use `Isolate[" & $(typeof(field)) & "]` to use it.".}
+  {.
+    error:
+      "Signal type with ref's aren't thread safe! Signal type: " & $(typeof(parent)) &
+      ". Use `Isolate[" & $(typeof(field)) & "]` to use it."
+  .}
+
 template checkThreadSafety[T](field: T, parent: typed) =
   discard
 
@@ -42,7 +49,6 @@ template checkSignalThreadSafety(sig: typed) =
   for n, v in sig.fieldPairs():
     echo "CHECK: ", n, " ", v.typeof.repr, " v: ", v.repr
     checkThreadSafety(v, sig)
-
 
 method callMethod*(
     ctx: AgentProxyShared, req: SigilRequest, slot: AgentProc
@@ -112,8 +118,9 @@ template connect*[T, S](
   # TODO: does this *really* work? It feels off but I wanted to
   #       get it running something. Surprisingly haven't seen any
   #       bugs with it so far, but it's sus.
-  let proxy =
-    AgentProxy[typeof(b)](chan: ct[].inputs, remote: newSharedPtr(unsafeIsolate Agent(b)))
+  let proxy = AgentProxy[typeof(b)](
+    chan: ct[].inputs, remote: newSharedPtr(unsafeIsolate Agent(b))
+  )
   a.remote[].addAgentListeners(signalName(signal), proxy, slot)
 
 proc poll*(inputs: Chan[ThreadSignal]) =

@@ -85,5 +85,5 @@ proc runAsyncThread*(args: (AsyncEvent, Chan[ThreadSignal])) {.thread.} =
   runForever()
 
 proc start*(thread: AsyncSigilThread) =
-  let args = (thread[].event, thread[].inputs,)
+  let args = (thread[].event, thread[].inputs)
   createThread(thread[].thread, runAsyncThread, args)
