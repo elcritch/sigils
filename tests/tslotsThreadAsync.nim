@@ -1,9 +1,4 @@
-import std/isolation
-import std/unittest
-import std/os
-import std/asyncdispatch
-import std/[times, strutils]
-
+import std/[unittest, asyncdispatch, times, strutils]
 import sigils
 import sigils/threadAsyncs
 
