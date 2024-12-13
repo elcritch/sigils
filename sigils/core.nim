@@ -6,9 +6,9 @@ export signals, slots, threads
 
 type AgentSlotError* = object of CatchableError
 
-method executeRequest*(
+proc callMethod*(
     req: SigilRequest, slot: AgentProc, ctx: RpcContext, # clientId: ClientId,
-): SigilResponse {.base, gcsafe, effectsOf: slot.} =
+): SigilResponse {.gcsafe, effectsOf: slot.} =
   ## Route's an rpc request. 
 
   if slot.isNil:
@@ -46,7 +46,7 @@ proc callSlots*(obj: Agent | WeakRef[Agent], req: SigilRequest) {.gcsafe.} =
           raise newException(AgentSlotError, "error sending signal to thread")
       else:
         # echo "regular Thread!"
-        res = req.executeRequest(slot, tgtRef)
+        res = req.callMethod(slot, tgtRef)
 
       when defined(nimscript) or defined(useJsonSerde):
         discard
@@ -65,7 +65,7 @@ proc emit*(call: (Agent | WeakRef[Agent], SigilRequest)) =
 proc poll*(inputs: Chan[ThreadSignal]) =
   let sig = inputs.recv()
   # echo "thread got request: ", sig, " (", getThreadId(), ")"
-  discard sig.req.executeRequest(sig.slot, sig.tgt[])
+  discard sig.req.callMethod(sig.slot, sig.tgt[])
 
 proc poll*(thread: SigilsThread) =
   thread.inputs.poll()
