@@ -18,16 +18,27 @@ import std/asyncdispatch
 from std/selectors import IOSelectorsException
 
 type
-  AsyncAgentProxyShared* = ref object of AgentProxyShared
-    trigger*: AsyncEvent
 
-  AsyncAgentProxy*[T] = ref object of AsyncAgentProxyShared
+  AsyncAgentProxy*[T] = ref object of AgentProxy[T]
+    trigger*: AsyncEvent
 
   AsyncSigilThread* = ref object of SigilThread
     trigger*: AsyncEvent
 
-method callMethod*(
-    ctx: AgentProxyShared,
+proc moveToThread*[T: Agent](agent: T, thread: AsyncSigilThread): AgentProxy[T] =
+  if not isUniqueRef(agent):
+    raise newException(
+      AccessViolationDefect,
+      "agent must be unique and not shared to be passed to another thread!",
+    )
+
+  let proxy = AsyncAgentProxy[T](
+    remote: newSharedPtr(unsafeIsolate(Agent(agent))), chan: thread.inputs
+  )
+  return AgentProxy[T](proxy)
+
+method callMethod*[T](
+    ctx: AgentProxy[T],
     req: SigilRequest,
     slot: AgentProc,
 ): SigilResponse {.gcsafe, effectsOf: slot.} =
@@ -35,7 +46,7 @@ method callMethod*(
   # echo "threaded Agent!"
   let proxy = ctx
   let sig = ThreadSignal(slot: slot, req: req, tgt: proxy.remote)
-  # echo "executeRequest:agentProxy: ", "chan: ", $proxy.chan
+  echo "executeRequest:asyncAgentProxy: ", "chan: ", $proxy.chan
   let res = proxy.chan.trySend(unsafeIsolate sig)
   if not res:
     raise newException(AgentSlotError, "error sending signal to thread")
