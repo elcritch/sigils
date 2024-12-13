@@ -1,6 +1,6 @@
-import sigils/signals
-import sigils/slots
-import sigils/threads
+import signals
+import slots
+import threads
 
 export signals, slots, threads
 
