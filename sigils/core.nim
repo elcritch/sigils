@@ -6,6 +6,21 @@ export signals, slots, threads
 
 type AgentSlotError* = object of CatchableError
 
+method executeRequest*(
+    req: SigilRequest, slot: AgentProc, ctx: RpcContext, # clientId: ClientId,
+): SigilResponse {.base, gcsafe, effectsOf: slot.} =
+  ## Route's an rpc request. 
+
+  if slot.isNil:
+    let msg = req.procName & " is not a registered RPC method."
+    let err = SigilError(code: METHOD_NOT_FOUND, msg: msg)
+    result = wrapResponseError(req.origin, err)
+  else:
+    slot(ctx, req.params)
+    let res = rpcPack(true)
+
+    result = SigilResponse(kind: Response, id: req.origin, result: res)
+
 proc callSlots*(obj: Agent | WeakRef[Agent], req: SigilRequest) {.gcsafe.} =
   {.cast(gcsafe).}:
     let listeners = obj.toRef().getAgentListeners(req.procName)
@@ -25,13 +40,13 @@ proc callSlots*(obj: Agent | WeakRef[Agent], req: SigilRequest) {.gcsafe.} =
         # echo "threaded Agent!"
         let proxy = AgentProxyShared(tgtRef)
         let sig = ThreadSignal(slot: slot, req: req, tgt: proxy.remote)
-        # echo "callMethod:agentProxy: ", "chan: ", $proxy.chan
+        # echo "executeRequest:agentProxy: ", "chan: ", $proxy.chan
         let res = proxy.chan.trySend(unsafeIsolate sig)
         if not res:
           raise newException(AgentSlotError, "error sending signal to thread")
       else:
         # echo "regular Thread!"
-        res = req.callMethod(slot, tgtRef)
+        res = req.executeRequest(slot, tgtRef)
 
       when defined(nimscript) or defined(useJsonSerde):
         discard
@@ -50,7 +65,7 @@ proc emit*(call: (Agent | WeakRef[Agent], SigilRequest)) =
 proc poll*(inputs: Chan[ThreadSignal]) =
   let sig = inputs.recv()
   # echo "thread got request: ", sig, " (", getThreadId(), ")"
-  discard sig.req.callMethod(sig.slot, sig.tgt[])
+  discard sig.req.executeRequest(sig.slot, sig.tgt[])
 
 proc poll*(thread: SigilsThread) =
   thread.inputs.poll()

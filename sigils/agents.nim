@@ -124,19 +124,6 @@ else:
 proc hash*(a: Agent): Hash =
   hash(a.getId())
 
-# proc hash*(a: AgentProc): Hash = hash(getAgentProcId(a))
-
-proc initSigilRequest*[S, T](
-    procName: string,
-    args: T,
-    origin: SigilId = SigilId(-1),
-    reqKind: RequestType = Request,
-): SigilRequestTy[S] =
-  # echo "SigilRequest: ", procName, " args: ", args.repr
-  result = SigilRequestTy[S](
-    kind: reqKind, origin: origin, procName: procName, params: rpcPack(args)
-  )
-
 proc getAgentListeners*(
     obj: Agent, sig: string
 ): OrderedSet[(WeakRef[Agent], AgentProc)] =
@@ -171,18 +158,3 @@ proc addAgentListeners*(obj: Agent, sig: string, tgt: Agent, slot: AgentProc): v
 
   tgt.subscribedTo.incl(obj.unsafeWeakRef())
   # echo "subscribers: ", obj.subscribers.len, " SUBSC: ", tgt.subscribed.len
-
-method callMethod*(
-    req: SigilRequest, slot: AgentProc, ctx: RpcContext, # clientId: ClientId,
-): SigilResponse {.base, gcsafe, effectsOf: slot.} =
-  ## Route's an rpc request. 
-
-  if slot.isNil:
-    let msg = req.procName & " is not a registered RPC method."
-    let err = SigilError(code: METHOD_NOT_FOUND, msg: msg)
-    result = wrapResponseError(req.origin, err)
-  else:
-    slot(ctx, req.params)
-    let res = rpcPack(true)
-
-    result = SigilResponse(kind: Response, id: req.origin, result: res)

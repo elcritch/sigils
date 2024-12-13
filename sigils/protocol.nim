@@ -59,7 +59,6 @@ type
 
 type
   ConversionError* = object of CatchableError
-  AgentSlotError* = object of CatchableError
 
   SigilErrorStackTrace* = object
     code*: int
@@ -109,3 +108,14 @@ template packResponse*(res: SigilResponse): Variant =
   var so = newVariant()
   so.pack(res)
   so
+
+proc initSigilRequest*[S, T](
+    procName: string,
+    args: T,
+    origin: SigilId = SigilId(-1),
+    reqKind: RequestType = Request,
+): SigilRequestTy[S] =
+  # echo "SigilRequest: ", procName, " args: ", args.repr
+  result = SigilRequestTy[S](
+    kind: reqKind, origin: origin, procName: procName, params: rpcPack(args)
+  )

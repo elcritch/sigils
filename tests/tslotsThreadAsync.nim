@@ -45,7 +45,6 @@ proc completed*(self: SomeAction, final: int) {.slot.} =
   # echo "Action done! final: ", final, " (th:", getThreadId(), ")"
   self.value = final
 
-
 proc value*(self: Counter): int =
   self.value
 
