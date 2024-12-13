@@ -124,5 +124,11 @@ proc initSigilRequest*[S, T](
     kind: reqKind, origin: origin, procName: procName, params: rpcPack(ensureMove args)
   )
 
+proc toSigilName*(name: IndexableChars): SigilName =
+  return toStackString(name, 64)
+
+proc toSigilName*(name: static string): SigilName =
+  return toStackString(name, 64)
+
 proc toSigilName*(name: string): SigilName =
   return toStackString(name, 64)
