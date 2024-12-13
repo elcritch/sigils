@@ -18,10 +18,14 @@ import std/asyncdispatch
 
 type
   AsyncAgentProxy*[T] = ref object of AgentProxy[T]
-    signal*: AsyncEvent
+    event*: AsyncEvent
 
-  AsyncSigilThread* = ref object of SigilThread
-    signal*: AsyncEvent
+  AsyncSigilThreadObj* = object of Agent
+    thread*: Thread[(AsyncEvent, Chan[ThreadSignal])]
+    inputs*: Chan[ThreadSignal]
+    event*: AsyncEvent
+
+  AsyncSigilThread* = SharedPtr[AsyncSigilThreadObj]
 
 proc moveToThread*[T: Agent](agent: T, thread: AsyncSigilThread): AgentProxy[T] =
   if not isUniqueRef(agent):
@@ -32,8 +36,8 @@ proc moveToThread*[T: Agent](agent: T, thread: AsyncSigilThread): AgentProxy[T] 
 
   let proxy = AsyncAgentProxy[T](
     remote: newSharedPtr(unsafeIsolate(Agent(agent))),
-    chan: thread.inputs,
-    signal: thread.signal,
+    chan: thread[].inputs,
+    event: thread[].event,
   )
   return AgentProxy[T](proxy)
 
@@ -46,43 +50,40 @@ method callMethod*[T](
   let sig = ThreadSignal(slot: slot, req: req, tgt: proxy.remote)
   echo "executeRequest:asyncAgentProxy: ", "chan: ", $proxy.chan
   let res = proxy.chan.trySend(unsafeIsolate sig)
-  proxy.signal.trigger()
+  proxy.event.trigger()
   if not res:
     raise newException(AgentSlotError, "error sending signal to thread")
 
 proc newSigilAsyncThread*(): AsyncSigilThread =
-  result = AsyncSigilThread()
-  result.inputs = newChan[ThreadSignal]()
-  result.signal = newAsyncEvent()
+  result = newSharedPtr(AsyncSigilThreadObj())
+  result[].inputs = newChan[ThreadSignal]()
+  result[].event = newAsyncEvent()
 
 proc asyncExecute*(inputs: Chan[ThreadSignal]) =
   while true:
     echo "asyncExecute..."
-    proc addEvent(ev: AsyncEvent; cb: Callback)
+    # proc addEvent(ev: AsyncEvent; cb: Callback)
     poll(inputs)
 
 proc asyncExecute*(thread: AsyncSigilThread) =
-  thread.inputs.asyncExecute()
+  thread[].inputs.asyncExecute()
 
-proc runAsyncThread*(inputs: Chan[ThreadSignal]) {.thread.} =
-  {.cast(gcsafe).}:
-    var inputs = inputs
-    echo "sigil thread waiting!", " (", getThreadId(), ")"
+proc runAsyncThread*(args: (AsyncEvent, Chan[ThreadSignal])) {.thread.} =
+  var
+    event: AsyncEvent = args[0]
+    inputs = args[1]
+  echo "sigil thread waiting!", " (", getThreadId(), ")"
 
-    let cb = proc(fd: AsyncFD): bool {.closure.} =
-      var msg: ThreadSignal
-      if inputs.tryRecv(msg):
-        echo "HR start: "
-        let resp = httpRequest(msg.value)
-        proc onResult() =
-          echo "HR req: "
-          let val = resp.read()
-          let res = AsyncMessage[HttpResult](handle: msg.handle, value: val)
-          ap.proxy[].outputs.send(res)
-      inputs.asyncExecute()
+  let cb = proc(fd: AsyncFD): bool {.closure, gcsafe.} =
+    {.cast(gcsafe).}:
+      var sig: ThreadSignal
+      if inputs.tryRecv(sig):
+        echo "async thread run: "
+        discard sig.tgt[].callMethod(sig.req, sig.slot)
 
-    resp.addCallback(cb)
-
+  event.addEvent(cb)
+  runForever()
 
 proc start*(thread: AsyncSigilThread) =
-  createThread(thread.thread, runAsyncThread, thread.inputs)
+  let args = (thread[].event, thread[].inputs,)
+  createThread(thread[].thread, runAsyncThread, args)
