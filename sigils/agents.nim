@@ -54,11 +54,8 @@ type
 
   AgentPairing* = tuple[tgt: WeakRef[Agent], fn: AgentProc]
 
-  # Context for servicing an RPC call 
-  RpcContext* = Agent
-
   # Procedure signature accepted as an RPC call by server
-  AgentProc* = proc(context: RpcContext, params: RpcParams) {.nimcall.}
+  AgentProc* = proc(context: Agent, params: SigilParams) {.nimcall.}
 
   AgentProcTy*[S] = AgentProc
 
@@ -110,32 +107,19 @@ proc `=destroy`*(agent: AgentObj) =
   `=destroy`(xid[].subscribedTo)
 
 when defined(nimscript):
-  proc getId*(a: Agent): AgentId =
+  proc getId*(a: Agent): SigilId =
     a.debugId
 
   var lastUId {.compileTime.}: int = 1
 else:
-  proc getId*[T: Agent](a: WeakRef[T]): AgentId =
+  proc getId*[T: Agent](a: WeakRef[T]): SigilId =
     cast[int](a.toPtr())
 
-  proc getId*(a: Agent): AgentId =
+  proc getId*(a: Agent): SigilId =
     cast[int](cast[pointer](a))
 
 proc hash*(a: Agent): Hash =
   hash(a.getId())
-
-# proc hash*(a: AgentProc): Hash = hash(getAgentProcId(a))
-
-proc initAgentRequest*[S, T](
-    procName: string,
-    args: T,
-    origin: AgentId = AgentId(-1),
-    reqKind: AgentType = Request,
-): AgentRequestTy[S] =
-  # echo "AgentRequest: ", procName, " args: ", args.repr
-  result = AgentRequestTy[S](
-    kind: reqKind, origin: origin, procName: procName, params: rpcPack(args)
-  )
 
 proc getAgentListeners*(
     obj: Agent, sig: string
@@ -171,3 +155,18 @@ proc addAgentListeners*(obj: Agent, sig: string, tgt: Agent, slot: AgentProc): v
 
   tgt.subscribedTo.incl(obj.unsafeWeakRef())
   # echo "subscribers: ", obj.subscribers.len, " SUBSC: ", tgt.subscribed.len
+
+method callMethod*(
+    ctx: Agent, req: SigilRequest, slot: AgentProc
+): SigilResponse {.base, gcsafe, effectsOf: slot.} =
+  ## Route's an rpc request. 
+
+  if slot.isNil:
+    let msg = req.procName & " is not a registered RPC method."
+    let err = SigilError(code: METHOD_NOT_FOUND, msg: msg)
+    result = wrapResponseError(req.origin, err)
+  else:
+    slot(ctx, req.params)
+    let res = rpcPack(true)
+
+    result = SigilResponse(kind: Response, id: req.origin, result: res)

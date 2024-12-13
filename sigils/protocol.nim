@@ -17,14 +17,14 @@ when defined(nimscript) or defined(useJsonSerde):
   import std/json
   export json
 
-type RpcParams* = object ## implementation specific -- handles data buffer
+type SigilParams* = object ## implementation specific -- handles data buffer
   when defined(nimscript) or defined(useJsonSerde):
     buf*: JsonNode
   else:
     buf*: Variant
 
 type
-  AgentType* {.size: sizeof(uint8).} = enum
+  RequestType* {.size: sizeof(uint8).} = enum
     # Fast RPC Types
     Request = 5
     Response = 6
@@ -38,36 +38,32 @@ type
     Unsupported = 23
     # rtpMax = 23 # numbers less than this store in single mpack/cbor byte
 
-  AgentId* = int
+  SigilId* = int
 
-  AgentRequest* = object
-    kind*: AgentType
-    origin*: AgentId
+  SigilRequest* = object
+    kind*: RequestType
+    origin*: SigilId
     procName*: string
-    params*: RpcParams # - we handle params below
+    params*: SigilParams # - we handle params below
 
-  AgentRequestTy*[T] = AgentRequest
+  SigilRequestTy*[T] = SigilRequest
 
-  AgentResponse* = object
-    kind*: AgentType
+  SigilResponse* = object
+    kind*: RequestType
     id*: int
-    result*: RpcParams # - we handle params below
+    result*: SigilParams # - we handle params below
 
-  AgentError* = ref object
+  SigilError* = ref object
     code*: FastErrorCodes
     msg*: string # trace*: seq[(string, string, int)]
 
 type
   ConversionError* = object of CatchableError
-  AgentSlotError* = object of CatchableError
 
-  AgentErrorStackTrace* = object
+  SigilErrorStackTrace* = object
     code*: int
     msg*: string
     stacktrace*: seq[string]
-
-  AgentBindError* = object of ValueError
-  AgentAddressUnresolvableError* = object of ValueError
 
 proc pack*[T](ss: var Variant, val: T) =
   # echo "Pack Type: ", getTypeId(T), " <- ", typeof(val)
@@ -79,36 +75,47 @@ proc unpack*[T](ss: Variant, obj: var T) =
   # else:
   # raise newException(ConversionError, "couldn't convert to: " & $(T))
 
-proc rpcPack*(res: RpcParams): RpcParams {.inline.} =
+proc rpcPack*(res: SigilParams): SigilParams {.inline.} =
   result = res
 
-proc rpcPack*[T](res: T): RpcParams =
+proc rpcPack*[T](res: T): SigilParams =
   when defined(nimscript) or defined(useJsonSerde):
     let jn = toJson(res)
-    result = RpcParams(buf: jn)
+    result = SigilParams(buf: jn)
   else:
-    result = RpcParams(buf: newVariant(res))
+    result = SigilParams(buf: newVariant(res))
 
-proc rpcUnpack*[T](obj: var T, ss: RpcParams) =
+proc rpcUnpack*[T](obj: var T, ss: SigilParams) =
   when defined(nimscript) or defined(useJsonSerde):
     obj.fromJson(ss.buf)
     discard
   else:
     ss.buf.unpack(obj)
 
-proc wrapResponse*(id: AgentId, resp: RpcParams, kind = Response): AgentResponse =
+proc wrapResponse*(id: SigilId, resp: SigilParams, kind = Response): SigilResponse =
   # echo "WRAP RESP: ", id, " kind: ", kind
   result.kind = kind
   result.id = id
   result.result = resp
 
-proc wrapResponseError*(id: AgentId, err: AgentError): AgentResponse =
+proc wrapResponseError*(id: SigilId, err: SigilError): SigilResponse =
   echo "WRAP ERROR: ", id, " err: ", err.repr
   result.kind = Error
   result.id = id
   result.result = rpcPack(err)
 
-template packResponse*(res: AgentResponse): Variant =
+template packResponse*(res: SigilResponse): Variant =
   var so = newVariant()
   so.pack(res)
   so
+
+proc initSigilRequest*[S, T](
+    procName: string,
+    args: T,
+    origin: SigilId = SigilId(-1),
+    reqKind: RequestType = Request,
+): SigilRequestTy[S] =
+  # echo "SigilRequest: ", procName, " args: ", args.repr
+  result = SigilRequestTy[S](
+    kind: reqKind, origin: origin, procName: procName, params: rpcPack(args)
+  )

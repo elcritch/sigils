@@ -39,14 +39,14 @@ suite "threaded agent slots":
       b = Counter.new()
       c = Counter.new()
 
-    var agentResults = newChan[(WeakRef[Agent], AgentRequest)]()
+    var agentResults = newChan[(WeakRef[Agent], SigilRequest)]()
 
     connect(a, valueChanged, b, setValue)
     connect(a, valueChanged, c, Counter.setValue)
 
     let wa: WeakRef[SomeAction] = a.unsafeWeakRef()
     emit wa.valueChanged(137)
-    check typeof(wa.valueChanged(137)) is (WeakRef[Agent], AgentRequest)
+    check typeof(wa.valueChanged(137)) is (WeakRef[Agent], SigilRequest)
 
     check wa[].value == 0
     check b.value == 137
@@ -75,7 +75,7 @@ suite "threaded agent slots":
       b = Counter.new()
 
     # echo "thread runner!"
-    let thread = newSigilsThread()
+    let thread = newSigilThread()
     let bp: AgentProxy[Counter] = b.moveToThread(thread)
 
     connect(a, valueChanged, bp, setValue)
@@ -86,11 +86,10 @@ suite "threaded agent slots":
     var
       a = SomeAction.new()
       b = Counter.new()
-
-    # echo "thread runner!", " (th:", getThreadId(), ")"
+    echo "thread runner!", " (th:", getThreadId(), ")"
     # echo "obj a: ", a.unsafeWeakRef
     # echo "obj b: ", b.unsafeWeakRef
-    let thread = newSigilsThread()
+    let thread = newSigilThread()
     thread.start()
     startLocalThread()
 
@@ -115,7 +114,7 @@ suite "threaded agent slots":
     # echo "thread runner!", " (main thread:", getThreadId(), ")"
     # echo "obj a: ", a.unsafeWeakRef
     # echo "obj b: ", b.unsafeWeakRef
-    let thread = newSigilsThread()
+    let thread = newSigilThread()
     thread.start()
     startLocalThread()
 
@@ -138,7 +137,7 @@ suite "threaded agent slots":
   test "sigil object thread runner (loop)":
     if true:
       startLocalThread()
-      let thread = newSigilsThread()
+      let thread = newSigilThread()
       thread.start()
       # echo "thread runner!", " (th:", getThreadId(), ")"
 

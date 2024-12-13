@@ -219,7 +219,7 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
       mcall.add param[0]
 
     let agentSlotImpl = quote:
-      proc slot(context: Agent, params: RpcParams) {.nimcall.} =
+      proc slot(context: Agent, params: SigilParams) {.nimcall.} =
         if context == nil:
           raise newException(ValueError, "bad value")
         let `objId` = `contextType`(context)
@@ -253,9 +253,9 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
     let objId = ident"obj"
 
     result.add quote do:
-      proc `rpcMethod`(`objId`: `firstType`): (Agent, AgentRequestTy[`firstType`]) =
+      proc `rpcMethod`(`objId`: `firstType`): (Agent, SigilRequestTy[`firstType`]) =
         let args = `construct`
-        let req = initAgentRequest[`firstType`, typeof(args)](
+        let req = initSigilRequest[`firstType`, typeof(args)](
           procName = `signalName`, args = args, origin = `objId`.getId()
         )
         result = (`objId`, req)
@@ -266,9 +266,9 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
     result.add quote do:
       proc `rpcMethod`(
           `objId`: WeakRef[`firstType`]
-      ): (WeakRef[Agent], AgentRequestTy[`firstType`]) =
+      ): (WeakRef[Agent], SigilRequestTy[`firstType`]) =
         let args = `construct`
-        let req = initAgentRequest[`firstType`, typeof(args)](
+        let req = initSigilRequest[`firstType`, typeof(args)](
           procName = `signalName`, args = args, origin = `objId`.getId()
         )
         result = (`objId`.asAgent(), req)
