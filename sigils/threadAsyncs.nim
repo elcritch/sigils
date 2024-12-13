@@ -15,7 +15,6 @@ import std/options
 import std/isolation
 import std/uri
 import std/asyncdispatch
-from std/selectors import IOSelectorsException
 
 type
   AsyncAgentProxy*[T] = ref object of AgentProxy[T]
