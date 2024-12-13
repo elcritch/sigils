@@ -27,6 +27,23 @@ type
 
   SigilThread* = SharedPtr[SigilThreadObj]
 
+template checkThreadSafety(field: object, parent: typed) =
+  discard
+template checkThreadSafety[T](field: Isolated[T], parent: typed) =
+  discard
+template checkThreadSafety(field: ref, parent: typed) =
+  {.error: "Signal type with ref's aren't thread safe! Signal type: " & $(typeof(parent)) & ". Use `Isolate[" & $(typeof(field)) & "]` to use it.".}
+template checkThreadSafety[T](field: T, parent: typed) =
+  discard
+
+template checkSignalThreadSafety(sig: typed) =
+  discard
+  echo "CHECK: ", sig.typeof.repr, " :: ", sig.repr
+  for n, v in sig.fieldPairs():
+    echo "CHECK: ", n, " ", v.typeof.repr, " v: ", v.repr
+    checkThreadSafety(v, sig)
+
+
 method callMethod*(
     ctx: AgentProxyShared, req: SigilRequest, slot: AgentProc
 ): SigilResponse {.gcsafe, effectsOf: slot.} =
@@ -75,6 +92,7 @@ template connect*[T](
 ): void =
   ## connects `AgentProxy[T]` to remote signals
   ## 
+  checkSignalThreadSafety(SignalTypes.`signal`(typeof(a)))
   let agentSlot = `slot`(T)
   checkSignalTypes(a, signal, T(), agentSlot, acceptVoidSlot)
   a.addAgentListeners(signalName(signal), b, agentSlot)
