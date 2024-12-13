@@ -96,3 +96,4 @@ proc startLocalThread*() =
 proc getCurrentSigilThread*(): SigilsThread =
   startLocalThread()
   return sigilThread
+
