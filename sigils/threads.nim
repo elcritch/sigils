@@ -29,16 +29,12 @@ type
 
 template checkThreadSafety(sig: object, parent: typed) =
   discard
-  echo "CHECK: ok object"
-  # {.error: "error!".}
-template checkThreadSafety(sig: ref, parent: typed) =
+template checkThreadSafety[T](sig: Isolated[T], parent: typed) =
   discard
-  echo "CHECK: ok ref"
+template checkThreadSafety(sig: ref, parent: typed) =
   {.error: "Signal type with ref's aren't thread safe! Signal type: " & $(typeof(parent)).}
-
 template checkThreadSafety[T](sig: T, parent: typed) =
   discard
-  echo "CHECK: ok other"
 
 template checkSignalThreadSafety(sig: typed) =
   discard
