@@ -98,7 +98,7 @@ proc execute*(thread: SigilsThread) =
 proc runThread*(inputs: Chan[ThreadSignal]) {.thread.} =
   {.cast(gcsafe).}:
     var inputs = inputs
-    echo "sigil thread waiting!", " (", getThreadId(), ")"
+    # echo "sigil thread waiting!", " (", getThreadId(), ")"
     inputs.execute()
 
 proc start*(thread: SigilsThread) =

@@ -16,14 +16,14 @@ proc valueChanged*(tp: SomeAction, val: int) {.signal.}
 proc updated*(tp: Counter, final: int) {.signal.}
 
 proc setValue*(self: Counter, value: int) {.slot.} =
-  echo "setValue! ", value, " (th:", getThreadId(), ")"
+  # echo "setValue! ", value, " (th:", getThreadId(), ")"
   if self.value != value:
     self.value = value
   # echo "Counter: ", self.subscribers
   emit self.updated(self.value)
 
 proc completed*(self: SomeAction, final: int) {.slot.} =
-  echo "Action done! final: ", final, " (th:", getThreadId(), ")"
+  # echo "Action done! final: ", final, " (th:", getThreadId(), ")"
   self.value = final
 
 proc value*(self: Counter): int =
@@ -136,13 +136,13 @@ suite "threaded agent slots":
     check a.value == 628
 
   test "sigil object thread runner (loop)":
-    if false:
+    if true:
       startLocalThread()
       let thread = newSigilsThread()
       thread.start()
       echo "thread runner!", " (th:", getThreadId(), ")"
 
-      for idx in 1 .. 1_00:
+      for idx in 1 .. 1_000:
         var
           a = SomeAction.new()
           b = Counter.new()
