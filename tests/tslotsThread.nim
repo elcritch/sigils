@@ -88,15 +88,15 @@ suite "threaded agent slots":
       b = Counter.new()
 
     echo "thread runner!", " (th:", getThreadId(), ")"
-    echo "obj a: ", a.unsafeWeakRef
-    echo "obj b: ", b.unsafeWeakRef
+    # echo "obj a: ", a.unsafeWeakRef
+    # echo "obj b: ", b.unsafeWeakRef
     let thread = newSigilsThread()
     thread.start()
     startLocalThread()
 
     let bp: AgentProxy[Counter] = b.moveToThread(thread)
-    echo "obj bp: ", bp.unsafeWeakRef
-    echo "obj bp.remote: ", bp.remote[].unsafeWeakRef
+    # echo "obj bp: ", bp.unsafeWeakRef
+    # echo "obj bp.remote: ", bp.remote[].unsafeWeakRef
 
     connect(a, valueChanged, bp, setValue)
     connect(bp, updated, a, SomeAction.completed())
@@ -113,15 +113,15 @@ suite "threaded agent slots":
       b = Counter.new()
 
     echo "thread runner!", " (main thread:", getThreadId(), ")"
-    echo "obj a: ", a.unsafeWeakRef
-    echo "obj b: ", b.unsafeWeakRef
+    # echo "obj a: ", a.unsafeWeakRef
+    # echo "obj b: ", b.unsafeWeakRef
     let thread = newSigilsThread()
     thread.start()
     startLocalThread()
 
     let bp: AgentProxy[Counter] = b.moveToThread(thread)
-    echo "obj bp: ", bp.unsafeWeakRef
-    echo "obj bp.remote: ", bp.remote[].unsafeWeakRef
+    # echo "obj bp: ", bp.unsafeWeakRef
+    # echo "obj bp.remote: ", bp.remote[].unsafeWeakRef
     connect(a, valueChanged, bp, setValue)
     connect(bp, updated, a, SomeAction.completed())
 
