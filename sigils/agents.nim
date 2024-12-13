@@ -155,3 +155,20 @@ proc addAgentListeners*(obj: Agent, sig: string, tgt: Agent, slot: AgentProc): v
 
   tgt.subscribedTo.incl(obj.unsafeWeakRef())
   # echo "subscribers: ", obj.subscribers.len, " SUBSC: ", tgt.subscribed.len
+
+method callMethod*(
+    ctx: Agent,
+    req: SigilRequest,
+    slot: AgentProc,
+): SigilResponse {.base, gcsafe, effectsOf: slot.} =
+  ## Route's an rpc request. 
+
+  if slot.isNil:
+    let msg = req.procName & " is not a registered RPC method."
+    let err = SigilError(code: METHOD_NOT_FOUND, msg: msg)
+    result = wrapResponseError(req.origin, err)
+  else:
+    slot(ctx, req.params)
+    let res = rpcPack(true)
+
+    result = SigilResponse(kind: Response, id: req.origin, result: res)

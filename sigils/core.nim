@@ -1,27 +1,9 @@
 import signals
 import slots
-import threads
 
-export signals, slots, threads
+export signals, slots
 
 type AgentSlotError* = object of CatchableError
-
-proc callMethod*(
-    ctx: Agent,
-    req: SigilRequest,
-    slot: AgentProc,
-): SigilResponse {.gcsafe, effectsOf: slot.} =
-  ## Route's an rpc request. 
-
-  if slot.isNil:
-    let msg = req.procName & " is not a registered RPC method."
-    let err = SigilError(code: METHOD_NOT_FOUND, msg: msg)
-    result = wrapResponseError(req.origin, err)
-  else:
-    slot(ctx, req.params)
-    let res = rpcPack(true)
-
-    result = SigilResponse(kind: Response, id: req.origin, result: res)
 
 proc callSlots*(obj: Agent | WeakRef[Agent], req: SigilRequest) {.gcsafe.} =
   {.cast(gcsafe).}:
@@ -35,20 +17,7 @@ proc callSlots*(obj: Agent | WeakRef[Agent], req: SigilRequest) {.gcsafe.} =
       # echo "call listener:tgt: ", tgt, " ", req.procName
       # echo "call listener:slot: ", repr slot
       let tgtRef = tgt.toRef()
-
-      var res: SigilResponse
-
-      if tgtRef of AgentProxyShared:
-        # echo "threaded Agent!"
-        let proxy = AgentProxyShared(tgtRef)
-        let sig = ThreadSignal(slot: slot, req: req, tgt: proxy.remote)
-        # echo "executeRequest:agentProxy: ", "chan: ", $proxy.chan
-        let res = proxy.chan.trySend(unsafeIsolate sig)
-        if not res:
-          raise newException(AgentSlotError, "error sending signal to thread")
-      else:
-        # echo "regular Thread!"
-        res = tgtRef.callMethod(req, slot)
+      var res: SigilResponse = tgtRef.callMethod(req, slot)
 
       when defined(nimscript) or defined(useJsonSerde):
         discard
@@ -63,37 +32,3 @@ proc callSlots*(obj: Agent | WeakRef[Agent], req: SigilRequest) {.gcsafe.} =
 proc emit*(call: (Agent | WeakRef[Agent], SigilRequest)) =
   let (obj, req) = call
   callSlots(obj, req)
-
-proc poll*(inputs: Chan[ThreadSignal]) =
-  let sig = inputs.recv()
-  # echo "thread got request: ", sig, " (", getThreadId(), ")"
-  discard sig.tgt[].callMethod(sig.req, sig.slot, )
-
-proc poll*(thread: SigilsThread) =
-  thread.inputs.poll()
-
-proc execute*(inputs: Chan[ThreadSignal]) =
-  while true:
-    poll(inputs)
-
-proc execute*(thread: SigilsThread) =
-  thread.inputs.execute()
-
-proc runThread*(inputs: Chan[ThreadSignal]) {.thread.} =
-  {.cast(gcsafe).}:
-    var inputs = inputs
-    # echo "sigil thread waiting!", " (", getThreadId(), ")"
-    inputs.execute()
-
-proc start*(thread: SigilsThread) =
-  createThread(thread.thread, runThread, thread.inputs)
-
-var sigilThread {.threadVar.}: SigilsThread
-
-proc startLocalThread*() =
-  if sigilThread.isNil:
-    sigilThread = newSigilsThread()
-
-proc getCurrentSigilThread*(): SigilsThread =
-  startLocalThread()
-  return sigilThread

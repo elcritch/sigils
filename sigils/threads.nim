@@ -1,21 +1,14 @@
 import std/sets
 import std/isolation
-import agents
 import threading/smartptrs
 import threading/channels
+
+import agents
+import core
 
 export channels, smartptrs, isolation
 
 type
-  ThreadSignal* = object
-    slot*: AgentProc
-    req*: SigilRequest
-    tgt*: SharedPtr[Agent]
-
-  SigilsThread* = ref object of Agent
-    thread*: Thread[Chan[ThreadSignal]]
-    inputs*: Chan[ThreadSignal]
-
   AgentProxyShared* = ref object of Agent
     remote*: SharedPtr[Agent]
     chan*: Chan[ThreadSignal]
@@ -25,6 +18,30 @@ type
     chan*: Chan[ThreadSignal]
 
   AgentProxy*[T] = ref object of AgentProxyShared
+
+  ThreadSignal* = object
+    slot*: AgentProc
+    req*: SigilRequest
+    tgt*: SharedPtr[Agent]
+
+  SigilsThread* = ref object of Agent
+    thread*: Thread[Chan[ThreadSignal]]
+    inputs*: Chan[ThreadSignal]
+
+method callMethod*(
+    ctx: AgentProxyShared,
+    req: SigilRequest,
+    slot: AgentProc,
+): SigilResponse {.gcsafe, effectsOf: slot.} =
+  ## Route's an rpc request. 
+  # echo "threaded Agent!"
+  let proxy = ctx
+  let sig = ThreadSignal(slot: slot, req: req, tgt: proxy.remote)
+  # echo "executeRequest:agentProxy: ", "chan: ", $proxy.chan
+  let res = proxy.chan.trySend(unsafeIsolate sig)
+  if not res:
+    raise newException(AgentSlotError, "error sending signal to thread")
+
 
 proc newSigilsThread*(): SigilsThread =
   result = SigilsThread()
@@ -84,3 +101,37 @@ template connect*[T, S](
   let proxy =
     AgentProxy[typeof(b)](chan: ct.inputs, remote: newSharedPtr(unsafeIsolate Agent(b)))
   a.remote[].addAgentListeners(signalName(signal), proxy, slot)
+
+proc poll*(inputs: Chan[ThreadSignal]) =
+  let sig = inputs.recv()
+  # echo "thread got request: ", sig, " (", getThreadId(), ")"
+  discard sig.tgt[].callMethod(sig.req, sig.slot, )
+
+proc poll*(thread: SigilsThread) =
+  thread.inputs.poll()
+
+proc execute*(inputs: Chan[ThreadSignal]) =
+  while true:
+    poll(inputs)
+
+proc execute*(thread: SigilsThread) =
+  thread.inputs.execute()
+
+proc runThread*(inputs: Chan[ThreadSignal]) {.thread.} =
+  {.cast(gcsafe).}:
+    var inputs = inputs
+    # echo "sigil thread waiting!", " (", getThreadId(), ")"
+    inputs.execute()
+
+proc start*(thread: SigilsThread) =
+  createThread(thread.thread, runThread, thread.inputs)
+
+var sigilThread {.threadVar.}: SigilsThread
+
+proc startLocalThread*() =
+  if sigilThread.isNil:
+    sigilThread = newSigilsThread()
+
+proc getCurrentSigilThread*(): SigilsThread =
+  startLocalThread()
+  return sigilThread
