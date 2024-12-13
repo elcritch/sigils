@@ -44,8 +44,8 @@ suite "threaded agent slots":
 
   test "sigil object thread runner":
     var
-      a = SomeAction.new()
-      b = Counter.new()
+      a = SomeAction()
+      b = Counter()
 
     echo "thread runner!", " (th:", getThreadId(), ")"
     echo "obj a: ", a.unsafeWeakRef
