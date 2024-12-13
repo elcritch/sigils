@@ -65,9 +65,9 @@ type
     msg*: string
     stacktrace*: seq[string]
 
-proc pack*[T](ss: var Variant, val: T) =
+proc pack*[T](ss: var Variant, val: sink T) =
   # echo "Pack Type: ", getTypeId(T), " <- ", typeof(val)
-  ss = newVariant(val)
+  ss = newVariant(ensureMove val)
 
 proc unpack*[T](ss: Variant, obj: var T) =
   # if ss.ofType(T):
@@ -78,12 +78,12 @@ proc unpack*[T](ss: Variant, obj: var T) =
 proc rpcPack*(res: SigilParams): SigilParams {.inline.} =
   result = res
 
-proc rpcPack*[T](res: T): SigilParams =
+proc rpcPack*[T](res: sink T): SigilParams =
   when defined(nimscript) or defined(useJsonSerde):
     let jn = toJson(res)
     result = SigilParams(buf: jn)
   else:
-    result = SigilParams(buf: newVariant(res))
+    result = SigilParams(buf: newVariant(ensureMove res))
 
 proc rpcUnpack*[T](obj: var T, ss: SigilParams) =
   when defined(nimscript) or defined(useJsonSerde):
@@ -111,11 +111,11 @@ template packResponse*(res: SigilResponse): Variant =
 
 proc initSigilRequest*[S, T](
     procName: string,
-    args: T,
+    args: sink T,
     origin: SigilId = SigilId(-1),
     reqKind: RequestType = Request,
 ): SigilRequestTy[S] =
   # echo "SigilRequest: ", procName, " args: ", args.repr
   result = SigilRequestTy[S](
-    kind: reqKind, origin: origin, procName: procName, params: rpcPack(args)
+    kind: reqKind, origin: origin, procName: procName, params: rpcPack(ensureMove args)
   )
