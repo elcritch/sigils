@@ -1,6 +1,8 @@
 import std/isolation
 import std/unittest
 import std/os
+import std/asyncdispatch
+import std/[times, strutils] # This is to provide the timing output
 
 import sigils
 import sigils/threadAsyncs
@@ -17,12 +19,26 @@ type
 proc valueChanged*(tp: SomeAction, val: int) {.signal.}
 proc updated*(tp: Counter, final: int) {.signal.}
 
+let start = epochTime()
+
+proc ticker(self: Counter) {.async.} =
+  ## This simple procedure will echo out "tick" ten times with 100ms between
+  ## each tick. We use it to visualise the time between other procedures.
+  for i in 1..10:
+    await sleepAsync(100)
+    echo "tick ",
+         i*100, "ms ",
+         split($((epochTime() - start)*1000), '.')[0], "ms (real)"
+
+  emit self.updated(epochTime().toInt())
+    
+
 proc setValue*(self: Counter, value: int) {.slot.} =
-  # echo "setValue! ", value, " (th:", getThreadId(), ")"
+  echo "setValue! ", value, " (th:", getThreadId(), ")"
   if self.value != value:
     self.value = value
   # echo "Counter: ", self.subscribers
-  emit self.updated(self.value)
+  waitFor ticker(self)
 
 proc completed*(self: SomeAction, final: int) {.slot.} =
   # echo "Action done! final: ", final, " (th:", getThreadId(), ")"
@@ -41,8 +57,8 @@ suite "threaded agent slots":
       b = Counter.new()
 
     echo "thread runner!", " (th:", getThreadId(), ")"
-    # echo "obj a: ", a.unsafeWeakRef
-    # echo "obj b: ", b.unsafeWeakRef
+    echo "obj a: ", a.unsafeWeakRef
+
     let thread = newSigilAsyncThread()
     thread.start()
     startLocalThread()

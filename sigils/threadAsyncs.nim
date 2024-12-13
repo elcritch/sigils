@@ -57,6 +57,7 @@ proc newSigilAsyncThread*(): AsyncSigilThread =
 
 proc asyncExecute*(inputs: Chan[ThreadSignal]) =
   while true:
+    echo "asyncExecute..."
     poll(inputs)
 
 proc asyncExecute*(thread: AsyncSigilThread) =
