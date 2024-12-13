@@ -44,10 +44,7 @@ template checkThreadSafety[T](field: T, parent: typed) =
   discard
 
 template checkSignalThreadSafety(sig: typed) =
-  discard
-  echo "CHECK: ", sig.typeof.repr, " :: ", sig.repr
   for n, v in sig.fieldPairs():
-    echo "CHECK: ", n, " ", v.typeof.repr, " v: ", v.repr
     checkThreadSafety(v, sig)
 
 method callMethod*(
