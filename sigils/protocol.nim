@@ -38,15 +38,15 @@ type
     Unsupported = 23
     # rtpMax = 23 # numbers less than this store in single mpack/cbor byte
 
-  AgentId* = int
+  SigilId* = int
 
-  AgentRequest* = object
+  SigilRequest* = object
     kind*: RequestType
-    origin*: AgentId
+    origin*: SigilId
     procName*: string
     params*: RpcParams # - we handle params below
 
-  AgentRequestTy*[T] = AgentRequest
+  SigilRequestTy*[T] = SigilRequest
 
   AgentResponse* = object
     kind*: RequestType
@@ -96,13 +96,13 @@ proc rpcUnpack*[T](obj: var T, ss: RpcParams) =
   else:
     ss.buf.unpack(obj)
 
-proc wrapResponse*(id: AgentId, resp: RpcParams, kind = Response): AgentResponse =
+proc wrapResponse*(id: SigilId, resp: RpcParams, kind = Response): AgentResponse =
   # echo "WRAP RESP: ", id, " kind: ", kind
   result.kind = kind
   result.id = id
   result.result = resp
 
-proc wrapResponseError*(id: AgentId, err: AgentError): AgentResponse =
+proc wrapResponseError*(id: SigilId, err: AgentError): AgentResponse =
   echo "WRAP ERROR: ", id, " err: ", err.repr
   result.kind = Error
   result.id = id

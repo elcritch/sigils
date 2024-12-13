@@ -40,14 +40,14 @@ suite "threaded agent slots":
       b = Counter.new()
       c = Counter.new()
 
-    var agentResults = newChan[(WeakRef[Agent], AgentRequest)]()
+    var agentResults = newChan[(WeakRef[Agent], SigilRequest)]()
 
     connect(a, valueChanged, b, setValue)
     connect(a, valueChanged, c, Counter.setValue)
 
     let wa: WeakRef[SomeAction] = a.unsafeWeakRef()
     emit wa.valueChanged(137)
-    check typeof(wa.valueChanged(137)) is (WeakRef[Agent], AgentRequest)
+    check typeof(wa.valueChanged(137)) is (WeakRef[Agent], SigilRequest)
 
     check wa[].value == 0
     check b.value == 137

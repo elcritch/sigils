@@ -110,15 +110,15 @@ proc `=destroy`*(agent: AgentObj) =
   `=destroy`(xid[].subscribedTo)
 
 when defined(nimscript):
-  proc getId*(a: Agent): AgentId =
+  proc getId*(a: Agent): SigilId =
     a.debugId
 
   var lastUId {.compileTime.}: int = 1
 else:
-  proc getId*[T: Agent](a: WeakRef[T]): AgentId =
+  proc getId*[T: Agent](a: WeakRef[T]): SigilId =
     cast[int](a.toPtr())
 
-  proc getId*(a: Agent): AgentId =
+  proc getId*(a: Agent): SigilId =
     cast[int](cast[pointer](a))
 
 proc hash*(a: Agent): Hash =
@@ -126,14 +126,14 @@ proc hash*(a: Agent): Hash =
 
 # proc hash*(a: AgentProc): Hash = hash(getAgentProcId(a))
 
-proc initAgentRequest*[S, T](
+proc initSigilRequest*[S, T](
     procName: string,
     args: T,
-    origin: AgentId = AgentId(-1),
+    origin: SigilId = SigilId(-1),
     reqKind: RequestType = Request,
-): AgentRequestTy[S] =
-  # echo "AgentRequest: ", procName, " args: ", args.repr
-  result = AgentRequestTy[S](
+): SigilRequestTy[S] =
+  # echo "SigilRequest: ", procName, " args: ", args.repr
+  result = SigilRequestTy[S](
     kind: reqKind, origin: origin, procName: procName, params: rpcPack(args)
   )
 
@@ -173,7 +173,7 @@ proc addAgentListeners*(obj: Agent, sig: string, tgt: Agent, slot: AgentProc): v
   # echo "subscribers: ", obj.subscribers.len, " SUBSC: ", tgt.subscribed.len
 
 method callMethod*(
-    req: AgentRequest, slot: AgentProc, ctx: RpcContext, # clientId: ClientId,
+    req: SigilRequest, slot: AgentProc, ctx: RpcContext, # clientId: ClientId,
 ): AgentResponse {.base, gcsafe, effectsOf: slot.} =
   ## Route's an rpc request. 
 

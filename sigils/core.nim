@@ -4,7 +4,7 @@ import threads
 
 export signals, slots, threads
 
-proc callSlots*(obj: Agent | WeakRef[Agent], req: AgentRequest) {.gcsafe.} =
+proc callSlots*(obj: Agent | WeakRef[Agent], req: SigilRequest) {.gcsafe.} =
   {.cast(gcsafe).}:
     let listeners = obj.toRef().getAgentListeners(req.procName)
 
@@ -41,7 +41,7 @@ proc callSlots*(obj: Agent | WeakRef[Agent], req: AgentRequest) {.gcsafe.} =
         else:
           discard
 
-proc emit*(call: (Agent | WeakRef[Agent], AgentRequest)) =
+proc emit*(call: (Agent | WeakRef[Agent], SigilRequest)) =
   let (obj, req) = call
   callSlots(obj, req)
 

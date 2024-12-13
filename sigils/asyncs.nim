@@ -23,7 +23,7 @@ type
 
   AsyncKey* = object
     reqId*: AsyncReqId
-    aid*: AgentId
+    aid*: SigilId
 
   AsyncMessage*[T] = object
     continued*: bool

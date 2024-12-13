@@ -9,7 +9,7 @@ export channels, smartptrs, isolation
 type
   ThreadSignal* = object
     slot*: AgentProc
-    req*: AgentRequest
+    req*: SigilRequest
     tgt*: SharedPtr[Agent]
 
   SigilsThread* = ref object of Agent
