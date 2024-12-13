@@ -24,7 +24,7 @@ let start = epochTime()
 proc ticker(self: Counter) {.async.} =
   ## This simple procedure will echo out "tick" ten times with 100ms between
   ## each tick. We use it to visualise the time between other procedures.
-  for i in 1..10:
+  for i in 1..3:
     await sleepAsync(100)
     echo "tick ",
          i*100, "ms ",
