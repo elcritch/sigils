@@ -83,3 +83,4 @@ suite "threaded agent slots":
 
     let bp: AgentProxy[SomeAction] = b.moveToThread(thread)
     check not compiles(connect(a, sendBad, bp, setValueBad))
+    # connect(a, sendBad, bp, setValueBad)

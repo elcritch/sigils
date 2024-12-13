@@ -27,13 +27,13 @@ type
 
   SigilThread* = SharedPtr[SigilThreadObj]
 
-template checkThreadSafety(sig: object, parent: typed) =
+template checkThreadSafety(field: object, parent: typed) =
   discard
-template checkThreadSafety[T](sig: Isolated[T], parent: typed) =
+template checkThreadSafety[T](field: Isolated[T], parent: typed) =
   discard
-template checkThreadSafety(sig: ref, parent: typed) =
-  {.error: "Signal type with ref's aren't thread safe! Signal type: " & $(typeof(parent)).}
-template checkThreadSafety[T](sig: T, parent: typed) =
+template checkThreadSafety(field: ref, parent: typed) =
+  {.error: "Signal type with ref's aren't thread safe! Signal type: " & $(typeof(parent)) & ". Use `Isolate[" & $(typeof(field)) & "]` to use it.".}
+template checkThreadSafety[T](field: T, parent: typed) =
   discard
 
 template checkSignalThreadSafety(sig: typed) =
