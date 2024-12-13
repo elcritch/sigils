@@ -37,6 +37,12 @@ proc completed*(self: SomeAction, final: int) {.slot.} =
 proc value*(self: Counter): int =
   self.value
 
+## -------------------------------------------------------- ##
+proc sendBad*(tp: SomeAction, val: Counter) {.signal.}
+
+proc setValueBad*(self: SomeAction, val: Counter) {.slot.} =
+  discard
+
 suite "threaded agent slots":
   teardown:
     GC_fullCollect()
@@ -62,3 +68,18 @@ suite "threaded agent slots":
     let ct = getCurrentSigilThread()
     ct.poll()
     check a.value == 1337
+
+  test "sigil object thread bad":
+    var
+      a = SomeAction()
+      b = SomeAction()
+
+    echo "thread runner!", " (th:", getThreadId(), ")"
+    echo "obj a: ", a.unsafeWeakRef
+
+    let thread = newSigilAsyncThread()
+    thread.start()
+    startLocalThread()
+
+    let bp: AgentProxy[SomeAction] = b.moveToThread(thread)
+    connect(a, sendBad, bp, setValueBad)
