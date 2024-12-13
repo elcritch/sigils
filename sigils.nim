@@ -7,22 +7,23 @@ export signals, slots, threads
 when not defined(gcArc) and not defined(gcOrc) and not defined(nimdoc):
   {.error: "Sigils requires --gc:arc or --gc:orc".}
 
-proc wrapResponse*(id: AgentId, resp: RpcParams, kind = Response): AgentResponse =
-  # echo "WRAP RESP: ", id, " kind: ", kind
-  result.kind = kind
-  result.id = id
-  result.result = resp
+method applyMethod*(ap: AgentRequest) {.base, gcsafe.} =
+  discard
 
-proc wrapResponseError*(id: AgentId, err: AgentError): AgentResponse =
-  echo "WRAP ERROR: ", id, " err: ", err.repr
-  result.kind = Error
-  result.id = id
-  result.result = rpcPack(err)
+proc callMethod*(
+    slot: AgentProc, ctx: RpcContext, req: AgentRequest, # clientId: ClientId,
+): AgentResponse {.gcsafe, effectsOf: slot.} =
+  ## Route's an rpc request. 
 
-template packResponse*(res: AgentResponse): Variant =
-  var so = newVariant()
-  so.pack(res)
-  so
+  if slot.isNil:
+    let msg = req.procName & " is not a registered RPC method."
+    let err = AgentError(code: METHOD_NOT_FOUND, msg: msg)
+    result = wrapResponseError(req.origin, err)
+  else:
+    slot(ctx, req.params)
+    let res = rpcPack(true)
+
+    result = AgentResponse(kind: Response, id: req.origin, result: res)
 
 proc callSlots*(obj: Agent | WeakRef[Agent], req: AgentRequest) {.gcsafe.} =
   {.cast(gcsafe).}:

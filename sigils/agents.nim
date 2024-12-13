@@ -120,45 +120,6 @@ else:
 proc hash*(a: Agent): Hash = hash(a.getId())
 # proc hash*(a: AgentProc): Hash = hash(getAgentProcId(a))
 
-type
-
-  ConversionError* = object of CatchableError
-  AgentSlotError* = object of CatchableError
-
-  AgentErrorStackTrace* = object
-    code*: int
-    msg*: string
-    stacktrace*: seq[string]
-
-  AgentBindError* = object of ValueError
-  AgentAddressUnresolvableError* = object of ValueError
-
-proc pack*[T](ss: var Variant, val: T) =
-  # echo "Pack Type: ", getTypeId(T), " <- ", typeof(val)
-  ss = newVariant(val)
-
-proc unpack*[T](ss: Variant, obj: var T) =
-  # if ss.ofType(T):
-    obj = ss.get(T)
-  # else:
-    # raise newException(ConversionError, "couldn't convert to: " & $(T))
-
-proc rpcPack*(res: RpcParams): RpcParams {.inline.} =
-  result = res
-
-proc rpcPack*[T](res: T): RpcParams =
-  when defined(nimscript) or defined(useJsonSerde):
-    let jn = toJson(res)
-    result = RpcParams(buf: jn)
-  else:
-    result = RpcParams(buf: newVariant(res))
-
-proc rpcUnpack*[T](obj: var T, ss: RpcParams) =
-  when defined(nimscript) or defined(useJsonSerde):
-    obj.fromJson(ss.buf)
-    discard
-  else:
-    ss.buf.unpack(obj)
 
 proc initAgentRequest*[S, T](
   procName: string,

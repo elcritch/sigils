@@ -57,20 +57,60 @@ type
     code*: FastErrorCodes
     msg*: string # trace*: seq[(string, string, int)]
 
-method applyMethod*(ap: AgentRequest) {.base, gcsafe.} =
-  discard
+type
 
-proc callMethod*(
-    slot: AgentProc, ctx: RpcContext, req: AgentRequest, # clientId: ClientId,
-): AgentResponse {.gcsafe, effectsOf: slot.} =
-  ## Route's an rpc request. 
+  ConversionError* = object of CatchableError
+  AgentSlotError* = object of CatchableError
 
-  if slot.isNil:
-    let msg = req.procName & " is not a registered RPC method."
-    let err = AgentError(code: METHOD_NOT_FOUND, msg: msg)
-    result = wrapResponseError(req.origin, err)
+  AgentErrorStackTrace* = object
+    code*: int
+    msg*: string
+    stacktrace*: seq[string]
+
+  AgentBindError* = object of ValueError
+  AgentAddressUnresolvableError* = object of ValueError
+
+proc pack*[T](ss: var Variant, val: T) =
+  # echo "Pack Type: ", getTypeId(T), " <- ", typeof(val)
+  ss = newVariant(val)
+
+proc unpack*[T](ss: Variant, obj: var T) =
+  # if ss.ofType(T):
+    obj = ss.get(T)
+  # else:
+    # raise newException(ConversionError, "couldn't convert to: " & $(T))
+
+proc rpcPack*(res: RpcParams): RpcParams {.inline.} =
+  result = res
+
+proc rpcPack*[T](res: T): RpcParams =
+  when defined(nimscript) or defined(useJsonSerde):
+    let jn = toJson(res)
+    result = RpcParams(buf: jn)
   else:
-    slot(ctx, req.params)
-    let res = rpcPack(true)
+    result = RpcParams(buf: newVariant(res))
 
-    result = AgentResponse(kind: Response, id: req.origin, result: res)
+proc rpcUnpack*[T](obj: var T, ss: RpcParams) =
+  when defined(nimscript) or defined(useJsonSerde):
+    obj.fromJson(ss.buf)
+    discard
+  else:
+    ss.buf.unpack(obj)
+
+
+proc wrapResponse*(id: AgentId, resp: RpcParams, kind = Response): AgentResponse =
+  # echo "WRAP RESP: ", id, " kind: ", kind
+  result.kind = kind
+  result.id = id
+  result.result = resp
+
+proc wrapResponseError*(id: AgentId, err: AgentError): AgentResponse =
+  echo "WRAP ERROR: ", id, " err: ", err.repr
+  result.kind = Error
+  result.id = id
+  result.result = rpcPack(err)
+
+template packResponse*(res: AgentResponse): Variant =
+  var so = newVariant()
+  so.pack(res)
+  so
