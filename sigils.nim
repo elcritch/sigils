@@ -1,4 +1,3 @@
-
 import sigils/signals
 import sigils/slots
 import sigils/threads
@@ -8,23 +7,20 @@ export signals, slots, threads
 when not defined(gcArc) and not defined(gcOrc) and not defined(nimdoc):
   {.error: "Sigils requires --gc:arc or --gc:orc".}
 
-proc wrapResponse*(id: AgentId, resp: RpcParams, kind = Response): AgentResponse = 
+proc wrapResponse*(id: AgentId, resp: RpcParams, kind = Response): AgentResponse =
   # echo "WRAP RESP: ", id, " kind: ", kind
   result.kind = kind
   result.id = id
   result.result = resp
 
-proc wrapResponseError*(id: AgentId, err: AgentError): AgentResponse = 
+proc wrapResponseError*(id: AgentId, err: AgentError): AgentResponse =
   echo "WRAP ERROR: ", id, " err: ", err.repr
   result.kind = Error
   result.id = id
   result.result = rpcPack(err)
 
 proc callMethod*(
-    slot: AgentProc,
-    ctx: RpcContext,
-    req: AgentRequest,
-    # clientId: ClientId,
+    slot: AgentProc, ctx: RpcContext, req: AgentRequest, # clientId: ClientId,
 ): AgentResponse {.gcsafe, effectsOf: slot.} =
   ## Route's an rpc request. 
 
@@ -61,16 +57,11 @@ proc callSlots*(obj: Agent | WeakRef[Agent], req: AgentRequest) {.gcsafe.} =
       if tgtRef of AgentProxyShared:
         # echo "threaded Agent!"
         let proxy = AgentProxyShared(tgtRef)
-        let sig = ThreadSignal(
-          slot: slot,
-          req: req,
-          tgt: proxy.remote
-        )
+        let sig = ThreadSignal(slot: slot, req: req, tgt: proxy.remote)
         echo "callMethod:agentProxy: ", "chan: ", $proxy.chan
         let res = proxy.chan.trySend(unsafeIsolate sig)
         if not res:
           raise newException(AgentSlotError, "error sending signal to thread")
-
       else:
         # echo "regular Thread!"
         res = slot.callMethod(tgtRef, req)

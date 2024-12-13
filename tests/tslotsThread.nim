@@ -68,7 +68,7 @@ suite "threaded agent slots":
 
     check b.value == 1337
     check c.value == 1337
-  
+
   test "threaded connect":
     var
       a = SomeAction.new()
@@ -80,7 +80,7 @@ suite "threaded agent slots":
 
     connect(a, valueChanged, bp, setValue)
     connect(a, valueChanged, bp, Counter.setValue())
-    check not compiles( connect(a, valueChanged, bp, someAction))
+    check not compiles(connect(a, valueChanged, bp, someAction))
 
   test "sigil object thread runner":
     var
@@ -142,7 +142,7 @@ suite "threaded agent slots":
       thread.start()
       echo "thread runner!", " (th:", getThreadId(), ")"
 
-      for idx in 1..1_00:
+      for idx in 1 .. 1_00:
         var
           a = SomeAction.new()
           b = Counter.new()
