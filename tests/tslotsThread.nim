@@ -109,7 +109,6 @@ suite "threaded agent slots":
 
   test "sigil object thread runner multiple":
     var
-      aa = SomeAction.new()
       a = SomeAction.new()
       b = Counter.new()
 

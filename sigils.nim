@@ -66,7 +66,7 @@ proc callSlots*(obj: Agent | WeakRef[Agent], req: AgentRequest) {.gcsafe.} =
           req: req,
           tgt: proxy.remote
         )
-        echo "callMethod:agentProxy: ", "chan: ", proxy.chan
+        echo "callMethod:agentProxy: ", "chan: ", $proxy.chan
         let res = proxy.chan.trySend(unsafeIsolate sig)
         if not res:
           raise newException(AgentSlotError, "error sending signal to thread")
