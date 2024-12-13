@@ -63,6 +63,8 @@ template verifyUnique[T: tuple | object](field: T) =
     checkThreadSafety(v, sig)
 
 proc tryIsolate*[T](field: T): Isolated[T] {.raises: [IsolateError].} =
+  ## Isolates a ref type or type with ref's and ensure that
+  ## each ref is unique. This allows safely isolating it.
   verifyUnique(field)
 
 method callMethod*(
