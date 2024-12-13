@@ -38,7 +38,6 @@ method callMethod*(
   if not res:
     raise newException(AgentSlotError, "error sending signal to thread")
 
-
 proc newSigilThread*(): SigilThread =
   result = SigilThread()
   result.inputs = newChan[ThreadSignal]()

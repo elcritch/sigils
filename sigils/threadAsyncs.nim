@@ -19,13 +19,12 @@ from std/selectors import IOSelectorsException
 
 type
   AsyncAgentProxyShared* = ref object of AgentProxyShared
+    trigger*: AsyncEvent
 
   AsyncAgentProxy*[T] = ref object of AsyncAgentProxyShared
 
-  SigilAsyncThread* = ref object of Agent
-    thread*: Thread[Chan[ThreadSignal]]
-    inputs*: Chan[ThreadSignal]
-
+  AsyncSigilThread* = ref object of SigilThread
+    trigger*: AsyncEvent
 
 method callMethod*(
     ctx: AgentProxyShared,
@@ -40,3 +39,24 @@ method callMethod*(
   let res = proxy.chan.trySend(unsafeIsolate sig)
   if not res:
     raise newException(AgentSlotError, "error sending signal to thread")
+
+proc newSigilAsyncThread*(): AsyncSigilThread =
+  result = AsyncSigilThread()
+  result.inputs = newChan[ThreadSignal]()
+  result.trigger = newAsyncEvent()
+
+proc asyncExecute*(inputs: Chan[ThreadSignal]) =
+  while true:
+    poll(inputs)
+
+proc asyncExecute*(thread: AsyncSigilThread) =
+  thread.inputs.asyncExecute()
+
+proc runAsyncThread*(inputs: Chan[ThreadSignal]) {.thread.} =
+  {.cast(gcsafe).}:
+    var inputs = inputs
+    # echo "sigil thread waiting!", " (", getThreadId(), ")"
+    inputs.asyncExecute()
+
+proc start*(thread: AsyncSigilThread) =
+  createThread(thread.thread, runAsyncThread, thread.inputs)
