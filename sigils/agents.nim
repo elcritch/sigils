@@ -174,15 +174,15 @@ proc addAgentListeners*(obj: Agent, sig: string, tgt: Agent, slot: AgentProc): v
 
 method callMethod*(
     req: SigilRequest, slot: AgentProc, ctx: RpcContext, # clientId: ClientId,
-): AgentResponse {.base, gcsafe, effectsOf: slot.} =
+): SigilResponse {.base, gcsafe, effectsOf: slot.} =
   ## Route's an rpc request. 
 
   if slot.isNil:
     let msg = req.procName & " is not a registered RPC method."
-    let err = AgentError(code: METHOD_NOT_FOUND, msg: msg)
+    let err = SigilError(code: METHOD_NOT_FOUND, msg: msg)
     result = wrapResponseError(req.origin, err)
   else:
     slot(ctx, req.params)
     let res = rpcPack(true)
 
-    result = AgentResponse(kind: Response, id: req.origin, result: res)
+    result = SigilResponse(kind: Response, id: req.origin, result: res)

@@ -17,7 +17,7 @@ proc callSlots*(obj: Agent | WeakRef[Agent], req: SigilRequest) {.gcsafe.} =
       # echo "call listener:slot: ", repr slot
       let tgtRef = tgt.toRef()
 
-      var res: AgentResponse
+      var res: SigilResponse
 
       if tgtRef of AgentProxyShared:
         # echo "threaded Agent!"
@@ -36,7 +36,7 @@ proc callSlots*(obj: Agent | WeakRef[Agent], req: SigilRequest) {.gcsafe.} =
       else:
         discard
         variantMatch case res.result.buf as u
-        of AgentError:
+        of SigilError:
           raise newException(AgentSlotError, $u.code & " msg: " & u.msg)
         else:
           discard

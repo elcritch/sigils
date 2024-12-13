@@ -48,12 +48,12 @@ type
 
   SigilRequestTy*[T] = SigilRequest
 
-  AgentResponse* = object
+  SigilResponse* = object
     kind*: RequestType
     id*: int
     result*: SigilParams # - we handle params below
 
-  AgentError* = ref object
+  SigilError* = ref object
     code*: FastErrorCodes
     msg*: string # trace*: seq[(string, string, int)]
 
@@ -61,7 +61,7 @@ type
   ConversionError* = object of CatchableError
   AgentSlotError* = object of CatchableError
 
-  AgentErrorStackTrace* = object
+  SigilErrorStackTrace* = object
     code*: int
     msg*: string
     stacktrace*: seq[string]
@@ -96,19 +96,19 @@ proc rpcUnpack*[T](obj: var T, ss: SigilParams) =
   else:
     ss.buf.unpack(obj)
 
-proc wrapResponse*(id: SigilId, resp: SigilParams, kind = Response): AgentResponse =
+proc wrapResponse*(id: SigilId, resp: SigilParams, kind = Response): SigilResponse =
   # echo "WRAP RESP: ", id, " kind: ", kind
   result.kind = kind
   result.id = id
   result.result = resp
 
-proc wrapResponseError*(id: SigilId, err: AgentError): AgentResponse =
+proc wrapResponseError*(id: SigilId, err: SigilError): SigilResponse =
   echo "WRAP ERROR: ", id, " err: ", err.repr
   result.kind = Error
   result.id = id
   result.result = rpcPack(err)
 
-template packResponse*(res: AgentResponse): Variant =
+template packResponse*(res: SigilResponse): Variant =
   var so = newVariant()
   so.pack(res)
   so
