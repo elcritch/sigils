@@ -62,7 +62,6 @@ template verifyUnique[T: tuple | object](field: T) =
   for n, v in field.fieldPairs():
     checkThreadSafety(v, sig)
 
-
 proc tryIsolate*[T](field: T): Isolated[T] {.raises: [IsolateError].} =
   verifyUnique(field)
 
