@@ -47,6 +47,25 @@ template checkSignalThreadSafety(sig: typed) =
   for n, v in sig.fieldPairs():
     checkThreadSafety(v, sig)
 
+type IsolateError* = object of CatchableError
+
+template verifyUnique[T](field: T) =
+  discard
+
+template verifyUnique(field: ref) =
+  if not field.isUniqueRef():
+    raise newException(IsolateError, "reference not unique! Cannot safely isolate it")
+  for v in field[].fields():
+    verifyUnique(v)
+
+template verifyUnique[T: tuple | object](field: T) =
+  for n, v in field.fieldPairs():
+    checkThreadSafety(v, sig)
+
+
+proc tryIsolate*[T](field: T): Isolated[T] =
+  verifyUnique(field)
+
 method callMethod*(
     ctx: AgentProxyShared, req: SigilRequest, slot: AgentProc
 ): SigilResponse {.gcsafe, effectsOf: slot.} =

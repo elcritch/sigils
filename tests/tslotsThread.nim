@@ -82,6 +82,28 @@ suite "threaded agent slots":
     connect(a, valueChanged, bp, Counter.setValue())
     check not compiles(connect(a, valueChanged, bp, someAction))
 
+  test "tryIsolate":
+    type
+      TestObj = object
+      TestRef = ref object
+
+    var
+      a = SomeAction()
+      b = 33
+      c = TestObj()
+      d = "test"
+      e = TestRef()
+
+    # echo "thread runner!"
+    let isoA = tryIsolate(a)
+    let isoB = tryIsolate(b)
+    let isoC = tryIsolate(c)
+    let isoD = tryIsolate(d)
+
+    expect(IsolateError):
+      var e2 = e
+      let isoE = tryIsolate(e)
+
   test "sigil object thread runner":
     var
       a = SomeAction.new()
