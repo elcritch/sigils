@@ -63,7 +63,7 @@ template verifyUnique[T: tuple | object](field: T) =
     checkThreadSafety(v, sig)
 
 
-proc tryIsolate*[T](field: T): Isolated[T] =
+proc tryIsolate*[T](field: T): Isolated[T] {.raises: [IsolateError].} =
   verifyUnique(field)
 
 method callMethod*(
