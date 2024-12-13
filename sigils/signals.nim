@@ -1,4 +1,4 @@
-import strutils, macros, options
+import std/[macros, options]
 import std/times
 import slots
 
@@ -6,111 +6,6 @@ import agents
 
 export agents
 export times
-
-proc wrapResponse*(id: AgentId, resp: RpcParams, kind = Response): AgentResponse = 
-  # echo "WRAP RESP: ", id, " kind: ", kind
-  result.kind = kind
-  result.id = id
-  result.result = resp
-
-proc wrapResponseError*(id: AgentId, err: AgentError): AgentResponse = 
-  echo "WRAP ERROR: ", id, " err: ", err.repr
-  result.kind = Error
-  result.id = id
-  result.result = rpcPack(err)
-
-proc wrapResponseError*(
-    id: AgentId,
-    code: FastErrorCodes,
-    msg: string,
-    err: ref Exception,
-    stacktraces: bool
-): AgentResponse = 
-  let errobj = AgentError(code: code, msg: msg)
-  raise err
-  # when defined(nimscript):
-  #   discard
-  # else:
-  #   if stacktraces and not err.isNil():
-  #     errobj.trace = @[]
-  #     for se in err.getStackTraceEntries():
-  #       let file: string = rsplit($(se.filename), '/', maxsplit=1)[^1]
-  #       errobj.trace.add( ($se.procname, file, se.line, ) )
-
-  # result = wrapResponseError(id, errobj)
-
-proc parseError*(ss: Variant): AgentError = 
-  ss.unpack(result)
-
-proc parseParams*[T](ss: Variant, val: var T) = 
-  ss.unpack(val)
-
-proc createRpcRouter*(): AgentRouter =
-  result = new(AgentRouter)
-  result.procs = initTable[string, AgentProc]()
-
-proc register*(router: var AgentRouter, path, name: string, call: AgentProc) =
-  router.procs[name] = call
-  echo "registering: ", name
-
-when nimvm:
-  var globalRouter {.compileTime.} = AgentRouter()
-else:
-  when not compiles(globalRouter):
-    var globalRouter {.global.} = AgentRouter()
-
-proc register*(path, name: string, call: AgentProc) =
-  globalRouter.procs[name] = call
-  echo "registering: ", name
-
-proc listMethods*(): seq[string] =
-  globalRouter.listMethods()
-
-proc clear*(router: var AgentRouter) =
-  router.procs.clear
-
-proc hasMethod*(router: AgentRouter, methodName: string): bool =
-  router.procs.hasKey(methodName)
-
-proc callMethod*(
-        slot: AgentProc,
-        ctx: RpcContext,
-        req: AgentRequest,
-        # clientId: ClientId,
-      ): AgentResponse {.gcsafe, effectsOf: slot.} =
-    ## Route's an rpc request. 
-
-    if slot.isNil:
-      let msg = req.procName & " is not a registered RPC method."
-      let err = AgentError(code: METHOD_NOT_FOUND, msg: msg)
-      result = wrapResponseError(req.id, err)
-    else:
-      # try:
-        # Handle rpc request the `context` variable is different
-        # based on whether the rpc request is a system/regular/subscription
-        slot(ctx, req.params)
-        let res = rpcPack(true)
-
-        result = AgentResponse(kind: Response, id: req.id, result: res)
-      # except ConversionError as err:
-      #   result = wrapResponseError(
-      #               req.id,
-      #               INVALID_PARAMS,
-      #               req.procName & " raised an exception",
-      #               err,
-      #               true)
-      # except CatchableError as err:
-      #   result = wrapResponseError(
-      #               req.id,
-      #               INTERNAL_ERROR,
-      #               req.procName & " raised an exception: " & err.msg,
-      #               err,
-      #               true)
-
-template packResponse*(res: AgentResponse): Variant =
-  var so = newVariant()
-  so.pack(res)
-  so
 
 proc getSignalName*(signal: NimNode): NimNode =
   # echo "getSignalName: ", signal.treeRepr
@@ -164,6 +59,25 @@ macro signalType*(s: untyped): auto =
 proc getAgentProcTy*[T](tp: AgentProcTy[T]): T =
   discard
 
+template checkSignalTypes*[T](
+    a: Agent,
+    signal: typed,
+    b: Agent,
+    slot: Signal[T],
+    acceptVoidSlot: static bool = false,
+): void =
+  block:
+    ## statically verify signal / slot types match
+    # echo "TYP: ", repr typeof(SignalTypes.`signal`(typeof(a)))
+    var signalType {.used, inject.}: typeof(SignalTypes.`signal`(typeof(a)))
+    var slotType {.used, inject.}: typeof(getAgentProcTy(slot))
+    when acceptVoidSlot and slotType is tuple[]:
+      discard
+    elif compiles(signalType = slotType):
+      discard # don't need compile check when compiles
+    else:
+      signalType = slotType # let the compiler show the type mismatches
+
 template connect*[T](
     a: Agent,
     signal: typed,
@@ -196,64 +110,16 @@ template connect*[T](
               b, setValue)
       emit a.valueChanged(137) #=> prints "setValue! 137"
 
-  # let agentSlot: Signal[T] = slot
-  # # static:
-  block:
-    ## statically verify signal / slot types match
-    # echo "TYP: ", repr typeof(SignalTypes.`signal`(typeof(a)))
-    var signalType {.used, inject.}: typeof(SignalTypes.`signal`(typeof(a)))
-    var slotType {.used, inject.}: typeof(getAgentProcTy(slot))
-    when acceptVoidSlot and slotType is tuple[]:
-      discard
-    else:
-      signalType = slotType
+  checkSignalTypes(a, signal, b, slot, acceptVoidSlot)
   a.addAgentListeners(signalName(signal), b, slot)
 
 template connect*(
     a: Agent,
     signal: typed,
     b: Agent,
-    slot: typed,
+    slot: untyped,
     acceptVoidSlot: static bool = false,
 ): void =
   let agentSlot = `slot`(typeof(b))
-  block:
-    ## statically verify signal / slot types match
-    var signalType {.used, inject.}: typeof(SignalTypes.`signal`(typeof(a)))
-    var slotType {.used, inject.}: typeof(getAgentProcTy(agentSlot))
-    when acceptVoidSlot and slotType is tuple[]:
-      discard
-    else:
-      signalType = slotType
-  static:
-    echo "TYPE CONNECT:slot: ", typeof(SignalTypes.`signal`(typeof(a)))
-    echo "TYPE CONNECT:st: ", agentSlot.typeof.repr, " " , repr getAgentProcTy(agentSlot).typeof
-    echo ""
-
+  checkSignalTypes(a, signal, b, agentSlot, acceptVoidSlot)
   a.addAgentListeners(signalName(signal), b, agentSlot)
-
-proc callSlots*(obj: Agent | WeakRef[Agent], req: AgentRequest) {.gcsafe.} =
-  {.cast(gcsafe).}:
-    let listeners = obj.toRef().getAgentListeners(req.procName)
-
-    # echo "call slots:req: ", req.repr
-    # echo "call slots:all: ", req.procName, " ", obj.agentId, " :: ", obj.listeners
-
-    for (tgt, slot) in listeners.items():
-      # echo ""
-      # echo "call listener:tgt: ", tgt.agentId, " ", req.procName
-      # echo "call listener:slot: ", repr slot
-      let res = slot.callMethod(tgt.toRef(), req)
-      when defined(nimscript) or defined(useJsonSerde):
-        discard
-      else:
-        discard
-        variantMatch case res.result.buf as u
-        of AgentError:
-          raise newException(AgentSlotError, $u.code & " msg: " & u.msg)
-        else:
-          discard
-
-proc emit*(call: (Agent | WeakRef[Agent], AgentRequest)) =
-  let (obj, req) = call
-  callSlots(obj, req)

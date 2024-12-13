@@ -1,56 +1,50 @@
-import sigils
+import std/isolation
+import std/unittest
 import std/os
 
-type Counter* = ref object of Agent
-  value: int
-  avg: int
+import sigils
+import sigils/threads
 
-proc valueChanged*(tp: Counter, val: int) {.signal.}
+type
+  SomeAction* = ref object of Agent
+    value: int
 
-proc avgChanged*(tp: Counter, val: float) {.signal.}
+  Counter* = ref object of Agent
+    value: int
+
+proc valueChanged*(tp: SomeAction, val: int) {.signal.}
+proc updated*(tp: Counter, final: int) {.signal.}
 
 proc setValue*(self: Counter, value: int) {.slot.} =
-  echo "setValue! ", value
+  # echo "setValue! ", value, " (th:", getThreadId(), ")"
   if self.value != value:
     self.value = value
-  emit self.valueChanged(value)
+  # echo "Counter: ", self.subscribers
+  emit self.updated(self.value)
 
-proc setSomeValue*(self: Counter, value: int) =
-  echo "setValue! ", value
-  if self.value != value:
-    self.value = value
-  emit self.valueChanged(value)
-
-proc someAction*(self: Counter) {.slot.} =
-  echo "action"
+proc completed*(self: SomeAction, final: int) {.slot.} =
+  # echo "Action done! final: ", final, " (th:", getThreadId(), ")"
+  self.value = final
 
 proc value*(self: Counter): int =
   self.value
 
-import unittest
-import std/sequtils
-
-import threading/channels
-import std/isolation
-
 suite "threaded agent slots":
-  setup:
-    var
-      a {.used.} = Counter.new()
-      b {.used.} = Counter.new()
-      c {.used.} = Counter.new()
-
   teardown:
     GC_fullCollect()
 
   test "simple threading test":
+    var
+      a = SomeAction.new()
+      b = Counter.new()
+      c = Counter.new()
+
     var agentResults = newChan[(WeakRef[Agent], AgentRequest)]()
 
     connect(a, valueChanged, b, setValue)
     connect(a, valueChanged, c, Counter.setValue)
-    connect(a, valueChanged, c, setValue Counter)
 
-    let wa: WeakRef[Counter] = a.unsafeWeakRef()
+    let wa: WeakRef[SomeAction] = a.unsafeWeakRef()
     emit wa.valueChanged(137)
     check typeof(wa.valueChanged(137)) is (WeakRef[Agent], AgentRequest)
 
@@ -58,56 +52,113 @@ suite "threaded agent slots":
     check b.value == 137
     check c.value == 137
 
-    proc threadTestProc(aref: WeakRef[Counter]) {.thread.} =
+    proc threadTestProc(aref: WeakRef[SomeAction]) {.thread.} =
       var res = aref.valueChanged(1337)
-      agentResults.send(unsafeIsolate(res))
-      echo "Thread Done"
+      # echo "Thread aref: ", aref
+      # echo "Thread sending: ", res
+      agentResults.send(unsafeIsolate(ensureMove res))
+      # echo "Thread Done"
 
-    var thread: Thread[WeakRef[Counter]]
+    var thread: Thread[WeakRef[SomeAction]]
     createThread(thread, threadTestProc, wa)
     thread.joinThread()
     let resp = agentResults.recv()
-    echo "RESP: ", resp
+    # echo "RESP: ", resp
     emit resp
 
     check b.value == 1337
     check c.value == 1337
 
-import sigils/asyncHttp
+  test "threaded connect":
+    var
+      a = SomeAction.new()
+      b = Counter.new()
 
-suite "threaded agent proxy":
+    # echo "thread runner!"
+    let thread = newSigilsThread()
+    let bp: AgentProxy[Counter] = b.moveToThread(thread)
 
-  test "simple proxy test":
-    var ap = newAsyncProcessor()
-    ap.startThread()
+    connect(a, valueChanged, bp, setValue)
+    connect(a, valueChanged, bp, Counter.setValue())
+    check not compiles(connect(a, valueChanged, bp, someAction))
 
-    let httpProxy = newAgentProxy[HttpRequest, HttpResult]()
-    echo "initial async http with trigger ",
-      " tid: ", getThreadId(), " ", httpProxy[].trigger.repr
+  test "sigil object thread runner":
+    var
+      a = SomeAction.new()
+      b = Counter.new()
 
-    ap.add(newHttpExecutor(httpProxy))
-    os.sleep(1_00)
+    # echo "thread runner!", " (th:", getThreadId(), ")"
+    # echo "obj a: ", a.unsafeWeakRef
+    # echo "obj b: ", b.unsafeWeakRef
+    let thread = newSigilsThread()
+    thread.start()
+    startLocalThread()
 
-    type HttpHandler = ref object of Agent
+    let bp: AgentProxy[Counter] = b.moveToThread(thread)
+    # echo "obj bp: ", bp.unsafeWeakRef
+    # echo "obj bp.remote: ", bp.remote[].unsafeWeakRef
 
-    proc receive(ha: HttpHandler, key: AsyncKey, data: HttpResult) {.slot.} =
-      echo "got http result: ", data.body
+    connect(a, valueChanged, bp, setValue)
+    connect(bp, updated, a, SomeAction.completed())
 
-    let handler = HttpHandler.new()
+    emit a.valueChanged(314)
+    # thread.thread.joinThread(500)
+    # os.sleep(500)
+    let ct = getCurrentSigilThread()
+    ct.poll()
 
-    var hreq = HttpAgent.new(httpProxy)
-    hreq.connect(received, handler, receive)
-    hreq.send(parseUri "http://first.example.com")
+  test "sigil object thread runner multiple":
+    var
+      a = SomeAction.new()
+      b = Counter.new()
 
-    os.sleep(1_00)
-    hreq.send(parseUri "http://neverssl.com")
+    # echo "thread runner!", " (main thread:", getThreadId(), ")"
+    # echo "obj a: ", a.unsafeWeakRef
+    # echo "obj b: ", b.unsafeWeakRef
+    let thread = newSigilsThread()
+    thread.start()
+    startLocalThread()
 
-    os.sleep(1_000)
+    let bp: AgentProxy[Counter] = b.moveToThread(thread)
+    # echo "obj bp: ", bp.unsafeWeakRef
+    # echo "obj bp.remote: ", bp.remote[].unsafeWeakRef
+    connect(a, valueChanged, bp, setValue)
+    connect(bp, updated, a, SomeAction.completed())
 
-    ap.finish()
-    ap[].thread.joinThread()
+    emit a.valueChanged(271)
+    emit a.valueChanged(628)
 
-    # TODO: need to document that this needs to be tied
-    #       into whatever event system / main loop
-    httpProxy.poll()
-    os.sleep(1_000)
+    # thread.thread.joinThread(500)
+    let ct = getCurrentSigilThread()
+    ct.poll()
+    check a.value == 271
+    ct.poll()
+    check a.value == 628
+
+  test "sigil object thread runner (loop)":
+    if true:
+      startLocalThread()
+      let thread = newSigilsThread()
+      thread.start()
+      # echo "thread runner!", " (th:", getThreadId(), ")"
+
+      for idx in 1 .. 1_000:
+        var
+          a = SomeAction.new()
+          b = Counter.new()
+
+        let bp: AgentProxy[Counter] = b.moveToThread(thread)
+
+        connect(a, valueChanged, bp, setValue)
+        connect(bp, updated, a, SomeAction.completed())
+
+        emit a.valueChanged(314)
+        emit a.valueChanged(271)
+
+        let ct = getCurrentSigilThread()
+        ct.poll()
+        check a.value == 314
+        ct.poll()
+        check a.value == 271
+
+        # GC_fullCollect()
