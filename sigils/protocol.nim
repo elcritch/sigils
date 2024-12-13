@@ -42,12 +42,12 @@ type
 
   SigilId* = int
 
-  SigilName* = StackString[128]
+  SigilName* = StackString[64]
 
   SigilRequest* = object
     kind*: RequestType
     origin*: SigilId
-    procName*: StackString[128]
+    procName*: SigilName
     params*: SigilParams # - we handle params below
 
   SigilRequestTy*[T] = SigilRequest
@@ -125,4 +125,4 @@ proc initSigilRequest*[S, T](
   )
 
 proc toSigilName*(name: string): SigilName =
-  return toStackString(name, 128)
+  return toStackString(name, 64)
