@@ -13,7 +13,6 @@ import sigils
 import sigils/threads
 
 type
-
   SigilsAsyncThread* = ref object of Agent
     thread*: Thread[Chan[ThreadSignal]]
     inputs*: Chan[ThreadSignal]
