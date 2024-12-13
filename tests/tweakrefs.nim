@@ -50,7 +50,7 @@ suite "agent weak refs":
       check y.subscribers.len() == 0
       check y.subscribedTo.len() == 1
 
-      check x.subscribers["valueChanged"].len() == 1
+      check x.subscribers["valueChanged".toSigilName].len() == 1
       check x.subscribedTo.len() == 0
 
       echo "block done"
@@ -88,7 +88,7 @@ suite "agent weak refs":
       check y.subscribers.len() == 0
       check y.subscribedTo.len() == 1
 
-      check x.subscribers["valueChanged"].len() == 1
+      check x.subscribers["valueChanged".toSigilName].len() == 1
       check x.subscribedTo.len() == 0
 
       echo "block done"

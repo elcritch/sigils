@@ -255,8 +255,9 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
     result.add quote do:
       proc `rpcMethod`(`objId`: `firstType`): (Agent, SigilRequestTy[`firstType`]) =
         let args = `construct`
+        let name: SigilName = toSigilName(`signalName`)
         let req = initSigilRequest[`firstType`, typeof(args)](
-          procName = `signalName`, args = args, origin = `objId`.getId()
+          procName = name, args = args, origin = `objId`.getId()
         )
         result = (`objId`, req)
 
@@ -268,8 +269,9 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
           `objId`: WeakRef[`firstType`]
       ): (WeakRef[Agent], SigilRequestTy[`firstType`]) =
         let args = `construct`
+        let name: SigilName = toSigilName(`signalName`)
         let req = initSigilRequest[`firstType`, typeof(args)](
-          procName = `signalName`, args = args, origin = `objId`.getId()
+          procName = name, args = args, origin = `objId`.getId()
         )
         result = (`objId`.asAgent(), req)
 

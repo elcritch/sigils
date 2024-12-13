@@ -5,6 +5,7 @@ import sigils/threadAsyncs
 type
   SomeAction* = ref object of Agent
     value: int
+
   Counter* = ref object of Agent
     value: int
 
@@ -17,11 +18,10 @@ let start = epochTime()
 proc ticker(self: Counter) {.async.} =
   ## This simple procedure will echo out "tick" ten times with 100ms between
   ## each tick. We use it to visualise the time between other procedures.
-  for i in 1..3:
+  for i in 1 .. 3:
     await sleepAsync(100)
     echo "tick ",
-         i*100, "ms ",
-         split($((epochTime() - start)*1000), '.')[0], "ms (real)"
+      i * 100, "ms ", split($((epochTime() - start) * 1000), '.')[0], "ms (real)"
 
   emit self.updated(1337)
 
