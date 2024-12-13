@@ -61,3 +61,20 @@ type
     msg*: string
     # trace*: seq[(string, string, int)]
 
+method applyMethod*(ap: AgentRequest) {.base, gcsafe.} =
+  discard
+
+proc callMethod*(
+    slot: AgentProc, ctx: RpcContext, req: AgentRequest, # clientId: ClientId,
+): AgentResponse {.gcsafe, effectsOf: slot.} =
+  ## Route's an rpc request. 
+
+  if slot.isNil:
+    let msg = req.procName & " is not a registered RPC method."
+    let err = AgentError(code: METHOD_NOT_FOUND, msg: msg)
+    result = wrapResponseError(req.origin, err)
+  else:
+    slot(ctx, req.params)
+    let res = rpcPack(true)
+
+    result = AgentResponse(kind: Response, id: req.origin, result: res)
