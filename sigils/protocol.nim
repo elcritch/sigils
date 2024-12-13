@@ -17,7 +17,7 @@ when defined(nimscript) or defined(useJsonSerde):
   import std/json
   export json
 
-type RpcParams* = object ## implementation specific -- handles data buffer
+type SigilParams* = object ## implementation specific -- handles data buffer
   when defined(nimscript) or defined(useJsonSerde):
     buf*: JsonNode
   else:
@@ -44,14 +44,14 @@ type
     kind*: RequestType
     origin*: SigilId
     procName*: string
-    params*: RpcParams # - we handle params below
+    params*: SigilParams # - we handle params below
 
   SigilRequestTy*[T] = SigilRequest
 
   AgentResponse* = object
     kind*: RequestType
     id*: int
-    result*: RpcParams # - we handle params below
+    result*: SigilParams # - we handle params below
 
   AgentError* = ref object
     code*: FastErrorCodes
@@ -79,24 +79,24 @@ proc unpack*[T](ss: Variant, obj: var T) =
   # else:
   # raise newException(ConversionError, "couldn't convert to: " & $(T))
 
-proc rpcPack*(res: RpcParams): RpcParams {.inline.} =
+proc rpcPack*(res: SigilParams): SigilParams {.inline.} =
   result = res
 
-proc rpcPack*[T](res: T): RpcParams =
+proc rpcPack*[T](res: T): SigilParams =
   when defined(nimscript) or defined(useJsonSerde):
     let jn = toJson(res)
-    result = RpcParams(buf: jn)
+    result = SigilParams(buf: jn)
   else:
-    result = RpcParams(buf: newVariant(res))
+    result = SigilParams(buf: newVariant(res))
 
-proc rpcUnpack*[T](obj: var T, ss: RpcParams) =
+proc rpcUnpack*[T](obj: var T, ss: SigilParams) =
   when defined(nimscript) or defined(useJsonSerde):
     obj.fromJson(ss.buf)
     discard
   else:
     ss.buf.unpack(obj)
 
-proc wrapResponse*(id: SigilId, resp: RpcParams, kind = Response): AgentResponse =
+proc wrapResponse*(id: SigilId, resp: SigilParams, kind = Response): AgentResponse =
   # echo "WRAP RESP: ", id, " kind: ", kind
   result.kind = kind
   result.id = id

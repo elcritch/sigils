@@ -58,7 +58,7 @@ type
   RpcContext* = Agent
 
   # Procedure signature accepted as an RPC call by server
-  AgentProc* = proc(context: RpcContext, params: RpcParams) {.nimcall.}
+  AgentProc* = proc(context: RpcContext, params: SigilParams) {.nimcall.}
 
   AgentProcTy*[S] = AgentProc
 

@@ -219,7 +219,7 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
       mcall.add param[0]
 
     let agentSlotImpl = quote:
-      proc slot(context: Agent, params: RpcParams) {.nimcall.} =
+      proc slot(context: Agent, params: SigilParams) {.nimcall.} =
         if context == nil:
           raise newException(ValueError, "bad value")
         let `objId` = `contextType`(context)
