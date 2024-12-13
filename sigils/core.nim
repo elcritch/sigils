@@ -7,7 +7,7 @@ export signals, slots, threads
 type AgentSlotError* = object of CatchableError
 
 proc callMethod*(
-    req: SigilRequest, slot: AgentProc, ctx: RpcContext, # clientId: ClientId,
+    req: SigilRequest, slot: AgentProc, ctx: Agent, # clientId: ClientId,
 ): SigilResponse {.gcsafe, effectsOf: slot.} =
   ## Route's an rpc request. 
 

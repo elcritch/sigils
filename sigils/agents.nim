@@ -54,11 +54,8 @@ type
 
   AgentPairing* = tuple[tgt: WeakRef[Agent], fn: AgentProc]
 
-  # Context for servicing an RPC call 
-  RpcContext* = Agent
-
   # Procedure signature accepted as an RPC call by server
-  AgentProc* = proc(context: RpcContext, params: SigilParams) {.nimcall.}
+  AgentProc* = proc(context: Agent, params: SigilParams) {.nimcall.}
 
   AgentProcTy*[S] = AgentProc
 
