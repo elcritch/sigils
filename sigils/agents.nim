@@ -157,9 +157,7 @@ proc addAgentListeners*(obj: Agent, sig: string, tgt: Agent, slot: AgentProc): v
   # echo "subscribers: ", obj.subscribers.len, " SUBSC: ", tgt.subscribed.len
 
 method callMethod*(
-    ctx: Agent,
-    req: SigilRequest,
-    slot: AgentProc,
+    ctx: Agent, req: SigilRequest, slot: AgentProc
 ): SigilResponse {.base, gcsafe, effectsOf: slot.} =
   ## Route's an rpc request. 
 

@@ -18,12 +18,11 @@ import std/asyncdispatch
 from std/selectors import IOSelectorsException
 
 type
-
   AsyncAgentProxy*[T] = ref object of AgentProxy[T]
-    trigger*: AsyncEvent
+    signal*: AsyncEvent
 
   AsyncSigilThread* = ref object of SigilThread
-    trigger*: AsyncEvent
+    signal*: AsyncEvent
 
 proc moveToThread*[T: Agent](agent: T, thread: AsyncSigilThread): AgentProxy[T] =
   if not isUniqueRef(agent):
@@ -33,14 +32,14 @@ proc moveToThread*[T: Agent](agent: T, thread: AsyncSigilThread): AgentProxy[T] 
     )
 
   let proxy = AsyncAgentProxy[T](
-    remote: newSharedPtr(unsafeIsolate(Agent(agent))), chan: thread.inputs
+    remote: newSharedPtr(unsafeIsolate(Agent(agent))),
+    chan: thread.inputs,
+    signal: thread.signal,
   )
   return AgentProxy[T](proxy)
 
 method callMethod*[T](
-    ctx: AgentProxy[T],
-    req: SigilRequest,
-    slot: AgentProc,
+    ctx: AsyncAgentProxy[T], req: SigilRequest, slot: AgentProc
 ): SigilResponse {.gcsafe, effectsOf: slot.} =
   ## Route's an rpc request. 
   # echo "threaded Agent!"
@@ -48,13 +47,14 @@ method callMethod*[T](
   let sig = ThreadSignal(slot: slot, req: req, tgt: proxy.remote)
   echo "executeRequest:asyncAgentProxy: ", "chan: ", $proxy.chan
   let res = proxy.chan.trySend(unsafeIsolate sig)
+  proxy.signal.trigger()
   if not res:
     raise newException(AgentSlotError, "error sending signal to thread")
 
 proc newSigilAsyncThread*(): AsyncSigilThread =
   result = AsyncSigilThread()
   result.inputs = newChan[ThreadSignal]()
-  result.trigger = newAsyncEvent()
+  result.signal = newAsyncEvent()
 
 proc asyncExecute*(inputs: Chan[ThreadSignal]) =
   while true:

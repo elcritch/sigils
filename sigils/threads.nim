@@ -25,9 +25,7 @@ type
     inputs*: Chan[ThreadSignal]
 
 method callMethod*(
-    ctx: AgentProxyShared,
-    req: SigilRequest,
-    slot: AgentProc,
+    ctx: AgentProxyShared, req: SigilRequest, slot: AgentProc
 ): SigilResponse {.gcsafe, effectsOf: slot.} =
   ## Route's an rpc request. 
   # echo "threaded Agent!"
@@ -100,7 +98,7 @@ template connect*[T, S](
 proc poll*(inputs: Chan[ThreadSignal]) =
   let sig = inputs.recv()
   # echo "thread got request: ", sig, " (", getThreadId(), ")"
-  discard sig.tgt[].callMethod(sig.req, sig.slot, )
+  discard sig.tgt[].callMethod(sig.req, sig.slot)
 
 proc poll*(thread: SigilThread) =
   thread.inputs.poll()
