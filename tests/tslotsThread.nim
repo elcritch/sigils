@@ -86,8 +86,7 @@ suite "threaded agent slots":
     var
       a = SomeAction.new()
       b = Counter.new()
-
-    # echo "thread runner!", " (th:", getThreadId(), ")"
+    echo "thread runner!", " (th:", getThreadId(), ")"
     # echo "obj a: ", a.unsafeWeakRef
     # echo "obj b: ", b.unsafeWeakRef
     let thread = newSigilThread()
