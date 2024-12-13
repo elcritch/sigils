@@ -78,6 +78,9 @@ template connect*[T, S](
   checkSignalTypes(T(), signal, b, slot, acceptVoidSlot)
   let ct = getCurrentSigilThread()
 
+  # TODO: does this *really* work? It feels off but I wanted to
+  #       get it running something. Surprisingly haven't seen any
+  #       bugs with it so far, but it's sus.
   let proxy = AgentProxy[typeof(b)](
     chan: ct.inputs,
     remote: newSharedPtr(unsafeIsolate Agent(b)),
