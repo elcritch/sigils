@@ -2,6 +2,9 @@ import std/[options, tables, sets, macros, hashes]
 import std/times
 
 import protocol
+import stack_strings
+
+export IndexableChars
 
 when defined(nimscript):
   import std/json
@@ -47,7 +50,7 @@ proc `$`*[T](obj: WeakRef[T]): string =
 
 type
   AgentObj = object of RootObj
-    subscribers*: Table[string, OrderedSet[AgentPairing]] ## agents listening to me
+    subscribers*: Table[SigilName, OrderedSet[AgentPairing]] ## agents listening to me
     subscribedTo*: HashSet[WeakRef[Agent]] ## agents I'm listening to
 
   Agent* = ref object of AgentObj
@@ -65,7 +68,7 @@ type
 proc unsubscribe(subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]) =
   ## remove myself from agents I'm subscribed to
   # echo "subscribed: ", xid[].subscribed.toSeq.mapIt(it[].debugId).repr
-  var delSigs: seq[string]
+  var delSigs: seq[SigilName]
   var toDel: seq[AgentPairing]
   for obj in subscribedTo:
     # echo "freeing subscribed: ", obj[].debugId
@@ -84,7 +87,7 @@ proc unsubscribe(subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]) =
       obj[].subscribers.del(sig)
 
 proc remove(
-    subscribers: var Table[string, OrderedSet[AgentPairing]], xid: WeakRef[Agent]
+    subscribers: var Table[SigilName, OrderedSet[AgentPairing]], xid: WeakRef[Agent]
 ) =
   ## remove myself from agents listening to me
   for signal, subscriberPairs in subscribers.mpairs():
@@ -122,11 +125,16 @@ proc hash*(a: Agent): Hash =
   hash(a.getId())
 
 proc getAgentListeners*(
-    obj: Agent, sig: string
+    obj: Agent, sig: SigilName
 ): OrderedSet[(WeakRef[Agent], AgentProc)] =
   # echo "FIND:subscribers: ", obj.subscribers
   if obj.subscribers.hasKey(sig):
     result = obj.subscribers[sig]
+
+template getAgentListeners*(
+    obj: Agent, sig: string
+): OrderedSet[(WeakRef[Agent], AgentProc)] =
+  obj.getAgentListeners(sig)
 
 proc unsafeWeakRef*[T: Agent](obj: T): WeakRef[T] =
   result = WeakRef[T](pt: obj)
@@ -137,7 +145,7 @@ proc asAgent*[T: Agent](obj: WeakRef[T]): WeakRef[Agent] =
 proc asAgent*[T: Agent](obj: T): Agent =
   result = obj
 
-proc addAgentListeners*(obj: Agent, sig: string, tgt: Agent, slot: AgentProc): void =
+proc addAgentListeners*(obj: Agent, sig: SigilName, tgt: Agent, slot: AgentProc): void =
   # echo "add agent listener: ", sig, " obj: ", obj.debugId, " tgt: ", tgt.debugId
   # if obj.subscribers.hasKey(sig):
   #   echo "listener:count: ", obj.subscribers[sig].len()
@@ -156,13 +164,16 @@ proc addAgentListeners*(obj: Agent, sig: string, tgt: Agent, slot: AgentProc): v
   tgt.subscribedTo.incl(obj.unsafeWeakRef())
   # echo "subscribers: ", obj.subscribers.len, " SUBSC: ", tgt.subscribed.len
 
+template addAgentListeners*(obj: Agent, sig: IndexableChars, tgt: Agent, slot: AgentProc): void =
+  addAgentListeners(obj, sig.toSigilName(), tgt, slot)
+
 method callMethod*(
     ctx: Agent, req: SigilRequest, slot: AgentProc
 ): SigilResponse {.base, gcsafe, effectsOf: slot.} =
   ## Route's an rpc request. 
 
   if slot.isNil:
-    let msg = req.procName & " is not a registered RPC method."
+    let msg = $req.procName & " is not a registered RPC method."
     let err = SigilError(code: METHOD_NOT_FOUND, msg: msg)
     result = wrapResponseError(req.origin, err)
   else:

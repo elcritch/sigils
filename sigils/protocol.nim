@@ -1,8 +1,10 @@
 import tables
 import variant
+import stack_strings
 
 export tables
 export variant
+export stack_strings
 
 type FastErrorCodes* = enum
   # Error messages
@@ -40,10 +42,12 @@ type
 
   SigilId* = int
 
+  SigilName* = StackString[128]
+
   SigilRequest* = object
     kind*: RequestType
     origin*: SigilId
-    procName*: string
+    procName*: StackString[128]
     params*: SigilParams # - we handle params below
 
   SigilRequestTy*[T] = SigilRequest
@@ -110,7 +114,7 @@ template packResponse*(res: SigilResponse): Variant =
   so
 
 proc initSigilRequest*[S, T](
-    procName: string,
+    procName: SigilName,
     args: sink T,
     origin: SigilId = SigilId(-1),
     reqKind: RequestType = Request,
@@ -119,3 +123,6 @@ proc initSigilRequest*[S, T](
   result = SigilRequestTy[S](
     kind: reqKind, origin: origin, procName: procName, params: rpcPack(ensureMove args)
   )
+
+proc toSigilName*(name: string): SigilName =
+  return toStackString(name, 128)
