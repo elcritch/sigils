@@ -130,7 +130,7 @@ proc initAgentRequest*[S, T](
     procName: string,
     args: T,
     origin: AgentId = AgentId(-1),
-    reqKind: AgentType = Request,
+    reqKind: RequestType = Request,
 ): AgentRequestTy[S] =
   # echo "AgentRequest: ", procName, " args: ", args.repr
   result = AgentRequestTy[S](
@@ -174,7 +174,7 @@ proc addAgentListeners*(obj: Agent, sig: string, tgt: Agent, slot: AgentProc): v
 
 method callMethod*(
     req: AgentRequest, slot: AgentProc, ctx: RpcContext, # clientId: ClientId,
-): AgentResponse {.gcsafe, effectsOf: slot.} =
+): AgentResponse {.base, gcsafe, effectsOf: slot.} =
   ## Route's an rpc request. 
 
   if slot.isNil:

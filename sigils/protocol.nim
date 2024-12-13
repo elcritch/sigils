@@ -24,7 +24,7 @@ type RpcParams* = object ## implementation specific -- handles data buffer
     buf*: Variant
 
 type
-  AgentType* {.size: sizeof(uint8).} = enum
+  RequestType* {.size: sizeof(uint8).} = enum
     # Fast RPC Types
     Request = 5
     Response = 6
@@ -41,7 +41,7 @@ type
   AgentId* = int
 
   AgentRequest* = object
-    kind*: AgentType
+    kind*: RequestType
     origin*: AgentId
     procName*: string
     params*: RpcParams # - we handle params below
@@ -49,7 +49,7 @@ type
   AgentRequestTy*[T] = AgentRequest
 
   AgentResponse* = object
-    kind*: AgentType
+    kind*: RequestType
     id*: int
     result*: RpcParams # - we handle params below
 
