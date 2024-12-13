@@ -60,7 +60,7 @@ suite "threaded agent slots":
     # echo "thread runner!", " (th:", getThreadId(), ")"
     # echo "obj a: ", a.unsafeWeakRef
     # echo "obj b: ", b.unsafeWeakRef
-    let thread = newSigilsThread()
+    let thread = newSigilThread()
     thread.start()
     startLocalThread()
 

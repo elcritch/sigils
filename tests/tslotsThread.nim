@@ -75,7 +75,7 @@ suite "threaded agent slots":
       b = Counter.new()
 
     # echo "thread runner!"
-    let thread = newSigilsThread()
+    let thread = newSigilThread()
     let bp: AgentProxy[Counter] = b.moveToThread(thread)
 
     connect(a, valueChanged, bp, setValue)
@@ -90,7 +90,7 @@ suite "threaded agent slots":
     # echo "thread runner!", " (th:", getThreadId(), ")"
     # echo "obj a: ", a.unsafeWeakRef
     # echo "obj b: ", b.unsafeWeakRef
-    let thread = newSigilsThread()
+    let thread = newSigilThread()
     thread.start()
     startLocalThread()
 
@@ -115,7 +115,7 @@ suite "threaded agent slots":
     # echo "thread runner!", " (main thread:", getThreadId(), ")"
     # echo "obj a: ", a.unsafeWeakRef
     # echo "obj b: ", b.unsafeWeakRef
-    let thread = newSigilsThread()
+    let thread = newSigilThread()
     thread.start()
     startLocalThread()
 
@@ -138,7 +138,7 @@ suite "threaded agent slots":
   test "sigil object thread runner (loop)":
     if true:
       startLocalThread()
-      let thread = newSigilsThread()
+      let thread = newSigilThread()
       thread.start()
       # echo "thread runner!", " (th:", getThreadId(), ")"
 

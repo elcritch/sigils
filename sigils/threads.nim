@@ -43,7 +43,7 @@ method callMethod*(
     raise newException(AgentSlotError, "error sending signal to thread")
 
 
-proc newSigilsThread*(): SigilsThread =
+proc newSigilThread*(): SigilsThread =
   result = SigilsThread()
   result.inputs = newChan[ThreadSignal]()
 
@@ -130,7 +130,7 @@ var sigilThread {.threadVar.}: SigilsThread
 
 proc startLocalThread*() =
   if sigilThread.isNil:
-    sigilThread = newSigilsThread()
+    sigilThread = newSigilThread()
 
 proc getCurrentSigilThread*(): SigilsThread =
   startLocalThread()
