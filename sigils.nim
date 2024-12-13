@@ -7,20 +7,8 @@ export signals, slots, threads
 when not defined(gcArc) and not defined(gcOrc) and not defined(nimdoc):
   {.error: "Sigils requires --gc:arc or --gc:orc".}
 
-proc wrapResponse*(id: AgentId, resp: RpcParams, kind = Response): AgentResponse =
-  # echo "WRAP RESP: ", id, " kind: ", kind
-  result.kind = kind
-  result.id = id
-  result.result = resp
-
-proc wrapResponseError*(id: AgentId, err: AgentError): AgentResponse =
-  echo "WRAP ERROR: ", id, " err: ", err.repr
-  result.kind = Error
-  result.id = id
-  result.result = rpcPack(err)
-
 proc callMethod*(
-    slot: AgentProc, ctx: RpcContext, req: AgentRequest, # clientId: ClientId,
+    req: AgentRequest, slot: AgentProc, ctx: RpcContext, # clientId: ClientId,
 ): AgentResponse {.gcsafe, effectsOf: slot.} =
   ## Route's an rpc request. 
 
@@ -33,11 +21,6 @@ proc callMethod*(
     let res = rpcPack(true)
 
     result = AgentResponse(kind: Response, id: req.origin, result: res)
-
-template packResponse*(res: AgentResponse): Variant =
-  var so = newVariant()
-  so.pack(res)
-  so
 
 proc callSlots*(obj: Agent | WeakRef[Agent], req: AgentRequest) {.gcsafe.} =
   {.cast(gcsafe).}:
@@ -64,7 +47,7 @@ proc callSlots*(obj: Agent | WeakRef[Agent], req: AgentRequest) {.gcsafe.} =
           raise newException(AgentSlotError, "error sending signal to thread")
       else:
         # echo "regular Thread!"
-        res = slot.callMethod(tgtRef, req)
+        res = req.callMethod(slot, tgtRef)
 
       when defined(nimscript) or defined(useJsonSerde):
         discard
@@ -83,7 +66,7 @@ proc emit*(call: (Agent | WeakRef[Agent], AgentRequest)) =
 proc poll*(inputs: Chan[ThreadSignal]) =
   let sig = inputs.recv()
   # echo "thread got request: ", sig, " (", getThreadId(), ")"
-  discard sig.slot.callMethod(sig.tgt[], sig.req)
+  discard sig.req.callMethod(sig.slot, sig.tgt[])
 
 proc poll*(thread: SigilsThread) =
   thread.inputs.poll()

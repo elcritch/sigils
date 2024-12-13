@@ -2,17 +2,14 @@ import std/times
 
 import agents
 
-type
-  AgentRouter* = ref object
-    procs*: Table[string, AgentProc]
-    sysprocs*: Table[string, AgentProc]
-    stacktraces*: bool
-    subscriptionTimeout*: Duration
+type AgentRouter* = ref object
+  procs*: Table[string, AgentProc]
+  sysprocs*: Table[string, AgentProc]
+  stacktraces*: bool
+  subscriptionTimeout*: Duration
 
 proc newAgentRouter*(
-    inQueueSize = 2,
-    outQueueSize = 2,
-    registerQueueSize = 2,
+    inQueueSize = 2, outQueueSize = 2, registerQueueSize = 2
 ): AgentRouter =
   new(result)
   result.procs = initTable[string, AgentProc]()

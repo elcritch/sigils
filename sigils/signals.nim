@@ -23,15 +23,9 @@ proc splitNamesImpl(slot: NimNode): Option[(NimNode, NimNode)] =
   if slot.kind == nnkCall and slot[0].kind == nnkDotExpr:
     return splitNamesImpl(slot[0])
   elif slot.kind == nnkCall:
-    result = some (
-      slot[1].copyNimTree,
-      slot[0].copyNimTree,
-    )
+    result = some (slot[1].copyNimTree, slot[0].copyNimTree)
   elif slot.kind == nnkDotExpr:
-    result = some (
-      slot[0].copyNimTree,
-      slot[1].copyNimTree,
-    )
+    result = some (slot[0].copyNimTree, slot[1].copyNimTree)
   # echo "splitNamesImpl:res: ", result.repr
 
 macro signalType*(s: untyped): auto =
@@ -53,7 +47,7 @@ macro signalType*(s: untyped): auto =
       p[0]
   # echo "signalType:p0: ", obj.repr
   result = nnkTupleConstr.newNimNode()
-  for arg in obj[2..^1]:
+  for arg in obj[2 ..^ 1]:
     result.add arg[1]
 
 proc getAgentProcTy*[T](tp: AgentProcTy[T]): T =
@@ -90,25 +84,24 @@ template connect*[T](
   ## while `slot` must be a slot proc.
   ## 
   runnableExamples:
-      type
-        Updater* = ref object of Agent
+    type
+      Updater* = ref object of Agent
 
-        Counter* = ref object of Agent
-          value: int
+      Counter* = ref object of Agent
+        value: int
 
-      proc valueChanged*(tp: Counter, val: int) {.signal.}
+    proc valueChanged*(tp: Counter, val: int) {.signal.}
 
-      proc setValue*(self: Counter, value: int) {.slot.} =
-        echo "setValue! ", value
-        if self.value != value:
-          self.value = value
-      
-      var
-        a = Updater.new()
-        a = Counter.new()
-      connect(a, valueChanged,
-              b, setValue)
-      emit a.valueChanged(137) #=> prints "setValue! 137"
+    proc setValue*(self: Counter, value: int) {.slot.} =
+      echo "setValue! ", value
+      if self.value != value:
+        self.value = value
+
+    var
+      a = Updater.new()
+      a = Counter.new()
+    connect(a, valueChanged, b, setValue)
+    emit a.valueChanged(137) #=> prints "setValue! 137"
 
   checkSignalTypes(a, signal, b, slot, acceptVoidSlot)
   a.addAgentListeners(signalName(signal), b, slot)

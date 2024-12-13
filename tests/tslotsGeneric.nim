@@ -1,10 +1,8 @@
-
 import sigils
 
-type
-  Counter*[T] = ref object of Agent
-    value: T
-    avg: int
+type Counter*[T] = ref object of Agent
+  value: T
+  avg: int
 
 proc valueChanged*[T](tp: Counter[T], val: T) {.signal.}
 
@@ -17,7 +15,6 @@ proc setValue*[T](self: Counter[T], value: T) {.slot.} =
   if self.value != value:
     self.value = value
   emit self.valueChanged(value)
-
 
 proc value*(self: Counter): int =
   self.value
@@ -35,15 +32,13 @@ when isMainModule:
         d {.used.} = Counter[uint].new()
 
     test "signal / slot types":
-      check SignalTypes.avgChanged(Counter[uint]) is (float, )
-      check SignalTypes.valueChanged(Counter[uint]) is (uint, )
-      check SignalTypes.setValue(Counter[uint]) is (uint, )
+      check SignalTypes.avgChanged(Counter[uint]) is (float,)
+      check SignalTypes.valueChanged(Counter[uint]) is (uint,)
+      check SignalTypes.setValue(Counter[uint]) is (uint,)
 
     test "signal connect":
-      connect(a, valueChanged,
-              b, Counter[uint].setValue())
-      connect(a, valueChanged,
-              c, Counter[uint].setValue())
+      connect(a, valueChanged, b, Counter[uint].setValue())
+      connect(a, valueChanged, c, Counter[uint].setValue())
       check b.value == 0
       check c.value == 0
       check d.value == 0
@@ -58,16 +53,13 @@ when isMainModule:
 
     test "signal connect in generic proc":
       proc setup[T]() =
-        connect(a, valueChanged,
-                b, Counter[uint].setValue)
+        connect(a, valueChanged, b, Counter[uint].setValue)
         setup[uint]()
 
     test "signal connect":
       # TODO: how to do this?
-      connect(a, valueChanged,
-              b, Counter[uint].setValue)
-      connect(a, valueChanged,
-              c, Counter[uint].setValue)
+      connect(a, valueChanged, b, Counter[uint].setValue)
+      connect(a, valueChanged, c, Counter[uint].setValue)
       # connect(a, valueChanged, c, Counter[float].setValue())
 
       check a.value == 0
@@ -82,9 +74,7 @@ when isMainModule:
       check c.value == 42
 
     test "connect type errors":
-      check not compiles(
-        connect(a, avgChanged,
-                c, Counter[uint].setValue))
+      check not compiles(connect(a, avgChanged, c, Counter[uint].setValue))
 
       # connect(a, avgChanged,
       #         c, Counter[uint].setValue)

@@ -1,4 +1,3 @@
-
 import sigils
 
 type
@@ -52,28 +51,22 @@ when isMainModule:
       GC_fullCollect()
 
     test "signal / slot types":
-      check SignalTypes.avgChanged(Counter) is (float, )
-      check SignalTypes.valueChanged(Counter) is (int, )
+      check SignalTypes.avgChanged(Counter) is (float,)
+      check SignalTypes.valueChanged(Counter) is (int,)
       echo "someChange: ", SignalTypes.someChange(Counter).typeof.repr
       check SignalTypes.someChange(Counter) is tuple[]
-      check SignalTypes.setValue(Counter) is (int, )
+      check SignalTypes.setValue(Counter) is (int,)
 
     test "signal connect":
       echo "Counter.setValue: ", Counter.setValue().repr
-      connect(a, valueChanged,
-              b, setValue)
-      connect(a, valueChanged,
-              c, Counter.setValue)
-      connect(a, valueChanged,
-              c, setValue Counter)
-      check not(compiles(
-        connect(a, someAction,
-                c, Counter.setValue)))
+      connect(a, valueChanged, b, setValue)
+      connect(a, valueChanged, c, Counter.setValue)
+      connect(a, valueChanged, c, setValue Counter)
+      check not (compiles(connect(a, someAction, c, Counter.setValue)))
 
       check b.value == 0
       check c.value == 0
       check d.value == 0
-
 
       emit a.valueChanged(137)
 
@@ -83,16 +76,13 @@ when isMainModule:
       check d.value == 0
 
       emit a.someChange()
-      connect(a, someChange,
-              c, Counter.someAction)
+      connect(a, someChange, c, Counter.someAction)
 
     test "basic signal connect":
       # TODO: how to do this?
       echo "done"
-      connect(a, valueChanged,
-              b, setValue)
-      connect(a, valueChanged,
-              c, Counter.setValue)
+      connect(a, valueChanged, b, setValue)
+      connect(a, valueChanged, c, Counter.setValue)
 
       check a.value == 0
       check b.value == 0
@@ -102,15 +92,20 @@ when isMainModule:
       check a.value == 42
       check b.value == 42
       check c.value == 42
-      echo "TEST REFS: ", " aref: ", cast[pointer](a).repr, " ", addr(a[]).pointer.repr, " agent: ", addr(Agent(a)).pointer.repr
+      echo "TEST REFS: ",
+        " aref: ",
+        cast[pointer](a).repr,
+        " ",
+        addr(a[]).pointer.repr,
+        " agent: ",
+        addr(Agent(a)).pointer.repr
       check a.unsafeWeakRef().toPtr == cast[pointer](a)
       check a.unsafeWeakRef().toPtr == addr(a[]).pointer
 
     test "differing agents, same sigs":
       # TODO: how to do this?
       echo "done"
-      connect(o, change,
-              b, setValue)
+      connect(o, change, b, setValue)
 
       check b.value == 0
 
@@ -119,23 +114,17 @@ when isMainModule:
       check b.value == 42
 
     test "connect type errors":
-      check not compiles(
-        connect(a, avgChanged,
-                c, setValue))
+      check not compiles(connect(a, avgChanged, c, setValue))
 
     test "signal connect reg proc":
       # TODO: how to do this?
       static:
         echo "\n\n\nREG PROC"
       # let sv: proc (self: Counter, value: int) = Counter.setValue
-      check not compiles(
-        connect(a, valueChanged,
-              b, setSomeValue)
-      )
+      check not compiles(connect(a, valueChanged, b, setSomeValue))
 
     test "empty signal conversion":
-      connect(a, valueChanged,
-              c, someAction, acceptVoidSlot = true)
+      connect(a, valueChanged, c, someAction, acceptVoidSlot = true)
 
       a.setValue(42)
 
