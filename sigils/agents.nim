@@ -1,4 +1,3 @@
-
 import std/[options, tables, sets, macros, hashes]
 import std/times
 
@@ -20,11 +19,10 @@ export sets
 export options
 export variant
 
-type
-  WeakRef*[T] = object
-    pt* {.cursor.}: T
-    ## type alias descring a weak ref that *must* be cleaned
-    ## up when an object is set to be destroyed
+type WeakRef*[T] = object
+  pt* {.cursor.}: T
+  ## type alias descring a weak ref that *must* be cleaned
+  ## up when an object is set to be destroyed
 
 proc `[]`*[T](r: WeakRef[T]): lent T =
   result = r.pt
@@ -37,6 +35,7 @@ proc hash*[T](obj: WeakRef[T]): Hash =
 
 proc toRef*[T: ref](obj: WeakRef[T]): T =
   result = cast[T](obj)
+
 proc toRef*[T: ref](obj: T): T =
   result = obj
 
@@ -59,9 +58,7 @@ type
   RpcContext* = Agent
 
   # Procedure signature accepted as an RPC call by server
-  AgentProc* = proc(context: RpcContext,
-                    params: RpcParams,
-                    ) {.nimcall.}
+  AgentProc* = proc(context: RpcContext, params: RpcParams) {.nimcall.}
 
   AgentProcTy*[S] = AgentProc
 
@@ -89,7 +86,9 @@ proc unsubscribe(subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]) =
     for sig in delSigs:
       obj[].subscribers.del(sig)
 
-proc remove(subscribers: var Table[string, OrderedSet[AgentPairing]], xid: WeakRef[Agent]) =
+proc remove(
+    subscribers: var Table[string, OrderedSet[AgentPairing]], xid: WeakRef[Agent]
+) =
   ## remove myself from agents listening to me
   for signal, subscriberPairs in subscribers.mpairs():
     # echo "freeing signal: ", signal, " subscribers: ", subscriberPairs
@@ -111,33 +110,36 @@ proc `=destroy`*(agent: AgentObj) =
   `=destroy`(xid[].subscribedTo)
 
 when defined(nimscript):
-  proc getId*(a: Agent): AgentId = a.debugId
+  proc getId*(a: Agent): AgentId =
+    a.debugId
+
   var lastUId {.compileTime.}: int = 1
 else:
-  proc getId*[T: Agent](a: WeakRef[T]): AgentId = cast[int](a.toPtr())
-  proc getId*(a: Agent): AgentId = cast[int](cast[pointer](a))
+  proc getId*[T: Agent](a: WeakRef[T]): AgentId =
+    cast[int](a.toPtr())
 
-proc hash*(a: Agent): Hash = hash(a.getId())
+  proc getId*(a: Agent): AgentId =
+    cast[int](cast[pointer](a))
+
+proc hash*(a: Agent): Hash =
+  hash(a.getId())
+
 # proc hash*(a: AgentProc): Hash = hash(getAgentProcId(a))
 
-
 proc initAgentRequest*[S, T](
-  procName: string,
-  args: T,
-  origin: AgentId = AgentId(-1),
-  reqKind: AgentType = Request,
+    procName: string,
+    args: T,
+    origin: AgentId = AgentId(-1),
+    reqKind: AgentType = Request,
 ): AgentRequestTy[S] =
   # echo "AgentRequest: ", procName, " args: ", args.repr
   result = AgentRequestTy[S](
-    kind: reqKind,
-    origin: origin,
-    procName: procName,
-    params: rpcPack(args)
+    kind: reqKind, origin: origin, procName: procName, params: rpcPack(args)
   )
 
-proc getAgentListeners*(obj: Agent,
-                        sig: string
-                        ): OrderedSet[(WeakRef[Agent], AgentProc)] =
+proc getAgentListeners*(
+    obj: Agent, sig: string
+): OrderedSet[(WeakRef[Agent], AgentProc)] =
   # echo "FIND:subscribers: ", obj.subscribers
   if obj.subscribers.hasKey(sig):
     result = obj.subscribers[sig]
@@ -147,15 +149,11 @@ proc unsafeWeakRef*[T: Agent](obj: T): WeakRef[T] =
 
 proc asAgent*[T: Agent](obj: WeakRef[T]): WeakRef[Agent] =
   result = WeakRef[Agent](pt: obj.pt)
+
 proc asAgent*[T: Agent](obj: T): Agent =
   result = obj
 
-proc addAgentListeners*(obj: Agent,
-                        sig: string,
-                        tgt: Agent,
-                        slot: AgentProc
-                        ): void =
-
+proc addAgentListeners*(obj: Agent, sig: string, tgt: Agent, slot: AgentProc): void =
   # echo "add agent listener: ", sig, " obj: ", obj.debugId, " tgt: ", tgt.debugId
   # if obj.subscribers.hasKey(sig):
   #   echo "listener:count: ", obj.subscribers[sig].len()
@@ -164,11 +162,11 @@ proc addAgentListeners*(obj: Agent,
   obj.subscribers.withValue(sig, agents):
     # if (tgt.unsafeWeakRef(), slot,) notin agents[]:
     #   echo "addAgentsubscribers: ", "tgt: ", tgt.unsafeWeakRef().toPtr().pointer.repr, " id: ", tgt.debugId, " obj: ", obj.debugId, " name: ", sig
-    agents[].incl((tgt.unsafeWeakRef(), slot,))
+    agents[].incl((tgt.unsafeWeakRef(), slot))
   do:
     # echo "addAgentsubscribers: ", "tgt: ", tgt.unsafeWeakRef().toPtr().pointer.repr, " id: ", tgt.debugId, " obj: ", obj.debugId, " name: ", sig
     var agents = initOrderedSet[AgentPairing]()
-    agents.incl( (tgt.unsafeWeakRef(), slot,) )
+    agents.incl((tgt.unsafeWeakRef(), slot))
     obj.subscribers[sig] = ensureMove agents
 
   tgt.subscribedTo.incl(obj.unsafeWeakRef())

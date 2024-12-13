@@ -1,5 +1,9 @@
---path:"../"
+--path:
+  "../"
 
---gc:arc
---threads:on
---d:useMalloc
+--gc:
+  arc
+--threads:
+  on
+--d:
+  useMalloc

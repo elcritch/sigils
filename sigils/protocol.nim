@@ -58,7 +58,6 @@ type
     msg*: string # trace*: seq[(string, string, int)]
 
 type
-
   ConversionError* = object of CatchableError
   AgentSlotError* = object of CatchableError
 
@@ -76,9 +75,9 @@ proc pack*[T](ss: var Variant, val: T) =
 
 proc unpack*[T](ss: Variant, obj: var T) =
   # if ss.ofType(T):
-    obj = ss.get(T)
+  obj = ss.get(T)
   # else:
-    # raise newException(ConversionError, "couldn't convert to: " & $(T))
+  # raise newException(ConversionError, "couldn't convert to: " & $(T))
 
 proc rpcPack*(res: RpcParams): RpcParams {.inline.} =
   result = res
@@ -96,7 +95,6 @@ proc rpcUnpack*[T](obj: var T, ss: RpcParams) =
     discard
   else:
     ss.buf.unpack(obj)
-
 
 proc wrapResponse*(id: AgentId, resp: RpcParams, kind = Response): AgentResponse =
   # echo "WRAP RESP: ", id, " kind: ", kind

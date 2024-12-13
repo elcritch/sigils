@@ -12,11 +12,10 @@ import std/asyncdispatch
 import sigils
 import sigils/threads
 
-type
-  SigilsAsyncThread* = ref object of Agent
-    thread*: Thread[Chan[ThreadSignal]]
-    inputs*: Chan[ThreadSignal]
-    trigger*: AsyncEvent
+type SigilsAsyncThread* = ref object of Agent
+  thread*: Thread[Chan[ThreadSignal]]
+  inputs*: Chan[ThreadSignal]
+  trigger*: AsyncEvent
 
 type
   SomeAction* = ref object of Agent
@@ -29,7 +28,6 @@ proc newSigilsAsyncThread*(): SigilsAsyncThread =
   result = SigilsAsyncThread()
   result.inputs = newChan[ThreadSignal]()
   result.trigger = newAsyncEvent()
-
 
 ## -------------------------------------------------------- ##
 
@@ -78,4 +76,3 @@ suite "threaded agent slots":
     # os.sleep(500)
     let ct = getCurrentSigilThread()
     ct.poll()
-

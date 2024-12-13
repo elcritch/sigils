@@ -1,4 +1,3 @@
-
 import std/[unittest, sequtils]
 import sigils
 
@@ -23,25 +22,22 @@ proc setValue*(self: Counter, value: int) {.slot.} =
     self.value = value
     emit self.valueChanged(value)
 
-type
-  TestObj = object
-    val: int
+type TestObj = object
+  val: int
 
 proc `=destroy`*(obj: TestObj) =
   echo "destroying test object: ", obj.val
 
-
 suite "agent weak refs":
   test "subscribers freed":
     var x = Counter.new()
-    
+
     block:
       var obj {.used.} = TestObj(val: 100)
       var y = Counter.new()
 
       # echo "Counter.setValue: ", "x: ", x.debugId, " y: ", y.debugId
-      connect(x, valueChanged,
-              y, setValue)
+      connect(x, valueChanged, y, setValue)
 
       check y.value == 0
       emit x.valueChanged(137)
@@ -58,7 +54,7 @@ suite "agent weak refs":
       check x.subscribedTo.len() == 0
 
       echo "block done"
-    
+
     echo "finishing outer block "
     # check x.subscribedTo.len() == 0
     echo "x:subscribers: ", x.subscribers
@@ -73,18 +69,16 @@ suite "agent weak refs":
 
   test "subscribers freed":
     var y = Counter.new()
-    
+
     block:
       var obj {.used.} = TestObj(val: 100)
       var x = Counter.new()
 
       # echo "Counter.setValue: ", "x: ", x.debugId, " y: ", y.debugId
-      connect(x, valueChanged,
-              y, setValue)
+      connect(x, valueChanged, y, setValue)
 
       check y.value == 0
       emit x.valueChanged(137)
-
 
       echo "x:subscribers: ", x.subscribers
       # echo "x:subscribed: ", x.subscribed
@@ -98,7 +92,7 @@ suite "agent weak refs":
       check x.subscribedTo.len() == 0
 
       echo "block done"
-    
+
     echo "finishing outer block "
     # check x.subscribedTo.len() == 0
     echo "y:subscribers: ", y.subscribers
@@ -115,23 +109,25 @@ test "weak refs":
   when defined(gcOrc):
     const
       rcMask = 0b1111
-      rcShift = 4      # shift by rcShift to get the reference counter
+      rcShift = 4 # shift by rcShift to get the reference counter
   else:
     const
       rcMask = 0b111
-      rcShift = 3      # shift by rcShift to get the reference counter
+      rcShift = 3 # shift by rcShift to get the reference counter
 
   type
     RefHeader = object
       rc: int
       when defined(gcOrc):
-        rootIdx: int # thanks to this we can delete potential cycle roots
-                      # in O(1) without doubly linked lists
+        rootIdx: int
+          # thanks to this we can delete potential cycle roots
+          # in O(1) without doubly linked lists
 
     Cell = ptr RefHeader
 
   template head[T](p: ref T): Cell =
     cast[Cell](cast[int](cast[pointer](p)) -% sizeof(RefHeader))
+
   template count(x: Cell): int =
     (x.rc shr rcShift)
 
@@ -145,8 +141,7 @@ test "weak refs":
     check x.head().count() == 0
 
     # echo "Counter.setValue: ", "x: ", x.debugId, " y: ", y.debugId
-    connect(x, valueChanged,
-            y, setValue)
+    connect(x, valueChanged, y, setValue)
     check x.head().count() == 0
 
     check y.value == 0
@@ -154,7 +149,7 @@ test "weak refs":
     echo "X::count:end: ", x.head().count()
     echo "Y::count:end: ", y.head().count()
     check x.head().count() == 1
-  
+
   echo "done with y"
   echo "X::count: ", x.head().count()
   check x.subscribers.len() == 0

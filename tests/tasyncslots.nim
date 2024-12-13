@@ -6,7 +6,6 @@ import sigils/asyncHttp
 import threading/channels
 
 suite "threaded agent proxy":
-
   test "simple proxy test":
     if false:
       var ap = newAsyncProcessor()

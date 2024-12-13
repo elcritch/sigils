@@ -16,7 +16,6 @@ export smartptrs
 export uri
 export asyncs
 
-
 type
   HttpRequest* = Uri
   HttpResult* = object
@@ -41,9 +40,7 @@ proc newHttpExecutor*(proxy: HttpProxy): HttpExecutor =
 
 proc httpRequest(req: HttpRequest): Future[HttpResult] {.async.} =
   var client = newAsyncHttpClient()
-  result = HttpResult(
-    uri: req,
-  )
+  result = HttpResult(uri: req)
 
   try:
     let ar = await client.request(req)
@@ -67,12 +64,12 @@ proc httpRequest(req: HttpRequest): Future[HttpResult] {.async.} =
     result.error = some(err.msg.split("\n")[0])
 
 method setup*(ap: HttpExecutor) {.gcsafe.} =
-  echo "setting up async http executor", " tid: ", getThreadId(), " trigger: ", ap.proxy[].trigger.repr 
+  echo "setting up async http executor",
+    " tid: ", getThreadId(), " trigger: ", ap.proxy[].trigger.repr
 
-  let cb = proc (fd: AsyncFD): bool {.closure.} =
+  let cb = proc(fd: AsyncFD): bool {.closure.} =
     var msg: AsyncMessage[HttpRequest]
     if ap.proxy[].inputs.tryRecv(msg):
-
       echo "HR start: "
       let resp = httpRequest(msg.value)
       proc onResult() =
@@ -80,6 +77,7 @@ method setup*(ap: HttpExecutor) {.gcsafe.} =
         let val = resp.read()
         let res = AsyncMessage[HttpResult](handle: msg.handle, value: val)
         ap.proxy[].outputs.send(res)
+
       resp.addCallback(onResult)
 
   ap.proxy[].trigger.addEvent(cb)

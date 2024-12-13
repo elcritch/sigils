@@ -31,14 +31,14 @@ proc newSigilsThread*(): SigilsThread =
   result.inputs = newChan[ThreadSignal]()
 
 proc moveToThread*[T: Agent](agent: T, thread: SigilsThread): AgentProxy[T] =
-
   if not isUniqueRef(agent):
-    raise newException(AccessViolationDefect,
-            "agent must be unique and not shared to be passed to another thread!")
-  
+    raise newException(
+      AccessViolationDefect,
+      "agent must be unique and not shared to be passed to another thread!",
+    )
+
   return AgentProxy[T](
-    remote: newSharedPtr(unsafeIsolate(Agent(agent))),
-    chan: thread.inputs
+    remote: newSharedPtr(unsafeIsolate(Agent(agent))), chan: thread.inputs
   )
 
 template connect*[T, S](
@@ -81,9 +81,6 @@ template connect*[T, S](
   # TODO: does this *really* work? It feels off but I wanted to
   #       get it running something. Surprisingly haven't seen any
   #       bugs with it so far, but it's sus.
-  let proxy = AgentProxy[typeof(b)](
-    chan: ct.inputs,
-    remote: newSharedPtr(unsafeIsolate Agent(b)),
-  )
+  let proxy =
+    AgentProxy[typeof(b)](chan: ct.inputs, remote: newSharedPtr(unsafeIsolate Agent(b)))
   a.remote[].addAgentListeners(signalName(signal), proxy, slot)
-
