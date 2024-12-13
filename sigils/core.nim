@@ -4,24 +4,6 @@ import threads
 
 export signals, slots, threads
 
-when not defined(gcArc) and not defined(gcOrc) and not defined(nimdoc):
-  {.error: "Sigils requires --gc:arc or --gc:orc".}
-
-method callMethod*(
-    req: AgentRequest, slot: AgentProc, ctx: RpcContext, # clientId: ClientId,
-): AgentResponse {.gcsafe, effectsOf: slot.} =
-  ## Route's an rpc request. 
-
-  if slot.isNil:
-    let msg = req.procName & " is not a registered RPC method."
-    let err = AgentError(code: METHOD_NOT_FOUND, msg: msg)
-    result = wrapResponseError(req.origin, err)
-  else:
-    slot(ctx, req.params)
-    let res = rpcPack(true)
-
-    result = AgentResponse(kind: Response, id: req.origin, result: res)
-
 proc callSlots*(obj: Agent | WeakRef[Agent], req: AgentRequest) {.gcsafe.} =
   {.cast(gcsafe).}:
     let listeners = obj.toRef().getAgentListeners(req.procName)
