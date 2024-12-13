@@ -54,16 +54,16 @@ suite "threaded agent slots":
 
     proc threadTestProc(aref: WeakRef[SomeAction]) {.thread.} =
       var res = aref.valueChanged(1337)
-      echo "Thread aref: ", aref
-      echo "Thread sending: ", res
+      # echo "Thread aref: ", aref
+      # echo "Thread sending: ", res
       agentResults.send(unsafeIsolate(ensureMove res))
-      echo "Thread Done"
+      # echo "Thread Done"
 
     var thread: Thread[WeakRef[SomeAction]]
     createThread(thread, threadTestProc, wa)
     thread.joinThread()
     let resp = agentResults.recv()
-    echo "RESP: ", resp
+    # echo "RESP: ", resp
     emit resp
 
     check b.value == 1337
@@ -74,7 +74,7 @@ suite "threaded agent slots":
       a = SomeAction.new()
       b = Counter.new()
 
-    echo "thread runner!"
+    # echo "thread runner!"
     let thread = newSigilsThread()
     let bp: AgentProxy[Counter] = b.moveToThread(thread)
 
@@ -87,7 +87,7 @@ suite "threaded agent slots":
       a = SomeAction.new()
       b = Counter.new()
 
-    echo "thread runner!", " (th:", getThreadId(), ")"
+    # echo "thread runner!", " (th:", getThreadId(), ")"
     # echo "obj a: ", a.unsafeWeakRef
     # echo "obj b: ", b.unsafeWeakRef
     let thread = newSigilsThread()
@@ -112,7 +112,7 @@ suite "threaded agent slots":
       a = SomeAction.new()
       b = Counter.new()
 
-    echo "thread runner!", " (main thread:", getThreadId(), ")"
+    # echo "thread runner!", " (main thread:", getThreadId(), ")"
     # echo "obj a: ", a.unsafeWeakRef
     # echo "obj b: ", b.unsafeWeakRef
     let thread = newSigilsThread()
@@ -140,7 +140,7 @@ suite "threaded agent slots":
       startLocalThread()
       let thread = newSigilsThread()
       thread.start()
-      echo "thread runner!", " (th:", getThreadId(), ")"
+      # echo "thread runner!", " (th:", getThreadId(), ")"
 
       for idx in 1 .. 1_000:
         var
@@ -161,4 +161,4 @@ suite "threaded agent slots":
         ct.poll()
         check a.value == 271
 
-        GC_fullCollect()
+        # GC_fullCollect()
