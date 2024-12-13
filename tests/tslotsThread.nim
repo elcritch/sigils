@@ -12,6 +12,7 @@ type
   Counter* = ref object of Agent
     value: int
 
+
 proc valueChanged*(tp: SomeAction, val: int) {.signal.}
 proc updated*(tp: Counter, final: int) {.signal.}
 
