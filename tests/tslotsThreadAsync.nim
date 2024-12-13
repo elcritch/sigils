@@ -23,12 +23,11 @@ proc ticker(self: Counter) {.async.} =
          i*100, "ms ",
          split($((epochTime() - start)*1000), '.')[0], "ms (real)"
 
-  emit self.updated(epochTime().toInt())
-    
+  emit self.updated(1337)
+
 proc setValue*(self: Counter, value: int) {.slot.} =
   echo "setValue! ", value, " (th:", getThreadId(), ")"
-  if self.value != value:
-    self.value = value
+  self.value = value
   asyncCheck ticker(self)
 
 proc completed*(self: SomeAction, final: int) {.slot.} =
@@ -59,5 +58,7 @@ suite "threaded agent slots":
     connect(bp, updated, a, SomeAction.completed())
 
     emit a.valueChanged(314)
+    check a.value == 0
     let ct = getCurrentSigilThread()
     ct.poll()
+    check a.value == 1337
