@@ -2,20 +2,8 @@ import std/isolation
 import std/unittest
 import std/os
 
-import std/os
-import std/monotimes
-import std/options
-import std/isolation
-import std/uri
-import std/asyncdispatch
-
 import sigils
-import sigils/threads
-
-type SigilsAsyncThread* = ref object of Agent
-  thread*: Thread[Chan[ThreadSignal]]
-  inputs*: Chan[ThreadSignal]
-  trigger*: AsyncEvent
+import sigils/threadAsyncs
 
 type
   SomeAction* = ref object of Agent
@@ -23,11 +11,6 @@ type
 
   Counter* = ref object of Agent
     value: int
-
-proc newSigilsAsyncThread*(): SigilsAsyncThread =
-  result = SigilsAsyncThread()
-  result.inputs = newChan[ThreadSignal]()
-  result.trigger = newAsyncEvent()
 
 ## -------------------------------------------------------- ##
 

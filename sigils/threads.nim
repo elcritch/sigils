@@ -13,10 +13,6 @@ type
     remote*: SharedPtr[Agent]
     chan*: Chan[ThreadSignal]
 
-  AgentProxyWeak* = ref object of Agent
-    remote*: WeakRef[Agent]
-    chan*: Chan[ThreadSignal]
-
   AgentProxy*[T] = ref object of AgentProxyShared
 
   ThreadSignal* = object
@@ -24,7 +20,7 @@ type
     req*: SigilRequest
     tgt*: SharedPtr[Agent]
 
-  SigilsThread* = ref object of Agent
+  SigilThread* = ref object of Agent
     thread*: Thread[Chan[ThreadSignal]]
     inputs*: Chan[ThreadSignal]
 
@@ -43,11 +39,11 @@ method callMethod*(
     raise newException(AgentSlotError, "error sending signal to thread")
 
 
-proc newSigilThread*(): SigilsThread =
-  result = SigilsThread()
+proc newSigilThread*(): SigilThread =
+  result = SigilThread()
   result.inputs = newChan[ThreadSignal]()
 
-proc moveToThread*[T: Agent](agent: T, thread: SigilsThread): AgentProxy[T] =
+proc moveToThread*[T: Agent](agent: T, thread: SigilThread): AgentProxy[T] =
   if not isUniqueRef(agent):
     raise newException(
       AccessViolationDefect,
@@ -107,14 +103,14 @@ proc poll*(inputs: Chan[ThreadSignal]) =
   # echo "thread got request: ", sig, " (", getThreadId(), ")"
   discard sig.tgt[].callMethod(sig.req, sig.slot, )
 
-proc poll*(thread: SigilsThread) =
+proc poll*(thread: SigilThread) =
   thread.inputs.poll()
 
 proc execute*(inputs: Chan[ThreadSignal]) =
   while true:
     poll(inputs)
 
-proc execute*(thread: SigilsThread) =
+proc execute*(thread: SigilThread) =
   thread.inputs.execute()
 
 proc runThread*(inputs: Chan[ThreadSignal]) {.thread.} =
@@ -123,15 +119,15 @@ proc runThread*(inputs: Chan[ThreadSignal]) {.thread.} =
     # echo "sigil thread waiting!", " (", getThreadId(), ")"
     inputs.execute()
 
-proc start*(thread: SigilsThread) =
+proc start*(thread: SigilThread) =
   createThread(thread.thread, runThread, thread.inputs)
 
-var sigilThread {.threadVar.}: SigilsThread
+var sigilThread {.threadVar.}: SigilThread
 
 proc startLocalThread*() =
   if sigilThread.isNil:
     sigilThread = newSigilThread()
 
-proc getCurrentSigilThread*(): SigilsThread =
+proc getCurrentSigilThread*(): SigilThread =
   startLocalThread()
   return sigilThread
