@@ -39,9 +39,9 @@ jobs:
     - name: Install Deps
       run: |
         # sync deps
-        nimble install -d --verbose
+        nimble install --useSystemNim -d --verbose
 
     - name: Build Tests
       run: |
-        nimble test
+        nimble --useSystemNim test
 
