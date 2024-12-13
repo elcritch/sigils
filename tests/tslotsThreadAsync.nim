@@ -32,13 +32,12 @@ proc ticker(self: Counter) {.async.} =
 
   emit self.updated(epochTime().toInt())
     
-
 proc setValue*(self: Counter, value: int) {.slot.} =
   echo "setValue! ", value, " (th:", getThreadId(), ")"
   if self.value != value:
     self.value = value
   # echo "Counter: ", self.subscribers
-  waitFor ticker(self)
+  asyncCheck ticker(self)
 
 proc completed*(self: SomeAction, final: int) {.slot.} =
   # echo "Action done! final: ", final, " (th:", getThreadId(), ")"

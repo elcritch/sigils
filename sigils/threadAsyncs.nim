@@ -58,6 +58,7 @@ proc newSigilAsyncThread*(): AsyncSigilThread =
 proc asyncExecute*(inputs: Chan[ThreadSignal]) =
   while true:
     echo "asyncExecute..."
+    proc addEvent(ev: AsyncEvent; cb: Callback)
     poll(inputs)
 
 proc asyncExecute*(thread: AsyncSigilThread) =
@@ -66,8 +67,22 @@ proc asyncExecute*(thread: AsyncSigilThread) =
 proc runAsyncThread*(inputs: Chan[ThreadSignal]) {.thread.} =
   {.cast(gcsafe).}:
     var inputs = inputs
-    # echo "sigil thread waiting!", " (", getThreadId(), ")"
-    inputs.asyncExecute()
+    echo "sigil thread waiting!", " (", getThreadId(), ")"
+
+    let cb = proc(fd: AsyncFD): bool {.closure.} =
+      var msg: ThreadSignal
+      if inputs.tryRecv(msg):
+        echo "HR start: "
+        let resp = httpRequest(msg.value)
+        proc onResult() =
+          echo "HR req: "
+          let val = resp.read()
+          let res = AsyncMessage[HttpResult](handle: msg.handle, value: val)
+          ap.proxy[].outputs.send(res)
+      inputs.asyncExecute()
+
+    resp.addCallback(cb)
+
 
 proc start*(thread: AsyncSigilThread) =
   createThread(thread.thread, runAsyncThread, thread.inputs)

@@ -1,5 +1,6 @@
 import std/sets
 import std/isolation
+import std/options
 import threading/smartptrs
 import threading/channels
 
@@ -20,9 +21,11 @@ type
     req*: SigilRequest
     tgt*: SharedPtr[Agent]
 
-  SigilThread* = ref object of Agent
+  SigilThreadObj* = object of Agent
     thread*: Thread[Chan[ThreadSignal]]
     inputs*: Chan[ThreadSignal]
+
+  SigilThread* = SharedPtr[SigilThreadObj]
 
 method callMethod*(
     ctx: AgentProxyShared, req: SigilRequest, slot: AgentProc
@@ -37,8 +40,8 @@ method callMethod*(
     raise newException(AgentSlotError, "error sending signal to thread")
 
 proc newSigilThread*(): SigilThread =
-  result = SigilThread()
-  result.inputs = newChan[ThreadSignal]()
+  result = newSharedPtr(SigilThreadObj())
+  result[].inputs = newChan[ThreadSignal]()
 
 proc moveToThread*[T: Agent](agent: T, thread: SigilThread): AgentProxy[T] =
   if not isUniqueRef(agent):
@@ -48,7 +51,7 @@ proc moveToThread*[T: Agent](agent: T, thread: SigilThread): AgentProxy[T] =
     )
 
   return AgentProxy[T](
-    remote: newSharedPtr(unsafeIsolate(Agent(agent))), chan: thread.inputs
+    remote: newSharedPtr(unsafeIsolate(Agent(agent))), chan: thread[].inputs
   )
 
 template connect*[T, S](
@@ -92,7 +95,7 @@ template connect*[T, S](
   #       get it running something. Surprisingly haven't seen any
   #       bugs with it so far, but it's sus.
   let proxy =
-    AgentProxy[typeof(b)](chan: ct.inputs, remote: newSharedPtr(unsafeIsolate Agent(b)))
+    AgentProxy[typeof(b)](chan: ct[].inputs, remote: newSharedPtr(unsafeIsolate Agent(b)))
   a.remote[].addAgentListeners(signalName(signal), proxy, slot)
 
 proc poll*(inputs: Chan[ThreadSignal]) =
@@ -101,14 +104,14 @@ proc poll*(inputs: Chan[ThreadSignal]) =
   discard sig.tgt[].callMethod(sig.req, sig.slot)
 
 proc poll*(thread: SigilThread) =
-  thread.inputs.poll()
+  thread[].inputs.poll()
 
 proc execute*(inputs: Chan[ThreadSignal]) =
   while true:
     poll(inputs)
 
 proc execute*(thread: SigilThread) =
-  thread.inputs.execute()
+  thread[].inputs.execute()
 
 proc runThread*(inputs: Chan[ThreadSignal]) {.thread.} =
   {.cast(gcsafe).}:
@@ -117,14 +120,14 @@ proc runThread*(inputs: Chan[ThreadSignal]) {.thread.} =
     inputs.execute()
 
 proc start*(thread: SigilThread) =
-  createThread(thread.thread, runThread, thread.inputs)
+  createThread(thread[].thread, runThread, thread[].inputs)
 
-var sigilThread {.threadVar.}: SigilThread
+var sigilThread {.threadVar.}: Option[SigilThread]
 
 proc startLocalThread*() =
-  if sigilThread.isNil:
-    sigilThread = newSigilThread()
+  if sigilThread.isNone:
+    sigilThread = some newSigilThread()
 
 proc getCurrentSigilThread*(): SigilThread =
   startLocalThread()
-  return sigilThread
+  return sigilThread.get()
