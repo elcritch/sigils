@@ -4,6 +4,8 @@ import threads
 
 export signals, slots, threads
 
+type AgentSlotError* = object of CatchableError
+
 proc callSlots*(obj: Agent | WeakRef[Agent], req: SigilRequest) {.gcsafe.} =
   {.cast(gcsafe).}:
     let listeners = obj.toRef().getAgentListeners(req.procName)

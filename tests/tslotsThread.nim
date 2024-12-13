@@ -5,7 +5,6 @@ import std/os
 import sigils
 import sigils/threads
 
-
 type
   SomeAction* = ref object of Agent
     value: int

@@ -66,9 +66,6 @@ type
     msg*: string
     stacktrace*: seq[string]
 
-  AgentBindError* = object of ValueError
-  AgentAddressUnresolvableError* = object of ValueError
-
 proc pack*[T](ss: var Variant, val: T) =
   # echo "Pack Type: ", getTypeId(T), " <- ", typeof(val)
   ss = newVariant(val)
