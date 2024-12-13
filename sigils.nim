@@ -8,9 +8,7 @@ when not defined(gcArc) and not defined(gcOrc) and not defined(nimdoc):
   {.error: "Sigils requires --gc:arc or --gc:orc".}
 
 proc callMethod*(
-    req: AgentRequest,
-    slot: AgentProc,
-    ctx: RpcContext, # clientId: ClientId,
+    req: AgentRequest, slot: AgentProc, ctx: RpcContext, # clientId: ClientId,
 ): AgentResponse {.gcsafe, effectsOf: slot.} =
   ## Route's an rpc request. 
 
