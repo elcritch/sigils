@@ -119,50 +119,6 @@ proc getCurrentSigilThread*(): SigilThread =
   startLocalThread()
   return sigilThread.get()
 
-template connect*[T, S](
-    a: Agent,
-    signal: typed,
-    b: AgentProxy[T],
-    slot: Signal[S],
-    acceptVoidSlot: static bool = false,
-): void =
-  ## connects `AgentProxy[T]` to remote signals
-  ## 
-  checkSignalTypes(a, signal, T(), slot, acceptVoidSlot)
-  a.addAgentListeners(signalName(signal), b, slot)
-
-template connect*[T](
-    a: Agent,
-    signal: typed,
-    b: AgentProxy[T],
-    slot: typed,
-    acceptVoidSlot: static bool = false,
-): void =
-  ## connects `AgentProxy[T]` to remote signals
-  ## 
-  checkSignalThreadSafety(SignalTypes.`signal`(typeof(a)))
-  let agentSlot = `slot`(T)
-  checkSignalTypes(a, signal, T(), agentSlot, acceptVoidSlot)
-  a.addAgentListeners(signalName(signal), b, agentSlot)
-
-template connect*[T, S](
-    a: AgentProxy[T],
-    signal: typed,
-    b: Agent,
-    slot: Signal[S],
-    acceptVoidSlot: static bool = false,
-): void =
-  ## connects `AgentProxy[T]` to remote signals
-  ## 
-  checkSignalTypes(T(), signal, b, slot, acceptVoidSlot)
-  let ct = getCurrentSigilThread()
-  let proxy = AgentProxy[typeof(b)](
-    chan: ct[].inputs, remote: newSharedPtr(unsafeIsolate Agent(b))
-  )
-  a.remote[].addAgentListeners(signalName(signal), proxy, slot)
-  # TODO: This is wrong! but I wanted to get something running...
-  ct[].proxies.incl(proxy)
-
 proc findSubscribedToSignals*(
   subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]
 ): Table[SigilName, OrderedSet[AgentPairing]] =
@@ -220,3 +176,47 @@ proc moveToThread*[T: Agent](agent: T, thread: SigilThread): AgentProxy[T] =
     for subscriberPair in subscriberPairs:
       let (src, slot) = subscriberPair
       src.toRef().addAgentListeners(signal, result, slot)
+
+template connect*[T, S](
+    a: Agent,
+    signal: typed,
+    b: AgentProxy[T],
+    slot: Signal[S],
+    acceptVoidSlot: static bool = false,
+): void =
+  ## connects `AgentProxy[T]` to remote signals
+  ## 
+  checkSignalTypes(a, signal, T(), slot, acceptVoidSlot)
+  a.addAgentListeners(signalName(signal), b, slot)
+
+template connect*[T](
+    a: Agent,
+    signal: typed,
+    b: AgentProxy[T],
+    slot: typed,
+    acceptVoidSlot: static bool = false,
+): void =
+  ## connects `AgentProxy[T]` to remote signals
+  ## 
+  checkSignalThreadSafety(SignalTypes.`signal`(typeof(a)))
+  let agentSlot = `slot`(T)
+  checkSignalTypes(a, signal, T(), agentSlot, acceptVoidSlot)
+  a.addAgentListeners(signalName(signal), b, agentSlot)
+
+template connect*[T, S](
+    a: AgentProxy[T],
+    signal: typed,
+    b: Agent,
+    slot: Signal[S],
+    acceptVoidSlot: static bool = false,
+): void =
+  ## connects `AgentProxy[T]` to remote signals
+  ## 
+  checkSignalTypes(T(), signal, b, slot, acceptVoidSlot)
+  let ct = getCurrentSigilThread()
+  let proxy = AgentProxy[typeof(b)](
+    chan: ct[].inputs, remote: newSharedPtr(unsafeIsolate Agent(b))
+  )
+  a.remote[].addAgentListeners(signalName(signal), proxy, slot)
+  # TODO: This is wrong! but I wanted to get something running...
+  ct[].proxies.incl(proxy)
