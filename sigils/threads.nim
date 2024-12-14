@@ -120,7 +120,7 @@ proc getCurrentSigilThread*(): SigilThread =
   return sigilThread.get()
 
 proc findSubscribedToSignals*(
-  subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]
+    subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]
 ): Table[SigilName, OrderedSet[AgentPairing]] =
   ## remove myself from agents I'm subscribed to
   # echo "subscribed: ", xid[].subscribed.toSeq.mapIt(it[].debugId).repr
@@ -165,9 +165,8 @@ proc moveToThread*[T: Agent](agent: T, thread: SigilThread): AgentProxy[T] =
     for subscriberPair in subscriberPairs:
       let (tgt, slot) = subscriberPair
       # echo "signal: ", signal, " subscriber: ", tgt.getId
-      let proxy = AgentProxyShared(
-          chan: ct[].inputs, remote: newSharedPtr(unsafeIsolate tgt[])
-      )
+      let proxy =
+        AgentProxyShared(chan: ct[].inputs, remote: newSharedPtr(unsafeIsolate tgt[]))
       self.addAgentListeners(signal, proxy, slot)
       # TODO: This is wrong! but I wanted to get something running...
       ct[].proxies.incl(proxy)

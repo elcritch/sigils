@@ -164,7 +164,9 @@ proc addAgentListeners*(obj: Agent, sig: SigilName, tgt: Agent, slot: AgentProc)
   tgt.subscribedTo.incl(obj.unsafeWeakRef())
   # echo "subscribers: ", obj.subscribers.len, " SUBSC: ", tgt.subscribed.len
 
-template addAgentListeners*(obj: Agent, sig: IndexableChars, tgt: Agent, slot: AgentProc): void =
+template addAgentListeners*(
+    obj: Agent, sig: IndexableChars, tgt: Agent, slot: AgentProc
+): void =
   addAgentListeners(obj, sig.toSigilName(), tgt, slot)
 
 method callMethod*(
