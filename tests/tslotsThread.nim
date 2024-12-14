@@ -136,15 +136,17 @@ suite "threaded agent slots":
     var
       a = SomeAction.new()
       b = Counter.new()
+      c = SomeAction.new()
     echo "thread runner!", " (th:", getThreadId(), ")"
     echo "obj a: ", a.getId
     echo "obj b: ", b.getId
+    echo "obj c: ", c.getId
     let thread = newSigilThread()
     thread.start()
     startLocalThread()
 
     connect(a, valueChanged, b, setValue)
-    connect(b, updated, a, SomeAction.completed())
+    connect(b, updated, c, SomeAction.completed())
 
     let bp: AgentProxy[Counter] = b.moveToThread(thread)
     # echo "obj bp: ", bp.unsafeWeakRef
@@ -153,7 +155,7 @@ suite "threaded agent slots":
     emit a.valueChanged(314)
     let ct = getCurrentSigilThread()
     ct.poll()
-    check a.value == 314
+    check c.value == 314
 
   test "sigil object thread runner multiple":
     var
