@@ -16,14 +16,14 @@ proc valueChanged*(tp: SomeAction, val: int) {.signal.}
 proc updated*(tp: Counter, final: int) {.signal.}
 
 proc setValue*(self: Counter, value: int) {.slot.} =
-  # echo "setValue! ", value, " (th:", getThreadId(), ")"
+  echo "setValue! ", value, " (th:", getThreadId(), ")"
   if self.value != value:
     self.value = value
   # echo "Counter: ", self.subscribers
   emit self.updated(self.value)
 
 proc completed*(self: SomeAction, final: int) {.slot.} =
-  # echo "Action done! final: ", final, " (th:", getThreadId(), ")"
+  echo "Action done! final: ", final, " id: ", self.getId(), " (th:", getThreadId(), ")"
   self.value = final
 
 proc value*(self: Counter): int =
@@ -127,6 +127,30 @@ suite "threaded agent slots":
     # os.sleep(500)
     let ct = getCurrentSigilThread()
     ct.poll()
+    check a.value == 314
+
+  test "sigil object thread connect change":
+    var
+      a = SomeAction.new()
+      b = Counter.new()
+    echo "thread runner!", " (th:", getThreadId(), ")"
+    # echo "obj a: ", a.unsafeWeakRef
+    # echo "obj b: ", b.unsafeWeakRef
+    let thread = newSigilThread()
+    thread.start()
+    startLocalThread()
+
+    connect(a, valueChanged, b, setValue)
+    connect(b, updated, a, SomeAction.completed())
+
+    let bp: AgentProxy[Counter] = b.moveToThread(thread)
+    # echo "obj bp: ", bp.unsafeWeakRef
+    # echo "obj bp.remote: ", bp.remote[].unsafeWeakRef
+
+    emit a.valueChanged(314)
+    let ct = getCurrentSigilThread()
+    ct.poll()
+    check a.value == 314
 
   test "sigil object thread runner multiple":
     var
