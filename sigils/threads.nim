@@ -184,7 +184,7 @@ proc resubscribe(subscribedTo: HashSet[WeakRef[Agent]], xid, proxy: WeakRef[Agen
 
 proc moveTo[T](
     subscribers: var Table[SigilName, OrderedSet[AgentPairing]], xid, proxy: WeakRef[Agent], self: var AgentProxy[T]
-): OrderedSet[AgentProxyShared] =
+) =
   ## remove myself from agents listening to me
   echo "moveTo:self: ", xid.getId
 
@@ -204,13 +204,27 @@ proc moveTo[T](
       let remoteProxy = AgentProxy[typeof(b)](
         chan: ct[].inputs, remote: newSharedPtr(unsafeIsolate b)
       )
-      let pairing: AgentPairing = (tgt: Agent(remoteProxy).unsafeWeakRef(), fn: slot)
+      let pairing: AgentPairing = (tgt: self.remote[].unsafeWeakRef, fn: slot)
       newSubscriberPairs.incl(pairing)
       # self.remote[].addAgentListeners(signal, remoteProxy, slot)
-      result.incl(remoteProxy.AgentProxyShared)
       echo "\tlisterners:subscriber: b: ", b.getId, " rproxy: ", remoteProxy.getId
     
     subscriberPairs = newSubscriberPairs
+
+proc findSubscribedToSignals*(
+  subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]
+): Table[SigilName, OrderedSet[AgentPairing]] =
+  ## remove myself from agents I'm subscribed to
+  # echo "subscribed: ", xid[].subscribed.toSeq.mapIt(it[].debugId).repr
+  for obj in subscribedTo:
+    # echo "freeing subscribed: ", obj[].debugId
+    var toAdd = initOrderedSet[AgentPairing]()
+    for signal, subscriberPairs in obj[].subscribers.mpairs():
+      for item in subscriberPairs:
+        if item.tgt == xid:
+          toAdd.incl((tgt: obj, fn: item.fn))
+          # echo "agentRemoved: ", "tgt: ", xid.toPtr.repr, " id: ", agent.debugId, " obj: ", obj[].debugId, " name: ", signal
+      result[signal] = move toAdd
 
 proc moveToThread*[T: Agent](agent: T, thread: SigilThread): AgentProxy[T] =
   if not isUniqueRef(agent):
@@ -224,9 +238,31 @@ proc moveToThread*[T: Agent](agent: T, thread: SigilThread): AgentProxy[T] =
   )
 
   let
-    self = Agent(agent).unsafeWeakRef()
+    self = Agent(agent)
     proxy = Agent(result).unsafeWeakRef()
 
   echo "moving agent: ", self.getId, " to proxy: ", proxy.getId()
-  agent.subscribedTo.resubscribe(self, proxy)
-  let res = agent.subscribers.moveTo(self, proxy, result)
+
+  var
+    oldSubscribers = agent.subscribers
+    oldSubscribedTo = agent.subscribedTo.findSubscribedToSignals(self.unsafeWeakRef)
+
+  agent.subscribedTo.unsubscribe(self.unsafeWeakRef)
+  agent.subscribers.remove(self.unsafeWeakRef)
+
+  agent.subscribedTo.clear()
+  agent.subscribers.clear()
+
+  for signal, subscriberPairs in oldSubscribers.mpairs():
+    for subscriberPair in subscriberPairs:
+      let (tgt, slot) = subscriberPair
+      echo "signal: ", signal, " subscriber: ", tgt.getId
+      self.addAgentListeners(signal, tgt.toRef(), slot)
+
+  for signal, subscriberPairs in oldSubscribedTo.mpairs():
+    for subscriberPair in subscriberPairs:
+      let (src, slot) = subscriberPair
+      src.toRef().addAgentListeners(signal, result, slot)
+
+  # a.addAgentListeners(signalName(signal), b, agentSlot)
+  # a.remote[].addAgentListeners(signalName(signal), proxy, slot)

@@ -65,7 +65,7 @@ type
   Signal*[S] = AgentProcTy[S]
   SignalTypes* = distinct object
 
-proc unsubscribe(subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]) =
+proc unsubscribe*(subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]) =
   ## remove myself from agents I'm subscribed to
   # echo "subscribed: ", xid[].subscribed.toSeq.mapIt(it[].debugId).repr
   var delSigs: seq[SigilName]
@@ -86,7 +86,7 @@ proc unsubscribe(subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]) =
     for sig in delSigs:
       obj[].subscribers.del(sig)
 
-proc remove(
+proc remove*(
     subscribers: var Table[SigilName, OrderedSet[AgentPairing]], xid: WeakRef[Agent]
 ) =
   ## remove myself from agents listening to me
