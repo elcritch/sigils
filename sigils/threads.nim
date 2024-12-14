@@ -1,6 +1,7 @@
 import std/sets
 import std/isolation
 import std/options
+import std/sequtils
 import threading/smartptrs
 import threading/channels
 
@@ -83,56 +84,6 @@ proc newSigilThread*(): SigilThread =
   result = newSharedPtr(SigilThreadObj())
   result[].inputs = newChan[ThreadSignal]()
 
-proc resubscribe(subscribedTo: HashSet[WeakRef[Agent]], xid, proxy: WeakRef[Agent]) =
-  ## remove myself from agents I'm subscribed to
-  # echo "subscribed: ", xid[].subscribed.toSeq.mapIt(it[].debugId).repr
-  var toDel: seq[AgentPairing]
-  for obj in subscribedTo:
-    # echo "freeing subscribed: ", obj[].debugId
-    for signal, subscriberPairs in obj[].subscribers.mpairs():
-      toDel.setLen(0)
-      for item in subscriberPairs:
-        if item.tgt == xid:
-          toDel.add(item)
-      for item in toDel:
-        echo "agentReSubscribe: ", "tgt: ", xid.getId, " obj: ", obj.getId, " name: ", signal
-        subscriberPairs.excl(item)
-        let curr = (tgt: proxy, fn: item.fn)
-        subscriberPairs.incl(curr)
-        # echo "agentReSubscribed: ", "tgt: ", xid.toPtr.repr, " id: ", agent.debugId, " obj: ", obj[].debugId, " name: ", signal
-
-proc moveTo(
-    subscribers: var Table[SigilName, OrderedSet[AgentPairing]], xid, proxy: WeakRef[Agent]
-) =
-  ## remove myself from agents listening to me
-  for signal, subscriberPairs in subscribers.mpairs():
-    # echo "freeing signal: ", signal, " subscribers: ", subscriberPairs
-    for subscriber in subscriberPairs:
-      # echo "\tlisterners: ", subscriber.tgt
-      # echo "\tlisterners:subscribed ", subscriber.tgt[].subscribed
-      subscriber.tgt[].subscribedTo.excl(xid)
-      # subscriber.tgt[].subscribedTo.incl(proxy)
-      echo "\tlisterners:subscriber: ", subscriber.tgt[].getId
-
-proc moveToThread*[T: Agent](agent: T, thread: SigilThread): AgentProxy[T] =
-  if not isUniqueRef(agent):
-    raise newException(
-      AccessViolationDefect,
-      "agent must be unique and not shared to be passed to another thread!",
-    )
-
-  result = AgentProxy[T](
-    remote: newSharedPtr(unsafeIsolate(Agent(agent))), chan: thread[].inputs
-  )
-
-  let
-    self = Agent(agent).unsafeWeakRef()
-    proxy = Agent(result).unsafeWeakRef()
-
-  echo "moving agent: ", self.getId, " to proxy: ", proxy.getId()
-  agent.subscribedTo.resubscribe(self, proxy)
-  agent.subscribers.moveTo(self, proxy)
-
 
 template connect*[T, S](
     a: Agent,
@@ -170,11 +121,10 @@ template connect*[T, S](
   ## connects `AgentProxy[T]` to remote signals
   ## 
   checkSignalTypes(T(), signal, b, slot, acceptVoidSlot)
-  let ct = getCurrentSigilThread()
-
   # TODO: does this *really* work? It feels off but I wanted to
   #       get it running something. Surprisingly haven't seen any
   #       bugs with it so far, but it's sus.
+  let ct = getCurrentSigilThread()
   let proxy = AgentProxy[typeof(b)](
     chan: ct[].inputs, remote: newSharedPtr(unsafeIsolate Agent(b))
   )
@@ -213,3 +163,62 @@ proc startLocalThread*() =
 proc getCurrentSigilThread*(): SigilThread =
   startLocalThread()
   return sigilThread.get()
+
+proc resubscribe(subscribedTo: HashSet[WeakRef[Agent]], xid, proxy: WeakRef[Agent]) =
+  ## remove myself from agents I'm subscribed to
+  # echo "subscribed: ", xid[].subscribed.toSeq.mapIt(it[].debugId).repr
+  var toDel: seq[AgentPairing]
+  for obj in subscribedTo:
+    # echo "freeing subscribed: ", obj[].debugId
+    for signal, subscriberPairs in obj[].subscribers.mpairs():
+      toDel.setLen(0)
+      for item in subscriberPairs:
+        if item.tgt == xid:
+          toDel.add(item)
+      for item in toDel:
+        echo "agentReSubscribe: ", "tgt: ", xid.getId, " obj: ", obj.getId, " name: ", signal
+        subscriberPairs.excl(item)
+        let curr = (tgt: proxy, fn: item.fn)
+        subscriberPairs.incl(curr)
+        # echo "agentReSubscribed: ", "tgt: ", xid.toPtr.repr, " id: ", agent.debugId, " obj: ", obj[].debugId, " name: ", signal
+
+proc moveTo[T](
+    subscribers: var Table[SigilName, OrderedSet[AgentPairing]], xid, proxy: WeakRef[Agent], self: var AgentProxy[T]
+) =
+  ## remove myself from agents listening to me
+  for signal, subscriberPairs in subscribers.mpairs():
+    # echo "freeing signal: ", signal, " subscribers: ", subscriberPairs
+    for subscriber in subscriberPairs:
+      # echo "\tlisterners: ", subscriber.tgt
+      let b = subscriber.tgt[]
+      echo "\tlisterners:subscribed ", b.subscribedTo.mapIt(it.getId)
+      b.subscribedTo.excl(xid)
+      b.subscribedTo.incl(proxy)
+      echo "\tlisterners:subscribed:post: ", b.subscribedTo.mapIt(it.getId)
+
+      let ct = getCurrentSigilThread()
+      let slot = subscriber.fn
+      let remoteProxy = AgentProxy[typeof(b)](
+        chan: ct[].inputs, remote: newSharedPtr(unsafeIsolate b)
+      )
+      self.remote[].addAgentListeners(signalName(signal), remoteProxy, slot)
+      echo "\tlisterners:subscriber: ", subscriber.tgt[].getId
+
+proc moveToThread*[T: Agent](agent: T, thread: SigilThread): AgentProxy[T] =
+  if not isUniqueRef(agent):
+    raise newException(
+      AccessViolationDefect,
+      "agent must be unique and not shared to be passed to another thread!",
+    )
+
+  result = AgentProxy[T](
+    remote: newSharedPtr(unsafeIsolate(Agent(agent))), chan: thread[].inputs
+  )
+
+  let
+    self = Agent(agent).unsafeWeakRef()
+    proxy = Agent(result).unsafeWeakRef()
+
+  echo "moving agent: ", self.getId, " to proxy: ", proxy.getId()
+  agent.subscribedTo.resubscribe(self, proxy)
+  agent.subscribers.moveTo(self, proxy, result)
