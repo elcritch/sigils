@@ -184,16 +184,14 @@ proc resubscribe(subscribedTo: HashSet[WeakRef[Agent]], xid, proxy: WeakRef[Agen
 
 proc moveTo[T](
     subscribers: var Table[SigilName, OrderedSet[AgentPairing]], xid, proxy: WeakRef[Agent], self: var AgentProxy[T]
-) =
+): OrderedSet[AgentProxyShared] =
   ## remove myself from agents listening to me
-  var toAdd: seq[tuple[signal: SigilName, proxy: AgentProxyShared, fn: AgentProc]]
   echo "moveTo:self: ", xid.getId
 
   for signal, subscriberPairs in subscribers.mpairs():
     # echo "freeing signal: ", signal, " subscribers: ", subscriberPairs
-    var oldSubscriberPairs = subscriberPairs
-    subscriberPairs.clear()
-    for subscriberPair in oldSubscriberPairs:
+    var newSubscriberPairs = initOrderedSet[AgentPairing]()
+    for subscriberPair in subscriberPairs:
       # echo "\tlisterners: ", subscriber.tgt
       let b = subscriberPair.tgt[]
       echo "\tlisterners:subscribed ", b.subscribedTo.mapIt(it.getId)
@@ -206,13 +204,13 @@ proc moveTo[T](
       let remoteProxy = AgentProxy[typeof(b)](
         chan: ct[].inputs, remote: newSharedPtr(unsafeIsolate b)
       )
-      toAdd.add((signal, remoteProxy.AgentProxyShared, slot))
+      let pairing: AgentPairing = (tgt: Agent(remoteProxy).unsafeWeakRef(), fn: slot)
+      newSubscriberPairs.incl(pairing)
       # self.remote[].addAgentListeners(signal, remoteProxy, slot)
+      result.incl(remoteProxy.AgentProxyShared)
       echo "\tlisterners:subscriber: b: ", b.getId, " rproxy: ", remoteProxy.getId
-  
-  for item in toAdd:
-    echo "\tsubscriber:readd: ", self.remote[].getId, " b: ", item.proxy.remote[].getId, " rproxy: ", item.proxy.getId
-    self.remote[].addAgentListeners(item.signal, item.proxy, item.fn)
+    
+    subscriberPairs = newSubscriberPairs
 
 proc moveToThread*[T: Agent](agent: T, thread: SigilThread): AgentProxy[T] =
   if not isUniqueRef(agent):
@@ -231,4 +229,4 @@ proc moveToThread*[T: Agent](agent: T, thread: SigilThread): AgentProxy[T] =
 
   echo "moving agent: ", self.getId, " to proxy: ", proxy.getId()
   agent.subscribedTo.resubscribe(self, proxy)
-  agent.subscribers.moveTo(self, proxy, result)
+  let res = agent.subscribers.moveTo(self, proxy, result)
