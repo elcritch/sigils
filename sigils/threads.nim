@@ -83,53 +83,6 @@ proc newSigilThread*(): SigilThread =
   result = newSharedPtr(SigilThreadObj())
   result[].inputs = newChan[ThreadSignal]()
 
-
-template connect*[T, S](
-    a: Agent,
-    signal: typed,
-    b: AgentProxy[T],
-    slot: Signal[S],
-    acceptVoidSlot: static bool = false,
-): void =
-  ## connects `AgentProxy[T]` to remote signals
-  ## 
-  checkSignalTypes(a, signal, T(), slot, acceptVoidSlot)
-  a.addAgentListeners(signalName(signal), b, slot)
-
-template connect*[T](
-    a: Agent,
-    signal: typed,
-    b: AgentProxy[T],
-    slot: typed,
-    acceptVoidSlot: static bool = false,
-): void =
-  ## connects `AgentProxy[T]` to remote signals
-  ## 
-  checkSignalThreadSafety(SignalTypes.`signal`(typeof(a)))
-  let agentSlot = `slot`(T)
-  checkSignalTypes(a, signal, T(), agentSlot, acceptVoidSlot)
-  a.addAgentListeners(signalName(signal), b, agentSlot)
-
-template connect*[T, S](
-    a: AgentProxy[T],
-    signal: typed,
-    b: Agent,
-    slot: Signal[S],
-    acceptVoidSlot: static bool = false,
-): void =
-  ## connects `AgentProxy[T]` to remote signals
-  ## 
-  checkSignalTypes(T(), signal, b, slot, acceptVoidSlot)
-  let ct = getCurrentSigilThread()
-
-  # TODO: does this *really* work? It feels off but I wanted to
-  #       get it running something. Surprisingly haven't seen any
-  #       bugs with it so far, but it's sus.
-  let proxy = AgentProxy[typeof(b)](
-    chan: ct[].inputs, remote: newSharedPtr(unsafeIsolate Agent(b))
-  )
-  a.remote[].addAgentListeners(signalName(signal), proxy, slot)
-
 proc resubscribe(subscribedTo: HashSet[WeakRef[Agent]], xid, proxy: WeakRef[Agent]) =
   ## remove myself from agents I'm subscribed to
   # echo "subscribed: ", xid[].subscribed.toSeq.mapIt(it[].debugId).repr
@@ -180,6 +133,52 @@ proc moveToThread*[T: Agent](agent: T, thread: SigilThread): AgentProxy[T] =
   agent.subscribedTo.resubscribe(self, proxy)
   agent.subscribers.moveTo(self, proxy)
 
+
+template connect*[T, S](
+    a: Agent,
+    signal: typed,
+    b: AgentProxy[T],
+    slot: Signal[S],
+    acceptVoidSlot: static bool = false,
+): void =
+  ## connects `AgentProxy[T]` to remote signals
+  ## 
+  checkSignalTypes(a, signal, T(), slot, acceptVoidSlot)
+  a.addAgentListeners(signalName(signal), b, slot)
+
+template connect*[T](
+    a: Agent,
+    signal: typed,
+    b: AgentProxy[T],
+    slot: typed,
+    acceptVoidSlot: static bool = false,
+): void =
+  ## connects `AgentProxy[T]` to remote signals
+  ## 
+  checkSignalThreadSafety(SignalTypes.`signal`(typeof(a)))
+  let agentSlot = `slot`(T)
+  checkSignalTypes(a, signal, T(), agentSlot, acceptVoidSlot)
+  a.addAgentListeners(signalName(signal), b, agentSlot)
+
+template connect*[T, S](
+    a: AgentProxy[T],
+    signal: typed,
+    b: Agent,
+    slot: Signal[S],
+    acceptVoidSlot: static bool = false,
+): void =
+  ## connects `AgentProxy[T]` to remote signals
+  ## 
+  checkSignalTypes(T(), signal, b, slot, acceptVoidSlot)
+  let ct = getCurrentSigilThread()
+
+  # TODO: does this *really* work? It feels off but I wanted to
+  #       get it running something. Surprisingly haven't seen any
+  #       bugs with it so far, but it's sus.
+  let proxy = AgentProxy[typeof(b)](
+    chan: ct[].inputs, remote: newSharedPtr(unsafeIsolate Agent(b))
+  )
+  a.remote[].addAgentListeners(signalName(signal), proxy, slot)
 
 proc poll*(inputs: Chan[ThreadSignal]) =
   let sig = inputs.recv()
