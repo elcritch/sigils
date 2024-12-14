@@ -1,6 +1,7 @@
 import std/isolation
 import std/unittest
 import std/os
+import std/sequtils
 
 import sigils
 import sigils/threads
@@ -19,7 +20,8 @@ proc setValue*(self: Counter, value: int) {.slot.} =
   echo "setValue! ", value, " (th:", getThreadId(), ")"
   if self.value != value:
     self.value = value
-  # echo "Counter: ", self.subscribers
+  echo "setValue:subscribers: ", self.subscribers.pairs().toSeq.mapIt(it[1])
+  echo "setValue:subscribedTo: ", self.subscribedTo.toSeq.mapIt(it.getId)
   emit self.updated(self.value)
 
 proc completed*(self: SomeAction, final: int) {.slot.} =
@@ -130,12 +132,13 @@ suite "threaded agent slots":
     check a.value == 314
 
   test "sigil object thread connect change":
+    echo "sigil object thread connect change"
     var
       a = SomeAction.new()
       b = Counter.new()
     echo "thread runner!", " (th:", getThreadId(), ")"
-    # echo "obj a: ", a.unsafeWeakRef
-    # echo "obj b: ", b.unsafeWeakRef
+    echo "obj a: ", a.getId
+    echo "obj b: ", b.getId
     let thread = newSigilThread()
     thread.start()
     startLocalThread()
@@ -181,7 +184,7 @@ suite "threaded agent slots":
     check a.value == 628
 
   test "sigil object thread runner (loop)":
-    if true:
+    if false:
       startLocalThread()
       let thread = newSigilThread()
       thread.start()

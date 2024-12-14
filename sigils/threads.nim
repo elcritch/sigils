@@ -186,23 +186,33 @@ proc moveTo[T](
     subscribers: var Table[SigilName, OrderedSet[AgentPairing]], xid, proxy: WeakRef[Agent], self: var AgentProxy[T]
 ) =
   ## remove myself from agents listening to me
+  var toAdd: seq[tuple[signal: SigilName, proxy: AgentProxyShared, fn: AgentProc]]
+  echo "moveTo:self: ", xid.getId
+
   for signal, subscriberPairs in subscribers.mpairs():
     # echo "freeing signal: ", signal, " subscribers: ", subscriberPairs
-    for subscriber in subscriberPairs:
+    var oldSubscriberPairs = subscriberPairs
+    subscriberPairs.clear()
+    for subscriberPair in oldSubscriberPairs:
       # echo "\tlisterners: ", subscriber.tgt
-      let b = subscriber.tgt[]
+      let b = subscriberPair.tgt[]
       echo "\tlisterners:subscribed ", b.subscribedTo.mapIt(it.getId)
       b.subscribedTo.excl(xid)
       b.subscribedTo.incl(proxy)
       echo "\tlisterners:subscribed:post: ", b.subscribedTo.mapIt(it.getId)
 
       let ct = getCurrentSigilThread()
-      let slot = subscriber.fn
+      let slot = subscriberPair.fn
       let remoteProxy = AgentProxy[typeof(b)](
         chan: ct[].inputs, remote: newSharedPtr(unsafeIsolate b)
       )
-      self.remote[].addAgentListeners(signalName(signal), remoteProxy, slot)
-      echo "\tlisterners:subscriber: ", subscriber.tgt[].getId
+      toAdd.add((signal, remoteProxy.AgentProxyShared, slot))
+      # self.remote[].addAgentListeners(signal, remoteProxy, slot)
+      echo "\tlisterners:subscriber: b: ", b.getId, " rproxy: ", remoteProxy.getId
+  
+  for item in toAdd:
+    echo "\tsubscriber:readd: ", self.remote[].getId, " b: ", item.proxy.remote[].getId, " rproxy: ", item.proxy.getId
+    self.remote[].addAgentListeners(item.signal, item.proxy, item.fn)
 
 proc moveToThread*[T: Agent](agent: T, thread: SigilThread): AgentProxy[T] =
   if not isUniqueRef(agent):
