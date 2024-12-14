@@ -155,14 +155,12 @@ template connect*[T, S](
   ## connects `AgentProxy[T]` to remote signals
   ## 
   checkSignalTypes(T(), signal, b, slot, acceptVoidSlot)
-  # TODO: does this *really* work? It feels off but I wanted to
-  #       get it running something. Surprisingly haven't seen any
-  #       bugs with it so far, but it's sus.
   let ct = getCurrentSigilThread()
   let proxy = AgentProxy[typeof(b)](
     chan: ct[].inputs, remote: newSharedPtr(unsafeIsolate Agent(b))
   )
   a.remote[].addAgentListeners(signalName(signal), proxy, slot)
+  # TODO: This is wrong! but I wanted to get something running...
   ct[].proxies.incl(proxy)
 
 proc findSubscribedToSignals*(
@@ -216,6 +214,7 @@ proc moveToThread*[T: Agent](agent: T, thread: SigilThread): AgentProxy[T] =
           chan: ct[].inputs, remote: newSharedPtr(unsafeIsolate tgt[])
       )
       self.addAgentListeners(signal, proxy, slot)
+      # TODO: This is wrong! but I wanted to get something running...
       ct[].proxies.incl(proxy)
 
   for signal, subscriberPairs in oldSubscribedTo.mpairs():
