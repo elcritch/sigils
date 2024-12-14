@@ -164,7 +164,7 @@ proc moveToThread*[T: Agent](agent: T, thread: SigilThread): AgentProxy[T] =
   for signal, subscriberPairs in oldSubscribers.mpairs():
     for subscriberPair in subscriberPairs:
       let (tgt, slot) = subscriberPair
-      echo "signal: ", signal, " subscriber: ", tgt.getId
+      # echo "signal: ", signal, " subscriber: ", tgt.getId
       let proxy = AgentProxyShared(
           chan: ct[].inputs, remote: newSharedPtr(unsafeIsolate tgt[])
       )
