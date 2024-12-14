@@ -25,6 +25,7 @@ type
   SigilThreadObj* = object of Agent
     thread*: Thread[Chan[ThreadSignal]]
     inputs*: Chan[ThreadSignal]
+    proxies*: HashSet[AgentProxyShared]
 
   SigilThread* = SharedPtr[SigilThreadObj]
 
@@ -84,6 +85,39 @@ proc newSigilThread*(): SigilThread =
   result = newSharedPtr(SigilThreadObj())
   result[].inputs = newChan[ThreadSignal]()
 
+proc poll*(inputs: Chan[ThreadSignal]) =
+  let sig = inputs.recv()
+  # echo "thread got request: ", sig, " (", getThreadId(), ")"
+  discard sig.tgt[].callMethod(sig.req, sig.slot)
+
+proc poll*(thread: SigilThread) =
+  thread[].inputs.poll()
+
+proc execute*(inputs: Chan[ThreadSignal]) =
+  while true:
+    poll(inputs)
+
+proc execute*(thread: SigilThread) =
+  thread[].inputs.execute()
+
+proc runThread*(inputs: Chan[ThreadSignal]) {.thread.} =
+  {.cast(gcsafe).}:
+    var inputs = inputs
+    echo "sigil thread waiting!", " (", getThreadId(), ")"
+    inputs.execute()
+
+proc start*(thread: SigilThread) =
+  createThread(thread[].thread, runThread, thread[].inputs)
+
+var sigilThread {.threadVar.}: Option[SigilThread]
+
+proc startLocalThread*() =
+  if sigilThread.isNone:
+    sigilThread = some newSigilThread()
+
+proc getCurrentSigilThread*(): SigilThread =
+  startLocalThread()
+  return sigilThread.get()
 
 template connect*[T, S](
     a: Agent,
@@ -129,40 +163,7 @@ template connect*[T, S](
     chan: ct[].inputs, remote: newSharedPtr(unsafeIsolate Agent(b))
   )
   a.remote[].addAgentListeners(signalName(signal), proxy, slot)
-
-proc poll*(inputs: Chan[ThreadSignal]) =
-  let sig = inputs.recv()
-  # echo "thread got request: ", sig, " (", getThreadId(), ")"
-  discard sig.tgt[].callMethod(sig.req, sig.slot)
-
-proc poll*(thread: SigilThread) =
-  thread[].inputs.poll()
-
-proc execute*(inputs: Chan[ThreadSignal]) =
-  while true:
-    poll(inputs)
-
-proc execute*(thread: SigilThread) =
-  thread[].inputs.execute()
-
-proc runThread*(inputs: Chan[ThreadSignal]) {.thread.} =
-  {.cast(gcsafe).}:
-    var inputs = inputs
-    echo "sigil thread waiting!", " (", getThreadId(), ")"
-    inputs.execute()
-
-proc start*(thread: SigilThread) =
-  createThread(thread[].thread, runThread, thread[].inputs)
-
-var sigilThread {.threadVar.}: Option[SigilThread]
-
-proc startLocalThread*() =
-  if sigilThread.isNone:
-    sigilThread = some newSigilThread()
-
-proc getCurrentSigilThread*(): SigilThread =
-  startLocalThread()
-  return sigilThread.get()
+  ct[].proxies.incl(proxy)
 
 proc findSubscribedToSignals*(
   subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]
@@ -178,8 +179,6 @@ proc findSubscribedToSignals*(
           toAdd.incl((tgt: obj, fn: item.fn))
           # echo "agentRemoved: ", "tgt: ", xid.toPtr.repr, " id: ", agent.debugId, " obj: ", obj[].debugId, " name: ", signal
       result[signal] = move toAdd
-
-var holdProxies: OrderedSet[AgentProxyShared]
 
 proc moveToThread*[T: Agent](agent: T, thread: SigilThread): AgentProxy[T] =
   if not isUniqueRef(agent):
@@ -217,7 +216,7 @@ proc moveToThread*[T: Agent](agent: T, thread: SigilThread): AgentProxy[T] =
           chan: ct[].inputs, remote: newSharedPtr(unsafeIsolate tgt[])
       )
       self.addAgentListeners(signal, proxy, slot)
-      holdProxies.incl(proxy)
+      ct[].proxies.incl(proxy)
 
   for signal, subscriberPairs in oldSubscribedTo.mpairs():
     for subscriberPair in subscriberPairs:
