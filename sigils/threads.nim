@@ -103,7 +103,7 @@ proc execute*(thread: SigilThread) =
 proc runThread*(inputs: Chan[ThreadSignal]) {.thread.} =
   {.cast(gcsafe).}:
     var inputs = inputs
-    echo "sigil thread waiting!", " (", getThreadId(), ")"
+    echo "Sigil worker thread waiting!", " (", getThreadId(), ")"
     inputs.execute()
 
 proc start*(thread: SigilThread) =
@@ -193,8 +193,7 @@ proc moveToThread*[T: Agent](agent: T, thread: SigilThread): AgentProxy[T] =
     self = Agent(agent)
     proxy = Agent(result).unsafeWeakRef()
 
-  echo "moving agent: ", self.getId, " to proxy: ", proxy.getId()
-
+  # echo "moving agent: ", self.getId, " to proxy: ", proxy.getId()
   var
     oldSubscribers = agent.subscribers
     oldSubscribedTo = agent.subscribedTo.findSubscribedToSignals(self.unsafeWeakRef)
@@ -221,6 +220,3 @@ proc moveToThread*[T: Agent](agent: T, thread: SigilThread): AgentProxy[T] =
     for subscriberPair in subscriberPairs:
       let (src, slot) = subscriberPair
       src.toRef().addAgentListeners(signal, result, slot)
-
-  # a.addAgentListeners(signalName(signal), b, agentSlot)
-  # a.remote[].addAgentListeners(signalName(signal), proxy, slot)
