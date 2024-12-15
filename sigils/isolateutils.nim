@@ -37,13 +37,6 @@ proc verifyUnique[T, V](field: T, parent: V) =
     static:
       echo "verifyUnique: object: ", $(T)
     for n, v in field.fieldPairs():
-      when checkThreadSafety(v, parent):
-        static:
-          echo "verifyUnique: compile time safe: ", $(typeof(v))
-      else:
-        static:
-          echo "verifyUnique: not safe: ", $(typeof(v))
-      
       verifyUnique(v, parent)
   else:
     static:

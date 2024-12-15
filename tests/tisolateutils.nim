@@ -64,15 +64,17 @@ suite "isolate utils":
       isoD = isolateRuntime(d)
     check isoD.extract() == d
 
-
     expect(IsolationError):
       echo "expect error..."
       var
         e = TestRef()
         e2 = e
-      let isoE = isolateRuntime(e)
+        isoE = isolateRuntime(e)
+      check isoE.extract() == e
     
     var
       f = TestInner()
     var isoF = isolateRuntime(f)
     check isoF.extract() == f
+
+
