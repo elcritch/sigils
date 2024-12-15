@@ -54,9 +54,11 @@ suite "isolate utils":
     var isoA = isolateRuntime(a)
     check isoA.extract() == a
     var isoB = isolateRuntime(b)
+    check isoB.extract() == b
     var isoC = isolateRuntime(c)
+    check isoC.extract() == c
     var isoD = isolateRuntime(d)
-
+    check isoD.extract() == d
 
     expect(IsolationError):
       echo "expect error:"
