@@ -61,7 +61,7 @@ suite "isolate utils":
     check isoD.extract() == d
 
     expect(IsolationError):
-      echo "expect error:"
+      echo "expect error..."
       var
         e = TestRef()
         e2 = e
