@@ -33,7 +33,7 @@ template verifyUnique[T](field: T) =
 template verifyUnique(field: ref, parent: typed) =
   static:
     echo "verifyUnique: ref: ", $T
-  if not field.isUniqueRef():
+  if not field.isNil and not field.isUniqueRef():
     raise newException(IsolationError, "reference not unique! Cannot safely isolate it")
   for v in field[].fields():
     verifyUnique(v)
@@ -49,6 +49,8 @@ template verifyUnique[T: tuple | object](field: T, parent: typed) =
     else:
       static:
         echo "verifyUnique: not safe: ", $(typeof(v))
+    
+    verifyUnique(v, parent)
 
 proc isolateRuntime*[T](item: T): Isolated[T] {.raises: [IsolationError].} =
   ## Isolates a ref type or type with ref's and ensure that
