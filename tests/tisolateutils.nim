@@ -57,6 +57,7 @@ suite "isolate utils":
     var isoC = isolateRuntime(c)
     var isoD = isolateRuntime(d)
 
+
     expect(IsolationError):
       echo "expect error:"
       var
