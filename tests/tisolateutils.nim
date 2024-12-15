@@ -46,19 +46,24 @@ suite "isolate utils":
 
     var
       a = SomeAction()
-      b = 33
-      c = TestObj()
-      d = "test"
-
-    # echo "thread runner!"
-    var isoA = isolateRuntime(a)
+      isoA = isolateRuntime(a)
     check isoA.extract() == a
-    var isoB = isolateRuntime(b)
+
+    var
+      b = 33
+      isoB = isolateRuntime(b)
     check isoB.extract() == b
-    var isoC = isolateRuntime(c)
+
+    var
+      c = TestObj()
+      isoC = isolateRuntime(c)
     check isoC.extract() == c
-    var isoD = isolateRuntime(d)
+
+    var
+      d = "test"
+      isoD = isolateRuntime(d)
     check isoD.extract() == d
+
 
     expect(IsolationError):
       echo "expect error..."
@@ -70,3 +75,4 @@ suite "isolate utils":
     var
       f = TestInner()
     var isoF = isolateRuntime(f)
+    check isoF.extract() == f
