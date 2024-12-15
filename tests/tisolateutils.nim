@@ -76,5 +76,3 @@ suite "isolate utils":
       f = TestInner()
     var isoF = isolateRuntime(f)
     check isoF.extract() == f
-
-
