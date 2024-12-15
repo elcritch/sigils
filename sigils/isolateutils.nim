@@ -17,26 +17,38 @@ template checkThreadSafety(field: ref, parent: typed) =
 template checkThreadSafety[T](field: T, parent: typed) =
   discard
 
-template checkSignalThreadSafety(sig: typed) =
+template checkSignalThreadSafety*(sig: typed) =
   for n, v in sig.fieldPairs():
     checkThreadSafety(v, sig)
 
-type IsolateError* = object of CatchableError
+type IsolationError* = object of CatchableError
 
 template verifyUnique[T](field: T) =
+  static:
+    echo "verifyUnique: skip"
   discard
 
-template verifyUnique(field: ref) =
+template verifyUnique(field: ref, parent: typed) =
+  static:
+    echo "verifyUnique: ref"
   if not field.isUniqueRef():
-    raise newException(IsolateError, "reference not unique! Cannot safely isolate it")
+    raise newException(IsolationError, "reference not unique! Cannot safely isolate it")
   for v in field[].fields():
     verifyUnique(v)
 
-template verifyUnique[T: tuple | object](field: T) =
+template verifyUnique[T: tuple | object](field: T, parent: typed) =
+  static:
+    echo "verifyUnique: object: ", $(T)
   for n, v in field.fieldPairs():
-    checkThreadSafety(v, sig)
+    checkThreadSafety(v, parent)
 
-proc tryIsolate*[T](field: T): Isolated[T] {.raises: [IsolateError].} =
+proc isolateRuntime*[T](item: T): Isolated[T] {.raises: [IsolationError].} =
   ## Isolates a ref type or type with ref's and ensure that
   ## each ref is unique. This allows safely isolating it.
-  verifyUnique(field)
+  when compiles(isolate(item)):
+    echo "compile isolate: ", item.repr
+    result = isolate(item)
+  else:
+    echo "runtime isolate: ", item.repr
+    verifyUnique(item, item)
+    result = unsafeIsolate(item)

@@ -37,24 +37,33 @@ suite "isolate utils":
     GC_fullCollect()
 
 
-  test "tryIsolate":
+  test "isolateRuntime":
     type
       TestObj = object
       TestRef = ref object
+      TestInner = object
+        value: TestRef
 
     var
       a = SomeAction()
       b = 33
       c = TestObj()
       d = "test"
-      e = TestRef()
 
     # echo "thread runner!"
-    let isoA = tryIsolate(a)
-    let isoB = tryIsolate(b)
-    let isoC = tryIsolate(c)
-    let isoD = tryIsolate(d)
+    var isoA = isolateRuntime(a)
+    check isoA.extract() == a
+    var isoB = isolateRuntime(b)
+    var isoC = isolateRuntime(c)
+    var isoD = isolateRuntime(d)
 
-    expect(IsolateError):
-      var e2 = e
-      let isoE = tryIsolate(e)
+    expect(IsolationError):
+      echo "expect error:"
+      var
+        e = TestRef()
+        e2 = e
+      let isoE = isolateRuntime(e)
+    
+    var
+      f = TestInner()
+    var isoF = isolateRuntime(f)
