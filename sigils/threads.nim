@@ -5,10 +5,11 @@ import std/sequtils
 import threading/smartptrs
 import threading/channels
 
+import isolateutils
 import agents
 import core
 
-export channels, smartptrs, isolation
+export channels, smartptrs, isolation, isolateutils
 
 type
   AgentProxyShared* = ref object of Agent

@@ -1,27 +1,35 @@
 import std/isolation
 export isolation
 
-template checkThreadSafety(field: object, parent: typed): static bool =
-  true
+# template checkThreadSafety(field: object, parent: typed): static bool =
+#   true
+# template checkThreadSafety[T](field: Isolated[T], parent: typed): static bool =
+#   true
+# template checkThreadSafety(field: ref, parent: typed): static bool =
+#   false
+# template checkThreadSafety[T](field: T, parent: typed): static bool =
+#   true
 
-template checkThreadSafety[T](field: Isolated[T], parent: typed): static bool =
-  true
-
-template checkThreadSafety(field: ref, parent: typed): static bool =
-  false
-
-template checkThreadSafety[T](field: T, parent: typed): static bool =
-  true
-
-template checkSignalThreadSafety*(sig: typed) =
-  for n, v in sig.fieldPairs():
-    static:
-      if not checkThreadSafety(v, sig):
+proc checkThreadSafety[T, V](field: T, parent: V) =
+  when T is ref:
+    if not checkThreadSafety(v, sig):
         {.
           error:
-            "Signal type with ref's aren't thread safe! Signal type: " & $(typeof(parent)) &
-            ". Use `Isolate[" & $(typeof(field)) & "]` to use it."
+            "Signal type with ref's aren't thread safe! Signal type: " & $(typeof(sig)) &
+            ". Use `Isolate[" & $(typeof(v)) & "]` to use it."
         .}
+  elif T is tuple or T is object:
+    static:
+      echo "checkThreadSafety: object: ", $(T)
+    for n, v in field.fieldPairs():
+      checkThreadSafety(v, parent)
+  else:
+    static:
+      echo "checkThreadSafety: skip: ", $T
+    discard
+
+template checkSignalThreadSafety*(sig: typed) =
+  checkThreadSafety(sig, sig)
 
 type IsolationError* = object of CatchableError
 

@@ -98,14 +98,14 @@ suite "threaded agent slots":
       e = TestRef()
 
     # echo "thread runner!"
-    let isoA = tryIsolate(a)
-    let isoB = tryIsolate(b)
-    let isoC = tryIsolate(c)
-    let isoD = tryIsolate(d)
+    let isoA = isolateRuntime(a)
+    let isoB = isolateRuntime(b)
+    let isoC = isolateRuntime(c)
+    let isoD = isolateRuntime(d)
 
-    expect(IsolateError):
+    expect(IsolationError):
       var e2 = e
-      let isoE = tryIsolate(e)
+      let isoE = isolateRuntime(e)
 
   test "sigil object thread runner":
     var
