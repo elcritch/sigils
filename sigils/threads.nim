@@ -1,7 +1,6 @@
 import std/sets
 import std/isolation
 import std/options
-import std/sequtils
 import threading/smartptrs
 import threading/channels
 
@@ -27,6 +26,7 @@ type
     thread*: Thread[Chan[ThreadSignal]]
     inputs*: Chan[ThreadSignal]
     proxies*: HashSet[AgentProxyShared]
+    references*: HashSet[SharedPtr[Agent]]
 
   SigilThread* = SharedPtr[SigilThreadObj]
 
