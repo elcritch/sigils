@@ -70,6 +70,7 @@ method removeSubscriptionsFor*(
     self: Agent, subscriber: WeakRef[Agent]
 ) {.base, gcsafe.} =
   ## Route's an rpc request. 
+  # echo "freeing subscribed: ", self.debugId
   var delSigs: seq[SigilName]
   var toDel: seq[AgentPairing]
   for signal, subscriptions in self.subscribers.mpairs():
@@ -89,14 +90,16 @@ proc unsubscribe*(subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]) =
   ## unsubscribe myself from agents I'm subscribed (listening) to
   # echo "subscribed: ", xid[].subscribed.toSeq.mapIt(it[].debugId).repr
   for obj in subscribedTo:
-    # echo "freeing subscribed: ", obj[].debugId
     obj[].removeSubscriptionsFor(xid)
 
 method unregisterSubscriber*(
     self: Agent, listener: WeakRef[Agent]
 ) {.base, gcsafe.} =
+  # echo "\tlisterners: ", subscriber.tgt
+  # echo "\tlisterners:subscribed ", subscriber.tgt[].subscribed
   assert listener in self.subscribedTo
   self.subscribedTo.excl(listener)
+  # echo "\tlisterners:subscribed ", subscriber.tgt[].subscribed
 
 proc remove*(
     subscribers: var Table[SigilName, OrderedSet[AgentPairing]], xid: WeakRef[Agent]
@@ -105,10 +108,7 @@ proc remove*(
   for signal, subscriptions in subscribers.mpairs():
     # echo "freeing signal: ", signal, " subscribers: ", subscriberPairs
     for subscription in subscriptions:
-      # echo "\tlisterners: ", subscriber.tgt
-      # echo "\tlisterners:subscribed ", subscriber.tgt[].subscribed
       subscription.tgt[].unregisterSubscriber(xid)
-      # echo "\tlisterners:subscribed ", subscriber.tgt[].subscribed
 
 proc `=destroy`*(agent: AgentObj) =
   let xid: WeakRef[Agent] = WeakRef[Agent](pt: cast[Agent](addr agent))
