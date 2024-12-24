@@ -14,6 +14,7 @@ type
   AgentProxyShared* = ref object of Agent
     remote*: SharedPtr[Agent]
     chan*: Chan[ThreadSignal]
+    listeners*: HashSet[SharedPtr[Agent]]
 
   AgentProxy*[T] = ref object of AgentProxyShared
 
@@ -106,9 +107,7 @@ proc moveToThread*[T: Agent](agent: T, thread: SigilThread): AgentProxy[T] =
     remote: newSharedPtr(unsafeIsolate(Agent(agent))), chan: thread[].inputs
   )
 
-  let
-    self = Agent(agent)
-    proxy = Agent(result).unsafeWeakRef()
+  let self = Agent(agent)
 
   # handle things subscribed to `agent`, ie the inverse
   var
@@ -123,17 +122,17 @@ proc moveToThread*[T: Agent](agent: T, thread: SigilThread): AgentProxy[T] =
 
   let ct = getCurrentSigilThread()
   for signal, subscriberPairs in oldSubscribers.mpairs():
-    for (tgt, slot) in subscriberPairs:
+    for (sub, slot) in subscriberPairs:
       # echo "signal: ", signal, " subscriber: ", tgt.getId
-      let rproxy =
-        AgentProxyShared(chan: ct[].inputs, remote: newSharedPtr(unsafeIsolate tgt[]))
-      self.addAgentListeners(signal, rproxy, slot)
+      let subproxy =
+        AgentProxyShared(chan: ct[].inputs,
+                         remote: newSharedPtr(unsafeIsolate sub[]))
+      self.addAgentListeners(signal, subproxy, slot)
       # TODO: This is wrong! but I wanted to get something running...
-      ct[].proxies.incl(rproxy)
+      ct[].proxies.incl(subproxy)
 
   for signal, subscriberPairs in oldSubscribedTo.mpairs():
-    for subscriberPair in subscriberPairs:
-      let (src, slot) = subscriberPair
+    for (src, slot) in subscriberPairs:
       src.toRef().addAgentListeners(signal, result, slot)
 
 template connect*[T, S](
