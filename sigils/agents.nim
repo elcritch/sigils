@@ -86,12 +86,6 @@ method removeSubscriptionsFor*(
   for sig in delSigs:
     self.subscribers.del(sig)
 
-proc unsubscribe*(subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]) =
-  ## unsubscribe myself from agents I'm subscribed (listening) to
-  # echo "subscribed: ", xid[].subscribed.toSeq.mapIt(it[].debugId).repr
-  for obj in subscribedTo:
-    obj[].removeSubscriptionsFor(xid)
-
 method unregisterSubscriber*(
     self: Agent, listener: WeakRef[Agent]
 ) {.base, gcsafe.} =
@@ -100,6 +94,12 @@ method unregisterSubscriber*(
   assert listener in self.subscribedTo
   self.subscribedTo.excl(listener)
   # echo "\tlisterners:subscribed ", subscriber.tgt[].subscribed
+
+proc unsubscribe*(subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]) =
+  ## unsubscribe myself from agents I'm subscribed (listening) to
+  # echo "subscribed: ", xid[].subscribed.toSeq.mapIt(it[].debugId).repr
+  for obj in subscribedTo:
+    obj[].removeSubscriptionsFor(xid)
 
 proc remove*(
     subscribers: var Table[SigilName, OrderedSet[AgentPairing]], xid: WeakRef[Agent]

@@ -1,6 +1,7 @@
 import std/sets
 import std/isolation
 import std/options
+import std/locks
 import threading/smartptrs
 import threading/channels
 
@@ -15,6 +16,7 @@ type
     remote*: SharedPtr[Agent]
     chan*: Chan[ThreadSignal]
     listeners*: HashSet[SharedPtr[Agent]]
+    lock*: Lock
 
   AgentProxy*[T] = ref object of AgentProxyShared
 
