@@ -90,7 +90,7 @@ proc unsubscribe*(subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]) =
   # echo "subscribed: ", xid[].subscribed.toSeq.mapIt(it[].debugId).repr
   for obj in subscribedTo:
     # echo "freeing subscribed: ", obj[].debugId
-    obj[].removeSubscriptionsFor(subscriber=xid)
+    obj[].removeSubscriptionsFor(xid)
 
 method unregisterSubscriber*(
     self: Agent, listener: WeakRef[Agent]
