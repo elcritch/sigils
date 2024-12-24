@@ -120,6 +120,15 @@ proc moveToThread*[T: Agent](agent: T, thread: SigilThread): AgentProxy[T] =
   agent.subscribedTo.clear()
   agent.subscribers.clear()
 
+  # update add proxy to listen to agents I am subscribed to
+  # so they'll send my proxy events which the remote thread
+  # will process
+  for signal, subscriberPairs in oldSubscribedTo.mpairs():
+    for (src, slot) in subscriberPairs:
+      src.toRef().addAgentListeners(signal, result, slot)
+
+  # update my subscribers so I use a new proxy to send events
+  # to them
   let ct = getCurrentSigilThread()
   for signal, subscriberPairs in oldSubscribers.mpairs():
     for (sub, slot) in subscriberPairs:
@@ -128,12 +137,9 @@ proc moveToThread*[T: Agent](agent: T, thread: SigilThread): AgentProxy[T] =
         AgentProxyShared(chan: ct[].inputs,
                          remote: newSharedPtr(unsafeIsolate sub[]))
       self.addAgentListeners(signal, subproxy, slot)
-      # TODO: This is wrong! but I wanted to get something running...
+      # # TODO: This is wrong! but I wanted to get something running...
       ct[].proxies.incl(subproxy)
 
-  for signal, subscriberPairs in oldSubscribedTo.mpairs():
-    for (src, slot) in subscriberPairs:
-      src.toRef().addAgentListeners(signal, result, slot)
 
 template connect*[T, S](
     a: Agent,

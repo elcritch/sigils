@@ -1,5 +1,6 @@
 import std/[options, tables, sets, macros, hashes]
 import std/times
+import std/[locks, options]
 
 import protocol
 import stack_strings
@@ -65,37 +66,48 @@ type
   Signal*[S] = AgentProcTy[S]
   SignalTypes* = distinct object
 
-proc unsubscribe*(subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]) =
-  ## remove myself from agents I'm subscribed to
-  # echo "subscribed: ", xid[].subscribed.toSeq.mapIt(it[].debugId).repr
+method removeSubscriptionsFor*(
+    self: Agent, subscriber: WeakRef[Agent]
+) {.base, gcsafe.} =
+  ## Route's an rpc request. 
   var delSigs: seq[SigilName]
   var toDel: seq[AgentPairing]
+  for signal, subscriptions in self.subscribers.mpairs():
+    toDel.setLen(0)
+    for subscription in subscriptions :
+      if subscription.tgt == subscriber:
+        toDel.add(subscription)
+        # echo "agentRemoved: ", "tgt: ", xid.toPtr.repr, " id: ", agent.debugId, " obj: ", obj[].debugId, " name: ", signal
+    for subscription in toDel:
+      subscriptions.excl(subscription)
+    if subscriptions.len() == 0:
+      delSigs.add(signal)
+  for sig in delSigs:
+    self.subscribers.del(sig)
+
+proc unsubscribe*(subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]) =
+  ## unsubscribe myself from agents I'm subscribed (listening) to
+  # echo "subscribed: ", xid[].subscribed.toSeq.mapIt(it[].debugId).repr
   for obj in subscribedTo:
     # echo "freeing subscribed: ", obj[].debugId
-    delSigs.setLen(0)
-    for signal, subscriberPairs in obj[].subscribers.mpairs():
-      toDel.setLen(0)
-      for item in subscriberPairs:
-        if item.tgt == xid:
-          toDel.add(item)
-          # echo "agentRemoved: ", "tgt: ", xid.toPtr.repr, " id: ", agent.debugId, " obj: ", obj[].debugId, " name: ", signal
-      for item in toDel:
-        subscriberPairs.excl(item)
-      if subscriberPairs.len() == 0:
-        delSigs.add(signal)
-    for sig in delSigs:
-      obj[].subscribers.del(sig)
+    obj[].removeSubscriptionsFor(subscriber=xid)
+
+method unregisterSubscriber*(
+    self: Agent, listener: WeakRef[Agent]
+) {.base, gcsafe.} =
+  assert listener in self.subscribedTo
+  self.subscribedTo.excl(listener)
 
 proc remove*(
     subscribers: var Table[SigilName, OrderedSet[AgentPairing]], xid: WeakRef[Agent]
 ) =
   ## remove myself from agents listening to me
-  for signal, subscriberPairs in subscribers.mpairs():
+  for signal, subscriptions in subscribers.mpairs():
     # echo "freeing signal: ", signal, " subscribers: ", subscriberPairs
-    for subscriber in subscriberPairs:
+    for subscription in subscriptions:
       # echo "\tlisterners: ", subscriber.tgt
       # echo "\tlisterners:subscribed ", subscriber.tgt[].subscribed
-      subscriber.tgt[].subscribedTo.excl(xid)
+      subscription.tgt[].unregisterSubscriber(xid)
       # echo "\tlisterners:subscribed ", subscriber.tgt[].subscribed
 
 proc `=destroy`*(agent: AgentObj) =
