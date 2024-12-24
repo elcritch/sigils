@@ -101,7 +101,7 @@ proc unsubscribe*(subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]) =
   for obj in subscribedTo:
     obj[].removeSubscriptionsFor(xid)
 
-proc remove*(
+proc removeSubscription*(
     subscribers: var Table[SigilName, OrderedSet[AgentPairing]], xid: WeakRef[Agent]
 ) =
   ## remove myself from agents listening to me
@@ -115,7 +115,7 @@ proc `=destroy`*(agent: AgentObj) =
 
   # echo "\ndestroy: agent: ", xid[].debugId, " pt: ", xid.toPtr.repr, " lstCnt: ", xid[].subscribers.len(), " subCnt: ", xid[].subscribed.len
   xid.toRef().subscribedTo.unsubscribe(xid)
-  xid.toRef().subscribers.remove(xid)
+  xid.toRef().subscribers.removeSubscription(xid)
 
   # xid[].subscribers.clear()
   `=destroy`(xid[].subscribers)

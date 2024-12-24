@@ -117,7 +117,7 @@ proc moveToThread*[T: Agent](agent: T, thread: SigilThread): AgentProxy[T] =
     oldSubscribedTo = agent.subscribedTo.findSubscribedToSignals(self.unsafeWeakRef)
 
   agent.subscribedTo.unsubscribe(self.unsafeWeakRef)
-  agent.subscribers.remove(self.unsafeWeakRef)
+  agent.subscribers.removeSubscription(self.unsafeWeakRef)
 
   agent.subscribedTo.clear()
   agent.subscribers.clear()
