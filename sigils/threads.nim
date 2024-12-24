@@ -110,7 +110,7 @@ proc moveToThread*[T: Agent](agent: T, thread: SigilThread): AgentProxy[T] =
     self = Agent(agent)
     proxy = Agent(result).unsafeWeakRef()
 
-  # echo "moving agent: ", self.getId, " to proxy: ", proxy.getId()
+  # handle things subscribed to `agent`, ie the inverse
   var
     oldSubscribers = agent.subscribers
     oldSubscribedTo = agent.subscribedTo.findSubscribedToSignals(self.unsafeWeakRef)
@@ -123,14 +123,13 @@ proc moveToThread*[T: Agent](agent: T, thread: SigilThread): AgentProxy[T] =
 
   let ct = getCurrentSigilThread()
   for signal, subscriberPairs in oldSubscribers.mpairs():
-    for subscriberPair in subscriberPairs:
-      let (tgt, slot) = subscriberPair
+    for (tgt, slot) in subscriberPairs:
       # echo "signal: ", signal, " subscriber: ", tgt.getId
-      let proxy =
+      let rproxy =
         AgentProxyShared(chan: ct[].inputs, remote: newSharedPtr(unsafeIsolate tgt[]))
-      self.addAgentListeners(signal, proxy, slot)
+      self.addAgentListeners(signal, rproxy, slot)
       # TODO: This is wrong! but I wanted to get something running...
-      ct[].proxies.incl(proxy)
+      ct[].proxies.incl(rproxy)
 
   for signal, subscriberPairs in oldSubscribedTo.mpairs():
     for subscriberPair in subscriberPairs:
