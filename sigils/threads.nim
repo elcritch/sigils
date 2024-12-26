@@ -59,18 +59,18 @@ method callMethod*(
   echo "threaded Agent!"
   if slot == remoteSlot:
     let sig = ThreadSignal(kind: Call, slot: localSlot, req: req, tgt: proxy.Agent.unsafeWeakRef)
-    echo "executeRequest:agentProxy: ", "req: ", req
-    echo "executeRequest:agentProxy: ", "inbound: ", $proxy.inbound, " proxy: ", proxy.getId()
+    echo "\texecuteRequest:agentProxy: ", "req: ", req
+    echo "\texecuteRequest:agentProxy: ", "inbound: ", $proxy.inbound, " proxy: ", proxy.getId()
     let res = proxy.inbound.trySend(unsafeIsolate sig)
     if not res:
       raise newException(AgentSlotError, "error sending signal to thread")
   elif slot == localSlot:
-    echo "executeRequest:agentProxy: ", "req: ", req
-    echo "executeRequest:agentProxy: ", "inbound: ", $proxy.inbound, " proxy: ", proxy.getId()
+    echo "\texecuteRequest:agentProxy: ", "req: ", req
+    echo "\texecuteRequest:agentProxy: ", "inbound: ", $proxy.inbound, " proxy: ", proxy.getId()
     callSlots(proxy, req)
   else:
     let sig = ThreadSignal(kind: Call, slot: slot, req: req, tgt: proxy.remote)
-    echo "executeRequest:agentProxy: ", "outbound: ", $proxy.outbound
+    echo "\texecuteRequest:agentProxy: ", "outbound: ", $proxy.outbound
     let res = proxy.outbound.trySend(unsafeIsolate sig)
     if not res:
       raise newException(AgentSlotError, "error sending signal to thread")
@@ -205,7 +205,7 @@ template connect*[T](
   a.addSubscription(signalName(signal), b, agentSlot)
 
 template connect*[T, S](
-    proxy: AgentProxy[T],
+    proxyTy: AgentProxy[T],
     signal: typed,
     b: Agent,
     slot: Signal[S],
@@ -213,13 +213,12 @@ template connect*[T, S](
 ): void =
   ## connects `AgentProxy[T]` to remote signals
   ## 
-  {.error: "TODO".}
   checkSignalTypes(T(), signal, b, slot, acceptVoidSlot)
   let ct = getCurrentSigilThread()
-  let bref = unsafeWeakRef[Agent](b)
+  let proxy = Agent(proxyTy)
+  # let bref = unsafeWeakRef[Agent](b)
   # proxy.extract()[].addSubscription(signalName(signal), proxy, slot)
-  proxy.addSubscription(signal, sub.tgt.toRef, sub.slot)
-  agent.addSubscription(signal, proxy, remoteSlot)
+  proxy.addSubscription(signalName(signal), b, slot)
 
   # thread[].inputs.send( unsafeIsolate ThreadSignal(kind: Register, shared: ensureMove agent))
 

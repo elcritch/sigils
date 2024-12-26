@@ -154,9 +154,8 @@ proc getSubscriptions*(
   # echo "FIND:subscribers: ", obj.subscribers
   if obj.subscribers.hasKey(sig):
     result = obj.subscribers[sig]
-  if obj.subscribers.hasKey(AnySigilName):
-    for sub in obj.subscribers[AnySigilName]:
-      result.incl sub
+  elif obj.subscribers.hasKey(AnySigilName):
+    result = obj.subscribers[AnySigilName]
 
 template getSubscriptions*(
     obj: Agent, sig: string
