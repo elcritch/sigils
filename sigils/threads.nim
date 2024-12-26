@@ -37,11 +37,12 @@ type
     of Deref:
       deref*: WeakRef[Agent]
 
-  SigilThreadObj* = object of Agent
-    thread*: Thread[SharedPtr[SigilThreadObj]]
+  SigilThreadBase* = object of Agent
     inputs*: Chan[ThreadSignal]
-    # proxies*: HashSet[AgentProxyShared]
     references*: HashSet[Agent]
+
+  SigilThreadObj* = object of SigilThreadBase
+    thr*: Thread[SharedPtr[SigilThreadObj]]
 
   SigilThread* = SharedPtr[SigilThreadObj]
 
@@ -104,7 +105,7 @@ proc runThread*(thread: SigilThread) {.thread.} =
     thread.execute()
 
 proc start*(thread: SigilThread) =
-  createThread(thread[].thread, runThread, thread)
+  createThread(thread[].thr, runThread, thread)
 
 proc startLocalThread*() =
   if localSigilThread.isNone:

@@ -20,9 +20,8 @@ type
   AsyncAgentProxy*[T] = ref object of AgentProxy[T]
     event*: AsyncEvent
 
-  AsyncSigilThreadObj* = object of Agent
-    thread*: Thread[(AsyncEvent, Chan[ThreadSignal])]
-    inputs*: Chan[ThreadSignal]
+  AsyncSigilThreadObj* = object of SigilThreadBase
+    thr*: Thread[SharedPtr[AsyncSigilThreadObj]]
     event*: AsyncEvent
 
   AsyncSigilThread* = SharedPtr[AsyncSigilThreadObj]
@@ -59,19 +58,10 @@ proc newSigilAsyncThread*(): AsyncSigilThread =
   result[].inputs = newChan[ThreadSignal]()
   result[].event = newAsyncEvent()
 
-proc asyncExecute*(inputs: Chan[ThreadSignal]) =
-  while true:
-    echo "asyncExecute..."
-    # proc addEvent(ev: AsyncEvent; cb: Callback)
-    poll(inputs)
-
-proc asyncExecute*(thread: AsyncSigilThread) =
-  thread[].inputs.asyncExecute()
-
-proc runAsyncThread*(args: (AsyncEvent, Chan[ThreadSignal])) {.thread.} =
+proc runAsyncThread*(thread: AsyncSigilThread) {.thread.} =
   var
-    event: AsyncEvent = args[0]
-    inputs = args[1]
+    event: AsyncEvent = thread[].event
+    inputs = thread[].inputs
   echo "sigil thread waiting!", " (", getThreadId(), ")"
 
   let cb = proc(fd: AsyncFD): bool {.closure, gcsafe.} =
@@ -86,4 +76,4 @@ proc runAsyncThread*(args: (AsyncEvent, Chan[ThreadSignal])) {.thread.} =
 
 proc start*(thread: AsyncSigilThread) =
   let args = (thread[].event, thread[].inputs)
-  createThread(thread[].thread, runAsyncThread, args)
+  createThread(thread[].thr, runAsyncThread, thread)
