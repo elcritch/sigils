@@ -48,11 +48,9 @@ type
 var localSigilThread {.threadVar.}: Option[SigilThread]
 
 proc remoteSlot*(context: Agent, params: SigilParams) {.nimcall.} =
-  discard
-  echo "I DO NOTHING", " agent: ", context.getId(), " (th: ", getThreadId(), ")"
+  raise newException(AssertionDefect, "this should never be called!")
 proc localSlot*(context: Agent, params: SigilParams) {.nimcall.} =
-  discard
-  echo "I DO NOTHING", " agent: ", context.getId(), " (th: ", getThreadId(), ")"
+  raise newException(AssertionDefect, "this should never be called!")
 
 method callMethod*(
     proxy: AgentProxyShared, req: SigilRequest, slot: AgentProc
