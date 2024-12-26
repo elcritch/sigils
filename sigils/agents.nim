@@ -56,7 +56,9 @@ type
 
   Agent* = ref object of AgentObj
 
-  Subscription* = tuple[tgt: WeakRef[Agent], fn: AgentProc]
+  Subscription* = object
+    tgt*: WeakRef[Agent]
+    slot*: AgentProc
 
   # Procedure signature accepted as an RPC call by server
   AgentProc* = proc(context: Agent, params: SigilParams) {.nimcall.}
@@ -138,7 +140,7 @@ proc hash*(a: Agent): Hash =
 
 proc getSubscriptions*(
     obj: Agent, sig: SigilName
-): OrderedSet[(WeakRef[Agent], AgentProc)] =
+): OrderedSet[Subscription] =
   # echo "FIND:subscribers: ", obj.subscribers
   if obj.subscribers.hasKey(sig):
     result = obj.subscribers[sig]
@@ -166,11 +168,11 @@ proc addSubscription*(obj: Agent, sig: SigilName, tgt: Agent, slot: AgentProc): 
   obj.subscribers.withValue(sig, agents):
     # if (tgt.unsafeWeakRef(), slot,) notin agents[]:
     #   echo "addAgentsubscribers: ", "tgt: ", tgt.unsafeWeakRef().toPtr().pointer.repr, " id: ", tgt.debugId, " obj: ", obj.debugId, " name: ", sig
-    agents[].incl((tgt.unsafeWeakRef(), slot))
+    agents[].incl(Subscription(tgt: tgt.unsafeWeakRef(), slot: slot))
   do:
     # echo "addAgentsubscribers: ", "tgt: ", tgt.unsafeWeakRef().toPtr().pointer.repr, " id: ", tgt.debugId, " obj: ", obj.debugId, " name: ", sig
     var agents = initOrderedSet[Subscription]()
-    agents.incl((tgt.unsafeWeakRef(), slot))
+    agents.incl(Subscription(tgt: tgt.unsafeWeakRef(), slot: slot))
     obj.subscribers[sig] = ensureMove agents
 
   tgt.subscribedTo.incl(obj.unsafeWeakRef())

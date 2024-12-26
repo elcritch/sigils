@@ -95,7 +95,7 @@ proc findSubscribedToSignals(
     for signal, subscriberPairs in obj[].subscribers.mpairs():
       for item in subscriberPairs:
         if item.tgt == xid:
-          toAdd.incl((tgt: obj, fn: item.fn))
+          toAdd.incl(Subscription(tgt: obj, slot: item.slot))
           # echo "agentRemoved: ", "tgt: ", xid.toPtr.repr, " id: ", agent.debugId, " obj: ", obj[].debugId, " name: ", signal
       result[signal] = move toAdd
 
@@ -127,19 +127,19 @@ proc moveToThread*[T: Agent](agentTy: T, thread: SigilThread): AgentProxy[T] =
   # so they'll send my proxy events which the remote thread
   # will process
   for signal, subscriberPairs in oldSubscribedTo.mpairs():
-    for (src, slot) in subscriberPairs:
-      src.toRef().addSubscription(signal, result, slot)
+    for sub in subscriberPairs:
+      sub.tgt.toRef().addSubscription(signal, result, sub.slot)
 
   # update my subscribers so I use a new proxy to send events
   # to them
   let ct = getCurrentSigilThread()
   for signal, subscriberPairs in oldSubscribers.mpairs():
-    for (sub, slot) in subscriberPairs:
+    for sub in subscriberPairs:
       # echo "signal: ", signal, " subscriber: ", tgt.getId
       let subproxy =
         AgentProxyShared(outbound: ct[].inputs,
-                         remote: newSharedPtr(unsafeIsolate sub[]))
-      agent.addSubscription(signal, subproxy, slot)
+                         remote: newSharedPtr(unsafeIsolate sub.tgt[]))
+      agent.addSubscription(signal, subproxy, sub.slot)
       # # TODO: This is wrong! but I wanted to get something running...
       ct[].proxies.incl(subproxy)
 
