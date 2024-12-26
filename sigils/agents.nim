@@ -95,13 +95,13 @@ method unregisterSubscriber*(
   self.subscribedTo.excl(listener)
   # echo "\tlisterners:subscribed ", subscriber.tgt[].subscribed
 
-proc unsubscribe*(subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]) =
+template unsubscribe*(subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]) =
   ## unsubscribe myself from agents I'm subscribed (listening) to
   # echo "subscribed: ", xid[].subscribed.toSeq.mapIt(it[].debugId).repr
   for obj in subscribedTo:
     obj[].removeSubscriptionsFor(xid)
 
-proc removeSubscription*(
+template removeSubscription*(
     subscribers: var Table[SigilName, OrderedSet[AgentPairing]], xid: WeakRef[Agent]
 ) =
   ## remove myself from agents listening to me
