@@ -19,6 +19,7 @@ import std/asyncdispatch
 type
 
   AsyncSigilThreadObj* = object of SigilThreadBase
+    thr*: Thread[SharedPtr[AsyncSigilThreadObj]]
 
   AsyncSigilThread* = SharedPtr[AsyncSigilThreadObj]
 
@@ -29,6 +30,7 @@ proc newSigilAsyncThread*(): AsyncSigilThread =
 
 proc runAsyncThread*(thread: AsyncSigilThread) {.thread.} =
   var
+    event: AsyncEvent
     # event: AsyncEvent = thread[].event
     inputs = thread[].inputs
   echo "sigil thread waiting!", " (", getThreadId(), ")"
@@ -44,5 +46,4 @@ proc runAsyncThread*(thread: AsyncSigilThread) {.thread.} =
   runForever()
 
 proc start*(thread: AsyncSigilThread) =
-  let args = (thread[].event, thread[].inputs)
   createThread(thread[].thr, runAsyncThread, thread)

@@ -59,7 +59,7 @@ suite "threaded agent slots":
     thread.start()
     startLocalThread()
 
-    let bp: AgentProxy[Counter] = b.moveToThread(thread)
+    let bp: AgentProxy[Counter] = b.moveToThread(thread.SigilThreadObj)
     connect(a, valueChanged, bp, setValue)
     connect(bp, updated, a, SomeAction.completed())
 

@@ -130,7 +130,7 @@ proc findSubscribedToSignals(
           # echo "agentRemoved: ", "tgt: ", xid.toPtr.repr, " id: ", agent.debugId, " obj: ", obj[].debugId, " name: ", signal
       result[signal] = move toAdd
 
-proc moveToThread*[T: Agent](agentTy: T, thread: SigilThread): AgentProxy[T] =
+proc moveToThread*[T: Agent, R: SigilThreadBase](agentTy: T, thread: SharedPtr[R]): AgentProxy[T] =
   if not isUniqueRef(agentTy):
     raise newException(
       AccessViolationDefect,
