@@ -128,7 +128,7 @@ proc moveToThread*[T: Agent](agentTy: T, thread: SigilThread): AgentProxy[T] =
   # will process
   for signal, subscriberPairs in oldSubscribedTo.mpairs():
     for (src, slot) in subscriberPairs:
-      src.toRef().addAgentListeners(signal, result, slot)
+      src.toRef().addSubscription(signal, result, slot)
 
   # update my subscribers so I use a new proxy to send events
   # to them
@@ -139,7 +139,7 @@ proc moveToThread*[T: Agent](agentTy: T, thread: SigilThread): AgentProxy[T] =
       let subproxy =
         AgentProxyShared(outbound: ct[].inputs,
                          remote: newSharedPtr(unsafeIsolate sub[]))
-      agent.addAgentListeners(signal, subproxy, slot)
+      agent.addSubscription(signal, subproxy, slot)
       # # TODO: This is wrong! but I wanted to get something running...
       ct[].proxies.incl(subproxy)
 
@@ -154,7 +154,7 @@ template connect*[T, S](
   ## connects `AgentProxy[T]` to remote signals
   ## 
   checkSignalTypes(a, signal, T(), slot, acceptVoidSlot)
-  a.addAgentListeners(signalName(signal), b, slot)
+  a.addSubscription(signalName(signal), b, slot)
 
 template connect*[T](
     a: Agent,
@@ -168,7 +168,7 @@ template connect*[T](
   checkSignalThreadSafety(SignalTypes.`signal`(typeof(a)))
   let agentSlot = `slot`(T)
   checkSignalTypes(a, signal, T(), agentSlot, acceptVoidSlot)
-  a.addAgentListeners(signalName(signal), b, agentSlot)
+  a.addSubscription(signalName(signal), b, agentSlot)
 
 template connect*[T, S](
     a: AgentProxy[T],
@@ -184,6 +184,6 @@ template connect*[T, S](
   let proxy = AgentProxy[typeof(b)](
     outbound: ct[].inputs, remote: newSharedPtr(unsafeIsolate Agent(b))
   )
-  a.remote[].addAgentListeners(signalName(signal), proxy, slot)
+  a.remote[].addSubscription(signalName(signal), proxy, slot)
   # TODO: This is wrong! but I wanted to get something running...
   ct[].proxies.incl(proxy)

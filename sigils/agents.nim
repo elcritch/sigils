@@ -157,7 +157,7 @@ proc asAgent*[T: Agent](obj: WeakRef[T]): WeakRef[Agent] =
 proc asAgent*[T: Agent](obj: T): Agent =
   result = obj
 
-proc addAgentListeners*(obj: Agent, sig: SigilName, tgt: Agent, slot: AgentProc): void =
+proc addSubscription*(obj: Agent, sig: SigilName, tgt: Agent, slot: AgentProc): void =
   # echo "add agent listener: ", sig, " obj: ", obj.debugId, " tgt: ", tgt.debugId
   # if obj.subscribers.hasKey(sig):
   #   echo "listener:count: ", obj.subscribers[sig].len()
@@ -176,10 +176,10 @@ proc addAgentListeners*(obj: Agent, sig: SigilName, tgt: Agent, slot: AgentProc)
   tgt.subscribedTo.incl(obj.unsafeWeakRef())
   # echo "subscribers: ", obj.subscribers.len, " SUBSC: ", tgt.subscribed.len
 
-template addAgentListeners*(
+template addSubscription*(
     obj: Agent, sig: IndexableChars, tgt: Agent, slot: AgentProc
 ): void =
-  addAgentListeners(obj, sig.toSigilName(), tgt, slot)
+  addSubscription(obj, sig.toSigilName(), tgt, slot)
 
 method callMethod*(
     ctx: Agent, req: SigilRequest, slot: AgentProc

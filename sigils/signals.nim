@@ -104,7 +104,7 @@ template connect*[T](
     emit a.valueChanged(137) #=> prints "setValue! 137"
 
   checkSignalTypes(a, signal, b, slot, acceptVoidSlot)
-  a.addAgentListeners(signalName(signal), b, slot)
+  a.addSubscription(signalName(signal), b, slot)
 
 template connect*(
     a: Agent,
@@ -115,4 +115,4 @@ template connect*(
 ): void =
   let agentSlot = `slot`(typeof(b))
   checkSignalTypes(a, signal, b, agentSlot, acceptVoidSlot)
-  a.addAgentListeners(signalName(signal), b, agentSlot)
+  a.addSubscription(signalName(signal), b, agentSlot)
