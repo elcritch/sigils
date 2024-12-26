@@ -25,7 +25,7 @@ type
     Call
     Move
     Deref
-    
+
   ThreadSignal* = object
     case kind*: ThreadSignalKind
     of Call:
