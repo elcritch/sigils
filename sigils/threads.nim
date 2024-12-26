@@ -167,11 +167,11 @@ proc moveToThread*[T: Agent](agentTy: T, thread: SigilThread): AgentProxy[T] =
 
   # update my subscribers so I use a new proxy to send events
   # to them
+  agent.addSubscription(AnySigilName, proxy, remoteSlot)
   for signal, subscriberPairs in oldSubscribers.mpairs():
     for sub in subscriberPairs:
       # echo "signal: ", signal, " subscriber: ", tgt.getId
       proxy.addSubscription(signal, sub.tgt.toRef, sub.slot)
-      agent.addSubscription(signal, proxy, remoteSlot)
   
   thread[].inputs.send(unsafeIsolate ThreadSignal(kind: Move, item: ensureMove agent))
 
@@ -205,7 +205,7 @@ template connect*[T](
   a.addSubscription(signalName(signal), b, agentSlot)
 
 template connect*[T, S](
-    a: AgentProxy[T],
+    proxy: AgentProxy[T],
     signal: typed,
     b: Agent,
     slot: Signal[S],
@@ -217,10 +217,9 @@ template connect*[T, S](
   checkSignalTypes(T(), signal, b, slot, acceptVoidSlot)
   let ct = getCurrentSigilThread()
   let bref = unsafeWeakRef[Agent](b)
-  let proxy = AgentProxy[typeof(b)](
-    outbound: ct[].inputs, remote: isolate bref
-  )
-  a.remote.extract()[].addSubscription(signalName(signal), proxy, slot)
+  # proxy.extract()[].addSubscription(signalName(signal), proxy, slot)
+  proxy.addSubscription(signal, sub.tgt.toRef, sub.slot)
+  agent.addSubscription(signal, proxy, remoteSlot)
 
   # thread[].inputs.send( unsafeIsolate ThreadSignal(kind: Register, shared: ensureMove agent))
 

@@ -132,3 +132,6 @@ proc toSigilName*(name: static string): SigilName =
 
 proc toSigilName*(name: string): SigilName =
   return toStackString(name, 64)
+
+const
+  AnySigilName* = toSigilName(":any:")

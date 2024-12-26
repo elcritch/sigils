@@ -48,8 +48,8 @@ proc isolate*[T](obj: WeakRef[T]): Isolated[WeakRef[T]] =
   result = unsafeIsolate(obj)
 
 proc `$`*[T](obj: WeakRef[T]): string =
-  result = $(T)
-  result &= "("
+  result = "Weak[" & $(T) & "]"
+  result &= "(0x"
   result &= obj.toPtr().repr
   result &= ")"
 
@@ -127,6 +127,12 @@ proc `=destroy`*(agent: AgentObj) =
   `=destroy`(xid[].subscribers)
   `=destroy`(xid[].subscribedTo)
 
+proc `$`*[T: Agent](obj: WeakRef[T]): string =
+  result = $(T)
+  result &= "{id: "
+  result &= obj.getId().repr
+  result &= "}"
+
 when defined(nimscript):
   proc getId*(a: Agent): SigilId =
     a.debugId
@@ -148,6 +154,9 @@ proc getSubscriptions*(
   # echo "FIND:subscribers: ", obj.subscribers
   if obj.subscribers.hasKey(sig):
     result = obj.subscribers[sig]
+  if obj.subscribers.hasKey(AnySigilName):
+    for sub in obj.subscribers[AnySigilName]:
+      result.incl sub
 
 template getSubscriptions*(
     obj: Agent, sig: string
