@@ -58,10 +58,10 @@ method callMethod*(
   ## Route's an rpc request. 
   echo "threaded Agent!"
   if slot == remoteSlot:
-    let sig = ThreadSignal(kind: Call, slot: localSlot, req: req, tgt: proxy.Agent.unsafeWeakRef)
+    let msg = ThreadSignal(kind: Call, slot: localSlot, req: req, tgt: proxy.Agent.unsafeWeakRef)
     echo "\texecuteRequest:agentProxy: ", "req: ", req
     echo "\texecuteRequest:agentProxy: ", "inbound: ", $proxy.inbound, " proxy: ", proxy.getId()
-    let res = proxy.inbound.trySend(unsafeIsolate sig)
+    let res = proxy.inbound.trySend(unsafeIsolate msg)
     if not res:
       raise newException(AgentSlotError, "error sending signal to thread")
   elif slot == localSlot:
@@ -69,9 +69,9 @@ method callMethod*(
     echo "\texecuteRequest:agentProxy: ", "inbound: ", $proxy.inbound, " proxy: ", proxy.getId()
     callSlots(proxy, req)
   else:
-    let sig = ThreadSignal(kind: Call, slot: slot, req: req, tgt: proxy.remote)
+    let msg = ThreadSignal(kind: Call, slot: slot, req: req, tgt: proxy.remote)
     echo "\texecuteRequest:agentProxy: ", "outbound: ", $proxy.outbound
-    let res = proxy.outbound.trySend(unsafeIsolate sig)
+    let res = proxy.outbound.trySend(unsafeIsolate msg)
     if not res:
       raise newException(AgentSlotError, "error sending signal to thread")
 
