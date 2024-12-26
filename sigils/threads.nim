@@ -40,7 +40,7 @@ type
   SigilThreadObj* = object of Agent
     thread*: Thread[SharedPtr[SigilThreadObj]]
     inputs*: Chan[ThreadSignal]
-    proxies*: HashSet[AgentProxyShared]
+    # proxies*: HashSet[AgentProxyShared]
     references*: HashSet[Agent]
 
   SigilThread* = SharedPtr[SigilThreadObj]
@@ -50,6 +50,9 @@ var localSigilThread {.threadVar.}: Option[SigilThread]
 proc remoteSlot*(context: Agent, params: SigilParams) {.nimcall.} =
   discard
   echo "I DO NOTHING", " agent: ", context.getId(), " (th: ", getThreadId(), ")"
+proc localSlot*(context: Agent, params: SigilParams) {.nimcall.} =
+  discard
+  echo "I DO NOTHING", " agent: ", context.getId(), " (th: ", getThreadId(), ")"
 
 method callMethod*(
     proxy: AgentProxyShared, req: SigilRequest, slot: AgentProc
@@ -57,14 +60,19 @@ method callMethod*(
   ## Route's an rpc request. 
   echo "threaded Agent!"
   if slot == remoteSlot:
-    let sig = ThreadSignal(kind: Call, slot: slot, req: req, tgt: proxy.Agent.unsafeWeakRef)
-    echo "executeRequest:agentProxy: ", "inbound: ", $proxy.outbound, " proxy: ", proxy.getId()
+    let sig = ThreadSignal(kind: Call, slot: localSlot, req: req, tgt: proxy.Agent.unsafeWeakRef)
+    echo "executeRequest:agentProxy: ", "req: ", req
+    echo "executeRequest:agentProxy: ", "inbound: ", $proxy.inbound, " proxy: ", proxy.getId()
     let res = proxy.inbound.trySend(unsafeIsolate sig)
     if not res:
       raise newException(AgentSlotError, "error sending signal to thread")
+  elif slot == localSlot:
+    echo "executeRequest:agentProxy: ", "req: ", req
+    echo "executeRequest:agentProxy: ", "inbound: ", $proxy.inbound, " proxy: ", proxy.getId()
+    callSlots(proxy, req)
   else:
     let sig = ThreadSignal(kind: Call, slot: slot, req: req, tgt: proxy.remote.extract)
-    # echo "executeRequest:agentProxy: ", "outbound: ", $proxy.outbound
+    echo "executeRequest:agentProxy: ", "outbound: ", $proxy.outbound
     let res = proxy.outbound.trySend(unsafeIsolate sig)
     if not res:
       raise newException(AgentSlotError, "error sending signal to thread")
@@ -75,13 +83,14 @@ proc newSigilThread*(): SigilThread =
 
 proc poll*(thread: SigilThread) =
   let sig = thread[].inputs.recv()
-  # echo "thread got request: ", sig, " (", getThreadId(), ")"
+  echo "thread got request: ", sig, " (th: ", getThreadId(), ")"
   case sig.kind:
   of Register:
     thread[].references.incl(sig.shared)
   of UnRegister:
     thread[].references.excl(sig.unshared.toRef)
   of Call:
+    echo "call: ", sig.tgt[].getId()
     discard sig.tgt[].callMethod(sig.req, sig.slot)
 
 proc execute*(thread: SigilThread) =
@@ -166,6 +175,7 @@ proc moveToThread*[T: Agent](agentTy: T, thread: SigilThread): AgentProxy[T] =
       agent.addSubscription(signal, proxy, remoteSlot)
   
   thread[].inputs.send( unsafeIsolate ThreadSignal(kind: Register, shared: ensureMove agent))
+
   return proxy
 
 
@@ -204,6 +214,7 @@ template connect*[T, S](
 ): void =
   ## connects `AgentProxy[T]` to remote signals
   ## 
+  {.error: "TODO".}
   checkSignalTypes(T(), signal, b, slot, acceptVoidSlot)
   let ct = getCurrentSigilThread()
   let bref = unsafeWeakRef[Agent](b)
@@ -211,5 +222,8 @@ template connect*[T, S](
     outbound: ct[].inputs, remote: isolate bref
   )
   a.remote.extract()[].addSubscription(signalName(signal), proxy, slot)
+
+  # thread[].inputs.send( unsafeIsolate ThreadSignal(kind: Register, shared: ensureMove agent))
+
   # TODO: This is wrong! but I wanted to get something running...
-  ct[].proxies.incl(proxy)
+  # ct[].proxies.incl(proxy)
