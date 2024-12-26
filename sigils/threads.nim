@@ -13,7 +13,7 @@ export channels, smartptrs, isolation, isolateutils
 
 type
   AgentProxyShared* = ref object of Agent
-    remote*: Isolated[WeakRef[Agent]]
+    remote*: WeakRef[Agent]
     outbound*: Chan[ThreadSignal]
     inbound*: Chan[ThreadSignal]
     listeners*: HashSet[Agent]
@@ -69,7 +69,7 @@ method callMethod*(
     echo "executeRequest:agentProxy: ", "inbound: ", $proxy.inbound, " proxy: ", proxy.getId()
     callSlots(proxy, req)
   else:
-    let sig = ThreadSignal(kind: Call, slot: slot, req: req, tgt: proxy.remote.extract)
+    let sig = ThreadSignal(kind: Call, slot: slot, req: req, tgt: proxy.remote)
     echo "executeRequest:agentProxy: ", "outbound: ", $proxy.outbound
     let res = proxy.outbound.trySend(unsafeIsolate sig)
     if not res:
@@ -140,7 +140,7 @@ proc moveToThread*[T: Agent](agentTy: T, thread: SigilThread): AgentProxy[T] =
     agent = Agent(agentTy)
     agentRef = agent.unsafeWeakRef()
     proxy = AgentProxy[T](
-      remote: isolate(agentRef),
+      remote: agentRef,
       outbound: thread[].inputs,
       inbound: ct[].inputs,
     )
