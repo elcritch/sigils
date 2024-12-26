@@ -151,7 +151,6 @@ suite "threaded agent slots":
 
     let bp: AgentProxy[Counter] = b.moveToThread(thread)
     echo "obj bp: ", bp.getId()
-    # echo "obj bp.remote: ", bp.remote[].unsafeWeakRef
 
     emit a.valueChanged(314)
     let ct = getCurrentSigilThread()

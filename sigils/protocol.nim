@@ -42,7 +42,7 @@ type
 
   SigilId* = int
 
-  SigilName* = StackString[64]
+  SigilName* = StackString[48]
 
   SigilRequest* = object
     kind*: RequestType
@@ -125,13 +125,13 @@ proc initSigilRequest*[S, T](
   )
 
 proc toSigilName*(name: IndexableChars): SigilName =
-  return toStackString(name, 64)
+  return toStackString(name, 48)
 
 proc toSigilName*(name: static string): SigilName =
-  return toStackString(name, 64)
+  return toStackString(name, 48)
 
 proc toSigilName*(name: string): SigilName =
-  return toStackString(name, 64)
+  return toStackString(name, 48)
 
 const
   AnySigilName* = toSigilName(":any:")
