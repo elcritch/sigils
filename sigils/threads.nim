@@ -106,11 +106,12 @@ proc moveToThread*[T: Agent](agentTy: T, thread: SigilThread): AgentProxy[T] =
       "agent must be unique and not shared to be passed to another thread!",
     )
 
-  result = AgentProxy[T](
+  let proxy = AgentProxy[T](
     remote: newSharedPtr(unsafeIsolate(Agent(agentTy))), outbound: thread[].inputs
   )
 
-  let agent = Agent(agentTy)
+  let
+    agent = Agent(agentTy)
 
   # handle things subscribed to `agent`, ie the inverse
   var
@@ -128,7 +129,8 @@ proc moveToThread*[T: Agent](agentTy: T, thread: SigilThread): AgentProxy[T] =
   # will process
   for signal, subscriberPairs in oldSubscribedTo.mpairs():
     for sub in subscriberPairs:
-      sub.tgt.toRef().addSubscription(signal, result, sub.slot)
+      let tgt = sub.tgt.toRef()
+      tgt.addSubscription(signal, proxy, sub.slot)
 
   # update my subscribers so I use a new proxy to send events
   # to them
@@ -142,6 +144,8 @@ proc moveToThread*[T: Agent](agentTy: T, thread: SigilThread): AgentProxy[T] =
       agent.addSubscription(signal, subproxy, sub.slot)
       # # TODO: This is wrong! but I wanted to get something running...
       ct[].proxies.incl(subproxy)
+  
+  return proxy
 
 
 template connect*[T, S](
