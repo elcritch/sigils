@@ -51,12 +51,12 @@ proc `$`*[T](obj: WeakRef[T]): string =
 
 type
   AgentObj = object of RootObj
-    subscribers*: Table[SigilName, OrderedSet[AgentPairing]] ## agents listening to me
+    subscribers*: Table[SigilName, OrderedSet[Subscription]] ## agents listening to me
     subscribedTo*: HashSet[WeakRef[Agent]] ## agents I'm listening to
 
   Agent* = ref object of AgentObj
 
-  AgentPairing* = tuple[tgt: WeakRef[Agent], fn: AgentProc]
+  Subscription* = tuple[tgt: WeakRef[Agent], fn: AgentProc]
 
   # Procedure signature accepted as an RPC call by server
   AgentProc* = proc(context: Agent, params: SigilParams) {.nimcall.}
@@ -72,7 +72,7 @@ method removeSubscriptionsFor*(
   ## Route's an rpc request. 
   # echo "freeing subscribed: ", self.debugId
   var delSigs: seq[SigilName]
-  var toDel: seq[AgentPairing]
+  var toDel: seq[Subscription]
   for signal, subscriptions in self.subscribers.mpairs():
     toDel.setLen(0)
     for subscription in subscriptions :
@@ -102,7 +102,7 @@ template unsubscribe*(subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]
     obj[].removeSubscriptionsFor(xid)
 
 template removeSubscription*(
-    subscribers: var Table[SigilName, OrderedSet[AgentPairing]], xid: WeakRef[Agent]
+    subscribers: var Table[SigilName, OrderedSet[Subscription]], xid: WeakRef[Agent]
 ) =
   ## remove myself from agents listening to me
   for signal, subscriptions in subscribers.mpairs():
@@ -169,7 +169,7 @@ proc addAgentListeners*(obj: Agent, sig: SigilName, tgt: Agent, slot: AgentProc)
     agents[].incl((tgt.unsafeWeakRef(), slot))
   do:
     # echo "addAgentsubscribers: ", "tgt: ", tgt.unsafeWeakRef().toPtr().pointer.repr, " id: ", tgt.debugId, " obj: ", obj.debugId, " name: ", sig
-    var agents = initOrderedSet[AgentPairing]()
+    var agents = initOrderedSet[Subscription]()
     agents.incl((tgt.unsafeWeakRef(), slot))
     obj.subscribers[sig] = ensureMove agents
 

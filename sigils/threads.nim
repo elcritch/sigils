@@ -86,12 +86,12 @@ proc getCurrentSigilThread*(): SigilThread =
 
 proc findSubscribedToSignals(
     subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]
-): Table[SigilName, OrderedSet[AgentPairing]] =
+): Table[SigilName, OrderedSet[Subscription]] =
   ## remove myself from agents I'm subscribed to
   # echo "subscribed: ", xid[].subscribed.toSeq.mapIt(it[].debugId).repr
   for obj in subscribedTo:
     # echo "freeing subscribed: ", obj[].debugId
-    var toAdd = initOrderedSet[AgentPairing]()
+    var toAdd = initOrderedSet[Subscription]()
     for signal, subscriberPairs in obj[].subscribers.mpairs():
       for item in subscriberPairs:
         if item.tgt == xid:
