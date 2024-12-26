@@ -17,23 +17,19 @@ import std/uri
 import std/asyncdispatch
 
 type
-  AsyncAgentProxy*[T] = ref object of AgentProxy[T]
-    event*: AsyncEvent
 
   AsyncSigilThreadObj* = object of SigilThreadBase
-    thr*: Thread[SharedPtr[AsyncSigilThreadObj]]
-    event*: AsyncEvent
 
   AsyncSigilThread* = SharedPtr[AsyncSigilThreadObj]
 
 proc newSigilAsyncThread*(): AsyncSigilThread =
   result = newSharedPtr(AsyncSigilThreadObj())
-  result[].inputs = newChan[ThreadSignal]()
-  result[].event = newAsyncEvent()
+  result[].inputs = newSigilChan[ThreadSignal]()
+  # result[].event = newAsyncEvent()
 
 proc runAsyncThread*(thread: AsyncSigilThread) {.thread.} =
   var
-    event: AsyncEvent = thread[].event
+    # event: AsyncEvent = thread[].event
     inputs = thread[].inputs
   echo "sigil thread waiting!", " (", getThreadId(), ")"
 

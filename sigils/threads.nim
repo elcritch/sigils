@@ -3,17 +3,13 @@ import std/isolation
 import std/options
 import std/locks
 import threading/smartptrs
-import threading/channels
 
+import chans
 import isolateutils
 import agents
 import core
 
-export channels, smartptrs, isolation, isolateutils
-
-type
-  SigilChan*[T] = object of RootObj
-    chan*: Chan[T]
+export chans, smartptrs, isolation, isolateutils
 
 type
   AgentProxyShared* = ref object of Agent
@@ -57,32 +53,16 @@ proc remoteSlot*(context: Agent, params: SigilParams) {.nimcall.} =
 proc localSlot*(context: Agent, params: SigilParams) {.nimcall.} =
   raise newException(AssertionDefect, "this should never be called!")
 
-proc newSigilChan*[T](): SigilChan[ThreadSignal] =
-  result.chan = newChan[T]()
-
-method trySend*(
-    chan: SigilChan[ThreadSignal], msg: sink Isolated[ThreadSignal],
-): bool {.base, gcsafe.} =
-  result = chan.chan.trySend(msg)
-
-method send*(
-    chan: SigilChan[ThreadSignal], msg: sink Isolated[ThreadSignal],
-) {.base, gcsafe.} =
-  chan.chan.send(msg)
-
-method recv*(chan: SigilChan[ThreadSignal]): ThreadSignal {.base, gcsafe.} =
-  result = chan.chan.recv()
-
 method callMethod*(
     proxy: AgentProxyShared, req: SigilRequest, slot: AgentProc
 ): SigilResponse {.gcsafe, effectsOf: slot.} =
   ## Route's an rpc request. 
   echo "threaded Agent!"
   if slot == remoteSlot:
-    let msg = ThreadSignal(kind: Call, slot: localSlot, req: req, tgt: proxy.Agent.unsafeWeakRef)
+    var msg = unsafeIsolate ThreadSignal(kind: Call, slot: localSlot, req: req, tgt: proxy.Agent.unsafeWeakRef)
     echo "\texecuteRequest:agentProxy: ", "req: ", req
     echo "\texecuteRequest:agentProxy: ", "inbound: ", $proxy.inbound, " proxy: ", proxy.getId()
-    let res = proxy.inbound.trySend(unsafeIsolate msg)
+    let res = proxy.inbound.trySend(msg)
     if not res:
       raise newException(AgentSlotError, "error sending signal to thread")
   elif slot == localSlot:
@@ -90,9 +70,9 @@ method callMethod*(
     echo "\texecuteRequest:agentProxy: ", "inbound: ", $proxy.inbound, " proxy: ", proxy.getId()
     callSlots(proxy, req)
   else:
-    let msg = ThreadSignal(kind: Call, slot: slot, req: req, tgt: proxy.remote)
+    var msg = unsafeIsolate ThreadSignal(kind: Call, slot: slot, req: req, tgt: proxy.remote)
     echo "\texecuteRequest:agentProxy: ", "outbound: ", $proxy.outbound
-    let res = proxy.outbound.trySend(unsafeIsolate msg)
+    let res = proxy.outbound.trySend(msg)
     if not res:
       raise newException(AgentSlotError, "error sending signal to thread")
 

@@ -76,7 +76,6 @@ suite "threaded agent slots":
     var
       a = SomeAction.new()
       b = Counter.new()
-
     # echo "thread runner!"
     let thread = newSigilThread()
     let bp: AgentProxy[Counter] = b.moveToThread(thread)
@@ -84,6 +83,7 @@ suite "threaded agent slots":
     connect(a, valueChanged, bp, setValue)
     connect(a, valueChanged, bp, Counter.setValue())
     check not compiles(connect(a, valueChanged, bp, someAction))
+
 
   test "tryIsolate":
     type
