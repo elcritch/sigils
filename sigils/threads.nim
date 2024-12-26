@@ -12,7 +12,7 @@ import core
 export chans, smartptrs, isolation, isolateutils
 
 type
-  SigilChan* = object of RootObj
+  SigilChan* = ref object of RootObj
     ch*: Chan[ThreadSignal]
 
   AgentProxyShared* = ref object of Agent
@@ -52,18 +52,19 @@ type
 var localSigilThread {.threadVar.}: Option[SigilThread]
 
 proc newSigilChan*(): SigilChan =
+  result.new()
   result.ch = newChan[ThreadSignal]()
 
-method trySend*(chan: SigilChan, msg: sink Isolated[ThreadSignal]): bool =
+method trySend*(chan: SigilChan, msg: sink Isolated[ThreadSignal]): bool {.gcsafe, base.} =
   return chan.ch.trySend(msg)
 
-method send*(chan: SigilChan, msg: sink Isolated[ThreadSignal]) =
+method send*(chan: SigilChan, msg: sink Isolated[ThreadSignal]) {.gcsafe, base.} =
   chan.ch.send(msg)
 
-method tryRecv*(chan: SigilChan, dst: var ThreadSignal): bool =
+method tryRecv*(chan: SigilChan, dst: var ThreadSignal): bool {.gcsafe, base.} =
   chan.ch.tryRecv(dst)
 
-method recv*(chan: SigilChan): ThreadSignal =
+method recv*(chan: SigilChan): ThreadSignal {.gcsafe, base.} =
   chan.ch.recv()
 
 proc remoteSlot*(context: Agent, params: SigilParams) {.nimcall.} =

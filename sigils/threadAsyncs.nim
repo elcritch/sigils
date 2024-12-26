@@ -25,28 +25,23 @@ type
 
   AsyncSigilThread* = SharedPtr[AsyncSigilThreadObj]
 
-  AsyncSigilChan* = object of SigilChan
+  AsyncSigilChan* = ref object of SigilChan
     event*: AsyncEvent
 
-proc trySendImplAsync*[T](chan: SigilChan[T], msg: sink Isolated[T]): bool {.gcsafe.} =
-  let chan = chan.AsyncSigilChan[T]
+method trySend*[T](chan: AsyncSigilChan, msg: sink Isolated[T]): bool {.gcsafe.} =
   result = chan.ch.trySend(msg)
   echo "TRIGGER send try: ", result
   if result:
     chan.event.trigger()
 
-proc sendImplAsync*[T](chan: SigilChan[T], msg: sink Isolated[T]) {.gcsafe.} =
-  let chan = AsyncSigilChan[T](chan)
+method send*[T](chan: AsyncSigilChan, msg: sink Isolated[T]) {.gcsafe.} =
   chan.ch.send(msg)
   echo "TRIGGER send: ", chan.event.repr
   chan.event.trigger()
 
-proc newAsyncSigilChan*[T](event: AsyncEvent): AsyncSigilChan[T] =
-  result.ch = newChan[T]()
-  result.fnTrySend = trySendImplAsync[T]
-  result.fnSend = sendImplAsync[T]
-  result.fnTryRecv = tryRecvImpl[T]
-  result.fnRecv = recvImpl[T]
+proc newAsyncSigilChan*[T](event: AsyncEvent): AsyncSigilChan =
+  result.new()
+  result.ch = newChan[ThreadSignal]()
   result.event = event
 
 proc newSigilAsyncThread*(): AsyncSigilThread =
