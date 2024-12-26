@@ -33,9 +33,9 @@ type
       req*: SigilRequest
       tgt*: WeakRef[Agent]
     of Register:
-      shared*: Agent
+      shared*: WeakRef[Agent]
     of UnRegister:
-      unshared*: Agent
+      unshared*: WeakRef[Agent]
 
   SigilThreadObj* = object of Agent
     thread*: Thread[SharedPtr[SigilThreadObj]]
@@ -84,7 +84,7 @@ proc poll*(thread: SigilThread) =
   echo "thread got request: ", sig, " (th: ", getThreadId(), ")"
   case sig.kind:
   of Register:
-    thread[].references.incl(sig.shared)
+    thread[].references.incl(sig.shared.toRef)
   of UnRegister:
     thread[].references.excl(sig.unshared.toRef)
   of Call:
@@ -172,7 +172,7 @@ proc moveToThread*[T: Agent](agentTy: T, thread: SigilThread): AgentProxy[T] =
       proxy.addSubscription(signal, sub.tgt.toRef, sub.slot)
       agent.addSubscription(signal, proxy, remoteSlot)
   
-  thread[].inputs.send( unsafeIsolate ThreadSignal(kind: Register, shared: ensureMove agent))
+  thread[].inputs.send(unsafeIsolate ThreadSignal(kind: Register, shared: ensureMove agentRef))
 
   return proxy
 
