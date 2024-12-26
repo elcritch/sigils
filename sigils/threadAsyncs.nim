@@ -28,37 +28,43 @@ type
   AsyncSigilChan*[T] = object of SigilChan[T]
     event*: AsyncEvent
 
-proc trySendImplAsync*[T](chan: AsyncSigilChan[T], msg: sink Isolated[T]): bool {.gcsafe.} =
-  return chan.ch.trySend(msg)
+proc trySendImplAsync*[T](chan: SigilChan[T], msg: sink Isolated[T]): bool {.gcsafe.} =
+  let chan = chan.AsyncSigilChan[T]
+  result = chan.ch.trySend(msg)
+  echo "TRIGGER send try: ", result
+  if result:
+    chan.event.trigger()
 
-proc sendImplAsync*[T](chan: AsyncSigilChan[T], msg: sink Isolated[T]) {.gcsafe.} =
+proc sendImplAsync*[T](chan: SigilChan[T], msg: sink Isolated[T]) {.gcsafe.} =
+  let chan = AsyncSigilChan[T](chan)
   chan.ch.send(msg)
-
-proc tryRecvImplAsync*[T](chan: AsyncSigilChan[T], dst: var T): bool =
-  return chan.ch.tryRecv(dst)
-
-proc recvImplAsync*[T](chan: AsyncSigilChan[T]): T =
-  chan.ch.recv()
+  echo "TRIGGER send: ", chan.event.repr
+  chan.event.trigger()
 
 proc newAsyncSigilChan*[T](event: AsyncEvent): AsyncSigilChan[T] =
   result.ch = newChan[T]()
   result.fnTrySend = trySendImplAsync[T]
   result.fnSend = sendImplAsync[T]
-  result.fnTryRecv = tryRecvImplAsync[T]
-  result.fnRecv = recvImplAsync[T]
+  result.fnTryRecv = tryRecvImpl[T]
+  result.fnRecv = recvImpl[T]
   result.event = event
 
 proc newSigilAsyncThread*(): AsyncSigilThread =
   result = newSharedPtr(AsyncSigilThreadObj())
-  result[].event = newAsyncEvent()
-  result[].inputs = newAsyncSigilChan[ThreadSignal](result[].event)
+  let
+    event = newAsyncEvent()
+    inputs = newAsyncSigilChan[ThreadSignal](event)
+  result[].event = event
+  result[].inputs = inputs
+  echo "newSigilAsyncThread: ", result[].event.repr
+  echo "newSigilAsyncThread: ", result[].inputs.repr
 
 proc runAsyncThread*(thread: AsyncSigilThread) {.thread.} =
   var
     event: AsyncEvent = thread[].event
     # event: AsyncEvent = thread[].event
     inputs = thread[].inputs
-  echo "sigil thread waiting!", " (", getThreadId(), ")"
+  echo "async sigil thread waiting!", " evt: ", event.repr, " (", getThreadId(), ")"
 
   let cb = proc(fd: AsyncFD): bool {.closure, gcsafe.} =
     {.cast(gcsafe).}:
