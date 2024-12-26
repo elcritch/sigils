@@ -23,8 +23,8 @@ type
 
   ThreadSignalKind* {.pure.} = enum
     Call
-    Register
-    UnRegister
+    Move
+    Deref
     
   ThreadSignal* = object
     case kind*: ThreadSignalKind
@@ -32,10 +32,10 @@ type
       slot*: AgentProc
       req*: SigilRequest
       tgt*: WeakRef[Agent]
-    of Register:
-      shared*: WeakRef[Agent]
-    of UnRegister:
-      unshared*: WeakRef[Agent]
+    of Move:
+      item*: Agent
+    of Deref:
+      deref*: WeakRef[Agent]
 
   SigilThreadObj* = object of Agent
     thread*: Thread[SharedPtr[SigilThreadObj]]
@@ -83,10 +83,11 @@ proc poll*(thread: SigilThread) =
   let sig = thread[].inputs.recv()
   echo "thread got request: ", sig, " (th: ", getThreadId(), ")"
   case sig.kind:
-  of Register:
-    thread[].references.incl(sig.shared.toRef)
-  of UnRegister:
-    thread[].references.excl(sig.unshared.toRef)
+  of Move:
+    var item = sig.item
+    thread[].references.incl(item)
+  of Deref:
+    thread[].references.excl(sig.deref.toRef)
   of Call:
     echo "call: ", sig.tgt[].getId()
     discard sig.tgt[].callMethod(sig.req, sig.slot)
@@ -172,7 +173,7 @@ proc moveToThread*[T: Agent](agentTy: T, thread: SigilThread): AgentProxy[T] =
       proxy.addSubscription(signal, sub.tgt.toRef, sub.slot)
       agent.addSubscription(signal, proxy, remoteSlot)
   
-  thread[].inputs.send(unsafeIsolate ThreadSignal(kind: Register, shared: ensureMove agentRef))
+  thread[].inputs.send(unsafeIsolate ThreadSignal(kind: Move, item: ensureMove agent))
 
   return proxy
 
