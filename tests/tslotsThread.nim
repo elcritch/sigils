@@ -17,7 +17,7 @@ proc valueChanged*(tp: SomeAction, val: int) {.signal.}
 proc updated*(tp: Counter, final: int) {.signal.}
 
 proc setValue*(self: Counter, value: int) {.slot.} =
-  echo "setValue! ", value, " id: ", self.getId, " (th:", getThreadId(), ")"
+  echo "setValue! ", value, " id: ", self.getId, " (th: ", getThreadId(), ")"
   if self.value != value:
     self.value = value
   echo "setValue:subscribers: ",
@@ -26,7 +26,7 @@ proc setValue*(self: Counter, value: int) {.slot.} =
   emit self.updated(self.value)
 
 proc completed*(self: SomeAction, final: int) {.slot.} =
-  echo "Action done! final: ", final, " id: ", self.getId(), " (th:", getThreadId(), ")"
+  echo "Action done! final: ", final, " id: ", self.getId(), " (th: ", getThreadId(), ")"
   self.value = final
 
 proc value*(self: Counter): int =
@@ -111,7 +111,7 @@ suite "threaded agent slots":
     var
       a = SomeAction.new()
       b = Counter.new()
-    echo "thread runner!", " (th:", getThreadId(), ")"
+    echo "thread runner!", " (th: ", getThreadId(), ")"
     # echo "obj a: ", a.unsafeWeakRef
     # echo "obj b: ", b.unsafeWeakRef
     let thread = newSigilThread()
@@ -138,7 +138,7 @@ suite "threaded agent slots":
       a = SomeAction.new()
       b = Counter.new()
       c = SomeAction.new()
-    echo "thread runner!", " (th:", getThreadId(), ")"
+    echo "thread runner!", " (th: ", getThreadId(), ")"
     echo "obj a: ", a.getId
     echo "obj b: ", b.getId
     echo "obj c: ", c.getId
@@ -191,7 +191,7 @@ suite "threaded agent slots":
       startLocalThread()
       let thread = newSigilThread()
       thread.start()
-      # echo "thread runner!", " (th:", getThreadId(), ")"
+      # echo "thread runner!", " (th: ", getThreadId(), ")"
 
       for idx in 1 .. 1_000:
         var

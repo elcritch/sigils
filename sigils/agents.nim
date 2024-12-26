@@ -1,5 +1,6 @@
 import std/[options, tables, sets, macros, hashes]
 import std/times
+import std/isolation
 import std/[locks, options]
 
 import protocol
@@ -42,6 +43,9 @@ proc toRef*[T: ref](obj: WeakRef[T]): T =
 
 proc toRef*[T: ref](obj: T): T =
   result = obj
+
+proc isolate*[T](obj: WeakRef[T]): Isolated[WeakRef[T]] =
+  result = unsafeIsolate(obj)
 
 proc `$`*[T](obj: WeakRef[T]): string =
   result = $(T)

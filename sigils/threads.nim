@@ -13,76 +13,98 @@ export channels, smartptrs, isolation, isolateutils
 
 type
   AgentProxyShared* = ref object of Agent
-    remote*: SharedPtr[Agent]
+    remote*: Isolated[WeakRef[Agent]]
     outbound*: Chan[ThreadSignal]
-    inbout*: Chan[ThreadSignal]
-    listeners*: HashSet[SharedPtr[Agent]]
+    inbound*: Chan[ThreadSignal]
+    listeners*: HashSet[Agent]
     lock*: Lock
 
   AgentProxy*[T] = ref object of AgentProxyShared
 
+  ThreadSignalKind* {.pure.} = enum
+    Call
+    Register
+    UnRegister
+    
   ThreadSignal* = object
-    slot*: AgentProc
-    req*: SigilRequest
-    tgt*: SharedPtr[Agent]
+    case kind*: ThreadSignalKind
+    of Call:
+      slot*: AgentProc
+      req*: SigilRequest
+      tgt*: WeakRef[Agent]
+    of Register:
+      shared*: Agent
+    of UnRegister:
+      unshared*: Agent
 
   SigilThreadObj* = object of Agent
-    thread*: Thread[Chan[ThreadSignal]]
+    thread*: Thread[SharedPtr[SigilThreadObj]]
     inputs*: Chan[ThreadSignal]
     proxies*: HashSet[AgentProxyShared]
-    references*: HashSet[SharedPtr[Agent]]
+    references*: HashSet[Agent]
 
   SigilThread* = SharedPtr[SigilThreadObj]
 
+var localSigilThread {.threadVar.}: Option[SigilThread]
+
+proc remoteSlot*(context: Agent, params: SigilParams) {.nimcall.} =
+  discard
+  echo "I DO NOTHING", " agent: ", context.getId(), " (th: ", getThreadId(), ")"
+
 method callMethod*(
-    ctx: AgentProxyShared, req: SigilRequest, slot: AgentProc
+    proxy: AgentProxyShared, req: SigilRequest, slot: AgentProc
 ): SigilResponse {.gcsafe, effectsOf: slot.} =
   ## Route's an rpc request. 
-  # echo "threaded Agent!"
-  let proxy = ctx
-  let sig = ThreadSignal(slot: slot, req: req, tgt: proxy.remote)
-  # echo "executeRequest:agentProxy: ", "outbound: ", $proxy.outbound
-  let res = proxy.outbound.trySend(unsafeIsolate sig)
-  if not res:
-    raise newException(AgentSlotError, "error sending signal to thread")
+  echo "threaded Agent!"
+  if slot == remoteSlot:
+    let sig = ThreadSignal(kind: Call, slot: slot, req: req, tgt: proxy.Agent.unsafeWeakRef)
+    echo "executeRequest:agentProxy: ", "inbound: ", $proxy.outbound, " proxy: ", proxy.getId()
+    let res = proxy.inbound.trySend(unsafeIsolate sig)
+    if not res:
+      raise newException(AgentSlotError, "error sending signal to thread")
+  else:
+    let sig = ThreadSignal(kind: Call, slot: slot, req: req, tgt: proxy.remote.extract)
+    # echo "executeRequest:agentProxy: ", "outbound: ", $proxy.outbound
+    let res = proxy.outbound.trySend(unsafeIsolate sig)
+    if not res:
+      raise newException(AgentSlotError, "error sending signal to thread")
 
 proc newSigilThread*(): SigilThread =
   result = newSharedPtr(SigilThreadObj())
   result[].inputs = newChan[ThreadSignal]()
 
-proc poll*(inputs: Chan[ThreadSignal]) =
-  let sig = inputs.recv()
-  # echo "thread got request: ", sig, " (", getThreadId(), ")"
-  discard sig.tgt[].callMethod(sig.req, sig.slot)
-
 proc poll*(thread: SigilThread) =
-  thread[].inputs.poll()
-
-proc execute*(inputs: Chan[ThreadSignal]) =
-  while true:
-    poll(inputs)
+  let sig = thread[].inputs.recv()
+  # echo "thread got request: ", sig, " (", getThreadId(), ")"
+  case sig.kind:
+  of Register:
+    thread[].references.incl(sig.shared)
+  of UnRegister:
+    thread[].references.excl(sig.unshared.toRef)
+  of Call:
+    discard sig.tgt[].callMethod(sig.req, sig.slot)
 
 proc execute*(thread: SigilThread) =
-  thread[].inputs.execute()
+  while true:
+    thread.poll()
 
-proc runThread*(inputs: Chan[ThreadSignal]) {.thread.} =
+proc runThread*(thread: SigilThread) {.thread.} =
   {.cast(gcsafe).}:
-    var inputs = inputs
+    assert localSigilThread.isNone()
+    localSigilThread = some(thread)
     echo "Sigil worker thread waiting!", " (", getThreadId(), ")"
-    inputs.execute()
+    thread.execute()
 
 proc start*(thread: SigilThread) =
-  createThread(thread[].thread, runThread, thread[].inputs)
-
-var sigilThread {.threadVar.}: Option[SigilThread]
+  createThread(thread[].thread, runThread, thread)
 
 proc startLocalThread*() =
-  if sigilThread.isNone:
-    sigilThread = some newSigilThread()
+  if localSigilThread.isNone:
+    localSigilThread = some newSigilThread()
 
 proc getCurrentSigilThread*(): SigilThread =
   startLocalThread()
-  return sigilThread.get()
+  return localSigilThread.get()
 
 proc findSubscribedToSignals(
     subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]
@@ -106,12 +128,15 @@ proc moveToThread*[T: Agent](agentTy: T, thread: SigilThread): AgentProxy[T] =
       "agent must be unique and not shared to be passed to another thread!",
     )
 
-  let proxy = AgentProxy[T](
-    remote: newSharedPtr(unsafeIsolate(Agent(agentTy))), outbound: thread[].inputs
-  )
-
   let
+    ct = getCurrentSigilThread()
     agent = Agent(agentTy)
+    agentRef = agent.unsafeWeakRef()
+    proxy = AgentProxy[T](
+      remote: isolate(agentRef),
+      outbound: thread[].inputs,
+      inbound: ct[].inputs,
+    )
 
   # handle things subscribed to `agent`, ie the inverse
   var
@@ -134,17 +159,13 @@ proc moveToThread*[T: Agent](agentTy: T, thread: SigilThread): AgentProxy[T] =
 
   # update my subscribers so I use a new proxy to send events
   # to them
-  let ct = getCurrentSigilThread()
   for signal, subscriberPairs in oldSubscribers.mpairs():
     for sub in subscriberPairs:
       # echo "signal: ", signal, " subscriber: ", tgt.getId
-      let subproxy =
-        AgentProxyShared(outbound: ct[].inputs,
-                         remote: newSharedPtr(unsafeIsolate sub.tgt[]))
-      agent.addSubscription(signal, subproxy, sub.slot)
-      # # TODO: This is wrong! but I wanted to get something running...
-      ct[].proxies.incl(subproxy)
+      proxy.addSubscription(signal, sub.tgt.toRef, sub.slot)
+      agent.addSubscription(signal, proxy, remoteSlot)
   
+  thread[].inputs.send( unsafeIsolate ThreadSignal(kind: Register, shared: ensureMove agent))
   return proxy
 
 
@@ -185,9 +206,10 @@ template connect*[T, S](
   ## 
   checkSignalTypes(T(), signal, b, slot, acceptVoidSlot)
   let ct = getCurrentSigilThread()
+  let bref = unsafeWeakRef[Agent](b)
   let proxy = AgentProxy[typeof(b)](
-    outbound: ct[].inputs, remote: newSharedPtr(unsafeIsolate Agent(b))
+    outbound: ct[].inputs, remote: isolate bref
   )
-  a.remote[].addSubscription(signalName(signal), proxy, slot)
+  a.remote.extract()[].addSubscription(signalName(signal), proxy, slot)
   # TODO: This is wrong! but I wanted to get something running...
   ct[].proxies.incl(proxy)
