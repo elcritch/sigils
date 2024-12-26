@@ -7,10 +7,10 @@ type AgentSlotError* = object of CatchableError
 
 proc callSlots*(obj: Agent | WeakRef[Agent], req: SigilRequest) {.gcsafe.} =
   {.cast(gcsafe).}:
-    let listeners = obj.toRef().getAgentListeners(req.procName)
+    let subscriptions = obj.toRef().getSubscriptions(req.procName)
     # echo "call slots:req: ", req.repr
     # echo "call slots:all: ", req.procName, " ", obj.agentId, " :: ", obj.listeners
-    for (tgt, slot) in listeners.items():
+    for (tgt, slot) in subscriptions.items():
       # echo ""
       # echo "call listener:tgt: ", tgt, " ", req.procName
       # echo "call listener:slot: ", repr slot

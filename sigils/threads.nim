@@ -14,7 +14,8 @@ export channels, smartptrs, isolation, isolateutils
 type
   AgentProxyShared* = ref object of Agent
     remote*: SharedPtr[Agent]
-    chan*: Chan[ThreadSignal]
+    outbound*: Chan[ThreadSignal]
+    inbout*: Chan[ThreadSignal]
     listeners*: HashSet[SharedPtr[Agent]]
     lock*: Lock
 
@@ -40,8 +41,8 @@ method callMethod*(
   # echo "threaded Agent!"
   let proxy = ctx
   let sig = ThreadSignal(slot: slot, req: req, tgt: proxy.remote)
-  # echo "executeRequest:agentProxy: ", "chan: ", $proxy.chan
-  let res = proxy.chan.trySend(unsafeIsolate sig)
+  # echo "executeRequest:agentProxy: ", "outbound: ", $proxy.outbound
+  let res = proxy.outbound.trySend(unsafeIsolate sig)
   if not res:
     raise newException(AgentSlotError, "error sending signal to thread")
 
@@ -106,7 +107,7 @@ proc moveToThread*[T: Agent](agent: T, thread: SigilThread): AgentProxy[T] =
     )
 
   result = AgentProxy[T](
-    remote: newSharedPtr(unsafeIsolate(Agent(agent))), chan: thread[].inputs
+    remote: newSharedPtr(unsafeIsolate(Agent(agent))), outbound: thread[].inputs
   )
 
   let self = Agent(agent)
@@ -136,7 +137,7 @@ proc moveToThread*[T: Agent](agent: T, thread: SigilThread): AgentProxy[T] =
     for (sub, slot) in subscriberPairs:
       # echo "signal: ", signal, " subscriber: ", tgt.getId
       let subproxy =
-        AgentProxyShared(chan: ct[].inputs,
+        AgentProxyShared(outbound: ct[].inputs,
                          remote: newSharedPtr(unsafeIsolate sub[]))
       self.addAgentListeners(signal, subproxy, slot)
       # # TODO: This is wrong! but I wanted to get something running...
@@ -181,7 +182,7 @@ template connect*[T, S](
   checkSignalTypes(T(), signal, b, slot, acceptVoidSlot)
   let ct = getCurrentSigilThread()
   let proxy = AgentProxy[typeof(b)](
-    chan: ct[].inputs, remote: newSharedPtr(unsafeIsolate Agent(b))
+    outbound: ct[].inputs, remote: newSharedPtr(unsafeIsolate Agent(b))
   )
   a.remote[].addAgentListeners(signalName(signal), proxy, slot)
   # TODO: This is wrong! but I wanted to get something running...

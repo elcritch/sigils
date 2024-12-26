@@ -136,17 +136,17 @@ else:
 proc hash*(a: Agent): Hash =
   hash(a.getId())
 
-proc getAgentListeners*(
+proc getSubscriptions*(
     obj: Agent, sig: SigilName
 ): OrderedSet[(WeakRef[Agent], AgentProc)] =
   # echo "FIND:subscribers: ", obj.subscribers
   if obj.subscribers.hasKey(sig):
     result = obj.subscribers[sig]
 
-template getAgentListeners*(
+template getSubscriptions*(
     obj: Agent, sig: string
 ): OrderedSet[(WeakRef[Agent], AgentProc)] =
-  obj.getAgentListeners(sig)
+  obj.getSubscriptions(sig)
 
 proc unsafeWeakRef*[T: Agent](obj: T): WeakRef[T] =
   result = WeakRef[T](pt: obj)
