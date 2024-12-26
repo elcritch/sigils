@@ -26,33 +26,6 @@ type
 
   AsyncSigilThread* = SharedPtr[AsyncSigilThreadObj]
 
-proc moveToThread*[T: Agent](agent: T, thread: AsyncSigilThread): AgentProxy[T] =
-  if not isUniqueRef(agent):
-    raise newException(
-      AccessViolationDefect,
-      "agent must be unique and not shared to be passed to another thread!",
-    )
-
-  let proxy = AsyncAgentProxy[T](
-    remote: newSharedPtr(unsafeIsolate(Agent(agent))),
-    outbound: thread[].inputs,
-    event: thread[].event,
-  )
-  return AgentProxy[T](proxy)
-
-method callMethod*[T](
-    ctx: AsyncAgentProxy[T], req: SigilRequest, slot: AgentProc
-): SigilResponse {.gcsafe, effectsOf: slot.} =
-  ## Route's an rpc request. 
-  # echo "threaded Agent!"
-  let proxy = ctx
-  let sig = ThreadSignal(slot: slot, req: req, tgt: proxy.remote)
-  # echo "executeRequest:asyncAgentProxy: ", "chan: ", $proxy.chan
-  let res = proxy.outbound.trySend(unsafeIsolate sig)
-  proxy.event.trigger()
-  if not res:
-    raise newException(AgentSlotError, "error sending signal to thread")
-
 proc newSigilAsyncThread*(): AsyncSigilThread =
   result = newSharedPtr(AsyncSigilThreadObj())
   result[].inputs = newChan[ThreadSignal]()

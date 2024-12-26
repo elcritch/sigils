@@ -12,10 +12,14 @@ import core
 export channels, smartptrs, isolation, isolateutils
 
 type
+  SigilChan*[T] = object of RootObj
+    chan*: Chan[T]
+
+type
   AgentProxyShared* = ref object of Agent
     remote*: WeakRef[Agent]
-    outbound*: Chan[ThreadSignal]
-    inbound*: Chan[ThreadSignal]
+    outbound*: SigilChan[ThreadSignal]
+    inbound*: SigilChan[ThreadSignal]
     listeners*: HashSet[Agent]
     lock*: Lock
 
@@ -38,7 +42,7 @@ type
       deref*: WeakRef[Agent]
 
   SigilThreadBase* = object of Agent
-    inputs*: Chan[ThreadSignal]
+    inputs*: SigilChan[ThreadSignal]
     references*: HashSet[Agent]
 
   SigilThreadObj* = object of SigilThreadBase
@@ -52,6 +56,22 @@ proc remoteSlot*(context: Agent, params: SigilParams) {.nimcall.} =
   raise newException(AssertionDefect, "this should never be called!")
 proc localSlot*(context: Agent, params: SigilParams) {.nimcall.} =
   raise newException(AssertionDefect, "this should never be called!")
+
+proc newSigilChan*[T](): SigilChan[ThreadSignal] =
+  result.chan = newChan[T]()
+
+method trySend*(
+    chan: SigilChan[ThreadSignal], msg: sink Isolated[ThreadSignal],
+): bool {.base, gcsafe.} =
+  result = chan.chan.trySend(msg)
+
+method send*(
+    chan: SigilChan[ThreadSignal], msg: sink Isolated[ThreadSignal],
+) {.base, gcsafe.} =
+  chan.chan.send(msg)
+
+method recv*(chan: SigilChan[ThreadSignal]): ThreadSignal {.base, gcsafe.} =
+  result = chan.chan.recv()
 
 method callMethod*(
     proxy: AgentProxyShared, req: SigilRequest, slot: AgentProc
@@ -78,7 +98,7 @@ method callMethod*(
 
 proc newSigilThread*(): SigilThread =
   result = newSharedPtr(SigilThreadObj())
-  result[].inputs = newChan[ThreadSignal]()
+  result[].inputs = newSigilChan[ThreadSignal]()
 
 proc poll*(thread: SigilThread) =
   let sig = thread[].inputs.recv()
