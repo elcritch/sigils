@@ -68,7 +68,7 @@ type
 
 method removeSubscriptionsFor*(
     self: Agent, subscriber: WeakRef[Agent]
-) {.base, gcsafe.} =
+) {.base, gcsafe, raises: [].} =
   ## Route's an rpc request. 
   # echo "freeing subscribed: ", self.debugId
   var delSigs: seq[SigilName]
@@ -88,7 +88,7 @@ method removeSubscriptionsFor*(
 
 method unregisterSubscriber*(
     self: Agent, listener: WeakRef[Agent]
-) {.base, gcsafe.} =
+) {.base, gcsafe, raises: [].} =
   # echo "\tlisterners: ", subscriber.tgt
   # echo "\tlisterners:subscribed ", subscriber.tgt[].subscribed
   assert listener in self.subscribedTo
