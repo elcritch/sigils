@@ -12,8 +12,10 @@ import core
 export chans, smartptrs, isolation, isolateutils
 
 type
-  SigilChan* = ref object of RootObj
+  SigilChanRef* = ref object of RootObj
     ch*: Chan[ThreadSignal]
+
+  SigilChan* = SharedPtr[SigilChanRef]
 
   AgentProxyShared* = ref object of Agent
     remote*: WeakRef[Agent]
@@ -52,25 +54,25 @@ type
 var localSigilThread {.threadVar.}: Option[SigilThread]
 
 proc newSigilChan*(): SigilChan =
-  result.new()
-  result.ch = newChan[ThreadSignal]()
+  result = newSharedPtr(SigilChanRef.new())
+  result[].ch = newChan[ThreadSignal]()
 
-method trySend*(chan: SigilChan, msg: sink Isolated[ThreadSignal]): bool {.gcsafe, base.} =
+method trySend*(chan: SigilChanRef, msg: sink Isolated[ThreadSignal]): bool {.gcsafe, base.} =
   echo "REGULAR send try: ", " (th: ", getThreadId(), ")"
-  result = chan.ch.trySend(msg)
+  result = chan[].ch.trySend(msg)
   echo "REGULAR send try: res: ", result, " (th: ", getThreadId(), ")"
 
-method send*(chan: SigilChan, msg: sink Isolated[ThreadSignal]) {.gcsafe, base.} =
+method send*(chan: SigilChanRef, msg: sink Isolated[ThreadSignal]) {.gcsafe, base.} =
   echo "REGULAR send: ", " (th: ", getThreadId(), ")"
-  chan.ch.send(msg)
+  chan[].ch.send(msg)
 
-method tryRecv*(chan: SigilChan, dst: var ThreadSignal): bool {.gcsafe, base.} =
+method tryRecv*(chan: SigilChanRef, dst: var ThreadSignal): bool {.gcsafe, base.} =
   echo "REGULAR recv try: ", " (th: ", getThreadId(), ")"
-  result = chan.ch.tryRecv(dst)
+  result = chan[].ch.tryRecv(dst)
 
-method recv*(chan: SigilChan): ThreadSignal {.gcsafe, base.} =
+method recv*(chan: SigilChanRef): ThreadSignal {.gcsafe, base.} =
   echo "REGULAR recv: ", " (th: ", getThreadId(), ")"
-  chan.ch.recv()
+  chan[].ch.recv()
 
 proc remoteSlot*(context: Agent, params: SigilParams) {.nimcall.} =
   raise newException(AssertionDefect, "this should never be called!")
@@ -86,7 +88,7 @@ method callMethod*(
     var msg = unsafeIsolate ThreadSignal(kind: Call, slot: localSlot, req: req, tgt: proxy.Agent.unsafeWeakRef)
     echo "\texecuteRequest:agentProxy:remoteSlot: ", "req: ", req
     # echo "\texecuteRequest:agentProxy: ", "inbound: ", $proxy.inbound, " proxy: ", proxy.getId()
-    let res = proxy.inbound.trySend(msg)
+    let res = proxy.inbound[].trySend(msg)
     if not res:
       raise newException(AgentSlotError, "error sending signal to thread")
   elif slot == localSlot:
@@ -96,7 +98,7 @@ method callMethod*(
   else:
     var msg = unsafeIsolate ThreadSignal(kind: Call, slot: slot, req: req, tgt: proxy.remote)
     echo "\texecuteRequest:agentProxy:other: ", "outbound: ", proxy.outbound.repr
-    let res = proxy.outbound.trySend(msg)
+    let res = proxy.outbound[].trySend(msg)
     if not res:
       raise newException(AgentSlotError, "error sending signal to thread")
 
@@ -117,7 +119,7 @@ proc poll*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
     discard sig.tgt[].callMethod(sig.req, sig.slot)
 
 proc poll*[R: SigilThreadBase](thread: var R) =
-  let sig = thread.inputs.recv()
+  let sig = thread.inputs[].recv()
   thread.poll(sig)
 
 proc execute*(thread: SigilThread) =
@@ -201,7 +203,7 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](agentTy: T, thread: SharedPtr[R
       # echo "signal: ", signal, " subscriber: ", tgt.getId
       proxy.addSubscription(signal, sub.tgt.toRef, sub.slot)
   
-  thread[].inputs.send(unsafeIsolate ThreadSignal(kind: Move, item: ensureMove agent))
+  thread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Move, item: ensureMove agent))
 
   return proxy
 

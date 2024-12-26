@@ -63,7 +63,7 @@ suite "threaded agent slots":
     connect(a, valueChanged, bp, setValue)
     connect(bp, updated, a, SomeAction.completed())
 
-    echo "bp.outbound: ", bp.outbound.AsyncSigilChan.repr
+    echo "bp.outbound: ", bp.outbound[].AsyncSigilChan.repr
     emit a.valueChanged(314)
     check a.value == 0
     let ct = getCurrentSigilThread()

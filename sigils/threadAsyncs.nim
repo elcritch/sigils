@@ -25,7 +25,7 @@ type
 
   AsyncSigilThread* = SharedPtr[AsyncSigilThreadObj]
 
-  AsyncSigilChan* = ref object of SigilChan
+  AsyncSigilChan* = ref object of SigilChanRef
     event*: AsyncEvent
 
 method trySend*(chan: AsyncSigilChan, msg: sink Isolated[ThreadSignal]): bool {.gcsafe.} =
@@ -47,10 +47,11 @@ method recv*(chan: AsyncSigilChan): ThreadSignal {.gcsafe.} =
   echo "TRIGGER recv: ", " (th: ", getThreadId(), ")"
   chan.ch.recv()
 
-proc newAsyncSigilChan*[T](event: AsyncEvent): AsyncSigilChan =
-  result.new()
-  result.ch = newChan[ThreadSignal]()
-  result.event = event
+proc newAsyncSigilChan*[T](event: AsyncEvent): SigilChan =
+  var sch = AsyncSigilChan.new()
+  sch.ch = newChan[ThreadSignal]()
+  sch.event = event
+  result = newSharedPtr(unsafeIsolate sch.SigilChanRef)
 
 proc newSigilAsyncThread*(): AsyncSigilThread =
   result = newSharedPtr(AsyncSigilThreadObj())
@@ -60,12 +61,12 @@ proc newSigilAsyncThread*(): AsyncSigilThread =
   result[].event = event
   result[].inputs = inputs
   echo "newSigilAsyncThread: ", result[].event.repr
-  echo "newSigilAsyncThread: ", result[].inputs.AsyncSigilChan.repr
+  echo "newSigilAsyncThread: ", result[].inputs[].AsyncSigilChan.repr
 
 proc runAsyncThread*(thread: AsyncSigilThread) {.thread.} =
   var
     event: AsyncEvent = thread[].event
-    inputs = thread[].inputs.AsyncSigilChan
+    inputs = thread[].inputs[].AsyncSigilChan
   echo "async sigil thread waiting!", " evt: ", inputs.repr, " (th: ", getThreadId(), ")"
 
   let cb = proc(fd: AsyncFD): bool {.closure, gcsafe.} =

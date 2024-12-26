@@ -130,7 +130,7 @@ suite "threaded agent slots":
     # thread.thread.joinThread(500)
     # os.sleep(500)
     let ct = getCurrentSigilThread()
-    ct.poll()
+    ct[].poll()
     check a.value == 314
 
   test "sigil object thread connect change":
@@ -155,7 +155,7 @@ suite "threaded agent slots":
 
     emit a.valueChanged(314)
     let ct = getCurrentSigilThread()
-    ct.poll()
+    ct[].poll()
     check c.value == 314
 
   test "sigil object thread runner multiple":
@@ -181,9 +181,9 @@ suite "threaded agent slots":
 
     # thread.thread.joinThread(500)
     let ct = getCurrentSigilThread()
-    ct.poll()
+    ct[].poll()
     check a.value == 271
-    ct.poll()
+    ct[].poll()
     check a.value == 628
 
   test "sigil object thread runner (loop)":
@@ -207,9 +207,8 @@ suite "threaded agent slots":
         emit a.valueChanged(271)
 
         let ct = getCurrentSigilThread()
-        ct.poll()
+        ct[].poll()
         check a.value == 314
-        ct.poll()
+        ct[].poll()
         check a.value == 271
-
         # GC_fullCollect()
