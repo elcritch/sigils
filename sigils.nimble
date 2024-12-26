@@ -6,6 +6,6 @@ srcDir = "."
 
 requires "nim >= 2.0.12 & < 2.2.0"
 requires "variant >= 0.2.12"
-requires "threading#master"
+requires "threading >= 0.2.1"
 requires "stack_strings"
 requires "patty >= 0.3.4"
