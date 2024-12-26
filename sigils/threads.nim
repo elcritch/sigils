@@ -56,15 +56,20 @@ proc newSigilChan*(): SigilChan =
   result.ch = newChan[ThreadSignal]()
 
 method trySend*(chan: SigilChan, msg: sink Isolated[ThreadSignal]): bool {.gcsafe, base.} =
-  return chan.ch.trySend(msg)
+  echo "REGULAR send try: ", " (th: ", getThreadId(), ")"
+  result = chan.ch.trySend(msg)
+  echo "REGULAR send try: res: ", result, " (th: ", getThreadId(), ")"
 
 method send*(chan: SigilChan, msg: sink Isolated[ThreadSignal]) {.gcsafe, base.} =
+  echo "REGULAR send: ", " (th: ", getThreadId(), ")"
   chan.ch.send(msg)
 
 method tryRecv*(chan: SigilChan, dst: var ThreadSignal): bool {.gcsafe, base.} =
-  chan.ch.tryRecv(dst)
+  echo "REGULAR recv try: ", " (th: ", getThreadId(), ")"
+  result = chan.ch.tryRecv(dst)
 
 method recv*(chan: SigilChan): ThreadSignal {.gcsafe, base.} =
+  echo "REGULAR recv: ", " (th: ", getThreadId(), ")"
   chan.ch.recv()
 
 proc remoteSlot*(context: Agent, params: SigilParams) {.nimcall.} =
@@ -76,21 +81,21 @@ method callMethod*(
     proxy: AgentProxyShared, req: SigilRequest, slot: AgentProc
 ): SigilResponse {.gcsafe, effectsOf: slot.} =
   ## Route's an rpc request. 
-  echo "threaded Agent!"
+  echo "threaded Agent!", " (th: ", getThreadId(), ")"
   if slot == remoteSlot:
     var msg = unsafeIsolate ThreadSignal(kind: Call, slot: localSlot, req: req, tgt: proxy.Agent.unsafeWeakRef)
-    echo "\texecuteRequest:agentProxy: ", "req: ", req
+    echo "\texecuteRequest:agentProxy:remoteSlot: ", "req: ", req
     # echo "\texecuteRequest:agentProxy: ", "inbound: ", $proxy.inbound, " proxy: ", proxy.getId()
     let res = proxy.inbound.trySend(msg)
     if not res:
       raise newException(AgentSlotError, "error sending signal to thread")
   elif slot == localSlot:
-    echo "\texecuteRequest:agentProxy: ", "req: ", req
+    echo "\texecuteRequest:agentProxy:localSlot: ", "req: ", req
     # echo "\texecuteRequest:agentProxy: ", "inbound: ", $proxy.inbound, " proxy: ", proxy.getId()
     callSlots(proxy, req)
   else:
     var msg = unsafeIsolate ThreadSignal(kind: Call, slot: slot, req: req, tgt: proxy.remote)
-    # echo "\texecuteRequest:agentProxy: ", "outbound: ", $proxy.outbound
+    echo "\texecuteRequest:agentProxy:other: ", "outbound: ", proxy.outbound.repr
     let res = proxy.outbound.trySend(msg)
     if not res:
       raise newException(AgentSlotError, "error sending signal to thread")
@@ -99,22 +104,25 @@ proc newSigilThread*(): SigilThread =
   result = newSharedPtr(SigilThreadObj())
   result[].inputs = newSigilChan()
 
-proc poll*(thread: SigilThread) =
-  let sig = thread[].inputs.recv()
+proc poll*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
   echo "thread got request: ", sig, " (th: ", getThreadId(), ")"
   case sig.kind:
   of Move:
     var item = sig.item
-    thread[].references.incl(item)
+    thread.references.incl(item)
   of Deref:
-    thread[].references.excl(sig.deref.toRef)
+    thread.references.excl(sig.deref.toRef)
   of Call:
     echo "call: ", sig.tgt[].getId()
     discard sig.tgt[].callMethod(sig.req, sig.slot)
 
+proc poll*[R: SigilThreadBase](thread: var R) =
+  let sig = thread.inputs.recv()
+  thread.poll(sig)
+
 proc execute*(thread: SigilThread) =
   while true:
-    thread.poll()
+    thread[].poll()
 
 proc runThread*(thread: SigilThread) {.thread.} =
   {.cast(gcsafe).}:

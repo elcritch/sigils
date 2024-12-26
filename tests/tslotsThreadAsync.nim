@@ -26,12 +26,12 @@ proc ticker(self: Counter) {.async.} =
   emit self.updated(1337)
 
 proc setValue*(self: Counter, value: int) {.slot.} =
-  echo "setValue! ", value, " (th:", getThreadId(), ")"
+  echo "setValue! ", value, " (th: ", getThreadId(), ")"
   self.value = value
   asyncCheck ticker(self)
 
 proc completed*(self: SomeAction, final: int) {.slot.} =
-  echo "Action done! final: ", final, " (th:", getThreadId(), ")"
+  echo "Action done! final: ", final, " (th: ", getThreadId(), ")"
   self.value = final
 
 proc value*(self: Counter): int =
@@ -52,7 +52,7 @@ suite "threaded agent slots":
       a = SomeAction()
       b = Counter()
 
-    echo "thread runner!", " (th:", getThreadId(), ")"
+    echo "thread runner!", " (th: ", getThreadId(), ")"
     echo "obj a: ", a.unsafeWeakRef
 
     let thread = newSigilAsyncThread()
@@ -63,10 +63,11 @@ suite "threaded agent slots":
     connect(a, valueChanged, bp, setValue)
     connect(bp, updated, a, SomeAction.completed())
 
+    echo "bp.outbound: ", bp.outbound.AsyncSigilChan.repr
     emit a.valueChanged(314)
     check a.value == 0
     let ct = getCurrentSigilThread()
-    ct.poll()
+    ct[].poll()
     check a.value == 1337
 
   test "sigil object thread bad":
@@ -74,7 +75,7 @@ suite "threaded agent slots":
       a = SomeAction()
       b = SomeAction()
 
-    echo "thread runner!", " (th:", getThreadId(), ")"
+    echo "thread runner!", " (th: ", getThreadId(), ")"
     echo "obj a: ", a.unsafeWeakRef
 
     let thread = newSigilAsyncThread()

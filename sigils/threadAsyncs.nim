@@ -28,16 +28,24 @@ type
   AsyncSigilChan* = ref object of SigilChan
     event*: AsyncEvent
 
-method trySend*[T](chan: AsyncSigilChan, msg: sink Isolated[T]): bool {.gcsafe.} =
+method trySend*(chan: AsyncSigilChan, msg: sink Isolated[ThreadSignal]): bool {.gcsafe.} =
+  echo "TRIGGER send try: "
   result = chan.ch.trySend(msg)
-  echo "TRIGGER send try: ", result
   if result:
     chan.event.trigger()
 
-method send*[T](chan: AsyncSigilChan, msg: sink Isolated[T]) {.gcsafe.} =
-  chan.ch.send(msg)
+method send*(chan: AsyncSigilChan, msg: sink Isolated[ThreadSignal]) {.gcsafe.} =
   echo "TRIGGER send: ", chan.event.repr
+  chan.ch.send(msg)
   chan.event.trigger()
+
+method tryRecv*(chan: AsyncSigilChan, dst: var ThreadSignal): bool {.gcsafe.} =
+  echo "TRIGGER recv try: ", " (th: ", getThreadId(), ")"
+  result = chan.ch.tryRecv(dst)
+
+method recv*(chan: AsyncSigilChan): ThreadSignal {.gcsafe.} =
+  echo "TRIGGER recv: ", " (th: ", getThreadId(), ")"
+  chan.ch.recv()
 
 proc newAsyncSigilChan*[T](event: AsyncEvent): AsyncSigilChan =
   result.new()
@@ -52,21 +60,20 @@ proc newSigilAsyncThread*(): AsyncSigilThread =
   result[].event = event
   result[].inputs = inputs
   echo "newSigilAsyncThread: ", result[].event.repr
-  echo "newSigilAsyncThread: ", result[].inputs.repr
+  echo "newSigilAsyncThread: ", result[].inputs.AsyncSigilChan.repr
 
 proc runAsyncThread*(thread: AsyncSigilThread) {.thread.} =
   var
     event: AsyncEvent = thread[].event
-    # event: AsyncEvent = thread[].event
-    inputs = thread[].inputs
-  echo "async sigil thread waiting!", " evt: ", event.repr, " (", getThreadId(), ")"
+    inputs = thread[].inputs.AsyncSigilChan
+  echo "async sigil thread waiting!", " evt: ", inputs.repr, " (th: ", getThreadId(), ")"
 
   let cb = proc(fd: AsyncFD): bool {.closure, gcsafe.} =
     {.cast(gcsafe).}:
       var sig: ThreadSignal
       if inputs.tryRecv(sig):
         echo "async thread run: "
-        discard sig.tgt[].callMethod(sig.req, sig.slot)
+        thread[].poll(sig)
 
   event.addEvent(cb)
   runForever()
