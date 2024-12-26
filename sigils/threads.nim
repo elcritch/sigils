@@ -81,7 +81,7 @@ proc newSigilThread*(): SigilThread =
   result[].inputs = newSigilChan[ThreadSignal]()
 
 proc poll*(thread: SigilThread) =
-  let sig = thread[].inputs.recv()
+  let sig = thread[].inputs.recv(ThreadSignal)
   echo "thread got request: ", sig, " (th: ", getThreadId(), ")"
   case sig.kind:
   of Move:

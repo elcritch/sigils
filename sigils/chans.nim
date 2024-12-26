@@ -30,15 +30,15 @@ proc newSigilChan*[T](): SigilChan[T] =
   result.fnTryRecv = tryRecvImpl[T]
   result.fnRecv = recvImpl[T]
 
-proc trySend*[T](chan: SigilChan[T], msg: sink Isolated[T]): bool =
+proc trySend*[M; T: SigilChan[M]](chan: T, msg: sink Isolated[M]): bool =
   return chan.fnTrySend(chan, msg)
 
-proc send*[T](chan: SigilChan[T], msg: sink Isolated[T]) =
+proc send*[M; T: SigilChan](chan: T, msg: sink Isolated[M]) =
   chan.fnSend(chan, msg)
 
-proc tryRecv*[T](chan: SigilChan[T], dst: var T): bool =
+proc tryRecv*[M; T: SigilChan](chan: T, dst: var M): bool =
   chan.fnTryRecv(chan, dst)
 
-proc recv*[T](chan: SigilChan[T]): T =
+proc recv*[M; T: SigilChan](chan: T, tp: typedesc[M]): M =
   chan.fnRecv(chan)
 
