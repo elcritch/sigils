@@ -83,7 +83,7 @@ proc getCurrentSigilThread*(): SigilThread =
   startLocalThread()
   return sigilThread.get()
 
-proc findSubscribedToSignals*(
+proc findSubscribedToSignals(
     subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]
 ): Table[SigilName, OrderedSet[AgentPairing]] =
   ## remove myself from agents I'm subscribed to
