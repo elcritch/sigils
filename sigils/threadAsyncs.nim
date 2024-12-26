@@ -20,17 +20,18 @@ type
 
   AsyncSigilThreadObj* = object of SigilThreadBase
     thr*: Thread[SharedPtr[AsyncSigilThreadObj]]
+    event*: AsyncEvent
 
   AsyncSigilThread* = SharedPtr[AsyncSigilThreadObj]
 
 proc newSigilAsyncThread*(): AsyncSigilThread =
   result = newSharedPtr(AsyncSigilThreadObj())
   result[].inputs = newSigilChan[ThreadSignal]()
-  # result[].event = newAsyncEvent()
+  result[].event = newAsyncEvent()
 
 proc runAsyncThread*(thread: AsyncSigilThread) {.thread.} =
   var
-    event: AsyncEvent
+    event: AsyncEvent = thread[].event
     # event: AsyncEvent = thread[].event
     inputs = thread[].inputs
   echo "sigil thread waiting!", " (", getThreadId(), ")"
