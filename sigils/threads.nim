@@ -12,10 +12,13 @@ import core
 export chans, smartptrs, isolation, isolateutils
 
 type
+  SigilChan* = object of RootObj
+    ch*: Chan[ThreadSignal]
+
   AgentProxyShared* = ref object of Agent
     remote*: WeakRef[Agent]
-    outbound*: SigilChan[ThreadSignal]
-    inbound*: SigilChan[ThreadSignal]
+    outbound*: SigilChan
+    inbound*: SigilChan
     listeners*: HashSet[Agent]
     lock*: Lock
 
@@ -38,7 +41,7 @@ type
       deref*: WeakRef[Agent]
 
   SigilThreadBase* = object of Agent
-    inputs*: SigilChan[ThreadSignal]
+    inputs*: SigilChan
     references*: HashSet[Agent]
 
   SigilThreadObj* = object of SigilThreadBase
@@ -47,6 +50,21 @@ type
   SigilThread* = SharedPtr[SigilThreadObj]
 
 var localSigilThread {.threadVar.}: Option[SigilThread]
+
+proc newSigilChan*(): SigilChan =
+  result.ch = newChan[ThreadSignal]()
+
+method trySend*(chan: SigilChan, msg: sink Isolated[ThreadSignal]): bool =
+  return chan.ch.trySend(msg)
+
+method send*(chan: SigilChan, msg: sink Isolated[ThreadSignal]) =
+  chan.ch.send(msg)
+
+method tryRecv*(chan: SigilChan, dst: var ThreadSignal): bool =
+  chan.ch.tryRecv(dst)
+
+method recv*(chan: SigilChan): ThreadSignal =
+  chan.ch.recv()
 
 proc remoteSlot*(context: Agent, params: SigilParams) {.nimcall.} =
   raise newException(AssertionDefect, "this should never be called!")
@@ -61,27 +79,27 @@ method callMethod*(
   if slot == remoteSlot:
     var msg = unsafeIsolate ThreadSignal(kind: Call, slot: localSlot, req: req, tgt: proxy.Agent.unsafeWeakRef)
     echo "\texecuteRequest:agentProxy: ", "req: ", req
-    echo "\texecuteRequest:agentProxy: ", "inbound: ", $proxy.inbound, " proxy: ", proxy.getId()
+    # echo "\texecuteRequest:agentProxy: ", "inbound: ", $proxy.inbound, " proxy: ", proxy.getId()
     let res = proxy.inbound.trySend(msg)
     if not res:
       raise newException(AgentSlotError, "error sending signal to thread")
   elif slot == localSlot:
     echo "\texecuteRequest:agentProxy: ", "req: ", req
-    echo "\texecuteRequest:agentProxy: ", "inbound: ", $proxy.inbound, " proxy: ", proxy.getId()
+    # echo "\texecuteRequest:agentProxy: ", "inbound: ", $proxy.inbound, " proxy: ", proxy.getId()
     callSlots(proxy, req)
   else:
     var msg = unsafeIsolate ThreadSignal(kind: Call, slot: slot, req: req, tgt: proxy.remote)
-    echo "\texecuteRequest:agentProxy: ", "outbound: ", $proxy.outbound
+    # echo "\texecuteRequest:agentProxy: ", "outbound: ", $proxy.outbound
     let res = proxy.outbound.trySend(msg)
     if not res:
       raise newException(AgentSlotError, "error sending signal to thread")
 
 proc newSigilThread*(): SigilThread =
   result = newSharedPtr(SigilThreadObj())
-  result[].inputs = newSigilChan[ThreadSignal]()
+  result[].inputs = newSigilChan()
 
 proc poll*(thread: SigilThread) =
-  let sig = thread[].inputs.recv(ThreadSignal)
+  let sig = thread[].inputs.recv()
   echo "thread got request: ", sig, " (th: ", getThreadId(), ")"
   case sig.kind:
   of Move:
