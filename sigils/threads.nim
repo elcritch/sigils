@@ -99,26 +99,26 @@ proc findSubscribedToSignals(
           # echo "agentRemoved: ", "tgt: ", xid.toPtr.repr, " id: ", agent.debugId, " obj: ", obj[].debugId, " name: ", signal
       result[signal] = move toAdd
 
-proc moveToThread*[T: Agent](agent: T, thread: SigilThread): AgentProxy[T] =
-  if not isUniqueRef(agent):
+proc moveToThread*[T: Agent](agentTy: T, thread: SigilThread): AgentProxy[T] =
+  if not isUniqueRef(agentTy):
     raise newException(
       AccessViolationDefect,
       "agent must be unique and not shared to be passed to another thread!",
     )
 
   result = AgentProxy[T](
-    remote: newSharedPtr(unsafeIsolate(Agent(agent))), outbound: thread[].inputs
+    remote: newSharedPtr(unsafeIsolate(Agent(agentTy))), outbound: thread[].inputs
   )
 
-  let self = Agent(agent)
+  let agent = Agent(agentTy)
 
   # handle things subscribed to `agent`, ie the inverse
   var
     oldSubscribers = agent.subscribers
-    oldSubscribedTo = agent.subscribedTo.findSubscribedToSignals(self.unsafeWeakRef)
+    oldSubscribedTo = agent.subscribedTo.findSubscribedToSignals(agent.unsafeWeakRef)
 
-  agent.subscribedTo.unsubscribe(self.unsafeWeakRef)
-  agent.subscribers.removeSubscription(self.unsafeWeakRef)
+  agent.subscribedTo.unsubscribe(agent.unsafeWeakRef)
+  agent.subscribers.removeSubscription(agent.unsafeWeakRef)
 
   agent.subscribedTo.clear()
   agent.subscribers.clear()
@@ -139,7 +139,7 @@ proc moveToThread*[T: Agent](agent: T, thread: SigilThread): AgentProxy[T] =
       let subproxy =
         AgentProxyShared(outbound: ct[].inputs,
                          remote: newSharedPtr(unsafeIsolate sub[]))
-      self.addAgentListeners(signal, subproxy, slot)
+      agent.addAgentListeners(signal, subproxy, slot)
       # # TODO: This is wrong! but I wanted to get something running...
       ct[].proxies.incl(subproxy)
 
