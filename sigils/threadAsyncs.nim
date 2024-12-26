@@ -49,7 +49,7 @@ method callMethod*[T](
   let proxy = ctx
   let sig = ThreadSignal(slot: slot, req: req, tgt: proxy.remote)
   # echo "executeRequest:asyncAgentProxy: ", "chan: ", $proxy.chan
-  let res = proxy.chan.trySend(unsafeIsolate sig)
+  let res = proxy.outbound.trySend(unsafeIsolate sig)
   proxy.event.trigger()
   if not res:
     raise newException(AgentSlotError, "error sending signal to thread")
