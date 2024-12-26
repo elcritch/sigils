@@ -25,7 +25,7 @@ type
 
   AsyncSigilThread* = SharedPtr[AsyncSigilThreadObj]
 
-  AsyncSigilChan*[T] = object of SigilChan[T]
+  AsyncSigilChan* = object of SigilChan
     event*: AsyncEvent
 
 proc trySendImplAsync*[T](chan: SigilChan[T], msg: sink Isolated[T]): bool {.gcsafe.} =
