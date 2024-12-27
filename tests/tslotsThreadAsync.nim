@@ -1,4 +1,4 @@
-import std/[unittest, asyncdispatch, times, strutils]
+import std/[unittest, asyncdispatch, times, strutils, os]
 import sigils
 import sigils/threadAsyncs
 
@@ -58,6 +58,7 @@ suite "threaded agent slots":
     let thread = newSigilAsyncThread()
     thread.start()
     startLocalThread()
+    # os.sleep(100)
 
     let bp: AgentProxy[Counter] = b.moveToThread(thread)
     connect(a, valueChanged, bp, setValue)
