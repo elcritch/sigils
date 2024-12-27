@@ -103,11 +103,11 @@ method callMethod*(
       raise newException(AgentSlotError, "error sending signal to thread")
 
 proc newSigilThread*(): SigilThread =
-  result = newSharedPtr(SigilThreadObj())
+  result = newSharedPtr(isolate SigilThreadObj())
   result[].inputs = newSigilChan()
 
 proc poll*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
-  echo "thread got request: ", sig, " (th: ", getThreadId(), ")"
+  # echo "thread got request: ", sig, " (th: ", getThreadId(), ")"
   case sig.kind:
   of Move:
     var item = sig.item
