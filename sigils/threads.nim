@@ -160,32 +160,31 @@ proc findSubscribedToSignals(
       result[signal] = move toAdd
 
 proc moveToThread*[T: Agent, R: SigilThreadBase](agentTy: T, thread: SharedPtr[R]): AgentProxy[T] =
+  ## move agent to another thread
   if not isUniqueRef(agentTy):
     raise newException(
       AccessViolationDefect,
       "agent must be unique and not shared to be passed to another thread!",
     )
-
   let
     ct = getCurrentSigilThread()
-    agent = Agent(agentTy)
-    agentRef = agent.unsafeWeakRef()
+    agent = agentTy.unsafeWeakRef.asAgent()
     proxy = AgentProxy[T](
-      remote: agentRef,
+      remote: agent,
       outbound: thread[].inputs,
       inbound: ct[].inputs,
     )
 
   # handle things subscribed to `agent`, ie the inverse
   var
-    oldSubscribers = agent.subscribers
-    oldSubscribedTo = agent.subscribedTo.findSubscribedToSignals(agent.unsafeWeakRef)
+    oldSubscribers = agent[].subscribers
+    oldSubscribedTo = agent[].subscribedTo.findSubscribedToSignals(agent[].unsafeWeakRef)
 
-  agent.subscribedTo.unsubscribe(agent.unsafeWeakRef)
-  agent.subscribers.removeSubscription(agent.unsafeWeakRef)
+  agent[].subscribedTo.unsubscribe(agent)
+  agent[].subscribers.removeSubscription(agent)
 
-  agent.subscribedTo.clear()
-  agent.subscribers.clear()
+  agent[].subscribedTo.clear()
+  agent[].subscribers.clear()
 
   # update add proxy to listen to agents I am subscribed to
   # so they'll send my proxy events which the remote thread
@@ -197,13 +196,13 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](agentTy: T, thread: SharedPtr[R
 
   # update my subscribers so I use a new proxy to send events
   # to them
-  agent.addSubscription(AnySigilName, proxy, remoteSlot)
+  agent[].addSubscription(AnySigilName, proxy, remoteSlot)
   for signal, subscriberPairs in oldSubscribers.mpairs():
     for sub in subscriberPairs:
       # echo "signal: ", signal, " subscriber: ", tgt.getId
       proxy.addSubscription(signal, sub.tgt.toRef, sub.slot)
   
-  thread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Move, item: ensureMove agent))
+  thread[].inputs[].send(isolateRuntime ThreadSignal(kind: Move, item: agentTy))
 
   return proxy
 

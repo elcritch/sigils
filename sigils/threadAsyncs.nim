@@ -51,7 +51,7 @@ proc newAsyncSigilChan*[T](event: AsyncEvent): SigilChan =
   var sch = AsyncSigilChan.new()
   sch.ch = newChan[ThreadSignal]()
   sch.event = event
-  result = newSharedPtr(unsafeIsolate sch.SigilChanRef)
+  result = newSharedPtr(isolateRuntime sch.SigilChanRef)
 
 proc newSigilAsyncThread*(): AsyncSigilThread =
   result = newSharedPtr(AsyncSigilThreadObj())
