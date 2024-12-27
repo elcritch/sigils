@@ -79,10 +79,11 @@ method removeSubscriptionsFor*(
     self: Agent, subscriber: WeakRef[Agent]
 ) {.base, gcsafe, raises: [].} =
   ## Route's an rpc request. 
-  # echo "freeing subscribed: ", self.debugId
+  echo "freeing removeSubscriptionsFor ", " self:id: ", cast[int](cast[pointer](self))
   var delSigs: seq[SigilName]
   var toDel: seq[Subscription]
   for signal, subscriptions in self.subscribers.mpairs():
+    echo "freeing subs ", signal
     toDel.setLen(0)
     for subscription in subscriptions :
       if subscription.tgt == subscriber:
@@ -106,7 +107,7 @@ method unregisterSubscriber*(
 
 template unsubscribe*(subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]) =
   ## unsubscribe myself from agents I'm subscribed (listening) to
-  # echo "subscribed: ", xid[].subscribed.toSeq.mapIt(it[].debugId).repr
+  echo "subscribed: ", subscribedTo
   for obj in subscribedTo:
     obj[].removeSubscriptionsFor(xid)
 
