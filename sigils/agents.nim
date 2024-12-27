@@ -29,6 +29,9 @@ type WeakRef*[T] = object
   ## type alias descring a weak ref that *must* be cleaned
   ## up when an object is set to be destroyed
 
+proc `=destroy`*[T](obj: WeakRef[T]) =
+  discard
+
 proc `[]`*[T](r: WeakRef[T]): lent T =
   result = r.pt
 
