@@ -6,6 +6,12 @@ import std/unittest
 type WeakRef*[T] {.acyclic.} = object
   pt* {.cursor.}: T # cursor effectively is just a pointer
 
+proc `=trace`[T](dest: var WeakRef[T]; env: pointer) =
+  discard
+
+proc `=destroy`*[T](agentObj: WeakRef[T]) =
+  discard
+
 template `[]`*[T](r: WeakRef[T]): lent T =
   ## using this in the destructor is fine because it's lent
   cast[T](r.pt)
@@ -16,7 +22,7 @@ proc toRef*[T: ref](obj: WeakRef[T]): T =
 
 type
   AgentObj = object of RootObj
-    subscribers*: Table[int, int] ## agents listening to me
+    subscribers*: Table[int, WeakRef[Agent]] ## agents listening to me
     when defined(debug):
       freed*: bool
       moved*: bool
@@ -42,6 +48,11 @@ proc `=destroy`*(agentObj: AgentObj) =
       raise newException(Defect, "already freed!")
 
   xid[].freed = true
+
+  ## remove subscribers via their WeakRef's
+  ## this is where we create a problem
+  ## by using `toRef` which creates a *new* Agent reference
+  ## which gets added to ORC as a potential cycle check (?)
   when defined(breakOrc):
     if xid.toRef().subscribers.len() > 0:
       echo "has subscribers"
