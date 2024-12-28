@@ -42,7 +42,7 @@ type
     of Deref:
       deref*: WeakRef[Agent]
 
-  SigilThreadBase* = object of Agent
+  SigilThreadBase* = object of RootObj
     inputs*: SigilChan
     references*: HashSet[Agent]
 
