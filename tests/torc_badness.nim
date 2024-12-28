@@ -23,15 +23,8 @@ proc toRef*[T: ref](obj: T): T =
   result = obj
 
 type
-  SigilName = array[48, char]
-
-  Subscription* = object
-    tgt*: WeakRef[Agent]
-    slot*: AgentProc
-
   AgentObj = object of RootObj
-    subscribers*: Table[SigilName, OrderedSet[Subscription]] ## agents listening to me
-    subscribedTo*: HashSet[WeakRef[Agent]] ## agents I'm listening to
+    subscribers*: Table[int, int] ## agents listening to me
     when defined(debug):
       freed*: bool
       moved*: bool
@@ -40,40 +33,8 @@ type
 
   AgentProc* = proc(context: Agent, params: string) {.nimcall.}
 
-  ThreadSignalKind* {.pure.} = enum
-    Call
-    Move
-    Deref
-
-  ThreadSignal* = object
-    case kind*: ThreadSignalKind
-    of Call:
-      slot*: AgentProc
-      req*: string
-      tgt*: WeakRef[Agent]
-    of Move:
-      item*: Agent
-    of Deref:
-      deref*: WeakRef[Agent]
-
-  SigilThreadBase* = object of RootObj
-    inputs*: SigilChan
-    references*: HashSet[Agent]
-
-  SigilThreadObj* = object of SigilThreadBase
-    thr*: Thread[SharedPtr[SigilThreadObj]]
-
-  SigilThread* = SharedPtr[SigilThreadObj]
-
-  SigilChanRef* = ref object of RootObj
-    ch*: Chan[ThreadSignal]
-
-  SigilChan* = SharedPtr[SigilChanRef]
-
   AgentProxyShared* {.acyclic.} = ref object of Agent
     remote*: WeakRef[Agent]
-    outbound*: SigilChan
-    inbound*: SigilChan
 
   AgentProxy*[T] = ref object of AgentProxyShared
 
@@ -85,12 +46,10 @@ proc `=destroy`*(agent: AgentObj) =
           " freed: ", agent.freed,
           " moved: ", agent.moved,
           " lstCnt: ", xid[].subscribers.len(),
-          " subscribedTo: ", xid[].subscribedTo.len(),
           " (th: ", getThreadId(), ")"
   when defined(debug):
     if agent.moved:
       raise newException(Defect, "moved!")
-    echo "destroy: agent: ", agent.moved, " freed: ", agent.freed
     if agent.freed:
       raise newException(Defect, "already freed!")
 
