@@ -6,8 +6,7 @@ import threading/channels
 import std/unittest
 
 type WeakRef*[T] {.acyclic.} = object
-  pt* {.cursor.}: T
-  # pt*: pointer
+  pt* {.cursor.}: T # cursor effectively is just a pointer
 
 template `[]`*[T](r: WeakRef[T]): lent T =
   cast[T](r.pt)
@@ -17,9 +16,6 @@ proc toPtr*[T](obj: WeakRef[T]): pointer =
 
 proc toRef*[T: ref](obj: WeakRef[T]): T =
   result = cast[T](obj)
-
-proc toRef*[T: ref](obj: T): T =
-  result = obj
 
 type
   AgentObj = object of RootObj
@@ -38,24 +34,26 @@ type
   AgentProxy*[T] = ref object of AgentProxyShared
 
 proc `=wasMoved`(agent: var AgentObj) =
-  let xid: WeakRef[Agent] = WeakRef[Agent](pt: cast[pointer](addr agent))
+  let xid: WeakRef[Agent] = WeakRef[Agent](pt: cast[Agent](addr agent))
   echo "agent was moved", " pt: ", xid.toPtr.repr
   agent.moved = true
 
-proc `=destroy`*(agent: AgentObj) =
-  let xid: WeakRef[Agent] = WeakRef[Agent](pt: cast[Agent](addr agent))
-  # This is a bad idea in many ways, but we need to modify some things
+proc `=destroy`*(agentObj: AgentObj) =
+  let xid: WeakRef[Agent] = WeakRef[Agent](pt: cast[Agent](addr agentObj))
+  # This is pretty hacky, but we need to get the address of the original
+  # Agent ref object, which luckily is the same as `addr agent`
+  # of the agent 
 
   echo "\ndestroy: agent: ",
           " pt: ", xid.toPtr.repr,
-          " freed: ", agent.freed,
-          " moved: ", agent.moved,
+          " freed: ", agentObj.freed,
+          " moved: ", agentObj.moved,
           " lstCnt: ", xid[].subscribers.len(),
           " (th: ", getThreadId(), ")"
   when defined(debug):
-    if agent.moved:
+    if agentObj.moved:
       raise newException(Defect, "moved!")
-    if agent.freed:
+    if agentObj.freed:
       raise newException(Defect, "already freed!")
 
   xid[].freed = true
