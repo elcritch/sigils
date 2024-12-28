@@ -25,15 +25,16 @@ export options
 export variant
 
 type WeakRef*[T] = object
-  pt* {.cursor.}: T
+  # pt* {.cursor.}: T
+  pt*: pointer
   ## type alias descring a weak ref that *must* be cleaned
   ## up when an object is set to be destroyed
 
 proc `=destroy`*[T](obj: WeakRef[T]) =
   discard
 
-proc `[]`*[T](r: WeakRef[T]): lent T =
-  result = r.pt
+template `[]`*[T](r: WeakRef[T]): lent T =
+  cast[T](r.pt)
 
 proc toPtr*[T](obj: WeakRef[T]): pointer =
   result = cast[pointer](obj.pt)
@@ -105,9 +106,11 @@ method unregisterSubscriber*(
   self.subscribedTo.excl(listener)
   # echo "\tlisterners:subscribed ", subscriber.tgt[].subscribed
 
-template unsubscribe*(subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]) =
+proc unsubscribe*(subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]) =
   ## unsubscribe myself from agents I'm subscribed (listening) to
-  echo "subscribed: ", subscribedTo
+  echo "unsubscribe: ", subscribedTo.len
+  for obj in subscribedTo.items():
+    echo "unsubscribe:obj: ", $obj
   for obj in subscribedTo:
     obj[].removeSubscriptionsFor(xid)
 
@@ -121,20 +124,22 @@ template removeSubscription*(
       subscription.tgt[].unregisterSubscriber(xid)
 
 proc `=destroy`*(agent: AgentObj) =
-  let xid: WeakRef[Agent] = WeakRef[Agent](pt: cast[Agent](addr agent))
+  let xid: WeakRef[Agent] = WeakRef[Agent](pt: cast[pointer](addr agent))
 
-  # echo "\ndestroy: agent: ", xid[].debugId, " pt: ", xid.toPtr.repr, " lstCnt: ", xid[].subscribers.len(), " subCnt: ", xid[].subscribed.len
+  echo "\ndestroy: agent: ", " pt: ", xid.toPtr.repr, " lstCnt: ", xid[].subscribers.len(), " subscribedTo: ", xid[].subscribedTo.len()
   xid.toRef().subscribedTo.unsubscribe(xid)
   xid.toRef().subscribers.removeSubscription(xid)
 
-  # xid[].subscribers.clear()
+  xid[].subscribers.clear()
+  xid[].subscribedTo.clear()
+
   `=destroy`(xid[].subscribers)
   `=destroy`(xid[].subscribedTo)
 
 proc `$`*[T: Agent](obj: WeakRef[T]): string =
   result = $(T)
   result &= "{id: "
-  result &= obj.getId().repr
+  result &= obj.getId().pointer
   result &= "}"
 
 when defined(nimscript):
@@ -167,7 +172,7 @@ template getSubscriptions*(
   obj.getSubscriptions(sig)
 
 proc unsafeWeakRef*[T: Agent](obj: T): WeakRef[T] =
-  result = WeakRef[T](pt: obj)
+  result = WeakRef[T](pt: cast[pointer](obj))
 
 proc asAgent*[T: Agent](obj: WeakRef[T]): WeakRef[Agent] =
   result = WeakRef[Agent](pt: obj.pt)
