@@ -77,44 +77,44 @@ suite "threaded agent slots":
       b = Counter.new()
     # echo "thread runner!"
     let thread = newSigilThread()
-    # let bp: AgentProxy[Counter] = b.moveToThread(thread)
+    let bp: AgentProxy[Counter] = b.moveToThread(thread)
 
-    # connect(a, valueChanged, bp, setValue)
-    # connect(a, valueChanged, bp, Counter.setValue())
-    # check not compiles(connect(a, valueChanged, bp, someAction))
+    connect(a, valueChanged, bp, setValue)
+    connect(a, valueChanged, bp, Counter.setValue())
+    check not compiles(connect(a, valueChanged, bp, someAction))
 
 
-  # test "sigil object thread runner":
+  test "sigil object thread runner":
 
-  #   var
-  #     a = SomeAction.new()
+    var
+      a = SomeAction.new()
 
-  #   block:
-  #     var
-  #       b = Counter.new()
-  #     echo "thread runner!", " (th: ", getThreadId(), ")"
-  #     # echo "obj a: ", a.unsafeWeakRef
-  #     # echo "obj b: ", b.unsafeWeakRef
-  #     let thread = newSigilThread()
-  #     thread.start()
-  #     startLocalThread()
+    block:
+      var
+        b = Counter.new()
+      echo "thread runner!", " (th: ", getThreadId(), ")"
+      # echo "obj a: ", a.unsafeWeakRef
+      # echo "obj b: ", b.unsafeWeakRef
+      let thread = newSigilThread()
+      thread.start()
+      startLocalThread()
 
-  #     let bp: AgentProxy[Counter] = b.moveToThread(thread)
-  #     # echo "obj bp: ", bp.unsafeWeakRef
-  #     # echo "obj bp.remote: ", bp.remote[].unsafeWeakRef
+      let bp: AgentProxy[Counter] = b.moveToThread(thread)
+      # echo "obj bp: ", bp.unsafeWeakRef
+      # echo "obj bp.remote: ", bp.remote[].unsafeWeakRef
 
-  #     connect(a, valueChanged, bp, setValue)
-  #     connect(bp, updated, a, SomeAction.completed())
+      connect(a, valueChanged, bp, setValue)
+      connect(bp, updated, a, SomeAction.completed())
 
-  #     emit a.valueChanged(314)
-  #     # thread.thread.joinThread(500)
-  #     # os.sleep(500)
-  #     let ct = getCurrentSigilThread()
-  #     ct[].poll()
-  #     check a.value == 314
+      emit a.valueChanged(314)
+      # thread.thread.joinThread(500)
+      # os.sleep(500)
+      let ct = getCurrentSigilThread()
+      ct[].poll()
+      check a.value == 314
     
-  #   check a.subscribers.len() == 0
-  #   check a.subscribedTo.len() == 0
+    check a.subscribers.len() == 0
+    check a.subscribedTo.len() == 0
 
   # test "sigil object thread connect change":
   #   echo "sigil object thread connect change"
