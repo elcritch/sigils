@@ -152,7 +152,7 @@ proc `=destroy`*(agent: AgentObj) =
           " subscribedTo: ", xid[].subscribedTo.len(),
           " (th: ", getThreadId(), ")"
   # echo "destroy: agent:st: ", getStackTrace()
-  when defined(debug):
+  when defined(debug) and false:
     echo "destroy: agent: ", agent.moved, " freed: ", agent.freed
     if agent.moved:
       raise newException(Defect, "moved!")
@@ -160,8 +160,11 @@ proc `=destroy`*(agent: AgentObj) =
     if agent.freed:
       raise newException(Defect, "already freed!")
     xid[].freed = true
-  xid.toRef().subscribedTo.unsubscribe(xid)
-  xid.toRef().subscribers.removeSubscription(xid)
+  
+  if xid.toRef().subscribedTo.len() > 0:
+    xid.toRef().subscribedTo.unsubscribe(xid)
+  if xid.toRef().subscribers.len() > 0:
+    xid.toRef().subscribers.removeSubscription(xid)
 
   # xid[].subscribers[].clear()
   # xid[].subscribedTo[].clear()
