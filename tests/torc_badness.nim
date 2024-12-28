@@ -9,12 +9,11 @@ type WeakRef*[T] {.acyclic.} = object
   pt* {.cursor.}: T # cursor effectively is just a pointer
 
 template `[]`*[T](r: WeakRef[T]): lent T =
+  ## using this in the destructor is fine because it's lent
   cast[T](r.pt)
 
-proc toPtr*[T](obj: WeakRef[T]): pointer =
-  result = cast[pointer](obj.pt)
-
 proc toRef*[T: ref](obj: WeakRef[T]): T =
+  ## using this in the destructor breaks ORC
   result = cast[T](obj)
 
 type
@@ -27,8 +26,7 @@ type
   Agent* = ref object of AgentObj
 
 proc `=wasMoved`(agent: var AgentObj) =
-  let xid: WeakRef[Agent] = WeakRef[Agent](pt: cast[Agent](addr agent))
-  echo "agent was moved", " pt: ", xid.toPtr.repr
+  echo "agent was moved"
   agent.moved = true
 
 proc `=destroy`*(agentObj: AgentObj) =
@@ -37,7 +35,7 @@ proc `=destroy`*(agentObj: AgentObj) =
     ## Agent (ref object) since it's used to unsubscribe from other agents in the actual code,
     ## Luckily the agent address is the same as `addr agent` of the agent object here.
   echo "destroying agent: ",
-          " pt: ", xid.toPtr.repr,
+          " pt: ", cast[pointer](xid.pt).repr,
           " freed: ", agentObj.freed,
           " moved: ", agentObj.moved,
           " lstCnt: ", xid[].subscribers.len()
@@ -54,7 +52,7 @@ proc `=destroy`*(agentObj: AgentObj) =
       echo "has subscribers"
 
   `=destroy`(xid[].subscribers)
-  echo "finished destroy: agent: ", " pt: ", xid.toPtr.repr
+  echo "finished destroy: agent: ", " pt: ", cast[pointer](xid.pt).repr
 
 type
   Counter* = ref object of Agent
