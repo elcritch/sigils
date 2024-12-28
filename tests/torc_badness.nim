@@ -90,52 +90,55 @@ proc getId*[T: Agent](a: WeakRef[T]): int =
 proc getId*(a: Agent): int =
   cast[int](cast[pointer](a))
 
-method removeSubscriptionsFor*(
-    self: Agent, subscriber: WeakRef[Agent]
-) {.base, gcsafe, raises: [].} =
-  ## Route's an rpc request. 
-  echo "removeSubscriptionsFor ", " self:id: ", $self.getId()
-  var delSigs: seq[SigilName]
-  var toDel: seq[Subscription]
-  for signal, subscriptions in self.subscribers.mpairs():
-    echo "removeSubscriptionsFor subs ", signal
-    toDel.setLen(0)
-    for subscription in subscriptions:
-      if subscription.tgt == subscriber:
-        toDel.add(subscription)
-        # echo "agentRemoved: ", "tgt: ", xid.toPtr.repr, " id: ", agent.debugId, " obj: ", obj[].debugId, " name: ", signal
-    for subscription in toDel:
-      subscriptions.excl(subscription)
-    if subscriptions.len() == 0:
-      delSigs.add(signal)
-  for sig in delSigs:
-    self.subscribers.del(sig)
+# method removeSubscriptionsFor*(
+#     self: Agent, subscriber: WeakRef[Agent]
+# ) {.base, gcsafe, raises: [].} =
+#   ## Route's an rpc request. 
+#   echo "removeSubscriptionsFor ", " self:id: ", $self.getId()
+#   var delSigs: seq[SigilName]
+#   var toDel: seq[Subscription]
+#   for signal, subscriptions in self.subscribers.mpairs():
+#     echo "removeSubscriptionsFor subs ", signal
+#     toDel.setLen(0)
+#     for subscription in subscriptions:
+#       if subscription.tgt == subscriber:
+#         toDel.add(subscription)
+#         # echo "agentRemoved: ", "tgt: ", xid.toPtr.repr, " id: ", agent.debugId, " obj: ", obj[].debugId, " name: ", signal
+#     for subscription in toDel:
+#       subscriptions.excl(subscription)
+#     if subscriptions.len() == 0:
+#       delSigs.add(signal)
+#   for sig in delSigs:
+#     self.subscribers.del(sig)
 
 method unregisterSubscriber*(
     self: Agent, listener: WeakRef[Agent]
 ) {.base, gcsafe, raises: [].} =
   # echo "\tlisterners: ", subscriber.tgt
   # echo "\tlisterners:subscribed ", subscriber.tgt[].subscribed
-  assert listener in self.subscribedTo
-  self.subscribedTo.excl(listener)
+  discard
+  # assert listener in self.subscribedTo
+  # self.subscribedTo.excl(listener)
   # echo "\tlisterners:subscribed ", subscriber.tgt[].subscribed
 
-proc unsubscribe*(subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]) =
-  ## unsubscribe myself from agents I'm subscribed (listening) to
-  echo "unsubscribe: ", subscribedTo.len
-  for obj in subscribedTo.items():
-    echo "unsubscribe:obj: ", $obj
-  for obj in subscribedTo:
-    obj[].removeSubscriptionsFor(xid)
+# proc unsubscribe*(subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]) =
+#   ## unsubscribe myself from agents I'm subscribed (listening) to
+#   echo "unsubscribe: ", subscribedTo.len
+#   for obj in subscribedTo.items():
+#     echo "unsubscribe:obj: ", $obj
+#   for obj in subscribedTo:
+#     obj[].removeSubscriptionsFor(xid)
 
 template removeSubscription*(
-    subscribers: var Table[SigilName, OrderedSet[Subscription]], xid: WeakRef[Agent]
+    subscribers: Table[SigilName, OrderedSet[Subscription]]
 ) =
   ## remove myself from agents listening to me
-  for signal, subscriptions in subscribers.mpairs():
-    # echo "freeing signal: ", signal, " subscribers: ", subscriberPairs
-    for subscription in subscriptions:
-      subscription.tgt[].unregisterSubscriber(xid)
+  discard
+  # for signal, subscriptions in subscribers.mpairs():
+  #   # echo "freeing signal: ", signal, " subscribers: ", subscriberPairs
+  #   for subscription in subscriptions:
+  #     # subscription.tgt[].unregisterSubscriber(xid)
+  #     discard
 
 proc `=destroy`*(agent: AgentObj) =
   let xid: WeakRef[Agent] = WeakRef[Agent](pt: cast[pointer](addr agent))
@@ -157,16 +160,17 @@ proc `=destroy`*(agent: AgentObj) =
       raise newException(Defect, "already freed!")
 
   xid[].freed = true
-  if xid.toRef().subscribedTo.len() > 0:
-    xid.toRef().subscribedTo.unsubscribe(xid)
-  if xid.toRef().subscribers.len() > 0:
-    xid.toRef().subscribers.removeSubscription(xid)
+  # if xid.toRef().subscribedTo.len() > 0:
+  #   xid.toRef().subscribedTo.unsubscribe(xid)
+  if xid[].subscribers.len() > 0:
+    echo "has subscribers"
+    # agent.subscribers.removeSubscription()
 
   # xid[].subscribers[].clear()
   # xid[].subscribedTo[].clear()
 
   `=destroy`(xid[].subscribers)
-  `=destroy`(xid[].subscribedTo)
+  # `=destroy`(xid[].subscribedTo)
   echo "finished destroy: agent: ", " pt: ", xid.toPtr.repr
 
 proc moveToThread*[T: Agent](
