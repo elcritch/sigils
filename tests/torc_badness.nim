@@ -20,14 +20,20 @@ proc toRef*[T: ref](obj: WeakRef[T]): T =
   ## using this in the destructor breaks ORC
   result = cast[T](obj)
 
-type
-  AgentObj = object of RootObj
-    subscribers*: Table[int, WeakRef[Agent]] ## agents listening to me
-    when defined(debug):
+when defined(breakOrc):
+  type
+    AgentObj = object of RootObj
+      subscribers*: Table[int, WeakRef[Agent]] ## agents listening to me
       freed*: bool
       moved*: bool
-
-  Agent* = ref object of AgentObj
+    Agent* = ref object of AgentObj
+else:
+  type
+    AgentObj = object of RootObj
+      subscribers*: Table[int, WeakRef[Agent]] ## agents listening to me
+      freed*: bool
+      moved*: bool
+    Agent* {.acyclic.} = ref object of AgentObj
 
 proc `=wasMoved`(agent: var AgentObj) =
   echo "agent was moved"
@@ -38,7 +44,7 @@ proc `=destroy`*(agentObj: AgentObj) =
     ## This is pretty hacky, but we need to get the address of the original
     ## Agent (ref object) since it's used to unsubscribe from other agents in the actual code,
     ## Luckily the agent address is the same as `addr agent` of the agent object here.
-  echo "destroying agent: ",
+  echo "Destroying agent: ",
           " pt: ", cast[pointer](xid.pt).repr,
           " freed: ", agentObj.freed,
           " moved: ", agentObj.moved,
@@ -53,6 +59,7 @@ proc `=destroy`*(agentObj: AgentObj) =
   ## this is where we create a problem
   ## by using `toRef` which creates a *new* Agent reference
   ## which gets added to ORC as a potential cycle check (?)
+  ## adding `{.acyclic.}` to 
   when defined(breakOrc):
     if xid.toRef().subscribers.len() > 0:
       echo "has subscribers"
