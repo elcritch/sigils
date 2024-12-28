@@ -1,5 +1,7 @@
 import std/[hashes, isolation]
 
+type DestructorUnsafe = object ## input/output effect
+
 type WeakRef*[T] {.acyclic.} = object
   # pt* {.cursor.}: T
   pt*: pointer
@@ -15,7 +17,7 @@ proc toPtr*[T](obj: WeakRef[T]): pointer =
 proc hash*[T](obj: WeakRef[T]): Hash =
   result = hash cast[pointer](obj.pt)
 
-proc toRef*[T: ref](obj: WeakRef[T]): T =
+proc toRef*[T: ref](obj: WeakRef[T]): T {.tags: [DestructorUnsafe].} =
   result = cast[T](obj)
 
 proc toRef*[T: ref](obj: T): T =

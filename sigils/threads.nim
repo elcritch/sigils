@@ -17,10 +17,12 @@ type
 
   SigilChan* = SharedPtr[SigilChanRef]
 
-  AgentProxyShared* {.acyclic.} = ref object of Agent
+  AgentProxyShared* = ref object of Agent
     remote*: WeakRef[Agent]
     outbound*: SigilChan
     inbound*: SigilChan
+    listeners*: HashSet[Agent]
+    lock*: Lock
 
   AgentProxy*[T] = ref object of AgentProxyShared
 
@@ -169,43 +171,42 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
       "agent must be unique and not shared to be passed to another thread!",
     )
   let
-    # ct = getCurrentSigilThread()
-    # agent = agentTy.unsafeWeakRef.asAgent()
+    ct = getCurrentSigilThread()
+    agent = agentTy.unsafeWeakRef.asAgent()
     proxy = AgentProxy[T](
-      # remote: agent,
-      # outbound: thread[].inputs,
-      # inbound: ct[].inputs,
+      remote: agent,
+      outbound: thread[].inputs,
+      inbound: ct[].inputs,
     )
 
   # handle things subscribed to `agent`, ie the inverse
-  # var
-  #   oldSubscribers = agent[].subscribers
-  #   oldSubscribedTo = agent[].subscribedTo.findSubscribedToSignals(agent[].unsafeWeakRef)
+  var
+    oldSubscribers = agent[].subscribers
+    oldSubscribedTo = agent[].subscribedTo.findSubscribedToSignals(agent[].unsafeWeakRef)
 
-  # agent[].subscribedTo.unsubscribe(agent)
-  # agent[].subscribers.removeSubscription(agent)
+  agent[].subscribedTo.unsubscribe(agent)
+  agent[].subscribers.removeSubscription(agent)
 
-  # # agent[].subscribedTo.clear()
-  # # agent[].subscribers.clear()
+  agent[].subscribedTo.clear()
+  agent[].subscribers.clear()
 
-  # # update add proxy to listen to agents I am subscribed to
-  # # so they'll send my proxy events which the remote thread
-  # # will process
-  # for signal, subscriberPairs in oldSubscribedTo.mpairs():
-  #   for sub in subscriberPairs:
-  #     let tgt = sub.tgt.toRef()
-  #     tgt.addSubscription(signal, proxy, sub.slot)
+  # update add proxy to listen to agents I am subscribed to
+  # so they'll send my proxy events which the remote thread
+  # will process
+  for signal, subscriberPairs in oldSubscribedTo.mpairs():
+    for sub in subscriberPairs:
+      let tgt = sub.tgt.toRef()
+      tgt.addSubscription(signal, proxy, sub.slot)
 
-  # # update my subscribers so I use a new proxy to send events
-  # # to them
-  # agent[].addSubscription(AnySigilName, proxy, remoteSlot)
-  # for signal, subscriberPairs in oldSubscribers.mpairs():
-  #   for sub in subscriberPairs:
-  #     # echo "signal: ", signal, " subscriber: ", tgt.getId
-  #     proxy.addSubscription(signal, sub.tgt.toRef, sub.slot)
+  # update my subscribers so I use a new proxy to send events
+  # to them
+  agent[].addSubscription(AnySigilName, proxy, remoteSlot)
+  for signal, subscriberPairs in oldSubscribers.mpairs():
+    for sub in subscriberPairs:
+      # echo "signal: ", signal, " subscriber: ", tgt.getId
+      proxy.addSubscription(signal, sub.tgt.toRef, sub.slot)
   
-  # GC_ref(agentTy)
-  # thread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Move, item: agentTy))
+  thread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Move, item: agentTy))
 
   return proxy
 

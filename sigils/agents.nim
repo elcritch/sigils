@@ -132,13 +132,10 @@ proc `=destroy`*(agent: AgentObj) =
       raise newException(Defect, "already freed!")
 
   xid[].freed = true
-  if xid.toRef().subscribedTo.len() > 0:
-    xid.toRef().subscribedTo.unsubscribe(xid)
-  if xid.toRef().subscribers.len() > 0:
-    xid.toRef().subscribers.removeSubscription(xid)
-
-  # xid[].subscribers[].clear()
-  # xid[].subscribedTo[].clear()
+  if agent.subscribedTo.len() > 0:
+    xid[].subscribedTo.unsubscribe(xid)
+  if agent.subscribers.len() > 0:
+    xid[].subscribers.removeSubscription(xid)
 
   `=destroy`(xid[].subscribers)
   `=destroy`(xid[].subscribedTo)
