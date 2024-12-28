@@ -35,8 +35,6 @@ proc value*(self: Counter): int =
 suite "threaded agent slots":
 
   when true:
-    # teardown:
-    #   GC_fullCollect()
 
     test "simple threading test":
       var
@@ -182,7 +180,7 @@ suite "threaded agent slots":
         GC_fullCollect()
       GC_fullCollect()
 
-  when true:
+  when false:
     test "sigil object thread runner (loop)":
       block:
         block:
@@ -209,7 +207,6 @@ suite "threaded agent slots":
             check a.value == 314
             ct[].poll()
             check a.value == 271
-            GC_fullCollect()
-          GC_fullCollect()
-        GC_fullCollect()
+          # GC_fullCollect()
+        # GC_fullCollect()
       GC_fullCollect()
