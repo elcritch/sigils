@@ -148,39 +148,41 @@ suite "threaded agent slots":
         ct[].poll()
         check c.value == 314
 
-  when false:
     test "sigil object thread runner multiple":
-      var
-        a = SomeAction.new()
-      
       block:
         var
-          b = Counter.new()
+          a = SomeAction.new()
+        
+        block:
+          var
+            b = Counter.new()
 
-        # echo "thread runner!", " (main thread:", getThreadId(), ")"
-        # echo "obj a: ", a.unsafeWeakRef
-        # echo "obj b: ", b.unsafeWeakRef
-        let thread = newSigilThread()
-        thread.start()
-        startLocalThread()
+          # echo "thread runner!", " (main thread:", getThreadId(), ")"
+          # echo "obj a: ", a.unsafeWeakRef
+          # echo "obj b: ", b.unsafeWeakRef
+          let thread = newSigilThread()
+          thread.start()
+          startLocalThread()
 
-        let bp: AgentProxy[Counter] = b.moveToThread(thread)
-        # echo "obj bp: ", bp.unsafeWeakRef
-        # echo "obj bp.remote: ", bp.remote[].unsafeWeakRef
-        connect(a, valueChanged, bp, setValue)
-        connect(bp, updated, a, SomeAction.completed())
+          let bp: AgentProxy[Counter] = b.moveToThread(thread)
+          # echo "obj bp: ", bp.unsafeWeakRef
+          # echo "obj bp.remote: ", bp.remote[].unsafeWeakRef
+          connect(a, valueChanged, bp, setValue)
+          connect(bp, updated, a, SomeAction.completed())
 
-        emit a.valueChanged(271)
-        emit a.valueChanged(628)
+          emit a.valueChanged(271)
+          emit a.valueChanged(628)
 
-        # thread.thread.joinThread(500)
-        let ct = getCurrentSigilThread()
-        ct[].poll()
-        check a.value == 271
-        ct[].poll()
-        check a.value == 628
+          # thread.thread.joinThread(500)
+          let ct = getCurrentSigilThread()
+          ct[].poll()
+          check a.value == 271
+          ct[].poll()
+          check a.value == 628
+        GC_fullCollect()
       GC_fullCollect()
 
+  when false:
     test "sigil object thread runner (loop)":
       if false:
         startLocalThread()
