@@ -110,13 +110,13 @@ template removeSubscription*(
 proc `=destroy`*(agent: AgentObj) {.forbids: [DestructorUnsafe].} =
   let xid: WeakRef[Agent] = WeakRef[Agent](pt: cast[pointer](addr agent))
 
-  # echo "\ndestroy: agent: ",
-  #         " pt: ", xid.toPtr.repr,
-  #         " freed: ", agent.freed,
-  #         " moved: ", agent.moved,
-  #         " lstCnt: ", xid[].subscribers.len(),
-  #         " subscribedTo: ", xid[].subscribedTo.len(),
-  #         " (th: ", getThreadId(), ")"
+  echo "\ndestroy: agent: ",
+          " pt: ", xid.toPtr.repr,
+          " freed: ", agent.freed,
+          " moved: ", agent.moved,
+          " lstCnt: ", xid[].subscribers.len(),
+          " subscribedTo: ", xid[].subscribedTo.len(),
+          " (th: ", getThreadId(), ")"
   when defined(debug):
     if agent.freed:
       raise newException(Defect, "already freed!")
