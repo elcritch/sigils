@@ -6,7 +6,9 @@ import threading/channels
 import std/unittest
 
 type WeakRef*[T] {.acyclic.} = object
-  pt* {.cursor.}: T
+  # pt* {.cursor.}: T
+  pt*: pointer
+
 
 template `[]`*[T](r: WeakRef[T]): lent T =
   cast[T](r.pt)
