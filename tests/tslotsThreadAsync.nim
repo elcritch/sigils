@@ -53,7 +53,7 @@ suite "threaded agent slots":
       b = Counter()
 
     echo "thread runner!", " (th: ", getThreadId(), ")"
-    echo "obj a: ", a.unsafeWeakRef
+    echo "obj a: ", $a.unsafeWeakRef()
 
     let thread = newSigilAsyncThread()
     thread.start()

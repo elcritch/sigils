@@ -142,7 +142,7 @@ proc `=destroy`*(agent: AgentObj) {.forbids: [DestructorUnsafe].} =
 proc `$`*[T: Agent](obj: WeakRef[T]): string =
   result = $(T)
   result &= "{id: "
-  result &= obj.getId().pointer
+  result &= $obj.getId()
   result &= "}"
 
 proc hash*(a: Agent): Hash =
