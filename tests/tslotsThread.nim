@@ -34,7 +34,7 @@ proc value*(self: Counter): int =
 
 suite "threaded agent slots":
 
-  when false:
+  when true:
 
     test "simple threading test":
       var
