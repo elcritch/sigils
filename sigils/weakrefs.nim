@@ -1,6 +1,6 @@
 import std/[hashes, isolation]
 
-type DestructorUnsafe = object ## input/output effect
+type DestructorUnsafe* = object ## input/output effect
 
 type WeakRef*[T] {.acyclic.} = object
   # pt* {.cursor.}: T

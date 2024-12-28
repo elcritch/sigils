@@ -112,7 +112,7 @@ proc `=wasMoved`(agent: var AgentObj) =
   echo "agent was moved", " pt: ", xid.toPtr.repr
   agent.moved = true
 
-proc `=destroy`*(agent: AgentObj) =
+proc `=destroy`*(agent: AgentObj) {.forbids: [DestructorUnsafe].} =
   let xid: WeakRef[Agent] = WeakRef[Agent](pt: cast[pointer](addr agent))
 
   echo "\ndestroy: agent: ",
@@ -133,9 +133,9 @@ proc `=destroy`*(agent: AgentObj) =
 
   xid[].freed = true
   if agent.subscribedTo.len() > 0:
-    xid[].subscribedTo.unsubscribe(xid)
+    xid.toRef().subscribedTo.unsubscribe(xid)
   if agent.subscribers.len() > 0:
-    xid[].subscribers.removeSubscription(xid)
+    xid.toRef().subscribers.removeSubscription(xid)
 
   `=destroy`(xid[].subscribers)
   `=destroy`(xid[].subscribedTo)
