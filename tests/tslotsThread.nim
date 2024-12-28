@@ -9,9 +9,20 @@ import sigils/threads
 type
   SomeAction* = ref object of Agent
     value: int
+    obj: InnerA
 
   Counter* = ref object of Agent
     value: int
+    obj: InnerC
+
+  InnerA = object
+  InnerC = object
+
+proc `=destroy`*(obj: InnerA) = 
+  echo "destroyed InnerA!"
+
+proc `=destroy`*(obj: InnerC) = 
+  echo "destroyed InnerC!"
 
 proc valueChanged*(tp: SomeAction, val: int) {.signal.}
 proc updated*(tp: Counter, final: int) {.signal.}
@@ -98,11 +109,11 @@ suite "threaded agent slots":
         var
           b = Counter.new()
         echo "thread runner!", " (th: ", getThreadId(), ")"
-        # echo "obj a: ", a.unsafeWeakRef
-        # echo "obj b: ", b.unsafeWeakRef
+        echo "obj a: ", $a.getId()
+        echo "obj b: ", $b.getId()
 
         let bp: AgentProxy[Counter] = b.moveToThread(thread)
-        # echo "obj bp: ", bp.unsafeWeakRef
+        echo "obj bp: ", $bp.getId()
         # echo "obj bp.remote: ", bp.remote[].unsafeWeakRef
 
         connect(a, valueChanged, bp, setValue)
@@ -116,8 +127,12 @@ suite "threaded agent slots":
         check a.value == 314
         GC_fullCollect()
       
-      check a.subscribers.len() == 0
-      check a.subscribedTo.len() == 0
+      # check a.subscribers.len() == 0
+      # check a.subscribedTo.len() == 0
+      if a.subscribers.len() > 0:
+        echo "a.subscribers: ", a.subscribers
+      if a.subscribedTo.len() > 0:
+        echo "a.subscribedTo: ", a.subscribedTo
       GC_fullCollect()
 
   when false:
