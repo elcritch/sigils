@@ -6,9 +6,8 @@ import threading/channels
 import std/unittest
 
 type WeakRef*[T] {.acyclic.} = object
-  # pt* {.cursor.}: T
-  pt*: pointer
-
+  pt* {.cursor.}: T
+  # pt*: pointer
 
 template `[]`*[T](r: WeakRef[T]): lent T =
   cast[T](r.pt)
@@ -38,8 +37,14 @@ type
 
   AgentProxy*[T] = ref object of AgentProxyShared
 
-proc `=destroy`*(agent: AgentObj) =
+proc `=wasMoved`(agent: var AgentObj) =
   let xid: WeakRef[Agent] = WeakRef[Agent](pt: cast[pointer](addr agent))
+  echo "agent was moved", " pt: ", xid.toPtr.repr
+  agent.moved = true
+
+proc `=destroy`*(agent: AgentObj) =
+  let xid: WeakRef[Agent] = WeakRef[Agent](pt: cast[Agent](addr agent))
+  # This is a bad idea in many ways, but we need to modify some things
 
   echo "\ndestroy: agent: ",
           " pt: ", xid.toPtr.repr,
@@ -54,10 +59,12 @@ proc `=destroy`*(agent: AgentObj) =
       raise newException(Defect, "already freed!")
 
   xid[].freed = true
-  # if xid[].subscribers.len() > 0:
-  #   echo "has subscribers"
-  if xid.toRef().subscribers.len() > 0:
-    echo "has subscribers"
+  when defined(breakOrc):
+    if xid.toRef().subscribers.len() > 0:
+      echo "has subscribers"
+  else:
+    if xid[].subscribers.len() > 0:
+      echo "has subscribers"
 
   `=destroy`(xid[].subscribers)
   echo "finished destroy: agent: ", " pt: ", xid.toPtr.repr
