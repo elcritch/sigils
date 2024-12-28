@@ -54,7 +54,9 @@ type
 var localSigilThread {.threadVar.}: Option[SigilThread]
 
 proc newSigilChan*(): SigilChan =
-  result = newSharedPtr(SigilChanRef.new())
+  let cref = SigilChanRef.new()
+  GC_ref(cref)
+  result = newSharedPtr(unsafeIsolate cref)
   result[].ch = newChan[ThreadSignal]()
 
 method trySend*(chan: SigilChanRef, msg: sink Isolated[ThreadSignal]): bool {.gcsafe, base.} =
