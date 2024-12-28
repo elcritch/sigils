@@ -20,20 +20,16 @@ proc toRef*[T: ref](obj: WeakRef[T]): T =
   ## using this in the destructor breaks ORC
   result = cast[T](obj)
 
-when defined(breakOrc):
-  type
-    AgentObj = object of RootObj
-      subscribers*: Table[int, WeakRef[Agent]] ## agents listening to me
+type
+  AgentObj = object of RootObj
+    subscribers*: Table[int, WeakRef[Agent]] ## agents listening to me
+    when defined(debug):
       freed*: bool
       moved*: bool
-    Agent* = ref object of AgentObj
-else:
-  type
-    AgentObj = object of RootObj
-      subscribers*: Table[int, WeakRef[Agent]] ## agents listening to me
-      freed*: bool
-      moved*: bool
-    Agent* {.acyclic.} = ref object of AgentObj
+
+  Agent* = ref object of AgentObj
+  ## Agent* {.acyclic.} = ref object of AgentObj
+  ## this also avoids the issue
 
 proc `=wasMoved`(agent: var AgentObj) =
   echo "agent was moved"
