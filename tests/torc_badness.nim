@@ -39,17 +39,16 @@ proc `=wasMoved`(agent: var AgentObj) =
   agent.moved = true
 
 proc `=destroy`*(agentObj: AgentObj) =
-  let xid: WeakRef[Agent] = WeakRef[Agent](pt: cast[Agent](addr agentObj))
-  # This is pretty hacky, but we need to get the address of the original
-  # Agent ref object, which luckily is the same as `addr agent`
-  # of the agent 
+  let xid: WeakRef[Agent] = WeakRef[Agent](pt: cast[Agent](addr agentObj)) ##\
+    ## This is pretty hacky, but we need to get the address of the original
+    ## Agent (ref object) since it's used to unsubscribe from other agents in the actual code,
+    ## Luckily the agent address is the same as `addr agent` of the agent object here.
 
-  echo "\ndestroy: agent: ",
+  echo "destroying agent: ",
           " pt: ", xid.toPtr.repr,
           " freed: ", agentObj.freed,
           " moved: ", agentObj.moved,
-          " lstCnt: ", xid[].subscribers.len(),
-          " (th: ", getThreadId(), ")"
+          " lstCnt: ", xid[].subscribers.len()
   when defined(debug):
     if agentObj.moved:
       raise newException(Defect, "moved!")
@@ -70,11 +69,6 @@ proc `=destroy`*(agentObj: AgentObj) =
 proc moveToThread*[T: Agent](
     agentTy: T,
 ): AgentProxy[T] =
-  if not isUniqueRef(agentTy):
-    raise newException(
-      AccessViolationDefect,
-      "agent must be unique and not shared to be passed to another thread!",
-    )
   let
     proxy = AgentProxy[T](
     )
@@ -87,9 +81,7 @@ suite "threaded agent slots":
   test "sigil object thread runner":
 
     block:
-      var
-        b = Counter.new()
-      echo "thread runner!", " (th: ", getThreadId(), ")"
+      var b = Counter.new()
       let bp: AgentProxy[Counter] = b.moveToThread()
     
     GC_fullCollect()
