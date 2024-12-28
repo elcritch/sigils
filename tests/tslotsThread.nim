@@ -176,9 +176,7 @@ suite "threaded agent slots":
       check a.value == 628
 
   test "sigil object thread runner (loop)":
-    # if false:
-    
-    block:
+    if false:
       startLocalThread()
       let thread = newSigilThread()
       thread.start()
