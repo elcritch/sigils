@@ -76,11 +76,23 @@ type
   Signal*[S] = AgentProcTy[S]
   SignalTypes* = distinct object
 
+when defined(nimscript):
+  proc getId*(a: Agent): SigilId =
+    a.debugId
+
+  var lastUId {.compileTime.}: int = 1
+else:
+  proc getId*[T: Agent](a: WeakRef[T]): SigilId =
+    cast[SigilId](a.toPtr())
+
+  proc getId*(a: Agent): SigilId =
+    cast[SigilId](cast[pointer](a))
+
 method removeSubscriptionsFor*(
     self: Agent, subscriber: WeakRef[Agent]
 ) {.base, gcsafe, raises: [].} =
   ## Route's an rpc request. 
-  echo "freeing removeSubscriptionsFor ", " self:id: ", cast[int](cast[pointer](self))
+  echo "freeing removeSubscriptionsFor ", " self:id: ", $self.getId()
   var delSigs: seq[SigilName]
   var toDel: seq[Subscription]
   for signal, subscriptions in self.subscribers.mpairs():
@@ -141,18 +153,6 @@ proc `$`*[T: Agent](obj: WeakRef[T]): string =
   result &= "{id: "
   result &= obj.getId().pointer
   result &= "}"
-
-when defined(nimscript):
-  proc getId*(a: Agent): SigilId =
-    a.debugId
-
-  var lastUId {.compileTime.}: int = 1
-else:
-  proc getId*[T: Agent](a: WeakRef[T]): SigilId =
-    cast[int](a.toPtr())
-
-  proc getId*(a: Agent): SigilId =
-    cast[int](cast[pointer](a))
 
 proc hash*(a: Agent): Hash =
   hash(a.getId())
@@ -217,4 +217,4 @@ method callMethod*(
     slot(ctx, req.params)
     let res = rpcPack(true)
 
-    result = SigilResponse(kind: Response, id: req.origin, result: res)
+    result = SigilResponse(kind: Response, id: req.origin.int, result: res)

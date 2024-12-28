@@ -1,4 +1,4 @@
-import tables
+import std/[tables, strutils]
 import variant
 import stack_strings
 
@@ -40,7 +40,7 @@ type
     Unsupported = 23
     # rtpMax = 23 # numbers less than this store in single mpack/cbor byte
 
-  SigilId* = int
+  SigilId* = distinct int
 
   SigilName* = StackString[48]
 
@@ -68,6 +68,9 @@ type
     code*: int
     msg*: string
     stacktrace*: seq[string]
+
+proc `$`*(id: SigilId): string =
+  id.int.toHex()
 
 proc pack*[T](ss: var Variant, val: sink T) =
   # echo "Pack Type: ", getTypeId(T), " <- ", typeof(val)
@@ -99,13 +102,13 @@ proc rpcUnpack*[T](obj: var T, ss: SigilParams) =
 proc wrapResponse*(id: SigilId, resp: SigilParams, kind = Response): SigilResponse =
   # echo "WRAP RESP: ", id, " kind: ", kind
   result.kind = kind
-  result.id = id
+  result.id = id.int
   result.result = resp
 
 proc wrapResponseError*(id: SigilId, err: SigilError): SigilResponse =
   echo "WRAP ERROR: ", id, " err: ", err.repr
   result.kind = Error
-  result.id = id
+  result.id = id.int
   result.result = rpcPack(err)
 
 template packResponse*(res: SigilResponse): Variant =

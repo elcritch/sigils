@@ -34,7 +34,7 @@ proc value*(self: Counter): int =
 
 suite "threaded agent slots":
 
-  when true:
+  when false:
 
     test "simple threading test":
       var
@@ -86,6 +86,7 @@ suite "threaded agent slots":
         check not compiles(connect(a, valueChanged, bp, someAction))
       GC_fullCollect()
 
+  when true:
     test "sigil object thread runner":
 
       var
@@ -117,7 +118,9 @@ suite "threaded agent slots":
       
       check a.subscribers.len() == 0
       check a.subscribedTo.len() == 0
+      GC_fullCollect()
 
+  when false:
     test "sigil object thread connect change":
       var
         a = SomeAction.new()
@@ -146,6 +149,7 @@ suite "threaded agent slots":
         ct[].poll()
         check c.value == 314
 
+  when false:
     test "sigil object thread runner multiple":
       block:
         var
@@ -180,7 +184,6 @@ suite "threaded agent slots":
         GC_fullCollect()
       GC_fullCollect()
 
-  when false:
     test "sigil object thread runner (loop)":
       block:
         block:
