@@ -139,6 +139,8 @@ template removeSubscription*(
       subscription.tgt[].unregisterSubscriber(xid)
 
 proc `=wasMoved`(agent: var AgentObj) =
+  let xid: WeakRef[Agent] = WeakRef[Agent](pt: cast[pointer](addr agent))
+  echo "agent was moved", " pt: ", xid.toPtr.repr
   agent.moved = true
 
 proc `=destroy`*(agent: AgentObj) =
@@ -151,7 +153,7 @@ proc `=destroy`*(agent: AgentObj) =
           " lstCnt: ", xid[].subscribers.len(),
           " subscribedTo: ", xid[].subscribedTo.len(),
           " (th: ", getThreadId(), ")"
-  # echo "destroy: agent:st: ", getStackTrace()
+  echo "destroy: agent:st: ", getStackTrace()
   when defined(debug) and false:
     echo "destroy: agent: ", agent.moved, " freed: ", agent.freed
     if agent.moved:
@@ -159,8 +161,8 @@ proc `=destroy`*(agent: AgentObj) =
     echo "destroy: agent: ", agent.moved, " freed: ", agent.freed
     if agent.freed:
       raise newException(Defect, "already freed!")
-    xid[].freed = true
-  
+
+  xid[].freed = true
   if xid.toRef().subscribedTo.len() > 0:
     xid.toRef().subscribedTo.unsubscribe(xid)
   if xid.toRef().subscribers.len() > 0:
