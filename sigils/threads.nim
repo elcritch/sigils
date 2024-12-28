@@ -150,9 +150,8 @@ proc findSubscribedToSignals(
     subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]
 ): Table[SigilName, OrderedSet[Subscription]] =
   ## remove myself from agents I'm subscribed to
-  # echo "subscribed: ", xid[].subscribed.toSeq.mapIt(it[].debugId).repr
   for obj in subscribedTo:
-    # echo "freeing subscribed: ", obj[].debugId
+    echo "freeing subscribed: ", obj[].getId()
     var toAdd = initOrderedSet[Subscription]()
     for signal, subscriberPairs in obj[].subscribers.mpairs():
       for item in subscriberPairs:
