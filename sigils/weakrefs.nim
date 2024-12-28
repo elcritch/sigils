@@ -1,3 +1,4 @@
+import std/[hashes, isolation]
 
 type WeakRef*[T] {.acyclic.} = object
   # pt* {.cursor.}: T
@@ -14,7 +15,7 @@ proc toPtr*[T](obj: WeakRef[T]): pointer =
 proc hash*[T](obj: WeakRef[T]): Hash =
   result = hash cast[pointer](obj.pt)
 
-proc toRef*[T: ref](obj: WeakRef[T]): lent T =
+proc toRef*[T: ref](obj: WeakRef[T]): T =
   result = cast[T](obj)
 
 proc toRef*[T: ref](obj: T): T =

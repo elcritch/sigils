@@ -1,5 +1,6 @@
 import std/[unittest, sequtils]
 import sigils
+import sigils/weakrefs
 
 type
   Counter* = ref object of Agent
