@@ -98,7 +98,7 @@ method removeSubscriptionsFor*(
   for signal, subscriptions in self.subscribers.mpairs():
     echo "freeing subs ", signal
     toDel.setLen(0)
-    for subscription in subscriptions :
+    for subscription in subscriptions:
       if subscription.tgt == subscriber:
         toDel.add(subscription)
         # echo "agentRemoved: ", "tgt: ", xid.toPtr.repr, " id: ", agent.debugId, " obj: ", obj[].debugId, " name: ", signal
