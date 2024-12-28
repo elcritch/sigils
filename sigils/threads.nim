@@ -160,7 +160,10 @@ proc findSubscribedToSignals(
           # echo "agentRemoved: ", "tgt: ", xid.toPtr.repr, " id: ", agent.debugId, " obj: ", obj[].debugId, " name: ", signal
       result[signal] = move toAdd
 
-proc moveToThread*[T: Agent, R: SigilThreadBase](agentTy: T, thread: SharedPtr[R]): AgentProxy[T] =
+proc moveToThread*[T: Agent, R: SigilThreadBase](
+    agentTy: T,
+    thread: SharedPtr[R]
+): AgentProxy[T] =
   ## move agent to another thread
   if not isUniqueRef(agentTy):
     raise newException(
@@ -184,8 +187,8 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](agentTy: T, thread: SharedPtr[R
   agent[].subscribedTo.unsubscribe(agent)
   agent[].subscribers.removeSubscription(agent)
 
-  agent[].subscribedTo.clear()
-  agent[].subscribers.clear()
+  # agent[].subscribedTo.clear()
+  # agent[].subscribers.clear()
 
   # update add proxy to listen to agents I am subscribed to
   # so they'll send my proxy events which the remote thread
@@ -203,6 +206,7 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](agentTy: T, thread: SharedPtr[R
       # echo "signal: ", signal, " subscriber: ", tgt.getId
       proxy.addSubscription(signal, sub.tgt.toRef, sub.slot)
   
+  GC_ref(agentTy)
   thread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Move, item: agentTy))
 
   return proxy

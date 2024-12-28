@@ -19,7 +19,7 @@ when defined(nimscript) or defined(useJsonSerde):
   import std/json
   export json
 
-type SigilParams* = object ## implementation specific -- handles data buffer
+type SigilParams* {.acyclic.} = object ## implementation specific -- handles data buffer
   when defined(nimscript) or defined(useJsonSerde):
     buf*: JsonNode
   else:

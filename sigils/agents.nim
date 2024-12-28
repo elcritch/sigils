@@ -24,7 +24,7 @@ export sets
 export options
 export variant
 
-type WeakRef*[T] = object
+type WeakRef*[T] {.acyclic.} = object
   # pt* {.cursor.}: T
   pt*: pointer
   ## type alias descring a weak ref that *must* be cleaned
@@ -61,6 +61,9 @@ type
   AgentObj = object of RootObj
     subscribers*: Table[SigilName, OrderedSet[Subscription]] ## agents listening to me
     subscribedTo*: HashSet[WeakRef[Agent]] ## agents I'm listening to
+    when defined(debug):
+      freed*: bool
+      moved*: bool
 
   Agent* = ref object of AgentObj
 
@@ -92,11 +95,11 @@ method removeSubscriptionsFor*(
     self: Agent, subscriber: WeakRef[Agent]
 ) {.base, gcsafe, raises: [].} =
   ## Route's an rpc request. 
-  echo "freeing removeSubscriptionsFor ", " self:id: ", $self.getId()
+  echo "removeSubscriptionsFor ", " self:id: ", $self.getId()
   var delSigs: seq[SigilName]
   var toDel: seq[Subscription]
   for signal, subscriptions in self.subscribers.mpairs():
-    echo "freeing subs ", signal
+    echo "removeSubscriptionsFor subs ", signal
     toDel.setLen(0)
     for subscription in subscriptions:
       if subscription.tgt == subscriber:
@@ -135,18 +138,37 @@ template removeSubscription*(
     for subscription in subscriptions:
       subscription.tgt[].unregisterSubscriber(xid)
 
+proc `=wasMoved`(agent: var AgentObj) =
+  agent.moved = true
+
 proc `=destroy`*(agent: AgentObj) =
   let xid: WeakRef[Agent] = WeakRef[Agent](pt: cast[pointer](addr agent))
 
-  echo "\ndestroy: agent: ", " pt: ", xid.toPtr.repr, " lstCnt: ", xid[].subscribers.len(), " subscribedTo: ", xid[].subscribedTo.len()
+  echo "\ndestroy: agent: ",
+          " pt: ", xid.toPtr.repr,
+          " freed: ", agent.freed,
+          " moved: ", agent.moved,
+          " lstCnt: ", xid[].subscribers.len(),
+          " subscribedTo: ", xid[].subscribedTo.len(),
+          " (th: ", getThreadId(), ")"
+  # echo "destroy: agent:st: ", getStackTrace()
+  when defined(debug):
+    echo "destroy: agent: ", agent.moved, " freed: ", agent.freed
+    if agent.moved:
+      raise newException(Defect, "moved!")
+    echo "destroy: agent: ", agent.moved, " freed: ", agent.freed
+    if agent.freed:
+      raise newException(Defect, "already freed!")
+    xid[].freed = true
   xid.toRef().subscribedTo.unsubscribe(xid)
   xid.toRef().subscribers.removeSubscription(xid)
 
-  xid[].subscribers.clear()
-  xid[].subscribedTo.clear()
+  # xid[].subscribers[].clear()
+  # xid[].subscribedTo[].clear()
 
   `=destroy`(xid[].subscribers)
   `=destroy`(xid[].subscribedTo)
+  echo "finished destroy: agent: ", " pt: ", xid.toPtr.repr
 
 proc `$`*[T: Agent](obj: WeakRef[T]): string =
   result = $(T)
