@@ -26,13 +26,6 @@ type
 
   Agent* = ref object of AgentObj
 
-  AgentProc* = proc(context: Agent, params: string) {.nimcall.}
-
-  AgentProxyShared* {.acyclic.} = ref object of Agent
-    remote*: WeakRef[Agent]
-
-  AgentProxy*[T] = ref object of AgentProxyShared
-
 proc `=wasMoved`(agent: var AgentObj) =
   let xid: WeakRef[Agent] = WeakRef[Agent](pt: cast[Agent](addr agent))
   echo "agent was moved", " pt: ", xid.toPtr.repr
@@ -43,15 +36,12 @@ proc `=destroy`*(agentObj: AgentObj) =
     ## This is pretty hacky, but we need to get the address of the original
     ## Agent (ref object) since it's used to unsubscribe from other agents in the actual code,
     ## Luckily the agent address is the same as `addr agent` of the agent object here.
-
   echo "destroying agent: ",
           " pt: ", xid.toPtr.repr,
           " freed: ", agentObj.freed,
           " moved: ", agentObj.moved,
           " lstCnt: ", xid[].subscribers.len()
   when defined(debug):
-    if agentObj.moved:
-      raise newException(Defect, "moved!")
     if agentObj.freed:
       raise newException(Defect, "already freed!")
 
@@ -66,13 +56,6 @@ proc `=destroy`*(agentObj: AgentObj) =
   `=destroy`(xid[].subscribers)
   echo "finished destroy: agent: ", " pt: ", xid.toPtr.repr
 
-proc moveToThread*[T: Agent](
-    agentTy: T,
-): AgentProxy[T] =
-  let
-    proxy = AgentProxy[T](
-    )
-
 type
   Counter* = ref object of Agent
     value: int
@@ -82,6 +65,5 @@ suite "threaded agent slots":
 
     block:
       var b = Counter.new()
-      let bp: AgentProxy[Counter] = b.moveToThread()
     
     GC_fullCollect()
