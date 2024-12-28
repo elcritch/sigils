@@ -89,8 +89,7 @@ suite "threaded agent slots":
   when true:
     test "sigil object thread runner":
 
-      var
-        a = SomeAction.new()
+      # var a = SomeAction.new()
 
       let thread = newSigilThread()
       thread.start()
@@ -102,7 +101,7 @@ suite "threaded agent slots":
         echo "thread runner!", " (th: ", getThreadId(), ")"
         # echo "obj a: ", a.unsafeWeakRef
         # echo "obj b: ", b.unsafeWeakRef
-        echo "obj a: ", a.getId
+        # echo "obj a: ", a.getId
         echo "obj b: ", b.getId
 
         let bp: AgentProxy[Counter] = b.moveToThread(thread)

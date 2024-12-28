@@ -154,8 +154,8 @@ proc `=destroy`*(agent: AgentObj) =
           " subscribedTo: ", xid[].subscribedTo.len(),
           " (th: ", getThreadId(), ")"
   echo "destroy: agent:st: ", getStackTrace()
-  when defined(debug) and false:
-    echo "destroy: agent: ", agent.moved, " freed: ", agent.freed
+  when defined(debug):
+    # echo "destroy: agent: ", agent.moved, " freed: ", agent.freed
     if agent.moved:
       raise newException(Defect, "moved!")
     echo "destroy: agent: ", agent.moved, " freed: ", agent.freed
