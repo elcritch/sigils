@@ -99,10 +99,10 @@ proc unsubscribe*(subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]) =
     obj[].removeSubscriptionsFor(xid)
 
 template removeSubscription*(
-    subscribers: var Table[SigilName, OrderedSet[Subscription]], xid: WeakRef[Agent]
+    subscribers: Table[SigilName, OrderedSet[Subscription]], xid: WeakRef[Agent]
 ) =
   ## remove myself from agents listening to me
-  for signal, subscriptions in subscribers.mpairs():
+  for signal, subscriptions in subscribers.pairs():
     # echo "freeing signal: ", signal, " subscribers: ", subscriberPairs
     for subscription in subscriptions:
       subscription.tgt[].unregisterSubscriber(xid)
