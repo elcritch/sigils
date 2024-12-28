@@ -96,7 +96,7 @@ suite "agent weak refs":
     echo "finishing outer block "
     # check x.subscribedTo.len() == 0
     echo "y:subscribers: ", y.subscribers
-    echo "y:subscribed: ", y.subscribedTo.mapIt(it)
+    # echo "y:subscribed: ", y.subscribedTo.mapIt(it)
     # check x.subscribers["valueChanged"].len() == 0
     check y.subscribers.len() == 0
     check y.subscribedTo.len() == 0
