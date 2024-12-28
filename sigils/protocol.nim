@@ -70,7 +70,7 @@ type
     stacktrace*: seq[string]
 
 proc `$`*(id: SigilId): string =
-  id.int.toHex()
+  id.int.toHex(16)
 
 proc pack*[T](ss: var Variant, val: sink T) =
   # echo "Pack Type: ", getTypeId(T), " <- ", typeof(val)
