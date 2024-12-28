@@ -1,6 +1,4 @@
 import std/tables
-import std/sets
-import std/hashes
 import threading/smartptrs
 import threading/channels
 import std/unittest
