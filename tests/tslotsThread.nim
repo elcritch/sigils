@@ -71,7 +71,6 @@ suite "threaded agent slots":
       check b.value == 1337
       check c.value == 1337
 
-  when false:
     test "threaded connect":
       block:
         var
@@ -121,6 +120,7 @@ suite "threaded agent slots":
       check a.subscribedTo.len() == 0
       GC_fullCollect()
 
+  when false:
     test "sigil object thread connect change":
       var
         a = SomeAction.new()
@@ -148,8 +148,8 @@ suite "threaded agent slots":
         let ct = getCurrentSigilThread()
         ct[].poll()
         check c.value == 314
+      GC_fullCollect()
 
-  when false:
     test "sigil object thread runner multiple":
       block:
         var
