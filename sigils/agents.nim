@@ -107,31 +107,21 @@ template removeSubscription*(
     for subscription in subscriptions:
       subscription.tgt[].unregisterSubscriber(xid)
 
-proc `=wasMoved`(agent: var AgentObj) =
-  let xid: WeakRef[Agent] = WeakRef[Agent](pt: cast[pointer](addr agent))
-  echo "agent was moved", " pt: ", xid.toPtr.repr
-  agent.moved = true
-
 proc `=destroy`*(agent: AgentObj) {.forbids: [DestructorUnsafe].} =
   let xid: WeakRef[Agent] = WeakRef[Agent](pt: cast[pointer](addr agent))
 
-  echo "\ndestroy: agent: ",
-          " pt: ", xid.toPtr.repr,
-          " freed: ", agent.freed,
-          " moved: ", agent.moved,
-          " lstCnt: ", xid[].subscribers.len(),
-          " subscribedTo: ", xid[].subscribedTo.len(),
-          " (th: ", getThreadId(), ")"
-  echo "destroy: agent:st: ", getStackTrace()
+  # echo "\ndestroy: agent: ",
+  #         " pt: ", xid.toPtr.repr,
+  #         " freed: ", agent.freed,
+  #         " moved: ", agent.moved,
+  #         " lstCnt: ", xid[].subscribers.len(),
+  #         " subscribedTo: ", xid[].subscribedTo.len(),
+  #         " (th: ", getThreadId(), ")"
   when defined(debug):
-    # echo "destroy: agent: ", agent.moved, " freed: ", agent.freed
-    if agent.moved:
-      raise newException(Defect, "moved!")
-    echo "destroy: agent: ", agent.moved, " freed: ", agent.freed
     if agent.freed:
       raise newException(Defect, "already freed!")
+    xid[].freed = true
 
-  xid[].freed = true
   agent.subscribedTo.unsubscribe(xid)
   agent.subscribers.removeSubscription(xid)
 
