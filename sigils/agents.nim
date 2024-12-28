@@ -68,7 +68,7 @@ method removeSubscriptionsFor*(
   var delSigs: seq[SigilName]
   var toDel: seq[Subscription]
   for signal, subscriptions in self.subscribers.mpairs():
-    echo "removeSubscriptionsFor subs ", signal
+    echo "removeSubscriptionsFor subs sig: ", signal
     toDel.setLen(0)
     for subscription in subscriptions:
       if subscription.tgt == subscriber:
