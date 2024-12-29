@@ -108,13 +108,17 @@ method removeSubscriptionsFor*(
     self: AgentProxyShared, subscriber: WeakRef[Agent]
 ) {.gcsafe, raises: [].} =
   echo "removeSubscriptionsFor:proxy:", " self:id: ", $self.getId()
-  removeSubscriptionsForImpl(self, subscriber)
+  withLock self.lock:
+    echo "removeSubscriptionsFor:proxy:ready:", " self:id: ", $self.getId()
+    removeSubscriptionsForImpl(self, subscriber)
 
 method unregisterSubscriber*(
     self: AgentProxyShared, listener: WeakRef[Agent]
 ) {.gcsafe, raises: [].} =
   echo "unregisterSubscriber:proxy:", " self:id: ", $self.getId()
-  unregisterSubscriberImpl(self, listener)
+  withLock self.lock:
+    echo "unregisterSubscriber:proxy:ready:", " self:id: ", $self.getId()
+    unregisterSubscriberImpl(self, listener)
 
 proc newSigilThread*(): SigilThread =
   result = newSharedPtr(isolate SigilThreadObj())
@@ -190,6 +194,7 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
       outbound: thread[].inputs,
       inbound: ct[].inputs,
     )
+  proxy.lock.initLock()
 
   # handle things subscribed to `agent`, ie the inverse
   var
