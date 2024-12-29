@@ -104,6 +104,16 @@ method callMethod*(
     if not res:
       raise newException(AgentSlotError, "error sending signal to thread")
 
+method removeSubscriptionsFor*(
+    self: AgentProxyShared, subscriber: WeakRef[Agent]
+) {.gcsafe, raises: [].} =
+  echo "removeSubscriptionsFor:proxy:", " self:id: ", $self.getId()
+
+method unregisterSubscriber*(
+    self: AgentProxyShared, listener: WeakRef[Agent]
+) {.gcsafe, raises: [].} =
+  echo "unregisterSubscriber:proxy:", " self:id: ", $self.getId()
+
 proc newSigilThread*(): SigilThread =
   result = newSharedPtr(isolate SigilThreadObj())
   result[].inputs = newSigilChan()

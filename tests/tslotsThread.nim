@@ -135,7 +135,7 @@ suite "threaded agent slots":
         echo "a.subscribedTo: ", a.subscribedTo
       GC_fullCollect()
 
-  when false:
+  when true:
     test "sigil object thread connect change":
       var
         a = SomeAction.new()
@@ -199,7 +199,7 @@ suite "threaded agent slots":
         GC_fullCollect()
       GC_fullCollect()
 
-  when false:
+  when true:
     test "sigil object thread runner (loop)":
       block:
         block:
