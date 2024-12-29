@@ -64,7 +64,6 @@ template removeSubscriptionsForImpl*(
     self: Agent, subscriber: WeakRef[Agent]
 ) =
   ## Route's an rpc request. 
-  echo "removeSubscriptionsFor:agent: ", " self:id: ", $self.getId()
   var delSigs: seq[SigilName]
   var toDel: seq[Subscription]
   for signal, subscriptions in self.subscribers.mpairs():
@@ -84,12 +83,12 @@ template removeSubscriptionsForImpl*(
 method removeSubscriptionsFor*(
     self: Agent, subscriber: WeakRef[Agent]
 ) {.base, gcsafe, raises: [].} =
+  echo "removeSubscriptionsFor:agent: ", " self:id: ", $self.getId()
   removeSubscriptionsForImpl(self, subscriber)
 
 template unregisterSubscriberImpl*(
     self: Agent, listener: WeakRef[Agent]
 ) =
-  echo "unregisterSubscriber:agent: ", " self:id: ", $self.getId()
   # echo "\unregisterSubscriber: ", subscriber.tgt
   # echo "\tlisterners:subscribed ", subscriber.tgt[].subscribed
   assert listener in self.subscribedTo
