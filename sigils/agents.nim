@@ -124,9 +124,8 @@ proc `=destroy`*(agent: AgentObj) {.forbids: [DestructorUnsafe].} =
   echo "\ndestroy: agent: ",
           " pt: ", xid.toPtr.repr,
           " freed: ", agent.freed,
-          " moved: ", agent.moved,
-          " lstCnt: ", xid[].subscribers.len(),
-          " subscribedTo: ", xid[].subscribedTo.len(),
+          " subs: ", xid[].subscribers.len(),
+          " subTo: ", xid[].subscribedTo.len(),
           " (th: ", getThreadId(), ")"
   when defined(debug):
     if agent.freed:
