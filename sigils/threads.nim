@@ -94,12 +94,12 @@ method callMethod*(
     if not res:
       raise newException(AgentSlotError, "error sending signal to thread")
   elif slot == localSlot:
-    echo "\execReq:agentProxy:localSlot: ", "req: ", req
+    echo "\texecReq:agentProxy:localSlot: ", "req: ", req
     # echo "\texecuteRequest:agentProxy: ", "inbound: ", $proxy.inbound, " proxy: ", proxy.getId()
     callSlots(proxy, req)
   else:
     var msg = unsafeIsolate ThreadSignal(kind: Call, slot: slot, req: req, tgt: proxy.remote)
-    echo "\execReq:agentProxy:other: ", "outbound: ", proxy.outbound.repr
+    echo "\texecReq:agentProxy:other: ", "outbound: ", proxy.outbound.repr
     let res = proxy.outbound[].trySend(msg)
     if not res:
       raise newException(AgentSlotError, "error sending signal to thread")
