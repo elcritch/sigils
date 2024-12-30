@@ -30,7 +30,7 @@ import std/[terminal, strformat, sequtils]
 export strformat
 
 var
-  pcolors* = ForegroundColor.items.toSeq()
+  pcolors* = [fgRed, fgYellow, fgBlue, fgMagenta, fgCyan]
   pcnt*: int = 0
   pidx* {.threadVar.}: int
 
@@ -39,7 +39,11 @@ proc print*(msgs: varargs[string, `$`]) {.raises: [].} =
     try:
       let
         tid = getThreadId()
-        color = pcolors[pidx+2]
+        color =
+          if pidx == 0:
+            fgGreen
+          else:
+            pcolors[pidx mod pcolors.len()]
       var msg = ""
       for m in msgs: msg &= m
       stdout.styledWriteLine color, msg, {styleBright}, &" [th: {$tid}]"

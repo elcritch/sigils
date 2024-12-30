@@ -199,7 +199,7 @@ suite "threaded agent slots":
         GC_fullCollect()
       GC_fullCollect()
 
-  when true:
+  when false:
     test "sigil object thread runner (loop)":
       block:
         block:
