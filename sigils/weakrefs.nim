@@ -20,7 +20,6 @@ proc hash*[T](obj: WeakRef[T]): Hash =
 template withRef*[T: ref](obj: WeakRef[T], name, blk: untyped) =
   block:
     var `name` {.inject.} = obj[]
-    # GC_ref(result) ## since we create a new ref instance "out of nowhere" we need to manually GC_ref it
     `blk`
 
 template withRef*[T: ref](obj: T, name, blk: untyped) =
