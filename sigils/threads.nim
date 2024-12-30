@@ -99,7 +99,7 @@ method callMethod*(
     callSlots(proxy, req)
   else:
     var msg = unsafeIsolate ThreadSignal(kind: Call, slot: slot, req: req, tgt: proxy.remote)
-    print "\texecReq:agentProxy:other: ", "outbound: ", proxy.outbound.repr
+    print "\texecReq:agentProxy:other: ", "outbound: " #, proxy.outbound.repr
     let res = proxy.outbound[].trySend(msg)
     if not res:
       raise newException(AgentSlotError, "error sending signal to thread")
