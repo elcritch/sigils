@@ -26,6 +26,18 @@ export sets
 export options
 export variant
 
+import std/[terminal, strformat, sequtils]
+export strformat
+
+const
+  pcolors = ForegroundColor.items.toSeq()
+
+proc print*(msg: varargs[string]) =
+  let
+    tid = getThreadId()
+    color = pcolors[tid mod pcolors.len()]
+  stdout.styledWriteLine color, "REGULAR send try:", &" (th: {$tid})"
+
 type
   AgentObj = object of RootObj
     subscribers*: Table[SigilName, OrderedSet[Subscription]] ## agents listening to me

@@ -60,20 +60,20 @@ proc newSigilChan*(): SigilChan =
   result[].ch = newChan[ThreadSignal]()
 
 method trySend*(chan: SigilChanRef, msg: sink Isolated[ThreadSignal]): bool {.gcsafe, base.} =
-  echo "REGULAR send try: ", " (th: ", getThreadId(), ")"
+  print &"REGULAR send try:"
   result = chan[].ch.trySend(msg)
-  echo "REGULAR send try: res: ", result, " (th: ", getThreadId(), ")"
+  print &"REGULAR send try: res: {$result}"
 
 method send*(chan: SigilChanRef, msg: sink Isolated[ThreadSignal]) {.gcsafe, base.} =
-  echo "REGULAR send: ", " (th: ", getThreadId(), ")"
+  print "REGULAR send: "
   chan[].ch.send(msg)
 
 method tryRecv*(chan: SigilChanRef, dst: var ThreadSignal): bool {.gcsafe, base.} =
-  echo "REGULAR recv try: ", " (th: ", getThreadId(), ")"
+  print "REGULAR recv try:"
   result = chan[].ch.tryRecv(dst)
 
 method recv*(chan: SigilChanRef): ThreadSignal {.gcsafe, base.} =
-  echo "REGULAR recv: ", " (th: ", getThreadId(), ")"
+  print "REGULAR recv: "
   chan[].ch.recv()
 
 proc remoteSlot*(context: Agent, params: SigilParams) {.nimcall.} =
@@ -85,7 +85,7 @@ method callMethod*(
     proxy: AgentProxyShared, req: SigilRequest, slot: AgentProc
 ): SigilResponse {.gcsafe, effectsOf: slot.} =
   ## Route's an rpc request. 
-  echo "threaded Agent!", " (th: ", getThreadId(), ")"
+  print "threaded Agent!"
   if slot == remoteSlot:
     var msg = unsafeIsolate ThreadSignal(kind: Call, slot: localSlot, req: req, tgt: proxy.Agent.unsafeWeakRef)
     echo "\texecReq:agentProxy:remoteSlot: ", "req: ", req
