@@ -39,22 +39,23 @@ plock.initLock()
 
 proc print*(msgs: varargs[string, `$`]) {.raises: [].} =
   {.cast(gcsafe).}:
-    try:
-      # withLock plock:
-      block:
-        let
-          tid = getThreadId()
-          color =
-            if pidx == 0:
-              fgGreen
-            else:
-              pcolors[pidx mod pcolors.len()]
-        var msg = ""
-        for m in msgs: msg &= m
-        stdout.styledWriteLine color, msg, {styleBright}, &" [th: {$tid}]"
-        stdout.flushFile()
-    except IOError:
-      discard
+    when false:
+      try:
+        # withLock plock:
+        block:
+          let
+            tid = getThreadId()
+            color =
+              if pidx == 0:
+                fgGreen
+              else:
+                pcolors[pidx mod pcolors.len()]
+          var msg = ""
+          for m in msgs: msg &= m
+          stdout.styledWriteLine color, msg, {styleBright}, &" [th: {$tid}]"
+          stdout.flushFile()
+      except IOError:
+        discard
 
 type
   AgentObj = object of RootObj
