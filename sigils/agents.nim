@@ -39,7 +39,7 @@ plock.initLock()
 
 proc print*(msgs: varargs[string, `$`]) {.raises: [].} =
   {.cast(gcsafe).}:
-    when true:
+    when false:
       try:
         # withLock plock:
         block:
