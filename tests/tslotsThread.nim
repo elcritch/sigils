@@ -35,7 +35,8 @@ proc setValue*(self: Counter, value: int) {.slot.} =
     self.value = value
   # echo "setValue:subscribers: ", self.subscribers.pairs().toSeq.mapIt(it[1].mapIt(cast[pointer](it.tgt.getId()).repr))
   # echo "setValue:subscribedTo: ", $self.subscribedTo.toSeq.mapIt(cast[pointer](it.getId()).repr)
-  # os.sleep(10)
+  if value == 756809:
+    os.sleep(100)
   emit self.updated(self.value)
 
 proc completed*(self: SomeAction, final: int) {.slot.} =
@@ -190,13 +191,13 @@ suite "threaded agent slots":
           connect(a, valueChanged, bp, setValue)
           connect(bp, updated, a, SomeAction.completed())
 
-          emit a.valueChanged(271)
+          emit a.valueChanged(756809)
           emit a.valueChanged(628)
 
           # thread.thread.joinThread(500)
           let ct = getCurrentSigilThread()
           ct[].poll()
-          check a.value == 271
+          check a.value == 756809
           ct[].poll()
           check a.value == 628
         GC_fullCollect()
