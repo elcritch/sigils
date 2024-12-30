@@ -68,7 +68,7 @@ proc newSigilChan*(): SigilChan =
   let cref = SigilChanRef.new()
   GC_ref(cref)
   result = newSharedPtr(unsafeIsolate cref)
-  result[].ch = newChan[ThreadSignal](1000)
+  result[].ch = newChan[ThreadSignal](1_000)
 
 method trySend*(chan: SigilChanRef, msg: sink Isolated[ThreadSignal]): bool {.gcsafe, base.} =
   debugPrint &"REGULAR send try:"
@@ -129,7 +129,8 @@ method removeSubscriptionsFor*(
     self: AgentProxyShared, subscriber: WeakRef[Agent]
 ) {.gcsafe, raises: [].} =
   debugPrint "removeSubscriptionsFor:proxy:", " self:id: ", $self.getId()
-  withLock self.obj.lock:
+  # withLock self.obj.lock:
+  block:
     debugPrint "removeSubscriptionsFor:proxy:ready:", " self:id: ", $self.getId()
     removeSubscriptionsForImpl(self, subscriber)
 
@@ -137,7 +138,8 @@ method unregisterSubscriber*(
     self: AgentProxyShared, listener: WeakRef[Agent]
 ) {.gcsafe, raises: [].} =
   debugPrint "unregisterSubscriber:proxy:", " self:id: ", self.getId()
-  withLock self.obj.lock:
+  # withLock self.obj.lock:
+  block:
     debugPrint "unregisterSubscriber:proxy:ready:", " self:id: ", self.getId()
     unregisterSubscriberImpl(self, listener)
 
