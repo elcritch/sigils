@@ -41,8 +41,8 @@ proc debugPrint*(msgs: varargs[string, `$`]) {.raises: [].} =
   {.cast(gcsafe).}:
     when true:
       try:
-        # withLock plock:
-        block:
+        withLock plock:
+        # block:
           let
             tid = getThreadId()
             color =

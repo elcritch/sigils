@@ -254,6 +254,7 @@ suite "threaded agent slots":
 
               emit a.valueChanged(314)
 
+              # os.sleep(100)
               # let ct = getCurrentSigilThread()
               # ct[].poll()
               # check a.value == 314
