@@ -154,7 +154,7 @@ proc `=destroy`*(agent: AgentObj) {.forbids: [DestructorUnsafe].} =
           &" freed: {agent.freed}",
           &" subs: {xid[].subscribers.len()}",
           &" subTo: {xid[].subscribedTo.len()}"
-  print "destroy agent: ", getStackTrace().replace("\n", "\n\t")
+  # print "destroy agent: ", getStackTrace().replace("\n", "\n\t")
   when defined(debug):
     if agent.freed:
       raise newException(Defect, "already freed!")
