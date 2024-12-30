@@ -29,14 +29,19 @@ export variant
 import std/[terminal, strformat, sequtils]
 export strformat
 
-const
-  pcolors = ForegroundColor.items.toSeq()
+var
+  pcolors* = ForegroundColor.items.toSeq()
+  pcnt*: int = 0
+  pidx* {.threadVar.}: int
 
-proc print*(msg: varargs[string]) =
-  let
-    tid = getThreadId()
-    color = pcolors[tid mod pcolors.len()]
-  stdout.styledWriteLine color, "REGULAR send try:", &" (th: {$tid})"
+proc print*(msgs: varargs[string]) =
+  {.cast(gcsafe).}:
+    let
+      tid = getThreadId()
+      color = pcolors[pidx+1]
+    for msg in msgs:
+      stdout.styledWrite color, msg
+    stdout.styledWriteLine color, &" (th: {$tid})"
 
 type
   AgentObj = object of RootObj

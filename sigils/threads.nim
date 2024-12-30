@@ -146,6 +146,8 @@ proc execute*(thread: SigilThread) =
 
 proc runThread*(thread: SigilThread) {.thread.} =
   {.cast(gcsafe).}:
+    pcnt.inc
+    pidx = pcnt
     assert localSigilThread.isNone()
     localSigilThread = some(thread)
     echo "Sigil worker thread waiting!", " (", getThreadId(), ")"
