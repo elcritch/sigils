@@ -30,7 +30,7 @@ import std/[terminal, strutils, strformat, sequtils]
 export strformat
 
 var
-  pcolors* = [fgRed, fgYellow, fgBlue, fgMagenta, fgCyan]
+  pcolors* = [fgRed, fgYellow, fgMagenta, fgCyan]
   pcnt*: int = 0
   pidx* {.threadVar.}: int
   plock: Lock
@@ -47,7 +47,7 @@ proc print*(msgs: varargs[string, `$`]) {.raises: [].} =
             tid = getThreadId()
             color =
               if pidx == 0:
-                fgGreen
+                fgBlue
               else:
                 pcolors[pidx mod pcolors.len()]
           var msg = ""
