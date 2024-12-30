@@ -212,24 +212,24 @@ suite "threaded agent slots":
           thread.start()
           # echo "thread runner!", " (th: ", getThreadId(), ")"
 
-          for idx in 1 .. 10_000:
-            var
-              a = SomeAction.new()
-              b = Counter.new()
+          for idx in 1 .. 100:
+            var a = SomeAction.new()
+            for idx in 1 .. 100:
+              var b = Counter.new()
 
-            let bp: AgentProxy[Counter] = b.moveToThread(thread)
+              let bp: AgentProxy[Counter] = b.moveToThread(thread)
 
-            connect(a, valueChanged, bp, setValue)
-            connect(bp, updated, a, SomeAction.completed())
+              connect(a, valueChanged, bp, setValue)
+              connect(bp, updated, a, SomeAction.completed())
 
-            emit a.valueChanged(314)
-            emit a.valueChanged(271)
+              emit a.valueChanged(314)
+              emit a.valueChanged(271)
 
-            let ct = getCurrentSigilThread()
-            ct[].poll()
-            check a.value == 314
-            ct[].poll()
-            check a.value == 271
-          GC_fullCollect()
+              let ct = getCurrentSigilThread()
+              ct[].poll()
+              check a.value == 314
+              ct[].poll()
+              check a.value == 271
+            GC_fullCollect()
         GC_fullCollect()
       GC_fullCollect()
