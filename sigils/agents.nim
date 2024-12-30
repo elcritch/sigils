@@ -33,21 +33,25 @@ var
   pcolors* = [fgRed, fgYellow, fgBlue, fgMagenta, fgCyan]
   pcnt*: int = 0
   pidx* {.threadVar.}: int
+  plock: Lock
+
+plock.initLock()
 
 proc print*(msgs: varargs[string, `$`]) {.raises: [].} =
   {.cast(gcsafe).}:
     try:
-      let
-        tid = getThreadId()
-        color =
-          if pidx == 0:
-            fgGreen
-          else:
-            pcolors[pidx mod pcolors.len()]
-      var msg = ""
-      for m in msgs: msg &= m
-      stdout.styledWriteLine color, msg, {styleBright}, &" [th: {$tid}]"
-      stdout.flushFile()
+      withLock plock:
+        let
+          tid = getThreadId()
+          color =
+            if pidx == 0:
+              fgGreen
+            else:
+              pcolors[pidx mod pcolors.len()]
+        var msg = ""
+        for m in msgs: msg &= m
+        stdout.styledWriteLine color, msg, {styleBright}, &" [th: {$tid}]"
+        stdout.flushFile()
     except IOError:
       discard
 
