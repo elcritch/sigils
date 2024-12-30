@@ -33,7 +33,7 @@ proc setValue*(self: Counter, value: int) {.slot.} =
     self.value = value
   print "setValue:subscribers: ",
     self.subscribers.pairs().toSeq.mapIt(it[1].mapIt(cast[pointer](it.tgt.getId()).repr))
-  print "setValue:subscribedTo: ", self.subscribedTo.toSeq.mapIt(cast[pointer](it.getId()).repr)
+  print "setValue:subscribedTo: ", $self.subscribedTo.toSeq.mapIt(cast[pointer](it.getId()).repr)
   emit self.updated(self.value)
 
 proc completed*(self: SomeAction, final: int) {.slot.} =
