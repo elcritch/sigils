@@ -129,8 +129,7 @@ method unregisterSubscriber*(
     self: Agent, listener: WeakRef[Agent]
 ) {.base, gcsafe, raises: [].} =
   print &"unregisterSubscriber:agent: self: {$self.getId()}"
-  assert listener in self.subscribedTo
-  self.subscribedTo.excl(listener)
+  unregisterSubscriberImpl(self, listener)
 
 proc unsubscribe*(subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]) =
   ## unsubscribe myself from agents I'm subscribed (listening) to

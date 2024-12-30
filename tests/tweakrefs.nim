@@ -151,6 +151,9 @@ test "weak refs":
     echo "Y::count:end: ", y.head().count()
     check x.head().count() == 1
 
+    # var xx = x
+    # check x.head().count() == 2
+
   echo "done with y"
   echo "X::count: ", x.head().count()
   check x.subscribers.len() == 0
