@@ -17,12 +17,15 @@ type
 
   SigilChan* = SharedPtr[SigilChanRef]
 
-  AgentProxyShared* = ref object of Agent
+  AgentProxySharedObj* = object
     remote*: WeakRef[Agent]
     outbound*: SigilChan
     inbound*: SigilChan
     listeners*: HashSet[Agent]
     lock*: Lock
+
+  AgentProxyShared* = ref object of Agent
+    obj*: AgentProxySharedObj
 
   AgentProxy*[T] = ref object of AgentProxyShared
 
@@ -53,11 +56,19 @@ type
 
 var localSigilThread {.threadVar.}: Option[SigilThread]
 
+proc `=destroy`*(obj: var AgentProxySharedObj) =
+  debugPrint "PROXY Destroy: ", addr(obj).pointer.repr
+  `=destroy`(obj.remote)
+  `=destroy`(obj.outbound)
+  `=destroy`(obj.inbound)
+  `=destroy`(obj.listeners)
+  `=destroy`(obj.lock)
+
 proc newSigilChan*(): SigilChan =
   let cref = SigilChanRef.new()
   GC_ref(cref)
   result = newSharedPtr(unsafeIsolate cref)
-  result[].ch = newChan[ThreadSignal]()
+  result[].ch = newChan[ThreadSignal](500)
 
 method trySend*(chan: SigilChanRef, msg: sink Isolated[ThreadSignal]): bool {.gcsafe, base.} =
   debugPrint &"REGULAR send try:"
@@ -85,12 +96,16 @@ method callMethod*(
     proxy: AgentProxyShared, req: SigilRequest, slot: AgentProc
 ): SigilResponse {.gcsafe, effectsOf: slot.} =
   ## Route's an rpc request. 
-  debugPrint "threaded Agent!"
+  debugPrint "call method: isnil: ", proxy.isNil
+  debugPrint "call method: ", proxy.getId()
   if slot == remoteSlot:
     var msg = unsafeIsolate ThreadSignal(kind: Call, slot: localSlot, req: req, tgt: proxy.Agent.unsafeWeakRef)
-    debugPrint "\texecReq:agentProxy:remoteSlot: ", "req: ", req
+    debugPrint "\t proxy:callMethod: ", "req: ", req
+    debugPrint "\t proxy:callMethod: ", "msg: ", msg
+    debugPrint "\t proxy:callMethod: ", "proxy: ", addr(proxy.obj).pointer.repr
     # echo "\texecuteRequest:agentProxy: ", "inbound: ", $proxy.inbound, " proxy: ", proxy.getId()
-    let res = proxy.inbound[].trySend(msg)
+    assert not proxy.freed
+    let res = proxy.obj.inbound[].trySend(msg)
     if not res:
       raise newException(AgentSlotError, "error sending signal to thread")
   elif slot == localSlot:
@@ -98,9 +113,9 @@ method callMethod*(
     # echo "\texecuteRequest:agentProxy: ", "inbound: ", $proxy.inbound, " proxy: ", proxy.getId()
     callSlots(proxy, req)
   else:
-    var msg = unsafeIsolate ThreadSignal(kind: Call, slot: slot, req: req, tgt: proxy.remote)
+    var msg = unsafeIsolate ThreadSignal(kind: Call, slot: slot, req: req, tgt: proxy.obj.remote)
     debugPrint "\texecReq:agentProxy:other: ", "outbound: " #, proxy.outbound.repr
-    let res = proxy.outbound[].trySend(msg)
+    let res = proxy.obj.outbound[].trySend(msg)
     if not res:
       raise newException(AgentSlotError, "error sending signal to thread")
 
@@ -108,7 +123,7 @@ method removeSubscriptionsFor*(
     self: AgentProxyShared, subscriber: WeakRef[Agent]
 ) {.gcsafe, raises: [].} =
   debugPrint "removeSubscriptionsFor:proxy:", " self:id: ", $self.getId()
-  withLock self.lock:
+  withLock self.obj.lock:
     debugPrint "removeSubscriptionsFor:proxy:ready:", " self:id: ", $self.getId()
     removeSubscriptionsForImpl(self, subscriber)
 
@@ -116,7 +131,7 @@ method unregisterSubscriber*(
     self: AgentProxyShared, listener: WeakRef[Agent]
 ) {.gcsafe, raises: [].} =
   debugPrint "unregisterSubscriber:proxy:", " self:id: ", self.getId()
-  withLock self.lock:
+  withLock self.obj.lock:
     debugPrint "unregisterSubscriber:proxy:ready:", " self:id: ", self.getId()
     unregisterSubscriberImpl(self, listener)
 
@@ -134,7 +149,8 @@ proc poll*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
     thread.references.excl(sig.deref[])
   of Call:
     debugPrint "call: ", $sig.tgt[].getId()
-    discard sig.tgt[].callMethod(sig.req, sig.slot)
+    withRef sig.tgt, tgt:
+      let res = tgt.callMethod(sig.req, sig.slot)
 
 proc poll*[R: SigilThreadBase](thread: var R) =
   let sig = thread.inputs[].recv()
@@ -192,11 +208,13 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
     ct = getCurrentSigilThread()
     agent = agentTy.unsafeWeakRef.asAgent()
     proxy = AgentProxy[T](
-      remote: agent,
-      outbound: thread[].inputs,
-      inbound: ct[].inputs,
+      obj: AgentProxySharedObj(
+        remote: agent,
+        outbound: thread[].inputs,
+        inbound: ct[].inputs,
+      )
     )
-  proxy.lock.initLock()
+  proxy.obj.lock.initLock()
 
   # handle things subscribed to `agent`, ie the inverse
   var
@@ -226,6 +244,7 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
       proxy.addSubscription(signal, sub.tgt[], sub.slot)
   
   thread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Move, item: agentTy))
+  thread[].references.incl(proxy)
 
   return proxy
 
