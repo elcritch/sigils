@@ -228,6 +228,6 @@ suite "threaded agent slots":
             check a.value == 314
             ct[].poll()
             check a.value == 271
-          # GC_fullCollect()
-        # GC_fullCollect()
+          GC_fullCollect()
+        GC_fullCollect()
       GC_fullCollect()
