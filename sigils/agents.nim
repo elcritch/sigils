@@ -93,7 +93,7 @@ template removeSubscriptionsForImpl*(
     for subscription in subscriptions:
       if subscription.tgt == subscriber:
         toDel.add(subscription)
-        # echo "agentRemoved: ", "tgt: ", xid.toPtr.repr, " id: ", agent.debugId, " obj: ", obj[].debugId, " name: ", signal
+        # print "agentRemoved: ", "tgt: ", xid.toPtr.repr, " id: ", agent.debugId, " obj: ", obj[].debugId, " name: ", signal
     for subscription in toDel:
       subscriptions.excl(subscription)
     if subscriptions.len() == 0:
@@ -104,17 +104,17 @@ template removeSubscriptionsForImpl*(
 method removeSubscriptionsFor*(
     self: Agent, subscriber: WeakRef[Agent]
 ) {.base, gcsafe, raises: [].} =
-  echo "removeSubscriptionsFor:agent: ", " self:id: ", $self.getId()
+  print "removeSubscriptionsFor:agent: ", " self:id: ", $self.getId()
   removeSubscriptionsForImpl(self, subscriber)
 
 template unregisterSubscriberImpl*(
     self: Agent, listener: WeakRef[Agent]
 ) =
-  # echo "\unregisterSubscriber: ", subscriber.tgt
-  # echo "\tlisterners:subscribed ", subscriber.tgt[].subscribed
+  # print "\unregisterSubscriber: ", subscriber.tgt
+  # print "\tlisterners:subscribed ", subscriber.tgt[].subscribed
   assert listener in self.subscribedTo
   self.subscribedTo.excl(listener)
-  # echo "\tlisterners:subscribed ", subscriber.tgt[].subscribed
+  # print "\tlisterners:subscribed ", subscriber.tgt[].subscribed
 
 method unregisterSubscriber*(
     self: Agent, listener: WeakRef[Agent]
@@ -157,7 +157,7 @@ proc `=destroy`*(agent: AgentObj) {.forbids: [DestructorUnsafe].} =
 
   `=destroy`(xid[].subscribers)
   `=destroy`(xid[].subscribedTo)
-  echo "finished destroy: agent: ", " pt: ", xid.toPtr.repr
+  print "finished destroy: agent: ", " pt: ", xid.toPtr.repr
 
 proc `$`*[T: Agent](obj: WeakRef[T]): string =
   result = $(T)
