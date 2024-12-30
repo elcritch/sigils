@@ -148,7 +148,7 @@ template removeSubscription*(
       subscription.tgt[].unregisterSubscriber(xid)
 
 proc `=destroy`*(agent: AgentObj) {.forbids: [DestructorUnsafe].} =
-  let xid: WeakRef[Agent] = WeakRef[Agent](pt: cast[pointer](addr agent))
+  let xid: WeakRef[Agent] = WeakRef[Agent](pt: cast[Agent](addr agent))
 
   print &"destroy: agent: ",
           &" pt: {xid.toPtr.repr}",
@@ -192,7 +192,7 @@ template getSubscriptions*(
   obj.getSubscriptions(sig)
 
 proc unsafeWeakRef*[T: Agent](obj: T): WeakRef[T] =
-  result = WeakRef[T](pt: cast[pointer](obj))
+  result = WeakRef[T](pt: obj)
 
 proc asAgent*[T: Agent](obj: WeakRef[T]): WeakRef[Agent] =
   result = WeakRef[Agent](pt: obj.pt)

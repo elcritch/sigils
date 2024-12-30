@@ -3,10 +3,9 @@ import std/[hashes, isolation]
 type DestructorUnsafe* = object ## input/output effect
 
 type WeakRef*[T] {.acyclic.} = object
-  # pt* {.cursor.}: T
-  pt*: pointer
-  ## type alias descring a weak ref that *must* be cleaned
-  ## up when an object is set to be destroyed
+  pt* {.cursor.}: T
+  ## type alias descring a weak ref that *must* be cleaned up
+  ## when it's actual object is set to be destroyed
 
 template `[]`*[T](r: WeakRef[T]): lent T =
   cast[T](r.pt)
