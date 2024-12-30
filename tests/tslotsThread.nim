@@ -233,3 +233,32 @@ suite "threaded agent slots":
             GC_fullCollect()
         GC_fullCollect()
       GC_fullCollect()
+
+  when true:
+    test "sigil object one way runner (loop)":
+      block:
+        block:
+          startLocalThread()
+          let thread = newSigilThread()
+          thread.start()
+          # echo "thread runner!", " (th: ", getThreadId(), ")"
+
+          for idx in 1 .. 10:
+            var a = SomeAction.new()
+            for idx in 1 .. 10:
+              var b = Counter.new()
+
+              let bp: AgentProxy[Counter] = b.moveToThread(thread)
+
+              connect(a, valueChanged, bp, setValue)
+
+              emit a.valueChanged(314)
+
+              # let ct = getCurrentSigilThread()
+              # ct[].poll()
+              # check a.value == 314
+              # ct[].poll()
+              # check a.value == 271
+            GC_fullCollect()
+        GC_fullCollect()
+      GC_fullCollect()
