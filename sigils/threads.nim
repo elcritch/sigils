@@ -118,7 +118,9 @@ method unregisterSubscriber*(
   print "unregisterSubscriber:proxy:", " self:id: ", self.getId()
   withLock self.lock:
     print "unregisterSubscriber:proxy:ready:", " self:id: ", self.getId()
-    unregisterSubscriberImpl(self, listener)
+    # unregisterSubscriberImpl(self, listener)
+    assert listener in self.subscribedTo
+    self.subscribedTo.excl(listener)
 
 proc newSigilThread*(): SigilThread =
   result = newSharedPtr(isolate SigilThreadObj())

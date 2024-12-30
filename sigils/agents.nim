@@ -26,7 +26,7 @@ export sets
 export options
 export variant
 
-import std/[terminal, strformat, sequtils]
+import std/[terminal, strutils, strformat, sequtils]
 export strformat
 
 var
@@ -128,13 +128,12 @@ method unregisterSubscriber*(
     self: Agent, listener: WeakRef[Agent]
 ) {.base, gcsafe, raises: [].} =
   print &"unregisterSubscriber:agent: self: {$self.getId()}"
-  unregisterSubscriberImpl(self, listener)
+  assert listener in self.subscribedTo
+  self.subscribedTo.excl(listener)
 
 proc unsubscribe*(subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]) =
   ## unsubscribe myself from agents I'm subscribed (listening) to
-  print &"unsubscribe: {$subscribedTo.len}"
-  for obj in subscribedTo.items():
-    print &"unsubscribe:obj: {$obj}"
+  print &"unsubscribe: {$subscribedTo.len()}"
   for obj in subscribedTo:
     obj[].removeSubscriptionsFor(xid)
 
@@ -155,6 +154,7 @@ proc `=destroy`*(agent: AgentObj) {.forbids: [DestructorUnsafe].} =
           &" freed: {agent.freed}",
           &" subs: {xid[].subscribers.len()}",
           &" subTo: {xid[].subscribedTo.len()}"
+  print "destroy agent: ", getStackTrace().replace("\n", "\n\t")
   when defined(debug):
     if agent.freed:
       raise newException(Defect, "already freed!")

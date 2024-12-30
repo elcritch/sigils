@@ -19,25 +19,25 @@ type
   InnerC = object
 
 proc `=destroy`*(obj: InnerA) = 
-  print "destroyed InnerA!"
+  echo "destroyed InnerA!"
 
 proc `=destroy`*(obj: InnerC) = 
-  print "destroyed InnerC!"
+  echo "destroyed InnerC!"
 
 proc valueChanged*(tp: SomeAction, val: int) {.signal.}
 proc updated*(tp: Counter, final: int) {.signal.}
 
 proc setValue*(self: Counter, value: int) {.slot.} =
-  print "setValue! ", value, " id: ", self.getId().int, " (th: ", getThreadId(), ")"
+  echo "setValue! ", value, " id: ", self.getId().int, " (th: ", getThreadId(), ")"
   if self.value != value:
     self.value = value
-  print "setValue:subscribers: ",
+  echo "setValue:subscribers: ",
     self.subscribers.pairs().toSeq.mapIt(it[1].mapIt(cast[pointer](it.tgt.getId()).repr))
-  print "setValue:subscribedTo: ", $self.subscribedTo.toSeq.mapIt(cast[pointer](it.getId()).repr)
+  echo "setValue:subscribedTo: ", $self.subscribedTo.toSeq.mapIt(cast[pointer](it.getId()).repr)
   emit self.updated(self.value)
 
 proc completed*(self: SomeAction, final: int) {.slot.} =
-  print "Action done! final: ", final, " id: ", self.getId().int, " (th: ", getThreadId(), ")"
+  echo "Action done! final: ", final, " id: ", self.getId().int, " (th: ", getThreadId(), ")"
   self.value = final
 
 proc value*(self: Counter): int =
@@ -82,6 +82,7 @@ suite "threaded agent slots":
       check b.value == 1337
       check c.value == 1337
 
+  when true:
     test "threaded connect":
       block:
         var
