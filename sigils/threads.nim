@@ -107,17 +107,17 @@ method callMethod*(
 method removeSubscriptionsFor*(
     self: AgentProxyShared, subscriber: WeakRef[Agent]
 ) {.gcsafe, raises: [].} =
-  echo "removeSubscriptionsFor:proxy:", " self:id: ", $self.getId()
+  print "removeSubscriptionsFor:proxy:", " self:id: ", $self.getId()
   withLock self.lock:
-    echo "removeSubscriptionsFor:proxy:ready:", " self:id: ", $self.getId()
+    print "removeSubscriptionsFor:proxy:ready:", " self:id: ", $self.getId()
     removeSubscriptionsForImpl(self, subscriber)
 
 method unregisterSubscriber*(
     self: AgentProxyShared, listener: WeakRef[Agent]
 ) {.gcsafe, raises: [].} =
-  echo "unregisterSubscriber:proxy:", " self:id: ", $self.getId()
+  print "unregisterSubscriber:proxy:", " self:id: ", self.getId()
   withLock self.lock:
-    echo "unregisterSubscriber:proxy:ready:", " self:id: ", $self.getId()
+    print "unregisterSubscriber:proxy:ready:", " self:id: ", self.getId()
     unregisterSubscriberImpl(self, listener)
 
 proc newSigilThread*(): SigilThread =
@@ -125,7 +125,7 @@ proc newSigilThread*(): SigilThread =
   result[].inputs = newSigilChan()
 
 proc poll*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
-  echo "thread got request: ", sig, " (th: ", getThreadId(), ")"
+  print "thread got request: ", $sig
   case sig.kind:
   of Move:
     var item = sig.item
@@ -133,7 +133,7 @@ proc poll*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
   of Deref:
     thread.references.excl(sig.deref.toRef)
   of Call:
-    echo "call: ", sig.tgt[].getId()
+    print "call: ", $sig.tgt[].getId()
     discard sig.tgt[].callMethod(sig.req, sig.slot)
 
 proc poll*[R: SigilThreadBase](thread: var R) =
@@ -150,7 +150,7 @@ proc runThread*(thread: SigilThread) {.thread.} =
     pidx = pcnt
     assert localSigilThread.isNone()
     localSigilThread = some(thread)
-    echo "Sigil worker thread waiting!", " (", getThreadId(), ")"
+    print "Sigil worker thread waiting!"
     thread.execute()
 
 proc start*(thread: SigilThread) =
@@ -169,7 +169,7 @@ proc findSubscribedToSignals(
 ): Table[SigilName, OrderedSet[Subscription]] =
   ## remove myself from agents I'm subscribed to
   for obj in subscribedTo:
-    echo "freeing subscribed: ", obj[].getId()
+    print "freeing subscribed: ", $obj[].getId()
     var toAdd = initOrderedSet[Subscription]()
     for signal, subscriberPairs in obj[].subscribers.mpairs():
       for item in subscriberPairs:

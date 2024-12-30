@@ -34,15 +34,15 @@ var
   pcnt*: int = 0
   pidx* {.threadVar.}: int
 
-proc print*(msgs: varargs[string]) {.raises: [].} =
+proc print*(msgs: varargs[string, `$`]) {.raises: [].} =
   {.cast(gcsafe).}:
     try:
       let
         tid = getThreadId()
-        color = pcolors[pidx+3]
+        color = pcolors[pidx+2]
       var msg = ""
       for m in msgs: msg &= m
-      stdout.styledWriteLine color, msg, &" (th: {$tid})"
+      stdout.styledWriteLine color, msg, {styleBright}, &" [th: {$tid}]"
       stdout.flushFile()
     except IOError:
       discard
