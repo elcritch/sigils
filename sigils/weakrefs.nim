@@ -19,6 +19,8 @@ proc hash*[T](obj: WeakRef[T]): Hash =
 
 proc toRef*[T: ref](obj: WeakRef[T]): T {.tags: [DestructorUnsafe].} =
   result = cast[T](obj)
+  ## since we create a new ref instance "out of nowhere" we need to manually GC_ref it
+  GC_ref(result)
 
 proc toRef*[T: ref](obj: T): T =
   result = obj
