@@ -34,14 +34,18 @@ var
   pcnt*: int = 0
   pidx* {.threadVar.}: int
 
-proc print*(msgs: varargs[string]) =
+proc print*(msgs: varargs[string]) {.raises: [].} =
   {.cast(gcsafe).}:
-    let
-      tid = getThreadId()
-      color = pcolors[pidx+1]
-    for msg in msgs:
-      stdout.styledWrite color, msg
-    stdout.styledWriteLine color, &" (th: {$tid})"
+    try:
+      let
+        tid = getThreadId()
+        color = pcolors[pidx+1]
+      var msg = ""
+      for m in msgs: msg &= m
+      stdout.styledWriteLine color, msg, &" (th: {$tid})"
+      stdout.flushFile()
+    except IOError:
+      discard
 
 type
   AgentObj = object of RootObj
@@ -84,7 +88,7 @@ template removeSubscriptionsForImpl*(
   var delSigs: seq[SigilName]
   var toDel: seq[Subscription]
   for signal, subscriptions in self.subscribers.mpairs():
-    print &"removeSubscriptionsFor subs sig: {$signal}"
+    print "removeSubscriptionsFor subs sig: ", $signal
     toDel.setLen(0)
     for subscription in subscriptions:
       if subscription.tgt == subscriber:
