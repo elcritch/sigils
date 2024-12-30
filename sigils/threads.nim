@@ -68,7 +68,7 @@ proc newSigilChan*(): SigilChan =
   let cref = SigilChanRef.new()
   GC_ref(cref)
   result = newSharedPtr(unsafeIsolate cref)
-  result[].ch = newChan[ThreadSignal](500)
+  result[].ch = newChan[ThreadSignal](1000)
 
 method trySend*(chan: SigilChanRef, msg: sink Isolated[ThreadSignal]): bool {.gcsafe, base.} =
   debugPrint &"REGULAR send try:"
@@ -105,9 +105,12 @@ method callMethod*(
     debugPrint "\t proxy:callMethod: ", "proxy: ", addr(proxy.obj).pointer.repr
     # echo "\texecuteRequest:agentProxy: ", "inbound: ", $proxy.inbound, " proxy: ", proxy.getId()
     assert not proxy.freed
-    let res = proxy.obj.inbound[].trySend(msg)
-    if not res:
-      raise newException(AgentSlotError, "error sending signal to thread")
+    when defined(sigilBlock):
+      let res = proxy.obj.inbound[].trySend(msg)
+      if not res:
+        raise newException(AgentSlotError, "error sending signal to thread")
+    else:
+      proxy.obj.inbound[].send(msg)
   elif slot == localSlot:
     debugPrint "\texecReq:agentProxy:localSlot: ", "req: ", req
     # echo "\texecuteRequest:agentProxy: ", "inbound: ", $proxy.inbound, " proxy: ", proxy.getId()
@@ -115,9 +118,12 @@ method callMethod*(
   else:
     var msg = unsafeIsolate ThreadSignal(kind: Call, slot: slot, req: req, tgt: proxy.obj.remote)
     debugPrint "\texecReq:agentProxy:other: ", "outbound: " #, proxy.outbound.repr
-    let res = proxy.obj.outbound[].trySend(msg)
-    if not res:
-      raise newException(AgentSlotError, "error sending signal to thread")
+    when defined(sigilBlock):
+      let res = proxy.obj.outbound[].trySend(msg)
+      if not res:
+        raise newException(AgentSlotError, "error sending signal to thread")
+    else:
+      proxy.obj.outbound[].send(msg)
 
 method removeSubscriptionsFor*(
     self: AgentProxyShared, subscriber: WeakRef[Agent]
@@ -139,7 +145,7 @@ proc newSigilThread*(): SigilThread =
   result = newSharedPtr(isolate SigilThreadObj())
   result[].inputs = newSigilChan()
 
-proc poll*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
+proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
   debugPrint "thread got request: ", $sig
   case sig.kind:
   of Move:
@@ -149,14 +155,24 @@ proc poll*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
     thread.references.excl(sig.deref[])
   of Call:
     debugPrint "call: ", $sig.tgt[].getId()
-    withRef sig.tgt, tgt:
-      let res = tgt.callMethod(sig.req, sig.slot)
+    assert not sig.tgt[].freed
+    let res = sig.tgt[].callMethod(sig.req, sig.slot)
 
 proc poll*[R: SigilThreadBase](thread: var R) =
   let sig = thread.inputs[].recv()
-  thread.poll(sig)
+  thread.exec(sig)
 
-proc execute*(thread: SigilThread) =
+proc tryPoll*[R: SigilThreadBase](thread: var R) =
+  var sig: ThreadSignal
+  if thread.inputs[].tryRecv(sig):
+    thread.exec(sig)
+
+proc pollAll*[R: SigilThreadBase](thread: var R) =
+  var sig: ThreadSignal
+  while thread.inputs[].tryRecv(sig):
+    thread.exec(sig)
+
+proc runForever*(thread: SigilThread) =
   while true:
     thread[].poll()
 
@@ -167,7 +183,7 @@ proc runThread*(thread: SigilThread) {.thread.} =
     assert localSigilThread.isNone()
     localSigilThread = some(thread)
     debugPrint "Sigil worker thread waiting!"
-    thread.execute()
+    thread.runForever()
 
 proc start*(thread: SigilThread) =
   createThread(thread[].thr, runThread, thread)

@@ -30,7 +30,7 @@ proc valueChanged*(tp: SomeAction, val: int) {.signal.}
 proc updated*(tp: Counter, final: int) {.signal.}
 
 proc setValue*(self: Counter, value: int) {.slot.} =
-  # echo "setValue! ", value, " id: ", self.getId().int, " (th: ", getThreadId(), ")"
+  echo "setValue! ", value, " id: ", self.getId().int, " (th: ", getThreadId(), ")"
   if self.value != value:
     self.value = value
   # echo "setValue:subscribers: ", self.subscribers.pairs().toSeq.mapIt(it[1].mapIt(cast[pointer](it.tgt.getId()).repr))
@@ -40,7 +40,7 @@ proc setValue*(self: Counter, value: int) {.slot.} =
   emit self.updated(self.value)
 
 proc completed*(self: SomeAction, final: int) {.slot.} =
-  # echo "Action done! final: ", final, " id: ", self.getId().int, " (th: ", getThreadId(), ")"
+  echo "Action done! final: ", final, " id: ", self.getId().int, " (th: ", getThreadId(), ")"
   self.value = final
 
 proc value*(self: Counter): int =
@@ -236,6 +236,7 @@ suite "threaded agent slots":
 
   when true:
     test "sigil object one way runner (loop)":
+      let ct = getCurrentSigilThread()
       block:
         block:
           startLocalThread()
@@ -245,7 +246,7 @@ suite "threaded agent slots":
 
           for idx in 1 .. 10:
             var a = SomeAction.new()
-            for idx in 1 .. 10:
+            for idx in 1 .. 1000:
               var b = Counter.new()
 
               let bp: AgentProxy[Counter] = b.moveToThread(thread)
@@ -260,6 +261,7 @@ suite "threaded agent slots":
               # check a.value == 314
               # ct[].poll()
               # check a.value == 271
+              ct[].pollAll()
             GC_fullCollect()
         GC_fullCollect()
       GC_fullCollect()
