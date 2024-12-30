@@ -37,7 +37,7 @@ var
 
 plock.initLock()
 
-proc print*(msgs: varargs[string, `$`]) {.raises: [].} =
+proc debugPrint*(msgs: varargs[string, `$`]) {.raises: [].} =
   {.cast(gcsafe).}:
     when false:
       try:
@@ -98,12 +98,12 @@ template removeSubscriptionsForImpl*(
   var delSigs: seq[SigilName]
   var toDel: seq[Subscription]
   for signal, subscriptions in self.subscribers.mpairs():
-    print "removeSubscriptionsFor subs sig: ", $signal
+    debugPrint "removeSubscriptionsFor subs sig: ", $signal
     toDel.setLen(0)
     for subscription in subscriptions:
       if subscription.tgt == subscriber:
         toDel.add(subscription)
-        # print "agentRemoved: ", "tgt: ", xid.toPtr.repr, " id: ", agent.debugId, " obj: ", obj[].debugId, " name: ", signal
+        # debugPrint "agentRemoved: ", "tgt: ", xid.toPtr.repr, " id: ", agent.debugId, " obj: ", obj[].debugId, " name: ", signal
     for subscription in toDel:
       subscriptions.excl(subscription)
     if subscriptions.len() == 0:
@@ -114,27 +114,27 @@ template removeSubscriptionsForImpl*(
 method removeSubscriptionsFor*(
     self: Agent, subscriber: WeakRef[Agent]
 ) {.base, gcsafe, raises: [].} =
-  print "removeSubscriptionsFor:agent: ", " self:id: ", $self.getId()
+  debugPrint "removeSubscriptionsFor:agent: ", " self:id: ", $self.getId()
   removeSubscriptionsForImpl(self, subscriber)
 
 template unregisterSubscriberImpl*(
     self: Agent, listener: WeakRef[Agent]
 ) =
-  # print "\unregisterSubscriber: ", subscriber.tgt
-  # print "\tlisterners:subscribed ", subscriber.tgt[].subscribed
+  # debugPrint "\unregisterSubscriber: ", subscriber.tgt
+  # debugPrint "\tlisterners:subscribed ", subscriber.tgt[].subscribed
   assert listener in self.subscribedTo
   self.subscribedTo.excl(listener)
-  # print "\tlisterners:subscribed ", subscriber.tgt[].subscribed
+  # debugPrint "\tlisterners:subscribed ", subscriber.tgt[].subscribed
 
 method unregisterSubscriber*(
     self: Agent, listener: WeakRef[Agent]
 ) {.base, gcsafe, raises: [].} =
-  print &"unregisterSubscriber:agent: self: {$self.getId()}"
+  debugPrint &"unregisterSubscriber:agent: self: {$self.getId()}"
   unregisterSubscriberImpl(self, listener)
 
 proc unsubscribe*(subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]) =
   ## unsubscribe myself from agents I'm subscribed (listening) to
-  print &"unsubscribe: {$subscribedTo.len()}"
+  debugPrint &"unsubscribe: {$subscribedTo.len()}"
   for obj in subscribedTo:
     obj[].removeSubscriptionsFor(xid)
 
@@ -150,12 +150,12 @@ template removeSubscription*(
 proc `=destroy`*(agent: AgentObj) {.forbids: [DestructorUnsafe].} =
   let xid: WeakRef[Agent] = WeakRef[Agent](pt: cast[Agent](addr agent))
 
-  print &"destroy: agent: ",
+  debugPrint &"destroy: agent: ",
           &" pt: {xid.toPtr.repr}",
           &" freed: {agent.freed}",
           &" subs: {xid[].subscribers.len()}",
           &" subTo: {xid[].subscribedTo.len()}"
-  # print "destroy agent: ", getStackTrace().replace("\n", "\n\t")
+  # debugPrint "destroy agent: ", getStackTrace().replace("\n", "\n\t")
   when defined(debug):
     if agent.freed:
       raise newException(Defect, "already freed!")
@@ -166,7 +166,7 @@ proc `=destroy`*(agent: AgentObj) {.forbids: [DestructorUnsafe].} =
 
   `=destroy`(xid[].subscribers)
   `=destroy`(xid[].subscribedTo)
-  print "finished destroy: agent: ", " pt: ", xid.toPtr.repr
+  debugPrint "finished destroy: agent: ", " pt: ", xid.toPtr.repr
 
 proc `$`*[T: Agent](obj: WeakRef[T]): string =
   result = $(T)

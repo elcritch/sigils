@@ -60,20 +60,20 @@ proc newSigilChan*(): SigilChan =
   result[].ch = newChan[ThreadSignal]()
 
 method trySend*(chan: SigilChanRef, msg: sink Isolated[ThreadSignal]): bool {.gcsafe, base.} =
-  print &"REGULAR send try:"
+  debugPrint &"REGULAR send try:"
   result = chan[].ch.trySend(msg)
-  print &"REGULAR send try: res: {$result}"
+  debugPrint &"REGULAR send try: res: {$result}"
 
 method send*(chan: SigilChanRef, msg: sink Isolated[ThreadSignal]) {.gcsafe, base.} =
-  print "REGULAR send: "
+  debugPrint "REGULAR send: "
   chan[].ch.send(msg)
 
 method tryRecv*(chan: SigilChanRef, dst: var ThreadSignal): bool {.gcsafe, base.} =
-  print "REGULAR recv try:"
+  debugPrint "REGULAR recv try:"
   result = chan[].ch.tryRecv(dst)
 
 method recv*(chan: SigilChanRef): ThreadSignal {.gcsafe, base.} =
-  print "REGULAR recv: "
+  debugPrint "REGULAR recv: "
   chan[].ch.recv()
 
 proc remoteSlot*(context: Agent, params: SigilParams) {.nimcall.} =
@@ -85,21 +85,21 @@ method callMethod*(
     proxy: AgentProxyShared, req: SigilRequest, slot: AgentProc
 ): SigilResponse {.gcsafe, effectsOf: slot.} =
   ## Route's an rpc request. 
-  print "threaded Agent!"
+  debugPrint "threaded Agent!"
   if slot == remoteSlot:
     var msg = unsafeIsolate ThreadSignal(kind: Call, slot: localSlot, req: req, tgt: proxy.Agent.unsafeWeakRef)
-    print "\texecReq:agentProxy:remoteSlot: ", "req: ", req
+    debugPrint "\texecReq:agentProxy:remoteSlot: ", "req: ", req
     # echo "\texecuteRequest:agentProxy: ", "inbound: ", $proxy.inbound, " proxy: ", proxy.getId()
     let res = proxy.inbound[].trySend(msg)
     if not res:
       raise newException(AgentSlotError, "error sending signal to thread")
   elif slot == localSlot:
-    print "\texecReq:agentProxy:localSlot: ", "req: ", req
+    debugPrint "\texecReq:agentProxy:localSlot: ", "req: ", req
     # echo "\texecuteRequest:agentProxy: ", "inbound: ", $proxy.inbound, " proxy: ", proxy.getId()
     callSlots(proxy, req)
   else:
     var msg = unsafeIsolate ThreadSignal(kind: Call, slot: slot, req: req, tgt: proxy.remote)
-    print "\texecReq:agentProxy:other: ", "outbound: " #, proxy.outbound.repr
+    debugPrint "\texecReq:agentProxy:other: ", "outbound: " #, proxy.outbound.repr
     let res = proxy.outbound[].trySend(msg)
     if not res:
       raise newException(AgentSlotError, "error sending signal to thread")
@@ -107,19 +107,19 @@ method callMethod*(
 method removeSubscriptionsFor*(
     self: AgentProxyShared, subscriber: WeakRef[Agent]
 ) {.gcsafe, raises: [].} =
-  print "removeSubscriptionsFor:proxy:", " self:id: ", $self.getId()
+  debugPrint "removeSubscriptionsFor:proxy:", " self:id: ", $self.getId()
   # withLock self.lock:
   block:
-    print "removeSubscriptionsFor:proxy:ready:", " self:id: ", $self.getId()
+    debugPrint "removeSubscriptionsFor:proxy:ready:", " self:id: ", $self.getId()
     removeSubscriptionsForImpl(self, subscriber)
 
 method unregisterSubscriber*(
     self: AgentProxyShared, listener: WeakRef[Agent]
 ) {.gcsafe, raises: [].} =
-  print "unregisterSubscriber:proxy:", " self:id: ", self.getId()
+  debugPrint "unregisterSubscriber:proxy:", " self:id: ", self.getId()
   # withLock self.lock:
   block:
-    print "unregisterSubscriber:proxy:ready:", " self:id: ", self.getId()
+    debugPrint "unregisterSubscriber:proxy:ready:", " self:id: ", self.getId()
     unregisterSubscriberImpl(self, listener)
 
 proc newSigilThread*(): SigilThread =
@@ -127,7 +127,7 @@ proc newSigilThread*(): SigilThread =
   result[].inputs = newSigilChan()
 
 proc poll*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
-  print "thread got request: ", $sig
+  debugPrint "thread got request: ", $sig
   case sig.kind:
   of Move:
     var item = sig.item
@@ -135,7 +135,7 @@ proc poll*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
   of Deref:
     thread.references.excl(sig.deref[])
   of Call:
-    print "call: ", $sig.tgt[].getId()
+    debugPrint "call: ", $sig.tgt[].getId()
     discard sig.tgt[].callMethod(sig.req, sig.slot)
 
 proc poll*[R: SigilThreadBase](thread: var R) =
@@ -152,7 +152,7 @@ proc runThread*(thread: SigilThread) {.thread.} =
     pidx = pcnt
     assert localSigilThread.isNone()
     localSigilThread = some(thread)
-    print "Sigil worker thread waiting!"
+    debugPrint "Sigil worker thread waiting!"
     thread.execute()
 
 proc start*(thread: SigilThread) =
@@ -171,7 +171,7 @@ proc findSubscribedToSignals(
 ): Table[SigilName, OrderedSet[Subscription]] =
   ## remove myself from agents I'm subscribed to
   for obj in subscribedTo:
-    print "freeing subscribed: ", $obj[].getId()
+    debugPrint "freeing subscribed: ", $obj[].getId()
     var toAdd = initOrderedSet[Subscription]()
     for signal, subscriberPairs in obj[].subscribers.mpairs():
       for item in subscriberPairs:
