@@ -40,7 +40,8 @@ plock.initLock()
 proc print*(msgs: varargs[string, `$`]) {.raises: [].} =
   {.cast(gcsafe).}:
     try:
-      withLock plock:
+      # withLock plock:
+      block:
         let
           tid = getThreadId()
           color =
