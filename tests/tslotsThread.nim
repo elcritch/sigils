@@ -209,7 +209,7 @@ suite "threaded agent slots":
           thread.start()
           # echo "thread runner!", " (th: ", getThreadId(), ")"
 
-          for idx in 1 .. 1_000:
+          for idx in 1 .. 10_000:
             var
               a = SomeAction.new()
               b = Counter.new()
