@@ -7,7 +7,13 @@ type AgentSlotError* = object of CatchableError
 
 proc callSlots*(obj: Agent | WeakRef[Agent], req: SigilRequest) {.gcsafe.} =
   {.cast(gcsafe).}:
-    let subscriptions = obj.toRef().getSubscriptions(req.procName)
+    let subscriptions =
+      when typeof(obj) is Agent:
+        obj.getSubscriptions(req.procName)
+      elif typeof(obj) is WeakRef[Agent]:
+        obj[].getSubscriptions(req.procName)
+      else:
+        {.error: "bad type".}
     # echo "call slots:req: ", req.repr
     # echo "call slots:all: ", req.procName, " ", " subscriptions: ", subscriptions
     for sub in subscriptions.items():
