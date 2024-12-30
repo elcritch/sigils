@@ -17,14 +17,16 @@ proc toPtr*[T](obj: WeakRef[T]): pointer =
 proc hash*[T](obj: WeakRef[T]): Hash =
   result = hash cast[pointer](obj.pt)
 
-template withRef*[T: ref](obj: WeakRef[T], name: untyped) =
+template withRef*[T: ref](obj: WeakRef[T], name, blk: untyped) =
   block:
-    var `name` {.inject.} = cast[T](obj)
-    # GC_ref(result)
-    ## since we create a new ref instance "out of nowhere" we need to manually GC_ref it
+    var `name` {.inject.} = obj[]
+    # GC_ref(result) ## since we create a new ref instance "out of nowhere" we need to manually GC_ref it
+    `blk`
 
-template withRef*[T: ref](obj: T, name: untyped) =
-  result = obj
+template withRef*[T: ref](obj: T, name, blk: untyped) =
+  block:
+    var `name` {.inject.} = obj
+    `blk`
 
 proc isolate*[T](obj: WeakRef[T]): Isolated[WeakRef[T]] =
   result = unsafeIsolate(obj)
