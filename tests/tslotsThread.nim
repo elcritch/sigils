@@ -252,7 +252,7 @@ suite "threaded agent slots":
 
               connect(a, valueChanged, bp, setValue)
 
-              emit a.valueChanged(314)
+              emit a.valueChanged(756809)
 
               # os.sleep(100)
               # let ct = getCurrentSigilThread()
