@@ -84,7 +84,7 @@ template removeSubscriptionsForImpl*(
   var delSigs: seq[SigilName]
   var toDel: seq[Subscription]
   for signal, subscriptions in self.subscribers.mpairs():
-    echo "removeSubscriptionsFor subs sig: ", signal
+    print &"removeSubscriptionsFor subs sig: {$signal}"
     toDel.setLen(0)
     for subscription in subscriptions:
       if subscription.tgt == subscriber:
@@ -115,14 +115,14 @@ template unregisterSubscriberImpl*(
 method unregisterSubscriber*(
     self: Agent, listener: WeakRef[Agent]
 ) {.base, gcsafe, raises: [].} =
-  echo "unregisterSubscriber:agent: ", " self:id: ", $self.getId()
+  print &"unregisterSubscriber:agent: self: {$self.getId()}"
   unregisterSubscriberImpl(self, listener)
 
 proc unsubscribe*(subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]) =
   ## unsubscribe myself from agents I'm subscribed (listening) to
-  echo "unsubscribe: ", subscribedTo.len
+  print &"unsubscribe: {$subscribedTo.len}"
   for obj in subscribedTo.items():
-    echo "unsubscribe:obj: ", $obj
+    print &"unsubscribe:obj: {$obj}"
   for obj in subscribedTo:
     obj[].removeSubscriptionsFor(xid)
 
@@ -138,12 +138,11 @@ template removeSubscription*(
 proc `=destroy`*(agent: AgentObj) {.forbids: [DestructorUnsafe].} =
   let xid: WeakRef[Agent] = WeakRef[Agent](pt: cast[pointer](addr agent))
 
-  echo "\ndestroy: agent: ",
-          " pt: ", xid.toPtr.repr,
-          " freed: ", agent.freed,
-          " subs: ", xid[].subscribers.len(),
-          " subTo: ", xid[].subscribedTo.len(),
-          " (th: ", getThreadId(), ")"
+  print &"destroy: agent: ",
+          &" pt: {xid.toPtr.repr}",
+          &" freed: {agent.freed}",
+          &" subs: {xid[].subscribers.len()}",
+          &" subTo: {xid[].subscribedTo.len()}"
   when defined(debug):
     if agent.freed:
       raise newException(Defect, "already freed!")
