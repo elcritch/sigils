@@ -108,8 +108,7 @@ method removeSubscriptionsFor*(
     self: AgentProxyShared, subscriber: WeakRef[Agent]
 ) {.gcsafe, raises: [].} =
   debugPrint "removeSubscriptionsFor:proxy:", " self:id: ", $self.getId()
-  # withLock self.lock:
-  block:
+  withLock self.lock:
     debugPrint "removeSubscriptionsFor:proxy:ready:", " self:id: ", $self.getId()
     removeSubscriptionsForImpl(self, subscriber)
 
@@ -117,8 +116,7 @@ method unregisterSubscriber*(
     self: AgentProxyShared, listener: WeakRef[Agent]
 ) {.gcsafe, raises: [].} =
   debugPrint "unregisterSubscriber:proxy:", " self:id: ", self.getId()
-  # withLock self.lock:
-  block:
+  withLock self.lock:
     debugPrint "unregisterSubscriber:proxy:ready:", " self:id: ", self.getId()
     unregisterSubscriberImpl(self, listener)
 
