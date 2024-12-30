@@ -19,25 +19,26 @@ type
   InnerC = object
 
 proc `=destroy`*(obj: InnerA) = 
-  echo "destroyed InnerA!"
+  # echo "destroyed InnerA!"
+  discard
 
 proc `=destroy`*(obj: InnerC) = 
-  echo "destroyed InnerC!"
+  # echo "destroyed InnerC!"
+  discard
 
 proc valueChanged*(tp: SomeAction, val: int) {.signal.}
 proc updated*(tp: Counter, final: int) {.signal.}
 
 proc setValue*(self: Counter, value: int) {.slot.} =
-  echo "setValue! ", value, " id: ", self.getId().int, " (th: ", getThreadId(), ")"
+  # echo "setValue! ", value, " id: ", self.getId().int, " (th: ", getThreadId(), ")"
   if self.value != value:
     self.value = value
-  echo "setValue:subscribers: ",
-    self.subscribers.pairs().toSeq.mapIt(it[1].mapIt(cast[pointer](it.tgt.getId()).repr))
-  echo "setValue:subscribedTo: ", $self.subscribedTo.toSeq.mapIt(cast[pointer](it.getId()).repr)
+  # echo "setValue:subscribers: ", self.subscribers.pairs().toSeq.mapIt(it[1].mapIt(cast[pointer](it.tgt.getId()).repr))
+  # echo "setValue:subscribedTo: ", $self.subscribedTo.toSeq.mapIt(cast[pointer](it.getId()).repr)
   emit self.updated(self.value)
 
 proc completed*(self: SomeAction, final: int) {.slot.} =
-  echo "Action done! final: ", final, " id: ", self.getId().int, " (th: ", getThreadId(), ")"
+  # echo "Action done! final: ", final, " id: ", self.getId().int, " (th: ", getThreadId(), ")"
   self.value = final
 
 proc value*(self: Counter): int =
