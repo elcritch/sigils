@@ -39,7 +39,7 @@ proc print*(msgs: varargs[string]) {.raises: [].} =
     try:
       let
         tid = getThreadId()
-        color = pcolors[pidx+1]
+        color = pcolors[pidx+3]
       var msg = ""
       for m in msgs: msg &= m
       stdout.styledWriteLine color, msg, &" (th: {$tid})"
