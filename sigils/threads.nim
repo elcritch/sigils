@@ -131,7 +131,7 @@ proc poll*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
     var item = sig.item
     thread.references.incl(item)
   of Deref:
-    thread.references.excl(sig.deref.toRef)
+    thread.references.excl(sig.deref[])
   of Call:
     print "call: ", $sig.tgt[].getId()
     discard sig.tgt[].callMethod(sig.req, sig.slot)
@@ -214,8 +214,8 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
   # will process
   for signal, subscriberPairs in oldSubscribedTo.mpairs():
     for sub in subscriberPairs:
-      let tgt = sub.tgt.toRef()
-      tgt.addSubscription(signal, proxy, sub.slot)
+      # let tgt = sub.tgt.toRef()
+      sub.tgt[].addSubscription(signal, proxy, sub.slot)
 
   # update my subscribers so I use a new proxy to send events
   # to them
@@ -223,7 +223,7 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
   for signal, subscriberPairs in oldSubscribers.mpairs():
     for sub in subscriberPairs:
       # echo "signal: ", signal, " subscriber: ", tgt.getId
-      proxy.addSubscription(signal, sub.tgt.toRef, sub.slot)
+      proxy.addSubscription(signal, sub.tgt[], sub.slot)
   
   thread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Move, item: agentTy))
 
