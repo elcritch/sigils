@@ -78,6 +78,7 @@ proc pack*[T](ss: var Variant, val: sink T) =
 
 proc unpack*[T](ss: Variant, obj: var T) =
   # if ss.ofType(T):
+  assert not ss.isNil
   obj = ss.get(T)
   # else:
   # raise newException(ConversionError, "couldn't convert to: " & $(T))

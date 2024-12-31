@@ -99,7 +99,8 @@ method callMethod*(
   debugPrint "call method: isnil: ", proxy.isNil
   debugPrint "call method: ", proxy.getId()
   if slot == remoteSlot:
-    var msg = unsafeIsolate ThreadSignal(kind: Call, slot: localSlot, req: req, tgt: proxy.Agent.unsafeWeakRef)
+    var req = req.deepCopy()
+    var msg = isolateRuntime ThreadSignal(kind: Call, slot: localSlot, req: move req, tgt: proxy.Agent.unsafeWeakRef)
     debugPrint "\t proxy:callMethod: ", "req: ", req
     debugPrint "\t proxy:callMethod: ", "msg: ", msg
     debugPrint "\t proxy:callMethod: ", "proxy: ", addr(proxy.obj).pointer.repr
@@ -116,7 +117,8 @@ method callMethod*(
     # echo "\texecuteRequest:agentProxy: ", "inbound: ", $proxy.inbound, " proxy: ", proxy.getId()
     callSlots(proxy, req)
   else:
-    var msg = unsafeIsolate ThreadSignal(kind: Call, slot: slot, req: req, tgt: proxy.obj.remote)
+    var req = req.deepCopy()
+    var msg = isolateRuntime ThreadSignal(kind: Call, slot: slot, req: move req, tgt: proxy.obj.remote)
     debugPrint "\texecReq:agentProxy:other: ", "outbound: " #, proxy.outbound.repr
     when defined(sigilBlock):
       let res = proxy.obj.outbound[].trySend(msg)
@@ -266,6 +268,8 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
       # echo "signal: ", signal, " subscriber: ", tgt.getId
       proxy.addSubscription(signal, sub.tgt[], sub.slot)
   
+  # GC_ref(agentTy)
+  # GC_ref(proxy)
   thread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Move, item: agentTy))
   thread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Move, item: proxy))
   # thread[].references.incl(proxy)

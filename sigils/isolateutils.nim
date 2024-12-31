@@ -1,4 +1,7 @@
+import std/strformat
 import std/isolation
+
+import weakrefs
 export isolation
 
 # template checkThreadSafety(field: object, parent: typed): static bool =
@@ -34,11 +37,13 @@ template checkSignalThreadSafety*(sig: typed) =
 type IsolationError* = object of CatchableError
 
 proc verifyUnique[T, V](field: T, parent: V) =
-  when T is ref:
+  when T is WeakRef:
+    discard
+  elif T is ref:
     static:
       echo "verifyUnique: ref: ", $T
     if not field.isNil and not field.isUniqueRef():
-      raise newException(IsolationError, "reference not unique! Cannot safely isolate it")
+      raise newException(IsolationError, &"reference not unique! Cannot safely isolate {$typeof(field)} parent: {$typeof(parent)} ")
     for v in field[].fields():
       verifyUnique(v, parent)
   elif T is tuple or T is object:
