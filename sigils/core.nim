@@ -21,6 +21,7 @@ proc callSlots*(obj: Agent | WeakRef[Agent], req: SigilRequest) {.gcsafe.} =
       # echo "call listener:tgt: ", sub.tgt, " ", req.procName
       # echo "call listener:slot: ", repr sub.slot
       # let tgtRef = sub.tgt.toRef()
+      assert not sub.tgt[].freed
       var res: SigilResponse = sub.tgt[].callMethod(req, sub.slot)
 
       when defined(nimscript) or defined(useJsonSerde):
