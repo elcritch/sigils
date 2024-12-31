@@ -6,6 +6,7 @@
 
 --debuginfo:on
 --debugger:native
+--deepcopy:on
 #--d:debug
 
 

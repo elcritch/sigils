@@ -23,25 +23,24 @@ type
   Agent* = ref object of AgentObj
   # Agent* {.acyclic.} = ref object of AgentObj ## this also avoids the issue
 
-proc `=wasMoved`(agent: var AgentObj) =
-  echo "agent was moved"
-  agent.moved = true
+# proc `=wasMoved`(agent: var AgentObj) =
+#   echo "agent was moved"
+#   agent.moved = true
 
 proc `=destroy`*(agentObj: AgentObj) =
   let xid: WeakRef[Agent] = WeakRef[Agent](pt: cast[Agent](addr agentObj)) ##\
     ## This is pretty hacky, but we need to get the address of the original
     ## Agent (ref object) since it's used to unsubscribe from other agents in the actual code,
     ## Luckily the agent address is the same as `addr agent` of the agent object here.
-  echo "Destroying agent: ",
-          " pt: ", cast[pointer](xid.pt).repr,
-          " freed: ", agentObj.freed,
-          " moved: ", agentObj.moved,
-          " lstCnt: ", xid[].subscribers.len()
-  when defined(debug):
+  when defined(sigilsWeakRefCursor):
+    echo "Destroying agent: ",
+            " pt: ", cast[pointer](xid.pt).repr,
+            " freed: ", agentObj.freed,
+            " lstCnt: ", xid[].subscribers.len()
     if agentObj.freed:
       raise newException(Defect, "already freed!")
 
-  xid[].freed = true
+    xid[].freed = true
 
   ## remove subscribers via their WeakRef's
   ## this is where we create a problem
