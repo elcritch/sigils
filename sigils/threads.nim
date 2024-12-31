@@ -172,8 +172,10 @@ proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
       if sig.tgt[].freed:
         echo "exec:call:sig.req: ", sig.req.repr
         echo "exec:call: ", $sig.tgt[].getId()
-        for r in getCurrentSigilThread()[].references:
-          echo "exec:references: ", $r.getId()
+        # for r in getCurrentSigilThread()[].references:
+        #   echo "exec:references: ", $r.getId()
+        var a: Agent
+        echo a[]
       assert not sig.tgt[].freed
     let res = sig.tgt[].callMethod(sig.req, sig.slot)
 
