@@ -147,6 +147,14 @@ proc newSigilThread*(): SigilThread =
   result = newSharedPtr(isolate SigilThreadObj())
   result[].inputs = newSigilChan()
 
+proc startLocalThread*() =
+  if localSigilThread.isNone:
+    localSigilThread = some newSigilThread()
+
+proc getCurrentSigilThread*(): SigilThread =
+  startLocalThread()
+  return localSigilThread.get()
+
 proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
   debugPrint "thread got request: ", $sig
   case sig.kind:
@@ -157,6 +165,11 @@ proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
     thread.references.excl(sig.deref[])
   of Call:
     debugPrint "call: ", $sig.tgt[].getId()
+    if sig.tgt[].freed:
+      echo "exec:call:sig.req: ", sig.req.repr
+      echo "exec:call: ", $sig.tgt[].getId()
+      for r in getCurrentSigilThread()[].references:
+        echo "exec:references: ", $r.getId()
     assert not sig.tgt[].freed
     let res = sig.tgt[].callMethod(sig.req, sig.slot)
 
@@ -189,14 +202,6 @@ proc runThread*(thread: SigilThread) {.thread.} =
 
 proc start*(thread: SigilThread) =
   createThread(thread[].thr, runThread, thread)
-
-proc startLocalThread*() =
-  if localSigilThread.isNone:
-    localSigilThread = some newSigilThread()
-
-proc getCurrentSigilThread*(): SigilThread =
-  startLocalThread()
-  return localSigilThread.get()
 
 proc findSubscribedToSignals(
     subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]
@@ -262,7 +267,8 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
       proxy.addSubscription(signal, sub.tgt[], sub.slot)
   
   thread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Move, item: agentTy))
-  thread[].references.incl(proxy)
+  thread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Move, item: proxy))
+  # thread[].references.incl(proxy)
 
   return proxy
 
