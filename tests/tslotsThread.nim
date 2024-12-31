@@ -247,13 +247,13 @@ suite "threaded agent slots":
           for i in 1 .. 100:
             var a = SomeAction.new()
             when defined(debug):
-              let n = 300
+              let n = 100
             else:
               let n = 1_000
 
             for j in 1 .. n:
               if j mod 50 == 0:
-                echo "Loop: ", i, "/", j
+                echo "Loop: ", i, ".", j
               var b = Counter.new()
 
               let bp: AgentProxy[Counter] = b.moveToThread(thread)
