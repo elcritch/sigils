@@ -10,6 +10,9 @@ type WeakRef*[T] {.acyclic.} = object
 template `[]`*[T](r: WeakRef[T]): lent T =
   cast[T](r.pt)
 
+proc verifyUnique*[T: WeakRef, V](field: T, parent: V) =
+  discard # "verifyUnique: skipping weakref: ", $T
+
 proc toPtr*[T](obj: WeakRef[T]): pointer =
   result = cast[pointer](obj.pt)
 

@@ -37,23 +37,22 @@ template checkSignalThreadSafety*(sig: typed) =
 type IsolationError* = object of CatchableError
 
 proc verifyUnique[T, V](field: T, parent: V) =
-  when T is WeakRef:
-    discard
-  elif T is ref:
-    static:
-      echo "verifyUnique: ref: ", $T
+  mixin verifyUnique
+  when T is ref:
+    # static:
+    #   echo "verifyUnique: ref: ", $T
     if not field.isNil and not field.isUniqueRef():
       raise newException(IsolationError, &"reference not unique! Cannot safely isolate {$typeof(field)} parent: {$typeof(parent)} ")
     for v in field[].fields():
       verifyUnique(v, parent)
   elif T is tuple or T is object:
-    static:
-      echo "verifyUnique: object: ", $(T)
+    # static:
+    #   echo "verifyUnique: object: ", $(T)
     for n, v in field.fieldPairs():
       verifyUnique(v, parent)
   else:
-    static:
-      echo "verifyUnique: skip: ", $T
+    # static:
+    #   echo "verifyUnique: skip: ", $T
     discard
 
 proc isolateRuntime*[T](item: T): Isolated[T] {.raises: [IsolationError].} =
