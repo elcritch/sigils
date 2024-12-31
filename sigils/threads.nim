@@ -96,13 +96,13 @@ method callMethod*(
     proxy: AgentProxyShared, req: SigilRequest, slot: AgentProc
 ): SigilResponse {.gcsafe, effectsOf: slot.} =
   ## Route's an rpc request. 
-  debugPrint "call method: isnil: ", proxy.isNil
-  debugPrint "call method: ", proxy.getId()
+  debugPrint "call method: isnil: ", $proxy.isNil
+  debugPrint "call method: ", $proxy.getId()
   if slot == remoteSlot:
     var req = req.deepCopy()
+    debugPrint "\t proxy:callMethod: ", "req: ", $req
     var msg = isolateRuntime ThreadSignal(kind: Call, slot: localSlot, req: move req, tgt: proxy.Agent.unsafeWeakRef)
-    debugPrint "\t proxy:callMethod: ", "req: ", req
-    debugPrint "\t proxy:callMethod: ", "msg: ", msg
+    debugPrint "\t proxy:callMethod: ", "msg: ", $msg
     debugPrint "\t proxy:callMethod: ", "proxy: ", addr(proxy.obj).pointer.repr
     # echo "\texecuteRequest:agentProxy: ", "inbound: ", $proxy.inbound, " proxy: ", proxy.getId()
     assert not proxy.freed
@@ -113,7 +113,7 @@ method callMethod*(
     else:
       proxy.obj.inbound[].send(msg)
   elif slot == localSlot:
-    debugPrint "\texecReq:agentProxy:localSlot: ", "req: ", req
+    debugPrint "\texecReq:agentProxy:localSlot: ", "req: ", $req
     # echo "\texecuteRequest:agentProxy: ", "inbound: ", $proxy.inbound, " proxy: ", proxy.getId()
     callSlots(proxy, req)
   else:
@@ -139,10 +139,10 @@ method removeSubscriptionsFor*(
 method unregisterSubscriber*(
     self: AgentProxyShared, listener: WeakRef[Agent]
 ) {.gcsafe, raises: [].} =
-  debugPrint "unregisterSubscriber:proxy:", " self:id: ", self.getId()
+  debugPrint "unregisterSubscriber:proxy:", " self:id: ", $self.getId()
   # withLock self.obj.lock:
   block:
-    debugPrint "unregisterSubscriber:proxy:ready:", " self:id: ", self.getId()
+    debugPrint "unregisterSubscriber:proxy:ready:", " self:id: ", $self.getId()
     unregisterSubscriberImpl(self, listener)
 
 proc newSigilThread*(): SigilThread =

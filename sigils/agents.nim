@@ -37,9 +37,8 @@ var
 
 plock.initLock()
 
-proc debugPrint*(msgs: varargs[string, `$`]) {.raises: [].} =
+proc debugPrintImpl*(msgs: varargs[string, `$`]) {.raises: [].} =
   {.cast(gcsafe).}:
-    when false:
       try:
         withLock plock:
         # block:
@@ -56,6 +55,10 @@ proc debugPrint*(msgs: varargs[string, `$`]) {.raises: [].} =
           stdout.flushFile()
       except IOError:
         discard
+
+template debugPrint*(msgs: varargs[untyped]) =
+  when false:
+    debugPrintImpl(msgs)
 
 type
   AgentObj = object of RootObj
