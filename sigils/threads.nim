@@ -105,7 +105,8 @@ method callMethod*(
     debugPrint "\t proxy:callMethod: ", "msg: ", $msg
     debugPrint "\t proxy:callMethod: ", "proxy: ", addr(proxy.obj).pointer.repr
     # echo "\texecuteRequest:agentProxy: ", "inbound: ", $proxy.inbound, " proxy: ", proxy.getId()
-    assert not proxy.freed
+    when defined(sigilDebugFreed):
+      assert not proxy.freed
     when defined(sigilBlock):
       let res = proxy.obj.inbound[].trySend(msg)
       if not res:
@@ -167,12 +168,13 @@ proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
     thread.references.excl(sig.deref[])
   of Call:
     debugPrint "call: ", $sig.tgt[].getId()
-    if sig.tgt[].freed:
-      echo "exec:call:sig.req: ", sig.req.repr
-      echo "exec:call: ", $sig.tgt[].getId()
-      for r in getCurrentSigilThread()[].references:
-        echo "exec:references: ", $r.getId()
-    assert not sig.tgt[].freed
+    when defined(sigilDebugFreed):
+      if sig.tgt[].freed:
+        echo "exec:call:sig.req: ", sig.req.repr
+        echo "exec:call: ", $sig.tgt[].getId()
+        for r in getCurrentSigilThread()[].references:
+          echo "exec:references: ", $r.getId()
+      assert not sig.tgt[].freed
     let res = sig.tgt[].callMethod(sig.req, sig.slot)
 
 proc poll*[R: SigilThreadBase](thread: var R) =

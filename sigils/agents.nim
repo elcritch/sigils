@@ -64,9 +64,8 @@ type
   AgentObj = object of RootObj
     subscribers*: Table[SigilName, OrderedSet[Subscription]] ## agents listening to me
     subscribedTo*: HashSet[WeakRef[Agent]] ## agents I'm listening to
-    when defined(debug):
+    when defined(sigilDebugFreed):
       freed*: bool
-      moved*: bool
 
   Agent* = ref object of AgentObj
 

@@ -6,6 +6,6 @@
 
 --debuginfo:on
 --debugger:native
---d:debug
+#--d:debug
 
 
