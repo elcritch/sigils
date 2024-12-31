@@ -105,7 +105,7 @@ method callMethod*(
     debugPrint "\t proxy:callMethod: ", "msg: ", $msg
     debugPrint "\t proxy:callMethod: ", "proxy: ", addr(proxy.obj).pointer.repr
     # echo "\texecuteRequest:agentProxy: ", "inbound: ", $proxy.inbound, " proxy: ", proxy.getId()
-    when defined(sigilDebugFreed):
+    when defined(sigilDebugFreed) or defined(debug):
       assert not proxy.freed
     when defined(sigilBlock):
       let res = proxy.obj.inbound[].trySend(msg)
@@ -168,7 +168,7 @@ proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
     thread.references.excl(sig.deref[])
   of Call:
     debugPrint "call: ", $sig.tgt[].getId()
-    when defined(sigilDebugFreed):
+    when defined(sigilDebugFreed) or defined(debug):
       if sig.tgt[].freed:
         echo "exec:call:sig.req: ", sig.req.repr
         echo "exec:call: ", $sig.tgt[].getId()

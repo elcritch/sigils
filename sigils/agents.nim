@@ -64,7 +64,7 @@ type
   AgentObj = object of RootObj
     subscribers*: Table[SigilName, OrderedSet[Subscription]] ## agents listening to me
     subscribedTo*: HashSet[WeakRef[Agent]] ## agents I'm listening to
-    when defined(sigilDebugFreed):
+    when defined(sigilDebugFreed) or defined(debug):
       freed*: bool
 
   Agent* = ref object of AgentObj
@@ -159,8 +159,7 @@ proc `=destroy`*(agent: AgentObj) {.forbids: [DestructorUnsafe].} =
           &" subTo: {xid[].subscribedTo.len()}"
   # debugPrint "destroy agent: ", getStackTrace().replace("\n", "\n\t")
   when defined(debug) or defined(sigilDebugFreed):
-    if agent.freed:
-      raise newException(Defect, "already freed!")
+    assert not agent.freed
     xid[].freed = true
 
   agent.subscribedTo.unsubscribe(xid)
