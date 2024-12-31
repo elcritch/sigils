@@ -244,7 +244,7 @@ suite "threaded agent slots":
           thread.start()
           # echo "thread runner!", " (th: ", getThreadId(), ")"
 
-          for i in 1 .. 10:
+          for i in 1 .. 100:
             var a = SomeAction.new()
             for j in 1 .. 1000:
               if j mod 50 == 0:
