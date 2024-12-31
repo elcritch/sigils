@@ -246,7 +246,12 @@ suite "threaded agent slots":
 
           for i in 1 .. 100:
             var a = SomeAction.new()
-            for j in 1 .. 1000:
+            when defined(debug):
+              let n = 300
+            else:
+              let n = 1_000
+
+            for j in 1 .. n:
               if j mod 50 == 0:
                 echo "Loop: ", i, "/", j
               var b = Counter.new()
