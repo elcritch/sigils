@@ -254,8 +254,8 @@ suite "threaded agent slots":
             var a = SomeAction.new()
 
             for j in 1 .. m:
-              if j mod 50 == 0:
-                echo "Loop: ", i, ".", j
+              if j mod 99 == 0:
+                echo "Loop: ", i, ".", j, " (th: ", getThreadId(), ")"
               var b = Counter.new()
 
               let bp: AgentProxy[Counter] = b.moveToThread(thread)

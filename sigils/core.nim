@@ -1,6 +1,8 @@
 import signals
 import slots
 
+from system/ansi_c import c_raise
+
 export signals, slots
 
 type AgentSlotError* = object of CatchableError
@@ -22,11 +24,12 @@ proc callSlots*(obj: Agent | WeakRef[Agent], req: SigilRequest) {.gcsafe.} =
       # echo "call listener:slot: ", repr sub.slot
       # let tgtRef = sub.tgt.toRef()
       when defined(sigilDebugFreed):
-        if sub.tgt[].freed:
+        if sub.tgt[].freed != 0:
           echo "exec:call:sig.sub: ", $sub.tgt[].getId()
           echo "exec:call:sig.req: ", req.repr
           echo "exec:call:sig.req: ", $obj.getId()
-        assert not sub.tgt[].freed
+          discard c_raise(11.cint)
+        assert sub.tgt[].freed == 0
       var res: SigilResponse = sub.tgt[].callMethod(req, sub.slot)
 
       when defined(nimscript) or defined(useJsonSerde):

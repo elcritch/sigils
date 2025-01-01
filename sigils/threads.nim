@@ -9,6 +9,8 @@ import isolateutils
 import agents
 import core
 
+from system/ansi_c import c_raise
+
 export chans, smartptrs, isolation, isolateutils
 
 type
@@ -106,7 +108,7 @@ method callMethod*(
     debugPrint "\t proxy:callMethod: ", "proxy: ", addr(proxy.obj).pointer.repr
     # echo "\texecuteRequest:agentProxy: ", "inbound: ", $proxy.inbound, " proxy: ", proxy.getId()
     when defined(sigilDebugFreed) or defined(debug):
-      assert not proxy.freed
+      assert proxy.freed == 0
     when defined(sigilBlock):
       let res = proxy.obj.inbound[].trySend(msg)
       if not res:
@@ -169,15 +171,15 @@ proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
   of Call:
     debugPrint "call: ", $sig.tgt[].getId()
     when defined(sigilDebugFreed) or defined(debug):
-      if sig.tgt[].freed:
+      if sig.tgt[].freed != 0:
+        echo "exec:call:sig.tgt[].freed:thread: ", $sig.tgt[].freed
         echo "exec:call:sig.req: ", sig.req.repr
+        echo "exec:call:thr: ", $getThreadId()
         echo "exec:call: ", $sig.tgt[].getId()
+        echo "exec:call:isUnique: ", sig.tgt[].isUniqueRef
         echo "exec:call:has: ", sig.tgt[] in getCurrentSigilThread()[].references
-        # for r in getCurrentSigilThread()[].references:
-        #   echo "exec:references: ", $r.getId()
-        var a: Agent
-        echo a[]
-      assert not sig.tgt[].freed
+        discard c_raise(11.cint)
+      assert sig.tgt[].freed == 0
     let res = sig.tgt[].callMethod(sig.req, sig.slot)
 
 proc poll*[R: SigilThreadBase](thread: var R) =
