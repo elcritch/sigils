@@ -106,6 +106,22 @@ suite "agent weak refs":
     # check b.value == 137
     echo "done outer block"
 
+test "refcount":
+  var x = Counter.new()
+  echo "X::count: ", x.unsafeGcCount()
+  check x.unsafeGcCount() == 1
+  block:
+    let y = x
+    echo "X::count: ", x.unsafeGcCount()
+    check x.unsafeGcCount() == 2
+    check y.unsafeGcCount() == 2
+  echo "X::count: ", x.unsafeGcCount()
+  check x.unsafeGcCount() == 1
+  var y = move x
+  echo "X::count: ", x.unsafeGcCount()
+  check x.isNil
+  check x.unsafeGcCount() == 0
+
 test "weak refs":
 
   var x = Counter.new()

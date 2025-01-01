@@ -94,6 +94,7 @@ suite "threaded agent slots":
         # echo "thread runner!"
         let thread = newSigilThread()
         let bp: AgentProxy[Counter] = b.moveToThread(thread)
+        echo "B refcount: ", b.unsafeGcCount()
 
         connect(a, valueChanged, bp, setValue)
         connect(a, valueChanged, bp, Counter.setValue())
