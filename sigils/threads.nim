@@ -60,15 +60,16 @@ var localSigilThread {.threadVar.}: Option[SigilThread]
 
 proc `=destroy`*(obj: var typeof(AgentProxyShared()[])) =
   debugPrint "PROXY Destroy: 0x", addr(obj).pointer.repr
-  `=destroy`(obj.remote)
-  `=destroy`(obj.outbound)
-  `=destroy`(obj.inbound)
-  `=destroy`(obj.listeners)
-  `=destroy`(obj.lock)
+  withLock obj.lock:
+    `=destroy`(obj.remote)
+    `=destroy`(obj.outbound)
+    `=destroy`(obj.inbound)
+    `=destroy`(obj.listeners)
 
-  # careful on this one -- should probably figure out a test
-  # in case the compiler ever changes
-  `=destroy`(toAgentObj(cast[AgentProxyShared](addr obj)))
+    # careful on this one -- should probably figure out a test
+    # in case the compiler ever changes
+    `=destroy`(toAgentObj(cast[AgentProxyShared](addr obj)))
+    `=destroy`(obj.lock)
 
 proc newSigilChan*(): SigilChan =
   let cref = SigilChanRef.new()
