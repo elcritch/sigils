@@ -25,9 +25,11 @@ proc callSlots*(obj: Agent | WeakRef[Agent], req: SigilRequest) {.gcsafe.} =
       # let tgtRef = sub.tgt.toRef()
       when defined(sigilDebugFreed):
         if sub.tgt[].freed != 0:
-          echo "exec:call:sig.sub: ", $sub.tgt[].getId()
-          echo "exec:call:sig.req: ", req.repr
-          echo "exec:call:sig.req: ", $obj.getId()
+          echo "exec:call:thread: ", $getThreadId()
+          echo "exec:call:sub.tgt[].freed:thread: ", $sub.tgt[].freed
+          echo "exec:call:sub.tgt[]:id: ", $sub.tgt[].getId()
+          echo "exec:call:sub.req: ", req.repr
+          echo "exec:call:obj:id: ", $obj.getId()
           discard c_raise(11.cint)
         assert sub.tgt[].freed == 0
       var res: SigilResponse = sub.tgt[].callMethod(req, sub.slot)
