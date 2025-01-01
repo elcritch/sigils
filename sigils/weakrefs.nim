@@ -38,3 +38,35 @@ proc `$`*[T](obj: WeakRef[T]): string =
   result &= "(0x"
   result &= obj.toPtr().repr
   result &= ")"
+
+when true:
+  when defined(gcOrc):
+    const
+      rcMask = 0b1111
+      rcShift = 4 # shift by rcShift to get the reference counter
+  else:
+    const
+      rcMask = 0b111
+      rcShift = 3 # shift by rcShift to get the reference counter
+
+  type
+    RefHeader = object
+      rc: int
+      when defined(gcOrc):
+        rootIdx: int
+          # thanks to this we can delete potential cycle roots
+          # in O(1) without doubly linked lists
+
+    Cell = ptr RefHeader
+
+  template head[T](p: ref T): Cell =
+    cast[Cell](cast[int](cast[pointer](p)) -% sizeof(RefHeader))
+
+  template count(x: Cell): int =
+    (x.rc shr rcShift)
+
+  proc unsafeGcCount*[T](x: ref T): int =
+    ## get the current gc count for ARC or ORC
+    ## unsafe! Only intended for testing purposes!
+    ## use `isUniqueRef` if you want to check a ref is unique
+    x.head().count()
