@@ -290,6 +290,7 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
   
   thread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Move, item: move agentTy))
   # thread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Move, item: proxy))
+  ct[].references.incl(proxy)
 
   return proxy
 

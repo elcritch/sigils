@@ -156,7 +156,7 @@ proc `=destroy`*(agent: AgentObj) {.forbids: [DestructorUnsafe].} =
     let xid: WeakRef[Agent] = WeakRef[Agent](pt: cast[pointer](addr agent))
 
   debugPrint &"destroy: agent: ",
-          &" pt: {xid.toPtr.repr}",
+          &" pt: 0x{xid.toPtr.repr}",
           &" freed: {agent.freedByThread}",
           &" subs: {xid[].subscribers.len()}",
           &" subTo: {xid[].subscribedTo.len()}"
