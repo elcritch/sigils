@@ -98,15 +98,13 @@ method callMethod*(
     proxy: AgentProxyShared, req: SigilRequest, slot: AgentProc
 ): SigilResponse {.gcsafe, effectsOf: slot.} =
   ## Route's an rpc request. 
-  debugPrint "call method: isnil: ", $proxy.isNil
-  debugPrint "call method: proxy: ", $proxy.getId(), " refcount: ", proxy.unsafeGcCount()
+  debugPrint "callMethod: proxy: ", $proxy.getId(), " refcount: ", proxy.unsafeGcCount()
   if slot == remoteSlot:
     var req = req.deepCopy()
-    debugPrint "\t proxy:callMethod: ", "req: ", $req
+    debugPrint "\t proxy:callMethod:remoteSlot: ", "req: ", $req
     var msg = isolateRuntime ThreadSignal(kind: Call, slot: localSlot, req: move req, tgt: proxy.Agent.unsafeWeakRef)
-    debugPrint "\t proxy:callMethod: ", "msg: ", $msg
-    debugPrint "\t proxy:callMethod: ", "proxy: ", addr(proxy.obj).pointer.repr
-    # echo "\texecuteRequest:agentProxy: ", "inbound: ", $proxy.inbound, " proxy: ", proxy.getId()
+    debugPrint "\t proxy:callMethod:remoteSlot: ", "msg: ", $msg
+    debugPrint "\t proxy:callMethod:remoteSlot: ", "proxy: ", addr(proxy.obj).pointer.repr
     when defined(sigilDebugFreed) or defined(debug):
       assert proxy.freed == 0
     when defined(sigilNonBlockingThreads):
@@ -116,15 +114,14 @@ method callMethod*(
     else:
       proxy.obj.inbound[].send(msg)
   elif slot == localSlot:
-    debugPrint "\texecReq:agentProxy:localSlot: ", "req: ", $req
-    # echo "\texecuteRequest:agentProxy: ", "inbound: ", $proxy.inbound, " proxy: ", proxy.getId()
+    debugPrint "\t callMethod:agentProxy:localSlot: ", "req: ", $req
     callSlots(proxy, req)
   else:
     var req = req.deepCopy()
     # echo "proxy:callMethod: ", " proxy:refcount: ", proxy.unsafeGcCount()
     # echo "proxy:callMethod: ", " proxy.obj.remote:refcount: ", proxy.obj.remote[].unsafeGcCount()
+    debugPrint "\t callMethod:agentProxy:InitCall:", "Outbound: ", req.procName, " proxy:remote:obj: ", proxy.obj.remote.getId()
     var msg = isolateRuntime ThreadSignal(kind: Call, slot: slot, req: move req, tgt: proxy.obj.remote)
-    debugPrint "\texecReq:agentProxy:other: ", "outbound: " #, proxy.outbound.repr
     when defined(sigilNonBlockingThreads):
       let res = proxy.obj.outbound[].trySend(msg)
       if not res:
@@ -166,12 +163,16 @@ proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
   debugPrint "thread got request: ", $sig
   case sig.kind:
   of Move:
+    debugPrint "\t threadExec:move: ", $sig.item.getId(), " refcount: ", $sig.item.unsafeGcCount()
     var item = sig.item
     thread.references.incl(item)
   of Deref:
+    debugPrint "\t threadExec:deref: ", $sig.deref[].getId(), " refcount: ", $sig.deref[].unsafeGcCount()
     thread.references.excl(sig.deref[])
   of Call:
-    debugPrint "call: ", $sig.tgt[].getId()
+    debugPrint "\t threadExec:call: ", $sig.tgt[].getId()
+    for item in thread.references.items():
+      debugPrint "\t threadExec:refcheck: ", $item.getId(), " rc: ", $item.unsafeGcCount()
     when defined(sigilDebugFreed) or defined(debug):
       if sig.tgt[].freed != 0:
         echo "exec:call:sig.tgt[].freed:thread: ", $sig.tgt[].freed
@@ -193,10 +194,12 @@ proc tryPoll*[R: SigilThreadBase](thread: var R) =
   if thread.inputs[].tryRecv(sig):
     thread.exec(sig)
 
-proc pollAll*[R: SigilThreadBase](thread: var R) =
+proc pollAll*[R: SigilThreadBase](thread: var R): int {.discardable.} =
   var sig: ThreadSignal
+  result = 0
   while thread.inputs[].tryRecv(sig):
     thread.exec(sig)
+    result.inc()
 
 proc runForever*(thread: SigilThread) =
   while true:
@@ -233,6 +236,7 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
     thread: SharedPtr[R]
 ): AgentProxy[T] =
   ## move agent to another thread
+  debugPrint "moveToThread: ", $agentTy.getId()
   if not isUniqueRef(agentTy):
     raise newException(
       AccessViolationDefect,

@@ -57,7 +57,7 @@ proc debugPrintImpl*(msgs: varargs[string, `$`]) {.raises: [].} =
         discard
 
 template debugPrint*(msgs: varargs[untyped]) =
-  when false:
+  when defined(sigilsDebugPrint):
     debugPrintImpl(msgs)
 
 type

@@ -171,6 +171,7 @@ suite "threaded agent slots":
         check c.value == 314
       GC_fullCollect()
 
+  when true:
     test "sigil object thread runner multiple":
       block:
         var
@@ -205,22 +206,34 @@ suite "threaded agent slots":
         GC_fullCollect()
       GC_fullCollect()
 
-  when false:
+  when true:
     test "sigil object thread runner (loop)":
       block:
         block:
           startLocalThread()
           let thread = newSigilThread()
           thread.start()
-          # echo "thread runner!", " (th: ", getThreadId(), ")"
+          echo "thread runner!", " (th: ", getThreadId(), ")"
           let ct = getCurrentSigilThread()
+          let polled = ct[].pollAll()
+          echo "polled: ", polled
+          when defined(debug):
+            let m = 2
+            let n = 2
+          else:
+            let m = 10
+            let n = 100
 
-          for idx in 1 .. 100:
+          for i in 1 .. m:
             var a = SomeAction.new()
-            for idx in 1 .. 100:
+            for j in 1 .. n:
+              # if j mod n == 0:
+              echo "Loop: ", i, ".", j, " (th: ", getThreadId(), ")"
               var b = Counter.new()
+              echo "B: ", b.getId()
 
               let bp: AgentProxy[Counter] = b.moveToThread(thread)
+              echo "BP: ", bp.getId()
 
               connect(a, valueChanged, bp, setValue)
               connect(bp, updated, a, SomeAction.completed())
@@ -232,11 +245,12 @@ suite "threaded agent slots":
               check a.value == 314
               ct[].poll()
               check a.value == 271
+              ct[].pollAll()
             GC_fullCollect()
         GC_fullCollect()
       GC_fullCollect()
 
-  when true:
+  when false:
     test "sigil object one way runner (loop)":
       let ct = getCurrentSigilThread()
       block:
@@ -246,16 +260,16 @@ suite "threaded agent slots":
           thread.start()
           echo "thread runner!", " (th: ", getThreadId(), ")"
           when defined(debug):
-            let n = 10
-            let m = 100
-          else:
+            let m = 10
             let n = 100
-            let m = 1_000
+          else:
+            let m = 100
+            let n = 1_000
 
-          for i in 1 .. n:
+          for i in 1 .. m:
             var a = SomeAction.new()
 
-            for j in 1 .. m:
+            for j in 1 .. n:
               if j mod n == 0:
                 echo "Loop: ", i, ".", j, " (th: ", getThreadId(), ")"
               var b = Counter.new()
