@@ -65,7 +65,7 @@ type
     subscribers*: Table[SigilName, OrderedSet[Subscription]] ## agents listening to me
     subscribedTo*: HashSet[WeakRef[Agent]] ## agents I'm listening to
     when defined(sigilDebugFreed) or defined(debug):
-      freed*: int
+      freedByThread*: int
 
   Agent* = ref object of AgentObj
 
@@ -157,20 +157,20 @@ proc `=destroy`*(agent: AgentObj) {.forbids: [DestructorUnsafe].} =
 
   debugPrint &"destroy: agent: ",
           &" pt: {xid.toPtr.repr}",
-          &" freed: {agent.freed}",
+          &" freed: {agent.freedByThread}",
           &" subs: {xid[].subscribers.len()}",
           &" subTo: {xid[].subscribedTo.len()}"
   # debugPrint "destroy agent: ", getStackTrace().replace("\n", "\n\t")
   when defined(debug) or defined(sigilDebugFreed):
-    assert agent.freed == 0
-    xid[].freed = getThreadId()
+    assert agent.freedByThread == 0
+    xid[].freedByThread = getThreadId()
 
   agent.subscribedTo.unsubscribe(xid)
   agent.subscribers.removeSubscription(xid)
 
   `=destroy`(xid[].subscribers)
   `=destroy`(xid[].subscribedTo)
-  debugPrint "finished destroy: agent: ", " pt: ", xid.toPtr.repr
+  debugPrint "finished destroy: agent: ", " pt: 0x", xid.toPtr.repr
 
 template toAgentObj*[T: Agent](agent: T): AgentObj =
   Agent(agent)[]

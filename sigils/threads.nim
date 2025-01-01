@@ -60,7 +60,10 @@ var localSigilThread {.threadVar.}: Option[SigilThread]
 
 proc `=destroy`*(obj: var typeof(AgentProxyShared()[])) =
   debugPrint "PROXY Destroy: 0x", addr(obj).pointer.repr
-  withLock obj.lock:
+  # withLock obj.lock:
+  block:
+    `=destroy`(toAgentObj(cast[AgentProxyShared](addr obj)))
+
     `=destroy`(obj.remote)
     `=destroy`(obj.outbound)
     `=destroy`(obj.inbound)
@@ -68,7 +71,7 @@ proc `=destroy`*(obj: var typeof(AgentProxyShared()[])) =
 
     # careful on this one -- should probably figure out a test
     # in case the compiler ever changes
-    `=destroy`(toAgentObj(cast[AgentProxyShared](addr obj)))
+
     `=destroy`(obj.lock)
 
 proc newSigilChan*(): SigilChan =
@@ -111,7 +114,7 @@ method callMethod*(
     debugPrint "\t proxy:callMethod:remoteSlot: ", "msg: ", $msg
     debugPrint "\t proxy:callMethod:remoteSlot: ", "proxy: ", proxy.getId()
     when defined(sigilDebugFreed) or defined(debug):
-      assert proxy.freed == 0
+      assert proxy.freedByThread == 0
     when defined(sigilNonBlockingThreads):
       let res = proxy.inbound[].trySend(msg)
       if not res:
@@ -179,15 +182,15 @@ proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
     for item in thread.references.items():
       debugPrint "\t threadExec:refcheck: ", $item.getId(), " rc: ", $item.unsafeGcCount()
     when defined(sigilDebugFreed) or defined(debug):
-      if sig.tgt[].freed != 0:
-        echo "exec:call:sig.tgt[].freed:thread: ", $sig.tgt[].freed
+      if sig.tgt[].freedByThread != 0:
+        echo "exec:call:sig.tgt[].freedByThread:thread: ", $sig.tgt[].freedByThread
         echo "exec:call:sig.req: ", sig.req.repr
         echo "exec:call:thr: ", $getThreadId()
         echo "exec:call: ", $sig.tgt[].getId()
         echo "exec:call:isUnique: ", sig.tgt[].isUniqueRef
         echo "exec:call:has: ", sig.tgt[] in getCurrentSigilThread()[].references
-        discard c_raise(11.cint)
-      assert sig.tgt[].freed == 0
+        # discard c_raise(11.cint)
+      assert sig.tgt[].freedByThread == 0
     let res = sig.tgt[].callMethod(sig.req, sig.slot)
 
 proc poll*[R: SigilThreadBase](thread: var R) =

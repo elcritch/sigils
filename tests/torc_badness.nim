@@ -55,7 +55,7 @@ proc `=destroy`*(agentObj: AgentObj) =
       echo "has subscribers"
 
   `=destroy`(xid[].subscribers)
-  echo "finished destroy: agent: ", " pt: ", cast[pointer](xid.pt).repr
+  echo "finished destroy: agent: ", " pt: 0x", cast[pointer](xid.pt).repr
 
 type
   Counter* = ref object of Agent

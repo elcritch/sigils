@@ -24,14 +24,14 @@ proc callSlots*(obj: Agent | WeakRef[Agent], req: SigilRequest) {.gcsafe.} =
       # echo "call listener:slot: ", repr sub.slot
       # let tgtRef = sub.tgt.toRef()
       when defined(sigilDebugFreed):
-        if sub.tgt[].freed != 0:
+        if sub.tgt[].freedByThread != 0:
           echo "exec:call:thread: ", $getThreadId()
-          echo "exec:call:sub.tgt[].freed:thread: ", $sub.tgt[].freed
+          echo "exec:call:sub.tgt[].freed:thread: ", $sub.tgt[].freedByThread
           echo "exec:call:sub.tgt[]:id: ", $sub.tgt[].getId()
           echo "exec:call:sub.req: ", req.repr
           echo "exec:call:obj:id: ", $obj.getId()
           discard c_raise(11.cint)
-        assert sub.tgt[].freed == 0
+        assert sub.tgt[].freedByThread == 0
       var res: SigilResponse = sub.tgt[].callMethod(req, sub.slot)
 
       when defined(nimscript) or defined(useJsonSerde):

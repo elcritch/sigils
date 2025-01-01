@@ -37,7 +37,7 @@ proc setValue*(self: Counter, value: int) {.slot.} =
   # echo "setValue:subscribers: ", self.subscribers.pairs().toSeq.mapIt(it[1].mapIt(cast[pointer](it.tgt.getId()).repr))
   # echo "setValue:subscribedTo: ", $self.subscribedTo.toSeq.mapIt(cast[pointer](it.getId()).repr)
   if value == 756809:
-    os.sleep(10)
+    os.sleep(1)
   emit self.updated(self.value)
 
 proc completed*(self: SomeAction, final: int) {.slot.} =
@@ -208,6 +208,48 @@ suite "threaded agent slots":
       GC_fullCollect()
 
   when true:
+    test "sigil object thread runner multiple":
+      block:
+        # echo "thread runner!", " (main thread:", getThreadId(), ")"
+        # echo "obj a: ", a.unsafeWeakRef
+        # echo "obj b: ", b.unsafeWeakRef
+        let thread = newSigilThread()
+        thread.start()
+        startLocalThread()
+        let ct = getCurrentSigilThread()
+
+        var
+          a = SomeAction.new()
+        
+        block:
+          var
+            b = Counter.new()
+
+          echo "B: ", b.getId()
+          let bp: AgentProxy[Counter] = b.moveToThread(thread)
+          echo "BP: ", bp.getId()
+          # echo "obj bp: ", bp.unsafeWeakRef
+          # echo "obj bp.remote: ", bp.remote[].unsafeWeakRef
+          connect(a, valueChanged, bp, setValue)
+          connect(bp, updated, a, SomeAction.completed())
+
+          emit a.valueChanged(756809)
+          emit a.valueChanged(628)
+
+          ct[].poll()
+          check a.value == 756809
+
+        ct[].poll()
+        check a.value == 628
+        echo "end block"
+
+        # ct[].poll()
+        # check a.value == 756809
+
+        # ct[].poll()
+        # check a.value == 628
+
+  when false:
     test "sigil object thread runner (loop)":
       block:
         block:
