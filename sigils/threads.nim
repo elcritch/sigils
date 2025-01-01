@@ -81,20 +81,20 @@ proc newSigilChan*(): SigilChan =
   result[].ch = newChan[ThreadSignal](1_000)
 
 method trySend*(chan: SigilChanRef, msg: sink Isolated[ThreadSignal]): bool {.gcsafe, base.} =
-  debugPrint &"REGULAR send try:"
+  # debugPrint &"chan:trySend:"
   result = chan[].ch.trySend(msg)
-  debugPrint &"REGULAR send try: res: {$result}"
+  # debugPrint &"chan:trySend: res: {$result}"
 
 method send*(chan: SigilChanRef, msg: sink Isolated[ThreadSignal]) {.gcsafe, base.} =
-  debugPrint "REGULAR send: "
+  # debugPrint "chan:send: "
   chan[].ch.send(msg)
 
 method tryRecv*(chan: SigilChanRef, dst: var ThreadSignal): bool {.gcsafe, base.} =
-  debugPrint "REGULAR recv try:"
+  # debugPrint "chan:tryRecv:"
   result = chan[].ch.tryRecv(dst)
 
 method recv*(chan: SigilChanRef): ThreadSignal {.gcsafe, base.} =
-  debugPrint "REGULAR recv: "
+  # debugPrint "chan:recv: "
   chan[].ch.recv()
 
 proc remoteSlot*(context: Agent, params: SigilParams) {.nimcall.} =
@@ -168,7 +168,7 @@ proc getCurrentSigilThread*(): SigilThread =
   return localSigilThread.get()
 
 proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
-  debugPrint "thread got request: ", $sig
+  debugPrint "\nthread got request: ", $sig
   case sig.kind:
   of Move:
     debugPrint "\t threadExec:move: ", $sig.item.getId(), " refcount: ", $sig.item.unsafeGcCount()
