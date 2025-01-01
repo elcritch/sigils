@@ -122,13 +122,13 @@ method callMethod*(
     else:
       proxy.inbound[].send(msg)
   elif slot == localSlot:
-    debugPrint "\t callMethod:agentProxy:localSlot: ", "req: ", $req
+    debugPrint "\t callMethod:agentProxy:localSlot: req: ", $req
     callSlots(proxy, req)
   else:
     var req = req.deepCopy()
     # echo "proxy:callMethod: ", " proxy:refcount: ", proxy.unsafeGcCount()
     # echo "proxy:callMethod: ", " proxy.obj.remote:refcount: ", proxy.obj.remote[].unsafeGcCount()
-    debugPrint "\t callMethod:agentProxy:InitCall:", "Outbound: ", req.procName, " proxy:remote:obj: ", proxy.remote.getId()
+    debugPrint "\t callMethod:agentProxy:InitCall:Outbound: ", req.procName, " proxy:remote:obj: ", proxy.remote.getId()
     var msg = isolateRuntime ThreadSignal(kind: Call, slot: slot, req: move req, tgt: proxy.remote)
     when defined(sigilNonBlockingThreads):
       let res = proxy.obj.outbound[].trySend(msg)
@@ -140,19 +140,19 @@ method callMethod*(
 method removeSubscriptionsFor*(
     self: AgentProxyShared, subscriber: WeakRef[Agent]
 ) {.gcsafe, raises: [].} =
-  debugPrint "removeSubscriptionsFor:proxy:", " self:id: ", $self.getId()
+  debugPrint "removeSubscriptionsFor:proxy: self:id: ", $self.getId()
   withLock self.lock:
     # block:
-    debugPrint "removeSubscriptionsFor:proxy:ready:", " self:id: ", $self.getId()
+    debugPrint "removeSubscriptionsFor:proxy:ready: self:id: ", $self.getId()
     removeSubscriptionsForImpl(self, subscriber)
 
 method unregisterSubscriber*(
     self: AgentProxyShared, listener: WeakRef[Agent]
 ) {.gcsafe, raises: [].} =
-  debugPrint "unregisterSubscriber:proxy:", " self:id: ", $self.getId()
+  debugPrint "unregisterSubscriber:proxy: self:id: ", $self.getId()
   withLock self.lock:
     # block:
-    debugPrint "unregisterSubscriber:proxy:ready:", " self:id: ", $self.getId()
+    debugPrint "unregisterSubscriber:proxy:ready: self:id: ", $self.getId()
     unregisterSubscriberImpl(self, listener)
 
 proc newSigilThread*(): SigilThread =
