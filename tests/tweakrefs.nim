@@ -26,8 +26,11 @@ proc setValue*(self: Counter, value: int) {.slot.} =
 type TestObj = object
   val: int
 
+var lastDestroyedTestObj = -1
+
 proc `=destroy`*(obj: TestObj) =
   echo "destroying test object: ", obj.val
+  lastDestroyedTestObj = obj.val
 
 suite "agent weak refs":
   test "subscribers freed":
@@ -107,7 +110,9 @@ suite "agent weak refs":
     echo "done outer block"
 
 test "refcount":
-  var x = Counter.new()
+  type TestRef = ref TestObj
+
+  var x = TestRef(val: 33)
   echo "X::count: ", x.unsafeGcCount()
   check x.unsafeGcCount() == 1
   block:
@@ -117,11 +122,11 @@ test "refcount":
     check y.unsafeGcCount() == 2
   echo "X::count: ", x.unsafeGcCount()
   check x.unsafeGcCount() == 1
-  GC_unref(x)
-  # var y = move x
-  # echo "X::count: ", x.unsafeGcCount()
-  # check x.isNil
-  check x.unsafeGcCount() == 0
+  var y = move x
+  echo "y: ", repr y
+  check lastDestroyedTestObj != 33
+  check x.isNil
+  check y.unsafeGcCount() == 1
 
 test "weak refs":
 
