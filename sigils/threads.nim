@@ -109,7 +109,7 @@ method callMethod*(
     # echo "\texecuteRequest:agentProxy: ", "inbound: ", $proxy.inbound, " proxy: ", proxy.getId()
     when defined(sigilDebugFreed) or defined(debug):
       assert proxy.freed == 0
-    when defined(sigilBlock):
+    when defined(sigilNonBlockingThreads):
       let res = proxy.obj.inbound[].trySend(msg)
       if not res:
         raise newException(AgentSlotError, "error sending signal to thread")
@@ -123,7 +123,7 @@ method callMethod*(
     var req = req.deepCopy()
     var msg = isolateRuntime ThreadSignal(kind: Call, slot: slot, req: move req, tgt: proxy.obj.remote)
     debugPrint "\texecReq:agentProxy:other: ", "outbound: " #, proxy.outbound.repr
-    when defined(sigilBlock):
+    when defined(sigilNonBlockingThreads):
       let res = proxy.obj.outbound[].trySend(msg)
       if not res:
         raise newException(AgentSlotError, "error sending signal to thread")
@@ -275,7 +275,7 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
       # echo "signal: ", signal, " subscriber: ", tgt.getId
       proxy.addSubscription(signal, sub.tgt[], sub.slot)
   
-  GC_ref(agentTy)
+  # GC_ref(agentTy)
   thread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Move, item: agentTy))
   thread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Move, item: proxy))
 

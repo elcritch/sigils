@@ -242,19 +242,19 @@ suite "threaded agent slots":
           startLocalThread()
           let thread = newSigilThread()
           thread.start()
-          # echo "thread runner!", " (th: ", getThreadId(), ")"
+          echo "thread runner!", " (th: ", getThreadId(), ")"
           when defined(debug):
             let n = 10
-            let m = 10
+            let m = 100
           else:
             let n = 100
-            let m = 2_000
+            let m = 1_000
 
           for i in 1 .. n:
             var a = SomeAction.new()
 
             for j in 1 .. m:
-              if j mod 99 == 0:
+              if j mod n == 0:
                 echo "Loop: ", i, ".", j, " (th: ", getThreadId(), ")"
               var b = Counter.new()
 
