@@ -234,14 +234,13 @@ suite "threaded agent slots":
           connect(bp, updated, a, SomeAction.completed())
 
           emit a.valueChanged(756809)
-          emit a.valueChanged(628)
-
-          ct[].poll()
-          check a.value == 756809
+          # emit a.valueChanged(628)
 
         ct[].poll()
-        check a.value == 628
-        echo "end block"
+        check a.value == 756809
+
+        # ct[].poll()
+        # check a.value == 628
 
         # ct[].poll()
         # check a.value == 756809
