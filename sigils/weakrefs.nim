@@ -69,4 +69,4 @@ when true:
     ## get the current gc count for ARC or ORC
     ## unsafe! Only intended for testing purposes!
     ## use `isUniqueRef` if you want to check a ref is unique
-    x.head().count()
+    x.head().count() + 1

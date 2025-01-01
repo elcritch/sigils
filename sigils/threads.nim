@@ -232,6 +232,7 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
 ): AgentProxy[T] =
   ## move agent to another thread
   if not isUniqueRef(agentTy):
+    echo "GC ref is: ", agentTy.unsafeGcCount()
     raise newException(
       AccessViolationDefect,
       "agent must be unique and not shared to be passed to another thread!",

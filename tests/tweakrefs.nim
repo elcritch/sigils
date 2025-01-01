@@ -110,22 +110,22 @@ test "weak refs":
 
   var x = Counter.new()
   echo "X::count: ", x.unsafeGcCount()
-  check x.unsafeGcCount() == 0
+  check x.unsafeGcCount() == 1
   block:
     var obj {.used.} = TestObj(val: 100)
     var y = Counter.new()
     echo "X::count: ", x.unsafeGcCount()
-    check x.unsafeGcCount() == 0
+    check x.unsafeGcCount() == 1
 
     # echo "Counter.setValue: ", "x: ", x.debugId, " y: ", y.debugId
     connect(x, valueChanged, y, setValue)
-    check x.unsafeGcCount() == 0
+    check x.unsafeGcCount() == 1
 
     check y.value == 0
     emit x.valueChanged(137)
     echo "X::count:end: ", x.unsafeGcCount()
     echo "Y::count:end: ", y.unsafeGcCount()
-    check x.unsafeGcCount() == 1
+    check x.unsafeGcCount() == 2
 
     # var xx = x
     # check x.unsafeGcCount() == 2
@@ -134,4 +134,4 @@ test "weak refs":
   echo "X::count: ", x.unsafeGcCount()
   check x.subscribers.len() == 0
   check x.subscribedTo.len() == 0
-  check x.unsafeGcCount() == 0
+  check x.unsafeGcCount() == 1
