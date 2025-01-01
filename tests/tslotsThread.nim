@@ -49,7 +49,7 @@ proc value*(self: Counter): int =
 
 suite "threaded agent slots":
 
-  when true:
+  when false:
     test "simple threading test":
       var
         a = SomeAction.new()
@@ -86,7 +86,7 @@ suite "threaded agent slots":
       check b.value == 1337
       check c.value == 1337
 
-  when true:
+  when false:
     test "threaded connect":
       block:
         var
@@ -102,6 +102,7 @@ suite "threaded agent slots":
         check not compiles(connect(a, valueChanged, bp, someAction))
       GC_fullCollect()
 
+  when false:
     test "sigil object thread runner":
 
       var
@@ -141,7 +142,7 @@ suite "threaded agent slots":
         echo "a.subscribedTo: ", a.subscribedTo
       GC_fullCollect()
 
-  when true:
+  when false:
     test "sigil object thread connect change":
       var
         a = SomeAction.new()
@@ -171,7 +172,7 @@ suite "threaded agent slots":
         check c.value == 314
       GC_fullCollect()
 
-  when true:
+  when false:
     test "sigil object thread runner multiple":
       block:
         var

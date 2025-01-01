@@ -95,9 +95,9 @@ when isMainModule:
       echo "TEST REFS: ",
         " aref: ",
         cast[pointer](a).repr,
-        " ",
+        " 0x",
         addr(a[]).pointer.repr,
-        " agent: ",
+        " agent: 0x",
         addr(Agent(a)).pointer.repr
       check a.unsafeWeakRef().toPtr == cast[pointer](a)
       check a.unsafeWeakRef().toPtr == addr(a[]).pointer

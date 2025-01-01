@@ -172,6 +172,9 @@ proc `=destroy`*(agent: AgentObj) {.forbids: [DestructorUnsafe].} =
   `=destroy`(xid[].subscribedTo)
   debugPrint "finished destroy: agent: ", " pt: ", xid.toPtr.repr
 
+template toAgentObj*[T: Agent](agent: T): AgentObj =
+  Agent(agent)[]
+
 proc `$`*[T: Agent](obj: WeakRef[T]): string =
   result = $(T)
   result &= "{id: "
@@ -215,10 +218,10 @@ proc addSubscription*(obj: Agent, sig: SigilName, tgt: Agent, slot: AgentProc): 
 
   obj.subscribers.withValue(sig, agents):
     # if (tgt.unsafeWeakRef(), slot,) notin agents[]:
-    #   echo "addAgentsubscribers: ", "tgt: ", tgt.unsafeWeakRef().toPtr().pointer.repr, " id: ", tgt.debugId, " obj: ", obj.debugId, " name: ", sig
+    #   echo "addAgentsubscribers: ", "tgt: 0x", tgt.unsafeWeakRef().toPtr().pointer.repr, " id: ", tgt.debugId, " obj: ", obj.debugId, " name: ", sig
     agents[].incl(Subscription(tgt: tgt.unsafeWeakRef(), slot: slot))
   do:
-    # echo "addAgentsubscribers: ", "tgt: ", tgt.unsafeWeakRef().toPtr().pointer.repr, " id: ", tgt.debugId, " obj: ", obj.debugId, " name: ", sig
+    # echo "addAgentsubscribers: ", "tgt: 0x", tgt.unsafeWeakRef().toPtr().pointer.repr, " id: ", tgt.debugId, " obj: ", obj.debugId, " name: ", sig
     var agents = initOrderedSet[Subscription]()
     agents.incl(Subscription(tgt: tgt.unsafeWeakRef(), slot: slot))
     obj.subscribers[sig] = ensureMove agents
