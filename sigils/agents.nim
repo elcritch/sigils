@@ -198,12 +198,6 @@ template getSubscriptions*(
 ): OrderedSet[(WeakRef[Agent], AgentProc)] =
   obj.getSubscriptions(sig)
 
-proc unsafeWeakRef*[T: Agent](obj: T): WeakRef[T] =
-  when defined(sigilsWeakRefCursor):
-    result = WeakRef[T](pt: obj)
-  else:
-    result = WeakRef[T](pt: cast[pointer](obj))
-
 proc asAgent*[T: Agent](obj: WeakRef[T]): WeakRef[Agent] =
   result = WeakRef[Agent](pt: obj.pt)
 

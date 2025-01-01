@@ -42,6 +42,7 @@ type
       slot*: AgentProc
       req*: SigilRequest
       tgt*: WeakRef[Agent]
+      src*: WeakRef[AgentProxyShared]
     of Move:
       item*: Agent
     of Deref:
@@ -129,7 +130,8 @@ method callMethod*(
     # echo "proxy:callMethod: ", " proxy:refcount: ", proxy.unsafeGcCount()
     # echo "proxy:callMethod: ", " proxy.obj.remote:refcount: ", proxy.obj.remote[].unsafeGcCount()
     debugPrint "\t callMethod:agentProxy:InitCall:Outbound: ", req.procName, " proxy:remote:obj: ", proxy.remote.getId()
-    var msg = isolateRuntime ThreadSignal(kind: Call, slot: slot, req: move req, tgt: proxy.remote)
+    GC_ref(proxy)
+    var msg = isolateRuntime ThreadSignal(kind: Call, slot: slot, req: move req, tgt: proxy.remote, src: proxy.unsafeWeakRef())
     when defined(sigilNonBlockingThreads):
       let res = proxy.obj.outbound[].trySend(msg)
       if not res:
@@ -192,6 +194,7 @@ proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
         # discard c_raise(11.cint)
       assert sig.tgt[].freedByThread == 0
     let res = sig.tgt[].callMethod(sig.req, sig.slot)
+    # sig.src[].inbound[].send(unsafeIsolate ThreadSignal(kind: Deref, item: toKind(sig.src, Agent)))
 
 proc poll*[R: SigilThreadBase](thread: var R) =
   let sig = thread.inputs[].recv()

@@ -11,11 +11,20 @@ type WeakRef*[T] {.acyclic.} = object
 template `[]`*[T](r: WeakRef[T]): lent T =
   cast[T](r.pt)
 
+proc unsafeWeakRef*[T](obj: T): WeakRef[T] =
+  when defined(sigilsWeakRefCursor):
+    result = WeakRef[T](pt: obj)
+  else:
+    result = WeakRef[T](pt: cast[pointer](obj))
+
 proc verifyUnique*[T: WeakRef, V](field: T, parent: V) =
   discard # "verifyUnique: skipping weakref: ", $T
 
 proc toPtr*[T](obj: WeakRef[T]): pointer =
   result = cast[pointer](obj.pt)
+
+template toKind*[T, U](obj: WeakRef[T], tp: typedesc[U]): WeakRef[U] =
+  cast[WeakRef[U]](U(obj[]))
 
 proc hash*[T](obj: WeakRef[T]): Hash =
   result = hash cast[pointer](obj.pt)
