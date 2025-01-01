@@ -99,7 +99,7 @@ method callMethod*(
 ): SigilResponse {.gcsafe, effectsOf: slot.} =
   ## Route's an rpc request. 
   debugPrint "call method: isnil: ", $proxy.isNil
-  debugPrint "call method: ", $proxy.getId()
+  debugPrint "call method: proxy: ", $proxy.getId(), " refcount: ", proxy.unsafeGcCount()
   if slot == remoteSlot:
     var req = req.deepCopy()
     debugPrint "\t proxy:callMethod: ", "req: ", $req
@@ -121,6 +121,8 @@ method callMethod*(
     callSlots(proxy, req)
   else:
     var req = req.deepCopy()
+    # echo "proxy:callMethod: ", " proxy:refcount: ", proxy.unsafeGcCount()
+    # echo "proxy:callMethod: ", " proxy.obj.remote:refcount: ", proxy.obj.remote[].unsafeGcCount()
     var msg = isolateRuntime ThreadSignal(kind: Call, slot: slot, req: move req, tgt: proxy.obj.remote)
     debugPrint "\texecReq:agentProxy:other: ", "outbound: " #, proxy.outbound.repr
     when defined(sigilNonBlockingThreads):
@@ -227,7 +229,7 @@ proc findSubscribedToSignals(
       result[signal] = move toAdd
 
 proc moveToThread*[T: Agent, R: SigilThreadBase](
-    agentTy: T,
+    agentTy: var T,
     thread: SharedPtr[R]
 ): AgentProxy[T] =
   ## move agent to another thread
@@ -276,7 +278,7 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
       # echo "signal: ", signal, " subscriber: ", tgt.getId
       proxy.addSubscription(signal, sub.tgt[], sub.slot)
   
-  thread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Move, item: agentTy))
+  thread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Move, item: move agentTy))
   thread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Move, item: proxy))
 
   return proxy
