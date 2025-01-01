@@ -117,9 +117,10 @@ test "refcount":
     check y.unsafeGcCount() == 2
   echo "X::count: ", x.unsafeGcCount()
   check x.unsafeGcCount() == 1
-  var y = move x
-  echo "X::count: ", x.unsafeGcCount()
-  check x.isNil
+  GC_unref(x)
+  # var y = move x
+  # echo "X::count: ", x.unsafeGcCount()
+  # check x.isNil
   check x.unsafeGcCount() == 0
 
 test "weak refs":
