@@ -248,7 +248,7 @@ suite "threaded agent slots":
             let m = 10
           else:
             let n = 100
-            let m = 1_000
+            let m = 2_000
 
           for i in 1 .. n:
             var a = SomeAction.new()

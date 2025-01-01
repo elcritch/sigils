@@ -275,6 +275,7 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
       # echo "signal: ", signal, " subscriber: ", tgt.getId
       proxy.addSubscription(signal, sub.tgt[], sub.slot)
   
+  GC_ref(agentTy)
   thread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Move, item: agentTy))
   thread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Move, item: proxy))
 
