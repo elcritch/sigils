@@ -20,14 +20,12 @@ type
 
   SigilChan* = SharedPtr[SigilChanRef]
 
-  # AgentProxySharedObj* = object
-
   AgentProxyShared* = ref object of Agent
-    # obj*: AgentProxySharedObj
     remote*: WeakRef[Agent]
     proxyTwin*: WeakRef[AgentProxyShared]
-    thread*: SigilThread
     lock*: Lock
+    thread*: SigilThread
+    msgs*: Chan[ThreadSignal]
 
   AgentProxy*[T] = ref object of AgentProxyShared
 
