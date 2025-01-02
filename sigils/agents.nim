@@ -255,19 +255,20 @@ template addSubscription*(
   addSubscription(obj, sig.toSigilName(), tgt, slot)
 
 proc printConnections*(agent: Agent) =
-  if agent.isNil:
-    brightPrint fgBlue, "connections for Agent: ", "nil"
-    return
-  if agent[].freedByThread != 0:
-    brightPrint fgBlue, "connections for Agent: ", $agent.unsafeWeakRef(), " freedByThread: ", $agent[].freedByThread
-    return
-  brightPrint fgBlue, "connections for Agent: ", $agent.unsafeWeakRef()
-  brightPrint fgMagenta, "\t subscribers:", ""
-  for sig, subs in agent.subcriptionsTable.pairs():
-    # brightPrint fgRed, "\t\t signal: ", $sig
-    for sub in subs:
-      brightPrint fgGreen, "\t\t:", $sig, ": => ", $sub.tgt
-  brightPrint fgMagenta, "\t listening:", ""
-  for listening in agent.listening:
-    brightPrint fgRed, "\t\t listen: ", $listening
-  
+  withLock plock:
+    if agent.isNil:
+      brightPrint fgBlue, "connections for Agent: ", "nil"
+      return
+    if agent[].freedByThread != 0:
+      brightPrint fgBlue, "connections for Agent: ", $agent.unsafeWeakRef(), " freedByThread: ", $agent[].freedByThread
+      return
+    brightPrint fgBlue, "connections for Agent: ", $agent.unsafeWeakRef()
+    brightPrint fgMagenta, "\t subscribers:", ""
+    for sig, subs in agent.subcriptionsTable.pairs():
+      # brightPrint fgRed, "\t\t signal: ", $sig
+      for sub in subs:
+        brightPrint fgGreen, "\t\t:", $sig, ": => ", $sub.tgt & " slot: " & $sub.slot.repr
+    brightPrint fgMagenta, "\t listening:", ""
+    for listening in agent.listening:
+      brightPrint fgRed, "\t\t listen: ", $listening
+    

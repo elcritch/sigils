@@ -24,8 +24,8 @@ type
     remote*: WeakRef[Agent]
     proxyTwin*: WeakRef[AgentProxyShared]
     lock*: Lock
-    thread*: SigilThread
-    msgs*: Chan[ThreadSignal]
+    remoteThread*: SigilThread
+    inbox*: Chan[ThreadSignal]
 
   AgentProxy*[T] = ref object of AgentProxyShared
 
@@ -67,7 +67,7 @@ proc `=destroy`*(obj: var typeof(AgentProxyShared()[])) =
     `=destroy`(toAgentObj(cast[AgentProxyShared](addr obj)))
 
     `=destroy`(obj.remote)
-    `=destroy`(obj.thread)
+    `=destroy`(obj.remoteThread)
 
     # careful on this one -- should probably figure out a test
     # in case the compiler ever changes
@@ -119,23 +119,26 @@ method callMethod*(
   #     if not res:
   #       raise newException(AgentSlotError, "error sending signal to thread")
   #   else:
-  #     proxy.inbound[].send(msg)
+  #     proxy.msgs[].send(msg)
   # elif slot == localSlot:
   #   debugPrint "\t callMethod:agentProxy:localSlot: req: ", $req
   #   callSlots(proxy, req)
   # else:
-  #   var req = req.deepCopy()
-  #   # echo "proxy:callMethod: ", " proxy:refcount: ", proxy.unsafeGcCount()
-  #   # echo "proxy:callMethod: ", " proxy.obj.remote:refcount: ", proxy.obj.remote[].unsafeGcCount()
-  #   debugPrint "\t callMethod:agentProxy:InitCall:Outbound: ", req.procName, " proxy:remote:obj: ", proxy.remote.getId()
-  #   GC_ref(proxy)
-  #   var msg = isolateRuntime ThreadSignal(kind: Call, slot: slot, req: move req, tgt: proxy.remote, src: proxy.unsafeWeakRef())
-  #   when defined(sigilNonBlockingThreads):
-  #     let res = proxy.obj.outbound[].trySend(msg)
-  #     if not res:
-  #       raise newException(AgentSlotError, "error sending signal to thread")
-  #   else:
-  #     proxy.outbound[].send(msg)
+  block:
+    var req = req.deepCopy()
+    # echo "proxy:callMethod: ", " proxy:refcount: ", proxy.unsafeGcCount()
+    # echo "proxy:callMethod: ", " proxy.obj.remote:refcount: ", proxy.obj.remote[].unsafeGcCount()
+    debugPrint "\t callMethod:agentProxy:InitCall:Outbound: ", req.procName, " proxy:remote:obj: ", proxy.remote.getId()
+    GC_ref(proxy)
+    var msg = isolateRuntime ThreadSignal(kind: Call, slot: slot, req: move req, tgt: proxy.remote, src: proxy.unsafeWeakRef())
+    when defined(sigilNonBlockingThreads):
+      let res = proxy.obj.outbound[].trySend(msg)
+      if not res:
+        raise newException(AgentSlotError, "error sending signal to thread")
+    else:
+      proxy.inbox.send(msg)
+      withLock proxy.remoteThread[].signaledLock:
+        proxy.remoteThread[].signaled.incl(proxy.remote)
 
 method removeSubscriptionsFor*(
     self: AgentProxyShared, subscriber: WeakRef[Agent]
@@ -264,16 +267,16 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
 
     localProxy = AgentProxy[T](
         remote: agent,
-        thread: ct,
-        msgs: newChan[ThreadSignal](1_000),
+        remoteThread: ct,
+        inbox: newChan[ThreadSignal](1_000),
         # outbound: thread[].inputs,
         # inbound: ct[].inputs,
     )
     remoteProxy = AgentProxy[T](
         # remote: WeakRef[Agent](pt: nil),
         remote: agent,
-        thread: thread,
-        msgs: newChan[ThreadSignal](1_000),
+        remoteThread: thread,
+        inbox: newChan[ThreadSignal](1_000),
         # outbound: thread[].inputs,
         # inbound: ct[].inputs,
     )
