@@ -134,11 +134,14 @@ suite "threaded agent slots":
         printConnections(a)
         printConnections(b)
 
-        echo "\n==== movedToThread"
+        echo "\n==== moveToThread"
         let bp: AgentProxy[Counter] = b.moveToThread(thread)
         brightPrint "obj bp: ", $bp.unsafeWeakRef()
         printConnections(a)
         printConnections(bp.remote[])
+        # check a.subcriptionsTable[AnySigilName].contains(a.unsafeWeakRef().asAgent())
+        check bp.listening.contains(a.unsafeWeakRef().asAgent())
+        # check bp.subcriptionsTable[]
         echo ""
         printConnections(bp)
 

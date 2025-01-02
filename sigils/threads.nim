@@ -258,7 +258,7 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
       "agent must be unique and not shared to be passed to another thread! " &
       "GC ref is: " & $agentTy.unsafeGcCount(),
     )
-  let
+  var
     ct = getCurrentSigilThread()
     agent = agentTy.unsafeWeakRef.asAgent()
 
@@ -308,8 +308,8 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
       localProxy.addSubscription(signal, sub.tgt[], sub.slot)
   
   thread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Move, item: move agentTy))
+  thread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Move, item: move remoteProxy))
 
-  GC_ref(remoteProxy)
   return localProxy
 
 
