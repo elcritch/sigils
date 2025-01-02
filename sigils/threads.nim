@@ -135,10 +135,12 @@ method callMethod*(
     GC_ref(proxy)
     var msg = isolateRuntime ThreadSignal(kind: Call, slot: slot, req: move req, tgt: proxy.remote)
     when defined(sigilNonBlockingThreads):
-      let res = proxy.obj.outbound[].trySend(msg)
-      if not res:
-        raise newException(AgentSlotError, "error sending signal to thread")
+      # let res = proxy.obj.outbound[].trySend(msg)
+      # if not res:
+      #   raise newException(AgentSlotError, "error sending signal to thread")
+      discard
     else:
+      debugPrint "\t callMethod:agentProxy:proxyTwin: ", proxy.proxyTwin
       proxy.proxyTwin[].inbox.send(msg)
       withLock proxy.remoteThread[].signaledLock:
         proxy.remoteThread[].signaled.incl(proxy.proxyTwin)
@@ -202,10 +204,6 @@ proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
       assert sig.tgt[].freedByThread == 0
     let res = sig.tgt[].callMethod(sig.req, sig.slot)
     debugPrint "\t threadExec:tgt: ", $sig.tgt[].getId(), " rc: ", $sig.tgt[].unsafeGcCount()
-    # debugPrint "\t threadExec:deref: ", $sig.src[].getId(), " rc: ", $sig.src[].unsafeGcCount()
-    # let src: WeakRef[Agent] = toKind(sig.src, Agent)
-    # if not sig.src[].isNil:
-    #   sig.src[].inbound[].send(unsafeIsolate ThreadSignal(kind: Deref, deref: src))
   of Trigger:
     debugPrint "Triggering"
     var signaled: HashSet[WeakRef[AgentProxyShared]]
@@ -217,8 +215,7 @@ proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
       var sig: ThreadSignal
       while signaled[].inbox.tryRecv(sig):
         debugPrint "\t threadExec:tgt: ", $sig.tgt[].getId(), " rc: ", $sig.tgt[].unsafeGcCount()
-        # debugPrint "\t threadExec:deref: ", $sig.src[].getId(), " rc: ", $sig.src[].unsafeGcCount()
-        # let src: WeakRef[Agent] = toKind(sig.src, Agent)
+        let res = sig.tgt[].callMethod(sig.req, sig.slot)
 
 proc poll*[R: SigilThreadBase](thread: var R) =
   let sig = thread.inputs[].recv()
