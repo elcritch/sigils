@@ -141,7 +141,7 @@ method callMethod*(
     else:
       proxy.inbox.send(msg)
       withLock proxy.remoteThread[].signaledLock:
-        proxy.remoteThread[].signaled.incl(proxy.remote)
+        proxy.remoteThread[].signaled.incl(proxy.proxyTwin.asAgent())
       proxy.remoteThread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Trigger))
 
 method removeSubscriptionsFor*(
