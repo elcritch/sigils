@@ -205,7 +205,12 @@ proc asAgent*[T: Agent](obj: WeakRef[T]): WeakRef[Agent] =
 proc asAgent*[T: Agent](obj: T): Agent =
   result = obj
 
-proc addSubscription*(obj: Agent, sig: SigilName, tgt: Agent | WeakRef[Agent], slot: AgentProc): void =
+proc addSubscription*(
+    obj: Agent,
+    sig: SigilName,
+    tgt: Agent | WeakRef[Agent],
+    slot: AgentProc
+): void =
   # echo "add agent listener: ", sig, " obj: ", obj.debugId, " tgt: ", tgt.debugId
   # if obj.subcriptionsTable.hasKey(sig):
   #   echo "listener:count: ", obj.subcriptionsTable[sig].len()
@@ -225,21 +230,6 @@ proc addSubscription*(obj: Agent, sig: SigilName, tgt: Agent | WeakRef[Agent], s
   # echo "subcriptionsTable: ", obj.subcriptionsTable.len, " SUBSC: ", tgt.subscribed.len
 
 template addSubscription*(
-    obj: Agent, sig: IndexableChars, tgt: Agent, slot: AgentProc
+    obj: Agent, sig: IndexableChars, tgt: Agent | WeakRef[Agent], slot: AgentProc
 ): void =
   addSubscription(obj, sig.toSigilName(), tgt, slot)
-
-method callMethod*(
-    ctx: Agent, req: SigilRequest, slot: AgentProc
-): SigilResponse {.base, gcsafe, effectsOf: slot.} =
-  ## Route's an rpc request. 
-
-  if slot.isNil:
-    let msg = $req.procName & " is not a registered RPC method."
-    let err = SigilError(code: METHOD_NOT_FOUND, msg: msg)
-    result = wrapResponseError(req.origin, err)
-  else:
-    slot(ctx, req.params)
-    let res = rpcPack(true)
-
-    result = SigilResponse(kind: Response, id: req.origin.int, result: res)

@@ -1,9 +1,27 @@
 import signals
 import slots
+import agents
 
 from system/ansi_c import c_raise
 
-export signals, slots
+export signals, slots, agents
+
+method callMethod*(
+    ctx: Agent, req: SigilRequest, slot: AgentProc
+): SigilResponse {.base, gcsafe, effectsOf: slot.} =
+  ## Route's an rpc request. 
+
+  if slot.isNil:
+    let msg = $req.procName & " is not a registered RPC method."
+    let err = SigilError(code: METHOD_NOT_FOUND, msg: msg)
+    result = wrapResponseError(req.origin, err)
+  else:
+    slot(ctx, req.params)
+    let res = rpcPack(true)
+
+    result = SigilResponse(kind: Response, id: req.origin.int, result: res)
+
+from system/ansi_c import c_raise
 
 type AgentSlotError* = object of CatchableError
 
