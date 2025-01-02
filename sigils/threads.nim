@@ -190,7 +190,7 @@ proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
         echo "exec:call:thr: ", $getThreadId()
         echo "exec:call: ", $sig.tgt[].getId()
         echo "exec:call:isUnique: ", sig.tgt[].isUniqueRef
-        echo "exec:call:has: ", sig.tgt[] in getCurrentSigilThread()[].references
+        # echo "exec:call:has: ", sig.tgt[] in getCurrentSigilThread()[].references
         # discard c_raise(11.cint)
       assert sig.tgt[].freedByThread == 0
     let res = sig.tgt[].callMethod(sig.req, sig.slot)
