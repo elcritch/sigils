@@ -139,16 +139,17 @@ suite "threaded agent slots":
         brightPrint "obj bp: ", $bp.unsafeWeakRef()
         printConnections(a)
         printConnections(bp.remote[])
-        # check a.subcriptionsTable[AnySigilName].contains(a.unsafeWeakRef().asAgent())
+        let subLocalProxy = Subscription(tgt: bp.unsafeWeakRef().asAgent(), slot: setValueGlobal(Counter))
+        check a.subcriptionsTable["valueChanged".toSigilName].contains(subLocalProxy)
         check bp.listening.contains(a.unsafeWeakRef().asAgent())
         # check bp.subcriptionsTable[]
         echo ""
         printConnections(bp)
 
         emit a.valueChanged(568)
-      echo "block done"
-      os.sleep(10)
-      check globalCounter == 568
+        echo "block done"
+        os.sleep(10)
+        check globalCounter == 568
 
   when false:
     test "agent connect then moveToThread and run":
