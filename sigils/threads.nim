@@ -165,8 +165,14 @@ method unregisterSubscriber*(
     debugPrint "   unregisterSubscriber:proxy:ready: self:id: ", $self.unsafeWeakRef()
     unregisterSubscriberImpl(self, listener)
     if self.listening.len() == 0:
-      debugPrint "\tproxy:listening:empty: ", self.listening.len(), " remote thread: ", self.remoteThread[].id
-      # self.remoteThread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Move, item: move remoteProxy))
+      let
+        thr = self.proxyTwin[].remoteThread
+        selfRef = self.unsafeWeakRef().asAgent()
+      debugPrint "\tproxy:listening:empty: ", self.listening.len(), " remote thread: ", thr[].id
+      try:
+        thr[].inputs[].send(unsafeIsolate ThreadSignal(kind: Deref, deref: selfRef))
+      except Exception:
+        echo "error sending deref message for ", $selfRef
 
 proc newSigilThread*(): SigilThread =
   result = newSharedPtr(isolate SigilThreadObj())
