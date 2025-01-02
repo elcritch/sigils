@@ -16,15 +16,21 @@ type
     obj: InnerC
 
   InnerA = object
+    id: int
   InnerC = object
+    id: int
 
+var globalLastInnerADestroyed = 0
 proc `=destroy`*(obj: InnerA) = 
-  # echo "destroyed InnerA!"
-  discard
+  if obj.id != 0:
+    echo "destroyed InnerA!"
+  globalLastInnerADestroyed = obj.id
 
+var globalLastInnerCDestroyed = 0
 proc `=destroy`*(obj: InnerC) = 
-  # echo "destroyed InnerC!"
-  discard
+  if obj.id != 0:
+    echo "destroyed InnerC!"
+  globalLastInnerCDestroyed = obj.id
 
 proc valueChanged*(tp: SomeAction, val: int) {.signal.}
 proc updated*(tp: Counter, final: int) {.signal.}
@@ -120,12 +126,14 @@ suite "threaded agent slots":
         a = SomeAction(debugName: "A")
       when defined(sigilsDebug):
         a.debugName = "A"
+        a.obj.id = 1010
 
       block:
         var
           b = Counter()
         when defined(sigilsDebug):
           b.debugName = "B"
+          b.obj.id = 2020
 
         brightPrint "thread runner!", &" (th: {getThreadId()})"
         brightPrint "obj a: ", $a.unsafeWeakRef()
@@ -158,9 +166,15 @@ suite "threaded agent slots":
       printConnections(a)
       # printConnections(bp)
 
+      # check a is disconnected
+      check not a.hasConnections()
       emit a.valueChanged(111)
       check globalCounter == 568
-      os.sleep(10)
+
+      for i in 1..100:
+        if globalLastInnerCDestroyed != 2020:
+          os.sleep(1)
+      check globalLastInnerCDestroyed == 2020
 
   when false:
     test "agent connect then moveToThread and run":
