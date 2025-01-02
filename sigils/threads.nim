@@ -204,7 +204,7 @@ proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
       if not agent.hasConnections():
         derefs.add(agent)
     for agent in derefs:
-      debugPrint "\t\tDEREF: ", agent.unsafeWeakRef(), " hasConnection: ", agent.hasConnections()
+      debugPrint "\tderef cleanup: ", agent.unsafeWeakRef()
       thread.references.excl(agent)
 
   of Call:
