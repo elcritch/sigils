@@ -158,10 +158,10 @@ method removeSubscriptionsFor*(
 method unregisterSubscriber*(
     self: AgentProxyShared, listener: WeakRef[Agent]
 ) {.gcsafe, raises: [].} =
-  debugPrint "unregisterSubscriber:proxy: self:id: ", $self.getId()
+  debugPrint "unregisterSubscriber:proxy: self:id: ", $self.unsafeWeakRef()
   withLock self.lock:
     # block:
-    debugPrint "unregisterSubscriber:proxy:ready: self:id: ", $self.getId()
+    debugPrint "unregisterSubscriber:proxy:ready: self:id: ", $self.unsafeWeakRef()
     unregisterSubscriberImpl(self, listener)
 
 proc newSigilThread*(): SigilThread =
