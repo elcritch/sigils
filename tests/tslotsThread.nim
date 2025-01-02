@@ -210,6 +210,9 @@ suite "threaded agent slots":
         printConnections(a)
         printConnections(b)
 
+        echo "inner done"
+      echo "outer done"
+
 
   when false:
     test "agent connect then moveToThread and run":
