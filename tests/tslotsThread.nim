@@ -54,6 +54,10 @@ proc setValueGlobal*(self: Counter, value: int) {.slot.} =
     self.value = value
   globalCounter = value
 
+proc ticker*(self: Counter) {.slot.} =
+  for i in 1..10:
+    echo "tick! i:", i, self.unsafeWeakRef(), " (th: ", getThreadId(), ")"
+
 proc completed*(self: SomeAction, final: int) {.slot.} =
   # echo "Action done! final: ", final, " id: ", self.getId().int, " (th: ", getThreadId(), ")"
   self.value = final
@@ -201,7 +205,7 @@ suite "threaded agent slots":
         let thread = newSigilThread()
         thread.start()
 
-        connect(a, valueChanged, b, setValueGlobal)
+        connect(thread, started, b, ticker)
         printConnections(a)
         printConnections(b)
 
