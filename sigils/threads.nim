@@ -107,7 +107,7 @@ method callMethod*(
     proxy: AgentProxyShared, req: SigilRequest, slot: AgentProc
 ): SigilResponse {.gcsafe, effectsOf: slot.} =
   ## Route's an rpc request. 
-  debugPrint "callMethod: proxy: ", $proxy.getId(), " refcount: ", proxy.unsafeGcCount(), " slot: ", repr(slot)
+  debugPrint "callMethod: proxy: ", $proxy.unsafeWeakRef().asAgent(), " refcount: ", proxy.unsafeGcCount(), " slot: ", repr(slot)
   if slot == remoteSlot:
     discard
   #   var req = req.deepCopy()
@@ -139,7 +139,7 @@ method callMethod*(
       if not res:
         raise newException(AgentSlotError, "error sending signal to thread")
     else:
-      proxy.proxyTwin.inbox.send(msg)
+      proxy.proxyTwin[].inbox.send(msg)
       withLock proxy.remoteThread[].signaledLock:
         proxy.remoteThread[].signaled.incl(proxy.proxyTwin)
       proxy.remoteThread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Trigger))
