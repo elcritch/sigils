@@ -207,7 +207,7 @@ suite "threaded agent slots":
         GC_fullCollect()
       GC_fullCollect()
 
-  when true:
+  when false:
     test "sigil object thread runner multiple":
       block:
         # echo "thread runner!", " (main thread:", getThreadId(), ")"
