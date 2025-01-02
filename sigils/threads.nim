@@ -107,7 +107,7 @@ method callMethod*(
     proxy: AgentProxyShared, req: SigilRequest, slot: AgentProc
 ): SigilResponse {.gcsafe, effectsOf: slot.} =
   ## Route's an rpc request. 
-  debugPrint "callMethod: proxy: ", $proxy.getId(), " refcount: ", proxy.unsafeGcCount()
+  debugPrint "callMethod: proxy: ", $proxy.getId(), " refcount: ", proxy.unsafeGcCount(), " slot: ", repr(slot)
   # if slot == remoteSlot:
   #   var req = req.deepCopy()
   #   debugPrint "\t proxy:callMethod:remoteSlot: ", "req: ", $req

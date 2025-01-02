@@ -112,6 +112,8 @@ suite "threaded agent slots":
 
   when true:
     test "agent connect single then moveToThread then destroy proxy":
+      echo "slot:remoteSlot: ", remoteSlot.repr
+
       let ct = getCurrentSigilThread()
       var
         a = SomeAction(debugName: "A")
