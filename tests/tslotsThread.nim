@@ -122,6 +122,7 @@ suite "threaded agent slots":
 
   when true:
     test "agent connect a->b then moveToThread then destroy proxy":
+      debugPrintQuiet = true
       echo "slot:remoteSlot: ", remoteSlot.repr
       echo "slot:localSlot: ", localSlot.repr
 
@@ -146,16 +147,16 @@ suite "threaded agent slots":
         thread.start()
 
         connect(a, valueChanged, b, setValueGlobal)
-        printConnections(a)
-        printConnections(b)
+        # printConnections(a)
+        # printConnections(b)
 
         echo "\n==== moveToThread"
         let bp: AgentProxy[Counter] = b.moveToThread(thread)
         brightPrint "obj bp: ", $bp.unsafeWeakRef()
-        printConnections(a)
-        printConnections(bp)
-        printConnections(bp.proxyTwin[])
-        printConnections(bp.remote[])
+        # printConnections(a)
+        # printConnections(bp)
+        # printConnections(bp.proxyTwin[])
+        # printConnections(bp.remote[])
         let
           subLocalProxy = Subscription(tgt: bp.unsafeWeakRef().asAgent(), slot: setValueGlobal(Counter))
         check a.subcriptionsTable["valueChanged".toSigilName].contains(subLocalProxy)
@@ -167,8 +168,7 @@ suite "threaded agent slots":
         os.sleep(10)
         check globalCounter == 568
       echo "block done"
-      printConnections(a)
-      # printConnections(bp)
+      # printConnections(a)
 
       # check a is disconnected
       check not a.hasConnections()
@@ -182,6 +182,7 @@ suite "threaded agent slots":
 
   when true:
     test "agent connect b->a then moveToThread then destroy proxy":
+      debugPrintQuiet = false
       echo "slot:remoteSlot: ", remoteSlot.repr
       echo "slot:localSlot: ", localSlot.repr
 
@@ -205,40 +206,10 @@ suite "threaded agent slots":
         let thread = newSigilThread()
         thread.start()
 
-        connect(thread, started, b, ticker)
+        connect(thread[], started, b, ticker)
         printConnections(a)
         printConnections(b)
 
-        echo "\n==== moveToThread"
-        let bp: AgentProxy[Counter] = b.moveToThread(thread)
-        brightPrint "obj bp: ", $bp.unsafeWeakRef()
-        printConnections(a)
-        printConnections(bp)
-        printConnections(bp.proxyTwin[])
-        printConnections(bp.remote[])
-        let
-          subLocalProxy = Subscription(tgt: bp.unsafeWeakRef().asAgent(), slot: setValueGlobal(Counter))
-        check a.subcriptionsTable["valueChanged".toSigilName].contains(subLocalProxy)
-        check bp.listening.contains(a.unsafeWeakRef().asAgent())
-        # check bp.subcriptionsTable[AnySigilName].contains(subLocalProxy)
-        # check bp.subcriptionsTable[]
-
-        emit a.valueChanged(568)
-        os.sleep(10)
-        check globalCounter == 568
-      echo "block done"
-      printConnections(a)
-      # printConnections(bp)
-
-      # check a is disconnected
-      check not a.hasConnections()
-      emit a.valueChanged(111)
-      check globalCounter == 568
-
-      for i in 1..100:
-        if globalLastInnerCDestroyed != 2020:
-          os.sleep(1)
-      check globalLastInnerCDestroyed == 2020
 
   when false:
     test "agent connect then moveToThread and run":

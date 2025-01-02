@@ -34,6 +34,7 @@ var
   pcnt*: int = 0
   pidx* {.threadVar.}: int
   plock: Lock
+  debugPrintQuiet* = false
 
 plock.initLock()
 
@@ -58,7 +59,8 @@ proc debugPrintImpl*(msgs: varargs[string, `$`]) {.raises: [].} =
 
 template debugPrint*(msgs: varargs[untyped]) =
   when defined(sigilsDebugPrint):
-    debugPrintImpl(msgs)
+    if not debugPrintQuiet:
+      debugPrintImpl(msgs)
 
 proc brightPrint*(color: ForegroundColor, msg, value: string, msg2 = "", value2 = "") =
   stdout.styledWriteLine color, msg, {styleBright, styleItalic}, value, resetStyle,
