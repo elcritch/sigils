@@ -62,7 +62,7 @@ template debugPrint*(msgs: varargs[untyped]) =
 
 type
   AgentObj = object of RootObj
-    suscriptionsTable*: Table[SigilName, OrderedSet[Subscription]] ## agents listening to me
+    subcriptionsTable*: Table[SigilName, OrderedSet[Subscription]] ## agents listening to me
     listening*: HashSet[WeakRef[Agent]] ## agents I'm listening to
     when defined(sigilDebugFreed) or defined(debug):
       freedByThread*: int
@@ -99,7 +99,7 @@ template removeSubscriptionsForImpl*(
   ## Route's an rpc request. 
   var delSigs: seq[SigilName]
   var toDel: seq[Subscription]
-  for signal, subscriptions in self.suscriptionsTable.mpairs():
+  for signal, subscriptions in self.subcriptionsTable.mpairs():
     debugPrint "removeSubscriptionsFor subs sig: ", $signal
     toDel.setLen(0)
     for subscription in subscriptions:
@@ -111,7 +111,7 @@ template removeSubscriptionsForImpl*(
     if subscriptions.len() == 0:
       delSigs.add(signal)
   for sig in delSigs:
-    self.suscriptionsTable.del(sig)
+    self.subcriptionsTable.del(sig)
 
 method removeSubscriptionsFor*(
     self: Agent, subscriber: WeakRef[Agent]
@@ -134,43 +134,44 @@ method unregisterSubscriber*(
   debugPrint &"unregisterSubscriber:agent: self: {$self.getId()}"
   unregisterSubscriberImpl(self, listener)
 
-proc unsubscribe*(listening: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]) =
+proc unsubscribeFrom*(self: WeakRef[Agent], listening: HashSet[WeakRef[Agent]]) =
   ## unsubscribe myself from agents I'm subscribed (listening) to
-  debugPrint &"unsubscribe: {$listening.len()}"
-  for obj in listening:
-    obj[].removeSubscriptionsFor(xid)
+  debugPrint fmt"agent: {$self.getId()} unsubscribeFrom: {$listening.len()}"
+  for agent in listening:
+    agent[].removeSubscriptionsFor(self)
 
-template removeSubscription*(
-    suscriptionsTable: Table[SigilName, OrderedSet[Subscription]], xid: WeakRef[Agent]
+template removeSubscriptions*(
+    agent: WeakRef[Agent],
+    subcriptionsTable: Table[SigilName, OrderedSet[Subscription]],
 ) =
   ## remove myself from agents listening to me
-  for signal, subscriptions in suscriptionsTable.pairs():
-    # echo "freeing signal: ", signal, " suscriptionsTable: ", subscriberPairs
+  for signal, subscriptions in subcriptionsTable.pairs():
+    # echo "freeing signal: ", signal, " subcriptionsTable: ", subscriberPairs
     for subscription in subscriptions:
-      subscription.tgt[].unregisterSubscriber(xid)
+      subscription.tgt[].unregisterSubscriber(agent)
 
 proc `=destroy`*(agentObj: AgentObj) {.forbids: [DestructorUnsafe].} =
   when defined(sigilsWeakRefCursor):
-    let xid: WeakRef[Agent] = WeakRef[Agent](pt: cast[Agent](addr agentObj))
+    let agent: WeakRef[Agent] = WeakRef[Agent](pt: cast[Agent](addr agentObj))
   else:
-    let xid: WeakRef[Agent] = WeakRef[Agent](pt: cast[pointer](addr agentObj))
+    let agent: WeakRef[Agent] = WeakRef[Agent](pt: cast[pointer](addr agentObj))
 
   debugPrint &"destroy: agent: ",
-          &" pt: 0x{xid.toPtr.repr}",
+          &" pt: 0x{agent.toPtr.repr}",
           &" freed: {agentObj.freedByThread}",
-          &" subs: {xid[].suscriptionsTable.len()}",
-          &" subTo: {xid[].listening.len()}"
+          &" subs: {agent[].subcriptionsTable.len()}",
+          &" subTo: {agent[].listening.len()}"
   # debugPrint "destroy agent: ", getStackTrace().replace("\n", "\n\t")
   when defined(debug) or defined(sigilDebugFreed):
     assert agentObj.freedByThread == 0
-    xid[].freedByThread = getThreadId()
+    agent[].freedByThread = getThreadId()
 
-  agentObj.listening.unsubscribe(xid)
-  agentObj.suscriptionsTable.removeSubscription(xid)
+  agent.unsubscribeFrom(agentObj.listening)
+  agent.removeSubscriptions(agentObj.subcriptionsTable)
 
-  `=destroy`(xid[].suscriptionsTable)
-  `=destroy`(xid[].listening)
-  debugPrint "finished destroy: agent: ", " pt: 0x", xid.toPtr.repr
+  `=destroy`(agent[].subcriptionsTable)
+  `=destroy`(agent[].listening)
+  debugPrint "finished destroy: agent: ", " pt: 0x", agent.toPtr.repr
 
 template toAgentObj*[T: Agent](agent: T): AgentObj =
   Agent(agent)[]
@@ -187,11 +188,11 @@ proc hash*(a: Agent): Hash =
 proc getSubscriptions*(
     obj: Agent, sig: SigilName
 ): OrderedSet[Subscription] =
-  # echo "FIND:suscriptionsTable: ", obj.suscriptionsTable
-  if obj.suscriptionsTable.hasKey(sig):
-    result = obj.suscriptionsTable[sig]
-  elif obj.suscriptionsTable.hasKey(AnySigilName):
-    result = obj.suscriptionsTable[AnySigilName]
+  # echo "FIND:subcriptionsTable: ", obj.subcriptionsTable
+  if obj.subcriptionsTable.hasKey(sig):
+    result = obj.subcriptionsTable[sig]
+  elif obj.subcriptionsTable.hasKey(AnySigilName):
+    result = obj.subcriptionsTable[AnySigilName]
 
 template getSubscriptions*(
     obj: Agent, sig: string
@@ -206,11 +207,11 @@ proc asAgent*[T: Agent](obj: T): Agent =
 
 proc addSubscription*(obj: Agent, sig: SigilName, tgt: Agent | WeakRef[Agent], slot: AgentProc): void =
   # echo "add agent listener: ", sig, " obj: ", obj.debugId, " tgt: ", tgt.debugId
-  # if obj.suscriptionsTable.hasKey(sig):
-  #   echo "listener:count: ", obj.suscriptionsTable[sig].len()
+  # if obj.subcriptionsTable.hasKey(sig):
+  #   echo "listener:count: ", obj.subcriptionsTable[sig].len()
   assert slot != nil
 
-  obj.suscriptionsTable.withValue(sig, subs):
+  obj.subcriptionsTable.withValue(sig, subs):
     # if (tgt.unsafeWeakRef(), slot,) notin agents[]:
     #   echo "addAgentsubscribers: ", "tgt: 0x", tgt.unsafeWeakRef().toPtr().pointer.repr, " id: ", tgt.debugId, " obj: ", obj.debugId, " name: ", sig
     subs[].incl(Subscription(tgt: tgt.unsafeWeakRef().asAgent(), slot: slot))
@@ -218,10 +219,10 @@ proc addSubscription*(obj: Agent, sig: SigilName, tgt: Agent | WeakRef[Agent], s
     # echo "addAgentsubscribers: ", "tgt: 0x", tgt.unsafeWeakRef().toPtr().pointer.repr, " id: ", tgt.debugId, " obj: ", obj.debugId, " name: ", sig
     var subs = initOrderedSet[Subscription]()
     subs.incl(Subscription(tgt: tgt.unsafeWeakRef().asAgent(), slot: slot))
-    obj.suscriptionsTable[sig] = ensureMove subs
+    obj.subcriptionsTable[sig] = ensureMove subs
 
   tgt.listening.incl(obj.unsafeWeakRef().asAgent())
-  # echo "suscriptionsTable: ", obj.suscriptionsTable.len, " SUBSC: ", tgt.subscribed.len
+  # echo "subcriptionsTable: ", obj.subcriptionsTable.len, " SUBSC: ", tgt.subscribed.len
 
 template addSubscription*(
     obj: Agent, sig: IndexableChars, tgt: Agent, slot: AgentProc

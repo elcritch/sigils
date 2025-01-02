@@ -34,7 +34,7 @@ proc setValue*(self: Counter, value: int) {.slot.} =
   # echo "setValue! self:refcount: ", self.unsafeGcCount() 
   if self.value != value:
     self.value = value
-  # echo "setValue:suscriptionsTable: ", self.suscriptionsTable.pairs().toSeq.mapIt(it[1].mapIt(cast[pointer](it.tgt.getId()).repr))
+  # echo "setValue:subcriptionsTable: ", self.subcriptionsTable.pairs().toSeq.mapIt(it[1].mapIt(cast[pointer](it.tgt.getId()).repr))
   # echo "setValue:listening: ", $self.listening.toSeq.mapIt(cast[pointer](it.getId()).repr)
   if value == 756809:
     os.sleep(1)
@@ -134,10 +134,10 @@ suite "threaded agent slots":
         check a.value == 314
         GC_fullCollect()
       
-      # check a.suscriptionsTable.len() == 0
+      # check a.subcriptionsTable.len() == 0
       # check a.listening.len() == 0
-      if a.suscriptionsTable.len() > 0:
-        echo "a.suscriptionsTable: ", a.suscriptionsTable
+      if a.subcriptionsTable.len() > 0:
+        echo "a.subcriptionsTable: ", a.subcriptionsTable
       if a.listening.len() > 0:
         echo "a.listening: ", a.listening
       GC_fullCollect()
