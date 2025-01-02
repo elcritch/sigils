@@ -52,7 +52,7 @@ type
     inputs*: SigilChan
 
     signaledLock*: Lock
-    signaled*: HashSet[WeakRef[Agent]]
+    signaled*: HashSet[WeakRef[AgentProxyShared]]
     references*: HashSet[Agent]
 
   SigilThreadObj* = object of SigilThreadBase
@@ -140,7 +140,7 @@ method callMethod*(
     else:
       proxy.inbox.send(msg)
       withLock proxy.remoteThread[].signaledLock:
-        proxy.remoteThread[].signaled.incl(proxy.proxyTwin.asAgent())
+        proxy.remoteThread[].signaled.incl(proxy.proxyTwin)
       proxy.remoteThread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Trigger))
 
 method removeSubscriptionsFor*(
@@ -207,14 +207,14 @@ proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
     #   sig.src[].inbound[].send(unsafeIsolate ThreadSignal(kind: Deref, deref: src))
   of Trigger:
     debugPrint "Triggering"
-    var signaled: HashSet[WeakRef[Agent]]
+    var signaled: HashSet[WeakRef[AgentProxyShared]]
     withLock thread.signaledLock:
       signaled = move thread.signaled
 
     for signaled in signaled:
       debugPrint "triggering: ", signaled
       var sig: ThreadSignal
-      while thread.inputs[].tryRecv(sig):
+      while signaled[].inbox.tryRecv(sig):
         debugPrint "\t threadExec:tgt: ", $sig.tgt[].getId(), " rc: ", $sig.tgt[].unsafeGcCount()
         # debugPrint "\t threadExec:deref: ", $sig.src[].getId(), " rc: ", $sig.src[].unsafeGcCount()
         # let src: WeakRef[Agent] = toKind(sig.src, Agent)
