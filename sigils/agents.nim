@@ -204,23 +204,23 @@ proc asAgent*[T: Agent](obj: WeakRef[T]): WeakRef[Agent] =
 proc asAgent*[T: Agent](obj: T): Agent =
   result = obj
 
-proc addSubscription*(obj: Agent, sig: SigilName, tgt: Agent, slot: AgentProc): void =
+proc addSubscription*(obj: Agent, sig: SigilName, tgt: Agent | WeakRef[Agent], slot: AgentProc): void =
   # echo "add agent listener: ", sig, " obj: ", obj.debugId, " tgt: ", tgt.debugId
   # if obj.subscribers.hasKey(sig):
   #   echo "listener:count: ", obj.subscribers[sig].len()
   assert slot != nil
 
-  obj.subscribers.withValue(sig, agents):
+  obj.subscribers.withValue(sig, subs):
     # if (tgt.unsafeWeakRef(), slot,) notin agents[]:
     #   echo "addAgentsubscribers: ", "tgt: 0x", tgt.unsafeWeakRef().toPtr().pointer.repr, " id: ", tgt.debugId, " obj: ", obj.debugId, " name: ", sig
-    agents[].incl(Subscription(tgt: tgt.unsafeWeakRef(), slot: slot))
+    subs[].incl(Subscription(tgt: tgt.unsafeWeakRef().asAgent(), slot: slot))
   do:
     # echo "addAgentsubscribers: ", "tgt: 0x", tgt.unsafeWeakRef().toPtr().pointer.repr, " id: ", tgt.debugId, " obj: ", obj.debugId, " name: ", sig
-    var agents = initOrderedSet[Subscription]()
-    agents.incl(Subscription(tgt: tgt.unsafeWeakRef(), slot: slot))
-    obj.subscribers[sig] = ensureMove agents
+    var subs = initOrderedSet[Subscription]()
+    subs.incl(Subscription(tgt: tgt.unsafeWeakRef().asAgent(), slot: slot))
+    obj.subscribers[sig] = ensureMove subs
 
-  tgt.subscribedTo.incl(obj.unsafeWeakRef())
+  tgt.subscribedTo.incl(obj.unsafeWeakRef().asAgent())
   # echo "subscribers: ", obj.subscribers.len, " SUBSC: ", tgt.subscribed.len
 
 template addSubscription*(

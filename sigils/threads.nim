@@ -24,9 +24,7 @@ type
   AgentProxyShared* = ref object of Agent
     # obj*: AgentProxySharedObj
     remote*: WeakRef[Agent]
-    outbound*: SigilChan
-    inbound*: SigilChan
-    listeners*: HashSet[Agent]
+    thread*: SigilThread
     lock*: Lock
 
   AgentProxy*[T] = ref object of AgentProxyShared
@@ -50,7 +48,9 @@ type
 
   SigilThreadBase* = object of RootObj
     inputs*: SigilChan
-    references*: HashSet[Agent]
+
+    signaledLock*: Lock
+    signaled*: HashSet[WeakRef[Agent]]
 
   SigilThreadObj* = object of SigilThreadBase
     thr*: Thread[SharedPtr[SigilThreadObj]]
@@ -66,13 +66,10 @@ proc `=destroy`*(obj: var typeof(AgentProxyShared()[])) =
     `=destroy`(toAgentObj(cast[AgentProxyShared](addr obj)))
 
     `=destroy`(obj.remote)
-    `=destroy`(obj.outbound)
-    `=destroy`(obj.inbound)
-    `=destroy`(obj.listeners)
+    `=destroy`(obj.thread)
 
     # careful on this one -- should probably figure out a test
     # in case the compiler ever changes
-
     `=destroy`(obj.lock)
 
 proc newSigilChan*(): SigilChan =
@@ -263,12 +260,19 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
   let
     ct = getCurrentSigilThread()
     agent = agentTy.unsafeWeakRef.asAgent()
-    proxy = AgentProxy[T](
+
+    localProxy = AgentProxy[T](
         remote: agent,
-        outbound: thread[].inputs,
-        inbound: ct[].inputs,
+        # outbound: thread[].inputs,
+        # inbound: ct[].inputs,
     )
-  proxy.lock.initLock()
+    remoteProxy = AgentProxy[T](
+        remote: agent,
+        # outbound: thread[].inputs,
+        # inbound: ct[].inputs,
+    )
+  localProxy.lock.initLock()
+  remoteProxy.lock.initLock()
 
   # handle things subscribed to `agent`, ie the inverse
   var
@@ -277,21 +281,22 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
 
   agent[].subscribedTo.unsubscribe(agent)
   agent[].subscribers.removeSubscription(agent)
-
   agent[].subscribedTo.clear()
   agent[].subscribers.clear()
 
-  # update add proxy to listen to agents I am subscribed to
-  # so they'll send my proxy events which the remote thread
-  # will process
-  for signal, subscriberPairs in oldSubscribedTo.mpairs():
-    for sub in subscriberPairs:
+  # update add proxy to listen to subs which agent was subscribed to
+  # so they'll send proxy events which the remote thread will process
+  for signal, subscriptions in oldSubscribedTo.mpairs():
+    for subscription in subscriptions:
       # let tgt = sub.tgt.toRef()
-      sub.tgt[].addSubscription(signal, proxy, sub.slot)
+      subscription.tgt[].addSubscription(signal, localProxy, sub.slot)
+
+  localProxy.addSubscription(AnySigilName, remoteProxy, localSlot)
+  remoteProxy.addSubscription(AnySigilName, agent[], localSlot)
 
   # update my subscribers so I use a new proxy to send events
   # to them
-  agent[].addSubscription(AnySigilName, proxy, remoteSlot)
+  agent[].addSubscription(AnySigilName, remoteProxy, remoteSlot)
   for signal, subscriberPairs in oldSubscribers.mpairs():
     for sub in subscriberPairs:
       # echo "signal: ", signal, " subscriber: ", tgt.getId
@@ -304,49 +309,49 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
   return proxy
 
 
-template connect*[T, S](
-    a: Agent,
-    signal: typed,
-    b: AgentProxy[T],
-    slot: Signal[S],
-    acceptVoidSlot: static bool = false,
-): void =
-  ## connects `AgentProxy[T]` to remote signals
-  ## 
-  checkSignalTypes(a, signal, T(), slot, acceptVoidSlot)
-  a.addSubscription(signalName(signal), b, slot)
+# template connect*[T, S](
+#     a: Agent,
+#     signal: typed,
+#     b: AgentProxy[T],
+#     slot: Signal[S],
+#     acceptVoidSlot: static bool = false,
+# ): void =
+#   ## connects `AgentProxy[T]` to remote signals
+#   ## 
+#   checkSignalTypes(a, signal, T(), slot, acceptVoidSlot)
+#   a.addSubscription(signalName(signal), b, slot)
 
-template connect*[T](
-    a: Agent,
-    signal: typed,
-    b: AgentProxy[T],
-    slot: typed,
-    acceptVoidSlot: static bool = false,
-): void =
-  ## connects `AgentProxy[T]` to remote signals
-  ## 
-  checkSignalThreadSafety(SignalTypes.`signal`(typeof(a)))
-  let agentSlot = `slot`(T)
-  checkSignalTypes(a, signal, T(), agentSlot, acceptVoidSlot)
-  a.addSubscription(signalName(signal), b, agentSlot)
+# template connect*[T](
+#     a: Agent,
+#     signal: typed,
+#     b: AgentProxy[T],
+#     slot: typed,
+#     acceptVoidSlot: static bool = false,
+# ): void =
+#   ## connects `AgentProxy[T]` to remote signals
+#   ## 
+#   checkSignalThreadSafety(SignalTypes.`signal`(typeof(a)))
+#   let agentSlot = `slot`(T)
+#   checkSignalTypes(a, signal, T(), agentSlot, acceptVoidSlot)
+#   a.addSubscription(signalName(signal), b, agentSlot)
 
-template connect*[T, S](
-    proxyTy: AgentProxy[T],
-    signal: typed,
-    b: Agent,
-    slot: Signal[S],
-    acceptVoidSlot: static bool = false,
-): void =
-  ## connects `AgentProxy[T]` to remote signals
-  ## 
-  checkSignalTypes(T(), signal, b, slot, acceptVoidSlot)
-  let ct = getCurrentSigilThread()
-  let proxy = Agent(proxyTy)
-  # let bref = unsafeWeakRef[Agent](b)
-  # proxy.extract()[].addSubscription(signalName(signal), proxy, slot)
-  proxy.addSubscription(signalName(signal), b, slot)
+# template connect*[T, S](
+#     proxyTy: AgentProxy[T],
+#     signal: typed,
+#     b: Agent,
+#     slot: Signal[S],
+#     acceptVoidSlot: static bool = false,
+# ): void =
+#   ## connects `AgentProxy[T]` to remote signals
+#   ## 
+#   checkSignalTypes(T(), signal, b, slot, acceptVoidSlot)
+#   let ct = getCurrentSigilThread()
+#   let proxy = Agent(proxyTy)
+#   # let bref = unsafeWeakRef[Agent](b)
+#   # proxy.extract()[].addSubscription(signalName(signal), proxy, slot)
+#   proxy.addSubscription(signalName(signal), b, slot)
 
-  # thread[].inputs.send( unsafeIsolate ThreadSignal(kind: Register, shared: ensureMove agent))
+#   # thread[].inputs.send( unsafeIsolate ThreadSignal(kind: Register, shared: ensureMove agent))
 
-  # TODO: This is wrong! but I wanted to get something running...
-  # ct[].proxies.incl(proxy)
+#   # TODO: This is wrong! but I wanted to get something running...
+#   # ct[].proxies.incl(proxy)

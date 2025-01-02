@@ -1,4 +1,6 @@
-import sigils
+import sigils/signals
+import sigils/slots
+import sigils/core
 
 type
   Counter* = ref object of Agent

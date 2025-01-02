@@ -17,6 +17,9 @@ proc unsafeWeakRef*[T](obj: T): WeakRef[T] =
   else:
     result = WeakRef[T](pt: cast[pointer](obj))
 
+proc unsafeWeakRef*[T](obj: WeakRef[T]): WeakRef[T] =
+  result = obj
+
 proc verifyUnique*[T: WeakRef, V](field: T, parent: V) =
   discard # "verifyUnique: skipping weakref: ", $T
 
