@@ -63,8 +63,9 @@ template debugPrint*(msgs: varargs[untyped]) =
       debugPrintImpl(msgs)
 
 proc brightPrint*(color: ForegroundColor, msg, value: string, msg2 = "", value2 = "") =
-  stdout.styledWriteLine color, msg, {styleBright, styleItalic}, value, resetStyle,
-                          color, msg2, {styleBright, styleItalic}, value2
+  if not debugPrintQuiet:
+    stdout.styledWriteLine color, msg, {styleBright, styleItalic}, value, resetStyle,
+                           color, msg2, {styleBright, styleItalic}, value2
 proc brightPrint*(msg, value: string, msg2 = "", value2 = "") =
   brightPrint(fgGreen, msg, value, msg2, value2)
 
