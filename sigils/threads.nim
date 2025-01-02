@@ -139,7 +139,7 @@ method callMethod*(
       if not res:
         raise newException(AgentSlotError, "error sending signal to thread")
     else:
-      proxy.inbox.send(msg)
+      proxy.proxyTwin.inbox.send(msg)
       withLock proxy.remoteThread[].signaledLock:
         proxy.remoteThread[].signaled.incl(proxy.proxyTwin)
       proxy.remoteThread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Trigger))
