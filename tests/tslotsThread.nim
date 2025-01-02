@@ -152,9 +152,14 @@ suite "threaded agent slots":
         # check bp.subcriptionsTable[]
 
         emit a.valueChanged(568)
-        echo "block done"
         os.sleep(10)
         check globalCounter == 568
+      echo "block done"
+      printConnections(a)
+      # printConnections(bp)
+
+      emit a.valueChanged(111)
+      check globalCounter == 568
 
   when false:
     test "agent connect then moveToThread and run":
