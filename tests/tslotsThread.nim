@@ -126,10 +126,12 @@ suite "threaded agent slots":
         thread.start()
 
         connect(a, valueChanged, b, setValueGlobal)
-
         printConnections(a)
+
         let bp: AgentProxy[Counter] = b.moveToThread(thread)
         brightPrint "obj bp: ", $bp.unsafeWeakRef()
+        printConnections(a)
+        printConnections(bp)
 
         emit a.valueChanged(568)
       echo "block done"
