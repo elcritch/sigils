@@ -269,5 +269,5 @@ proc printConnections*(agent: Agent) =
       brightPrint fgGreen, "\t\t:", $sig, ": => ", $sub.tgt
   brightPrint fgMagenta, "\t listening:", ""
   for listening in agent.listening:
-    brightPrint fgRed, "\t\t listen: ", $listening[].getId()
+    brightPrint fgRed, "\t\t listen: ", $listening
   

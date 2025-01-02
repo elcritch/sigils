@@ -141,9 +141,11 @@ suite "threaded agent slots":
         printConnections(bp)
         printConnections(bp.proxyTwin[])
         printConnections(bp.remote[])
-        let subLocalProxy = Subscription(tgt: bp.unsafeWeakRef().asAgent(), slot: setValueGlobal(Counter))
+        let
+          subLocalProxy = Subscription(tgt: bp.unsafeWeakRef().asAgent(), slot: setValueGlobal(Counter))
         check a.subcriptionsTable["valueChanged".toSigilName].contains(subLocalProxy)
         check bp.listening.contains(a.unsafeWeakRef().asAgent())
+        # check bp.subcriptionsTable[AnySigilName].contains(subLocalProxy)
         # check bp.subcriptionsTable[]
 
         emit a.valueChanged(568)

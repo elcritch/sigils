@@ -301,8 +301,8 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
       # brightPrint "moveToThread:oldListeningSubs: ", $subscription.tgt
       subscription.tgt[].addSubscription(signal, localProxy, subscription.slot)
 
-  # localProxy.addSubscription(AnySigilName, remoteProxy, remoteSlot)
-  # remoteProxy.addSubscription(AnySigilName, agent[], localSlot)
+  localProxy.addSubscription(AnySigilName, remoteProxy, remoteSlot)
+  remoteProxy.addSubscription(AnySigilName, agentTy, localSlot)
 
   # # update my subcriptionsTable so I use a new proxy to send events
   # agent[].addSubscription(AnySigilName, remoteProxy, localSlot)
