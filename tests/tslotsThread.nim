@@ -173,42 +173,7 @@ suite "threaded agent slots":
       GC_fullCollect()
 
   when false:
-    test "sigil object thread runner multiple":
-      block:
-        var
-          a = SomeAction.new()
-        
-        block:
-          var
-            b = Counter.new()
-
-          # echo "thread runner!", " (main thread:", getThreadId(), ")"
-          # echo "obj a: ", a.unsafeWeakRef
-          # echo "obj b: ", b.unsafeWeakRef
-          let thread = newSigilThread()
-          thread.start()
-          startLocalThread()
-
-          let bp: AgentProxy[Counter] = b.moveToThread(thread)
-          # echo "obj bp: ", bp.unsafeWeakRef
-          # echo "obj bp.remote: ", bp.remote[].unsafeWeakRef
-          connect(a, valueChanged, bp, setValue)
-          connect(bp, updated, a, SomeAction.completed())
-
-          emit a.valueChanged(756809)
-          emit a.valueChanged(628)
-
-          # thread.thread.joinThread(500)
-          let ct = getCurrentSigilThread()
-          ct[].poll()
-          check a.value == 756809
-          ct[].poll()
-          check a.value == 628
-        GC_fullCollect()
-      GC_fullCollect()
-
-  when false:
-    test "sigil object thread runner multiple":
+    test "sigil object thread runner multiple emits":
       block:
         # echo "thread runner!", " (main thread:", getThreadId(), ")"
         # echo "obj a: ", a.unsafeWeakRef
@@ -248,6 +213,41 @@ suite "threaded agent slots":
 
         # ct[].poll()
         # check a.value == 628
+  when false:
+    test "sigil object thread runner multiple emit and listens":
+      block:
+        var
+          a = SomeAction.new()
+        
+        block:
+          var
+            b = Counter.new()
+
+          # echo "thread runner!", " (main thread:", getThreadId(), ")"
+          # echo "obj a: ", a.unsafeWeakRef
+          # echo "obj b: ", b.unsafeWeakRef
+          let thread = newSigilThread()
+          thread.start()
+          startLocalThread()
+
+          let bp: AgentProxy[Counter] = b.moveToThread(thread)
+          # echo "obj bp: ", bp.unsafeWeakRef
+          # echo "obj bp.remote: ", bp.remote[].unsafeWeakRef
+          connect(a, valueChanged, bp, setValue)
+          connect(bp, updated, a, SomeAction.completed())
+
+          emit a.valueChanged(756809)
+          emit a.valueChanged(628)
+
+          # thread.thread.joinThread(500)
+          let ct = getCurrentSigilThread()
+          ct[].poll()
+          check a.value == 756809
+          ct[].poll()
+          check a.value == 628
+        GC_fullCollect()
+      GC_fullCollect()
+
 
   when false:
     test "sigil object thread runner (loop)":
