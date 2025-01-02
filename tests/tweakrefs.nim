@@ -1,5 +1,8 @@
 import std/[unittest, sequtils]
-import sigils
+
+import sigils/signals
+import sigils/slots
+import sigils/core
 import sigils/weakrefs
 
 type
