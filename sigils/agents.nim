@@ -149,24 +149,24 @@ template removeSubscription*(
     for subscription in subscriptions:
       subscription.tgt[].unregisterSubscriber(xid)
 
-proc `=destroy`*(agent: AgentObj) {.forbids: [DestructorUnsafe].} =
+proc `=destroy`*(agentObj: AgentObj) {.forbids: [DestructorUnsafe].} =
   when defined(sigilsWeakRefCursor):
-    let xid: WeakRef[Agent] = WeakRef[Agent](pt: cast[Agent](addr agent))
+    let xid: WeakRef[Agent] = WeakRef[Agent](pt: cast[Agent](addr agentObj))
   else:
-    let xid: WeakRef[Agent] = WeakRef[Agent](pt: cast[pointer](addr agent))
+    let xid: WeakRef[Agent] = WeakRef[Agent](pt: cast[pointer](addr agentObj))
 
   debugPrint &"destroy: agent: ",
           &" pt: 0x{xid.toPtr.repr}",
-          &" freed: {agent.freedByThread}",
+          &" freed: {agentObj.freedByThread}",
           &" subs: {xid[].suscriptionsTable.len()}",
           &" subTo: {xid[].listening.len()}"
   # debugPrint "destroy agent: ", getStackTrace().replace("\n", "\n\t")
   when defined(debug) or defined(sigilDebugFreed):
-    assert agent.freedByThread == 0
+    assert agentObj.freedByThread == 0
     xid[].freedByThread = getThreadId()
 
-  agent.listening.unsubscribe(xid)
-  agent.suscriptionsTable.removeSubscription(xid)
+  agentObj.listening.unsubscribe(xid)
+  agentObj.suscriptionsTable.removeSubscription(xid)
 
   `=destroy`(xid[].suscriptionsTable)
   `=destroy`(xid[].listening)
