@@ -49,6 +49,7 @@ type
       deref*: WeakRef[Agent]
 
   SigilThreadBase* = object of RootObj
+    id*: int
     inputs*: SigilChan
 
     signaledLock*: Lock
@@ -163,6 +164,9 @@ method unregisterSubscriber*(
     # block:
     debugPrint "   unregisterSubscriber:proxy:ready: self:id: ", $self.unsafeWeakRef()
     unregisterSubscriberImpl(self, listener)
+    if self.listening.len() == 0:
+      debugPrint "\tproxy:listening:empty: ", self.listening.len(), " remote thread: ", self.remoteThread[].id
+      # self.remoteThread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Move, item: move remoteProxy))
 
 proc newSigilThread*(): SigilThread =
   result = newSharedPtr(isolate SigilThreadObj())
@@ -171,6 +175,7 @@ proc newSigilThread*(): SigilThread =
 proc startLocalThread*() =
   if localSigilThread.isNone:
     localSigilThread = some newSigilThread()
+    localSigilThread.get()[].id = getThreadId()
 
 proc getCurrentSigilThread*(): SigilThread =
   startLocalThread()
@@ -243,6 +248,7 @@ proc runThread*(thread: SigilThread) {.thread.} =
     pidx = pcnt
     assert localSigilThread.isNone()
     localSigilThread = some(thread)
+    thread[].id = getThreadId()
     debugPrint "Sigil worker thread waiting!"
     thread.runForever()
 

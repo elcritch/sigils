@@ -148,11 +148,10 @@ method removeSubscriptionsFor*(
 template unregisterSubscriberImpl*(
     self: Agent, listener: WeakRef[Agent]
 ) =
-  # debugPrint "\unregisterSubscriber: ", subscriber.tgt
+  debugPrint "\tunregisterSubscriber: ", $listener, " from self: ", self.unsafeWeakRef()
   # debugPrint "\tlisterners:subscribed ", subscriber.tgt[].subscribed
   assert listener in self.listening
   self.listening.excl(listener)
-  # debugPrint "\tlisterners:subscribed ", subscriber.tgt[].subscribed
 
 method unregisterSubscriber*(
     self: Agent, listener: WeakRef[Agent]
