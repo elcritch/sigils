@@ -78,9 +78,9 @@ type
   AgentObj = object of RootObj
     subcriptionsTable*: Table[SigilName, OrderedSet[Subscription]] ## agents listening to me
     listening*: HashSet[WeakRef[Agent]] ## agents I'm listening to
-    when defined(sigilDebug) or defined(debug):
+    when defined(sigilsDebug) or defined(debug):
       freedByThread*: int
-    when defined(sigilDebug):
+    when defined(sigilsDebug):
       debugName*: string
 
   Agent* = ref object of AgentObj
@@ -178,7 +178,7 @@ proc `=destroy`*(agentObj: AgentObj) {.forbids: [DestructorUnsafe].} =
           &" subs: {agent[].subcriptionsTable.len()}",
           &" subTo: {agent[].listening.len()}"
   # debugPrint "destroy agent: ", getStackTrace().replace("\n", "\n\t")
-  when defined(debug) or defined(sigilDebug):
+  when defined(debug) or defined(sigilsDebug):
     assert agentObj.freedByThread == 0
     agent[].freedByThread = getThreadId()
 
@@ -192,7 +192,7 @@ proc `=destroy`*(agentObj: AgentObj) {.forbids: [DestructorUnsafe].} =
 template toAgentObj*[T: Agent](agent: T): AgentObj =
   Agent(agent)[]
 
-proc `$`*[T](obj: WeakRef[Agent]): string =
+proc `$`*[T: Agent](obj: WeakRef[T]): string =
   result = "Weak[" & $(T) & "]"
   result &= "(0x"
   result &= obj.toPtr().repr

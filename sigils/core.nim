@@ -41,7 +41,7 @@ proc callSlots*(obj: Agent | WeakRef[Agent], req: SigilRequest) {.gcsafe.} =
       # echo "call listener:tgt: ", sub.tgt, " ", req.procName
       # echo "call listener:slot: ", repr sub.slot
       # let tgtRef = sub.tgt.toRef()
-      when defined(sigilDebug):
+      when defined(sigilsDebug):
         if sub.tgt[].freedByThread != 0:
           echo "exec:call:thread: ", $getThreadId()
           echo "exec:call:sub.tgt[].freed:thread: ", $sub.tgt[].freedByThread

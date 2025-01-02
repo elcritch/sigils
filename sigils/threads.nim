@@ -112,7 +112,7 @@ method callMethod*(
   #   var msg = isolateRuntime ThreadSignal(kind: Call, slot: localSlot, req: move req, tgt: proxy.Agent.unsafeWeakRef)
   #   debugPrint "\t proxy:callMethod:remoteSlot: ", "msg: ", $msg
   #   debugPrint "\t proxy:callMethod:remoteSlot: ", "proxy: ", proxy.getId()
-  #   when defined(sigilDebug) or defined(debug):
+  #   when defined(sigilsDebug) or defined(debug):
   #     assert proxy.freedByThread == 0
   #   when defined(sigilNonBlockingThreads):
   #     let res = proxy.inbound[].trySend(msg)
@@ -183,7 +183,7 @@ proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
     debugPrint "\t threadExec:call: ", $sig.tgt[].getId()
     # for item in thread.references.items():
     #   debugPrint "\t threadExec:refcheck: ", $item.getId(), " rc: ", $item.unsafeGcCount()
-    when defined(sigilDebug) or defined(debug):
+    when defined(sigilsDebug) or defined(debug):
       if sig.tgt[].freedByThread != 0:
         echo "exec:call:sig.tgt[].freedByThread:thread: ", $sig.tgt[].freedByThread
         echo "exec:call:sig.req: ", sig.req.repr
