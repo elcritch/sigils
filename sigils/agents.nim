@@ -126,7 +126,7 @@ template removeSubscriptionsForImpl*(
   var delSigs: seq[SigilName]
   var toDel: seq[Subscription]
   for signal, subscriptions in self.subcriptionsTable.mpairs():
-    debugPrint "removeSubscriptionsFor subs sig: ", $signal
+    debugPrint "   removeSubscriptionsFor subs sig: ", $signal
     toDel.setLen(0)
     for subscription in subscriptions:
       if subscription.tgt == subscriber:
@@ -142,7 +142,7 @@ template removeSubscriptionsForImpl*(
 method removeSubscriptionsFor*(
     self: Agent, subscriber: WeakRef[Agent]
 ) {.base, gcsafe, raises: [].} =
-  debugPrint "removeSubscriptionsFor:agent: ", " self:id: ", $self.unsafeWeakRef()
+  debugPrint "   removeSubscriptionsFor:agent: ", " self:id: ", $self.unsafeWeakRef()
   removeSubscriptionsForImpl(self, subscriber)
 
 template unregisterSubscriberImpl*(
@@ -157,12 +157,12 @@ template unregisterSubscriberImpl*(
 method unregisterSubscriber*(
     self: Agent, listener: WeakRef[Agent]
 ) {.base, gcsafe, raises: [].} =
-  debugPrint &"unregisterSubscriber:agent: self: {$self.getId()}"
+  debugPrint &"   unregisterSubscriber:agent: self: {$self.getId()}"
   unregisterSubscriberImpl(self, listener)
 
 proc unsubscribeFrom*(self: WeakRef[Agent], listening: HashSet[WeakRef[Agent]]) =
   ## unsubscribe myself from agents I'm subscribed (listening) to
-  debugPrint fmt"agent: {$self} unsubscribeFrom:cnt: {$listening.len()}"
+  debugPrint fmt"   agent: {$self} unsubscribeFrom:cnt: {$listening.len()}"
   for agent in listening:
     agent[].removeSubscriptionsFor(self)
 
@@ -197,7 +197,7 @@ proc `=destroy`*(agentObj: AgentObj) {.forbids: [DestructorUnsafe].} =
 
   `=destroy`(agent[].subcriptionsTable)
   `=destroy`(agent[].listening)
-  debugPrint "finished destroy: agent: ", " pt: ", agent.repr
+  debugPrint "\tfinished destroy: agent: ", " pt: ", $agent
   when defined(sigilsDebug):
     `=destroy`(agent[].debugName)
 

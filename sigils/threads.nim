@@ -63,7 +63,7 @@ type
 var localSigilThread {.threadVar.}: Option[SigilThread]
 
 proc `=destroy`*(obj: var typeof(AgentProxyShared()[])) =
-  debugPrint "PROXY Destroy: 0x", addr(obj).pointer.repr
+  debugPrint "PROXY Destroy: ", cast[AgentProxyShared](addr(obj)).unsafeWeakRef()
   # withLock obj.lock:
   block:
     `=destroy`(toAgentObj(cast[AgentProxyShared](addr obj)))
@@ -132,7 +132,7 @@ method callMethod*(
     # echo "proxy:callMethod: ", " proxy:refcount: ", proxy.unsafeGcCount()
     # echo "proxy:callMethod: ", " proxy.obj.remote:refcount: ", proxy.obj.remote[].unsafeGcCount()
     debugPrint "\t callMethod:agentProxy:InitCall:Outbound: ", req.procName, " proxy:remote:obj: ", proxy.remote.getId()
-    GC_ref(proxy)
+    # GC_ref(proxy)
     var msg = isolateRuntime ThreadSignal(kind: Call, slot: slot, req: move req, tgt: proxy.remote)
     when defined(sigilNonBlockingThreads):
       # let res = proxy.obj.outbound[].trySend(msg)
