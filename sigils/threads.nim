@@ -293,7 +293,7 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
   for signal, subscriptions in oldListeningSubs.mpairs():
     for subscription in subscriptions:
       # let tgt = sub.tgt.toRef()
-      printBright "moveToThread:oldListeningSubs: ", subscription.tgt
+      # brightPrint "moveToThread:oldListeningSubs: ", $subscription.tgt
       subscription.tgt[].addSubscription(signal, localProxy, subscription.slot)
 
   localProxy.addSubscription(AnySigilName, remoteProxy, remoteSlot)
@@ -309,6 +309,7 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
   
   thread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Move, item: move agentTy))
 
+  GC_ref(remoteProxy)
   return localProxy
 
 
