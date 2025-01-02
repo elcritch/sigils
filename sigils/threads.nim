@@ -108,7 +108,8 @@ method callMethod*(
 ): SigilResponse {.gcsafe, effectsOf: slot.} =
   ## Route's an rpc request. 
   debugPrint "callMethod: proxy: ", $proxy.getId(), " refcount: ", proxy.unsafeGcCount(), " slot: ", repr(slot)
-  # if slot == remoteSlot:
+  if slot == remoteSlot:
+    discard
   #   var req = req.deepCopy()
   #   debugPrint "\t proxy:callMethod:remoteSlot: ", "req: ", $req
   #   var msg = isolateRuntime ThreadSignal(kind: Call, slot: localSlot, req: move req, tgt: proxy.Agent.unsafeWeakRef)
@@ -122,11 +123,11 @@ method callMethod*(
   #       raise newException(AgentSlotError, "error sending signal to thread")
   #   else:
   #     proxy.msgs[].send(msg)
-  # elif slot == localSlot:
+  elif slot == localSlot:
+    discard
   #   debugPrint "\t callMethod:agentProxy:localSlot: req: ", $req
   #   callSlots(proxy, req)
-  # else:
-  block:
+  else:
     var req = req.deepCopy()
     # echo "proxy:callMethod: ", " proxy:refcount: ", proxy.unsafeGcCount()
     # echo "proxy:callMethod: ", " proxy.obj.remote:refcount: ", proxy.obj.remote[].unsafeGcCount()
