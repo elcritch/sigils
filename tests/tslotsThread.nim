@@ -119,9 +119,9 @@ suite "threaded agent slots":
       block:
         var
           b = Counter.new()
-        echo "thread runner!", " (th: ", getThreadId(), ")"
-        echo "obj a: ", a.unsafeWeakRef()
-        echo "obj b: ", b.unsafeWeakRef()
+        brightPrint "thread runner!", fmt" (th: {getThreadId()})"
+        brightPrint "obj a: ", a.unsafeWeakRef()
+        brightPrint "obj b: ", b.unsafeWeakRef()
         let thread = newSigilThread()
         thread.start()
 
