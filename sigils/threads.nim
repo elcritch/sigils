@@ -41,7 +41,6 @@ type
       slot*: AgentProc
       req*: SigilRequest
       tgt*: WeakRef[Agent]
-      src*: WeakRef[AgentProxyShared]
     of Move:
       item*: Agent
     of Trigger:
@@ -133,7 +132,7 @@ method callMethod*(
     # echo "proxy:callMethod: ", " proxy.obj.remote:refcount: ", proxy.obj.remote[].unsafeGcCount()
     debugPrint "\t callMethod:agentProxy:InitCall:Outbound: ", req.procName, " proxy:remote:obj: ", proxy.remote.getId()
     GC_ref(proxy)
-    var msg = isolateRuntime ThreadSignal(kind: Call, slot: slot, req: move req, tgt: proxy.remote, src: proxy.unsafeWeakRef())
+    var msg = isolateRuntime ThreadSignal(kind: Call, slot: slot, req: move req, tgt: proxy.remote))
     when defined(sigilNonBlockingThreads):
       let res = proxy.obj.outbound[].trySend(msg)
       if not res:
