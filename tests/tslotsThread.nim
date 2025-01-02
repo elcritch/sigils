@@ -117,7 +117,67 @@ suite "threaded agent slots":
       GC_fullCollect()
 
   when true:
-    test "agent connect single then moveToThread then destroy proxy":
+    test "agent connect a->b then moveToThread then destroy proxy":
+      echo "slot:remoteSlot: ", remoteSlot.repr
+      echo "slot:localSlot: ", localSlot.repr
+
+      let ct = getCurrentSigilThread()
+      var
+        a = SomeAction(debugName: "A")
+      when defined(sigilsDebug):
+        a.debugName = "A"
+        a.obj.id = 1010
+
+      block:
+        var
+          b = Counter()
+        when defined(sigilsDebug):
+          b.debugName = "B"
+          b.obj.id = 2020
+
+        brightPrint "thread runner!", &" (th: {getThreadId()})"
+        brightPrint "obj a: ", $a.unsafeWeakRef()
+        brightPrint "obj b: ", $b.unsafeWeakRef()
+        let thread = newSigilThread()
+        thread.start()
+
+        connect(a, valueChanged, b, setValueGlobal)
+        printConnections(a)
+        printConnections(b)
+
+        echo "\n==== moveToThread"
+        let bp: AgentProxy[Counter] = b.moveToThread(thread)
+        brightPrint "obj bp: ", $bp.unsafeWeakRef()
+        printConnections(a)
+        printConnections(bp)
+        printConnections(bp.proxyTwin[])
+        printConnections(bp.remote[])
+        let
+          subLocalProxy = Subscription(tgt: bp.unsafeWeakRef().asAgent(), slot: setValueGlobal(Counter))
+        check a.subcriptionsTable["valueChanged".toSigilName].contains(subLocalProxy)
+        check bp.listening.contains(a.unsafeWeakRef().asAgent())
+        # check bp.subcriptionsTable[AnySigilName].contains(subLocalProxy)
+        # check bp.subcriptionsTable[]
+
+        emit a.valueChanged(568)
+        os.sleep(10)
+        check globalCounter == 568
+      echo "block done"
+      printConnections(a)
+      # printConnections(bp)
+
+      # check a is disconnected
+      check not a.hasConnections()
+      emit a.valueChanged(111)
+      check globalCounter == 568
+
+      for i in 1..100:
+        if globalLastInnerCDestroyed != 2020:
+          os.sleep(1)
+      check globalLastInnerCDestroyed == 2020
+
+  when true:
+    test "agent connect b->a then moveToThread then destroy proxy":
       echo "slot:remoteSlot: ", remoteSlot.repr
       echo "slot:localSlot: ", localSlot.repr
 
