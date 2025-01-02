@@ -105,36 +105,36 @@ method callMethod*(
 ): SigilResponse {.gcsafe, effectsOf: slot.} =
   ## Route's an rpc request. 
   debugPrint "callMethod: proxy: ", $proxy.getId(), " refcount: ", proxy.unsafeGcCount()
-  if slot == remoteSlot:
-    var req = req.deepCopy()
-    debugPrint "\t proxy:callMethod:remoteSlot: ", "req: ", $req
-    var msg = isolateRuntime ThreadSignal(kind: Call, slot: localSlot, req: move req, tgt: proxy.Agent.unsafeWeakRef)
-    debugPrint "\t proxy:callMethod:remoteSlot: ", "msg: ", $msg
-    debugPrint "\t proxy:callMethod:remoteSlot: ", "proxy: ", proxy.getId()
-    when defined(sigilDebugFreed) or defined(debug):
-      assert proxy.freedByThread == 0
-    when defined(sigilNonBlockingThreads):
-      let res = proxy.inbound[].trySend(msg)
-      if not res:
-        raise newException(AgentSlotError, "error sending signal to thread")
-    else:
-      proxy.inbound[].send(msg)
-  elif slot == localSlot:
-    debugPrint "\t callMethod:agentProxy:localSlot: req: ", $req
-    callSlots(proxy, req)
-  else:
-    var req = req.deepCopy()
-    # echo "proxy:callMethod: ", " proxy:refcount: ", proxy.unsafeGcCount()
-    # echo "proxy:callMethod: ", " proxy.obj.remote:refcount: ", proxy.obj.remote[].unsafeGcCount()
-    debugPrint "\t callMethod:agentProxy:InitCall:Outbound: ", req.procName, " proxy:remote:obj: ", proxy.remote.getId()
-    GC_ref(proxy)
-    var msg = isolateRuntime ThreadSignal(kind: Call, slot: slot, req: move req, tgt: proxy.remote, src: proxy.unsafeWeakRef())
-    when defined(sigilNonBlockingThreads):
-      let res = proxy.obj.outbound[].trySend(msg)
-      if not res:
-        raise newException(AgentSlotError, "error sending signal to thread")
-    else:
-      proxy.outbound[].send(msg)
+  # if slot == remoteSlot:
+  #   var req = req.deepCopy()
+  #   debugPrint "\t proxy:callMethod:remoteSlot: ", "req: ", $req
+  #   var msg = isolateRuntime ThreadSignal(kind: Call, slot: localSlot, req: move req, tgt: proxy.Agent.unsafeWeakRef)
+  #   debugPrint "\t proxy:callMethod:remoteSlot: ", "msg: ", $msg
+  #   debugPrint "\t proxy:callMethod:remoteSlot: ", "proxy: ", proxy.getId()
+  #   when defined(sigilDebugFreed) or defined(debug):
+  #     assert proxy.freedByThread == 0
+  #   when defined(sigilNonBlockingThreads):
+  #     let res = proxy.inbound[].trySend(msg)
+  #     if not res:
+  #       raise newException(AgentSlotError, "error sending signal to thread")
+  #   else:
+  #     proxy.inbound[].send(msg)
+  # elif slot == localSlot:
+  #   debugPrint "\t callMethod:agentProxy:localSlot: req: ", $req
+  #   callSlots(proxy, req)
+  # else:
+  #   var req = req.deepCopy()
+  #   # echo "proxy:callMethod: ", " proxy:refcount: ", proxy.unsafeGcCount()
+  #   # echo "proxy:callMethod: ", " proxy.obj.remote:refcount: ", proxy.obj.remote[].unsafeGcCount()
+  #   debugPrint "\t callMethod:agentProxy:InitCall:Outbound: ", req.procName, " proxy:remote:obj: ", proxy.remote.getId()
+  #   GC_ref(proxy)
+  #   var msg = isolateRuntime ThreadSignal(kind: Call, slot: slot, req: move req, tgt: proxy.remote, src: proxy.unsafeWeakRef())
+  #   when defined(sigilNonBlockingThreads):
+  #     let res = proxy.obj.outbound[].trySend(msg)
+  #     if not res:
+  #       raise newException(AgentSlotError, "error sending signal to thread")
+  #   else:
+  #     proxy.outbound[].send(msg)
 
 method removeSubscriptionsFor*(
     self: AgentProxyShared, subscriber: WeakRef[Agent]
@@ -172,7 +172,7 @@ proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
   of Move:
     debugPrint "\t threadExec:move: ", $sig.item.getId(), " refcount: ", $sig.item.unsafeGcCount()
     var item = sig.item
-    thread.references.incl(item)
+    # thread.references.incl(item)
   of Deref:
     debugPrint "\t threadExec:deref: ", $sig.deref[].getId(), " refcount: ", $sig.deref[].unsafeGcCount()
     if not sig.deref[].isNil:
@@ -180,8 +180,8 @@ proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
     # thread.references.excl(sig.deref[])
   of Call:
     debugPrint "\t threadExec:call: ", $sig.tgt[].getId()
-    for item in thread.references.items():
-      debugPrint "\t threadExec:refcheck: ", $item.getId(), " rc: ", $item.unsafeGcCount()
+    # for item in thread.references.items():
+    #   debugPrint "\t threadExec:refcheck: ", $item.getId(), " rc: ", $item.unsafeGcCount()
     when defined(sigilDebugFreed) or defined(debug):
       if sig.tgt[].freedByThread != 0:
         echo "exec:call:sig.tgt[].freedByThread:thread: ", $sig.tgt[].freedByThread
@@ -196,8 +196,8 @@ proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
     debugPrint "\t threadExec:tgt: ", $sig.tgt[].getId(), " rc: ", $sig.tgt[].unsafeGcCount()
     debugPrint "\t threadExec:deref: ", $sig.src[].getId(), " rc: ", $sig.src[].unsafeGcCount()
     let src: WeakRef[Agent] = toKind(sig.src, Agent)
-    if not sig.src[].isNil:
-      sig.src[].inbound[].send(unsafeIsolate ThreadSignal(kind: Deref, deref: src))
+    # if not sig.src[].isNil:
+    #   sig.src[].inbound[].send(unsafeIsolate ThreadSignal(kind: Deref, deref: src))
 
 proc poll*[R: SigilThreadBase](thread: var R) =
   let sig = thread.inputs[].recv()
@@ -279,6 +279,9 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
     oldSubscribers = agent[].subcriptionsTable
     oldSubscribedTo = agent[].listening.findSubscribedToSignals(agent[].unsafeWeakRef)
 
+  agent.unsubscribeFrom(agent[].listening)
+  agent.removeSubscriptions(agent[].subcriptionsTable)
+
   agent[].listening.unsubscribe(agent)
   agent[].subcriptionsTable.removeSubscription(agent)
   agent[].listening.clear()
@@ -289,18 +292,18 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
   for signal, subscriptions in oldSubscribedTo.mpairs():
     for subscription in subscriptions:
       # let tgt = sub.tgt.toRef()
-      subscription.tgt[].addSubscription(signal, localProxy, sub.slot)
+      subscription.tgt[].addSubscription(signal, localProxy, subscription.slot)
 
-  localProxy.addSubscription(AnySigilName, remoteProxy, localSlot)
+  localProxy.addSubscription(AnySigilName, remoteProxy, remoteSlot)
   remoteProxy.addSubscription(AnySigilName, agent[], localSlot)
 
   # update my subcriptionsTable so I use a new proxy to send events
-  # to them
-  agent[].addSubscription(AnySigilName, remoteProxy, remoteSlot)
+  agent[].addSubscription(AnySigilName, remoteProxy, localSlot)
+  remoteProxy.addSubscription(AnySigilName, localProxy, remoteSlot)
   for signal, subscriberPairs in oldSubscribers.mpairs():
     for sub in subscriberPairs:
       # echo "signal: ", signal, " subscriber: ", tgt.getId
-      proxy.addSubscription(signal, sub.tgt[], sub.slot)
+      localProxy.addSubscription(signal, sub.tgt[], sub.slot)
   
   thread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Move, item: move agentTy))
   # thread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Move, item: proxy))
