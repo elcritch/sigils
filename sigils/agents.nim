@@ -68,7 +68,7 @@ proc brightPrint*(msg, value: string, msg2 = "", value2 = "") =
 
 template printConnections*(agent: typed) =
   brightPrint fgBlue, "connections for Agent: ", $agent.unsafeWeakRef()
-  brightPrint fgMagenta, "\t subscriptions:", ""
+  brightPrint fgMagenta, "\t subscribers:", ""
   for sig, subs in agent.subcriptionsTable.pairs():
     # brightPrint fgRed, "\t\t signal: ", $sig
     for sub in subs:

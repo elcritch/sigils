@@ -25,6 +25,7 @@ type
   AgentProxyShared* = ref object of Agent
     # obj*: AgentProxySharedObj
     remote*: WeakRef[Agent]
+    proxyTwin*: WeakRef[AgentProxyShared]
     thread*: SigilThread
     lock*: Lock
 
@@ -274,6 +275,8 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
     )
   localProxy.lock.initLock()
   remoteProxy.lock.initLock()
+  localProxy.proxyTwin = remoteProxy.unsafeWeakRef().toKind(AgentProxyShared)
+  remoteProxy.proxyTwin = localProxy.unsafeWeakRef().toKind(AgentProxyShared)
   when defined(sigilsDebug):
     localProxy.debugName = "localProxy::" & agentTy.debugName 
     remoteProxy.debugName = "remoteProxy::" & agentTy.debugName 
@@ -296,17 +299,17 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
       # brightPrint "moveToThread:oldListeningSubs: ", $subscription.tgt
       subscription.tgt[].addSubscription(signal, localProxy, subscription.slot)
 
-  localProxy.addSubscription(AnySigilName, remoteProxy, remoteSlot)
-  remoteProxy.addSubscription(AnySigilName, agent[], localSlot)
+  # localProxy.addSubscription(AnySigilName, remoteProxy, remoteSlot)
+  # remoteProxy.addSubscription(AnySigilName, agent[], localSlot)
 
-  # update my subcriptionsTable so I use a new proxy to send events
-  agent[].addSubscription(AnySigilName, remoteProxy, localSlot)
-  remoteProxy.addSubscription(AnySigilName, localProxy, remoteSlot)
-  for signal, subscriberPairs in oldSubscribers.mpairs():
-    for sub in subscriberPairs:
-      # echo "signal: ", signal, " subscriber: ", tgt.getId
-      localProxy.addSubscription(signal, sub.tgt[], sub.slot)
-  
+  # # update my subcriptionsTable so I use a new proxy to send events
+  # agent[].addSubscription(AnySigilName, remoteProxy, localSlot)
+  # remoteProxy.addSubscription(AnySigilName, localProxy, remoteSlot)
+  # for signal, subscriberPairs in oldSubscribers.mpairs():
+  #   for sub in subscriberPairs:
+  #     # echo "signal: ", signal, " subscriber: ", tgt.getId
+  #     localProxy.addSubscription(signal, sub.tgt[], sub.slot)
+
   thread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Move, item: move agentTy))
   thread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Move, item: move remoteProxy))
 
