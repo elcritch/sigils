@@ -133,7 +133,7 @@ suite "threaded agent slots":
         connect(a, valueChanged, b, setValueGlobal)
         printConnections(a)
 
-        echo ""
+        echo "\n==== movedToThread"
         let bp: AgentProxy[Counter] = b.moveToThread(thread)
         brightPrint "obj bp: ", $bp.unsafeWeakRef()
         printConnections(a)
