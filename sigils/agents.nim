@@ -156,12 +156,12 @@ template unregisterSubscriberImpl*(
 method unregisterSubscriber*(
     self: Agent, listener: WeakRef[Agent]
 ) {.base, gcsafe, raises: [].} =
-  debugPrint &"   unregisterSubscriber:agent: self: {$self.getId()}"
+  debugPrint &"   unregisterSubscriber:agent: self: {$self.unsafeWeakRef()}"
   unregisterSubscriberImpl(self, listener)
 
 proc unsubscribeFrom*(self: WeakRef[Agent], listening: HashSet[WeakRef[Agent]]) =
   ## unsubscribe myself from agents I'm subscribed (listening) to
-  debugPrint fmt"   agent: {$self} unsubscribeFrom:cnt: {$listening.len()}"
+  debugPrint fmt"   unsubscribeFrom:cnt: {$listening.len()} self: {$self}"
   for agent in listening:
     agent[].removeSubscriptionsFor(self)
 

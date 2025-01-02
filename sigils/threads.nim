@@ -168,7 +168,7 @@ method unregisterSubscriber*(
       let
         thr = self.proxyTwin[].remoteThread
         selfRef = self.unsafeWeakRef().asAgent()
-      debugPrint "\tproxy:listening:empty: ", self.listening.len(), " remote thread: ", thr[].id
+      debugPrint "\tproxy:listening:empty: ", self.listening.len()
       try:
         thr[].inputs[].send(unsafeIsolate ThreadSignal(kind: Deref, deref: selfRef))
       except Exception:
@@ -197,8 +197,8 @@ proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
   of Deref:
     debugPrint "\t threadExec:deref: ", $sig.deref[].getId(), " refcount: ", $sig.deref[].unsafeGcCount()
     if not sig.deref[].isNil:
-      GC_unref(sig.deref[])
-    # thread.references.excl(sig.deref[])
+      # GC_unref(sig.deref[])
+      thread.references.excl(sig.deref[])
   of Call:
     debugPrint "\t threadExec:call: ", $sig.tgt[].getId()
     # for item in thread.references.items():
