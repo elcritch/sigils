@@ -5,10 +5,10 @@ import threading/channels
 
 import agents
 import threads
-import chans
 import core
 
-export chans, smartptrs, threads, isolation
+export smartptrs, isolation
+export threads
 
 import std/os
 import std/monotimes

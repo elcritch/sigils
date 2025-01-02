@@ -3,15 +3,16 @@ import std/isolation
 import std/options
 import std/locks
 import threading/smartptrs
+import threading/channels
 
-import chans
 import isolateutils
 import agents
 import core
 
 from system/ansi_c import c_raise
 
-export chans, smartptrs, isolation, isolateutils
+export smartptrs, isolation
+export isolateutils
 
 type
   SigilChanRef* = ref object of RootObj
