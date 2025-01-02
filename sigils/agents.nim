@@ -60,13 +60,16 @@ template debugPrint*(msgs: varargs[untyped]) =
   when defined(sigilsDebugPrint):
     debugPrintImpl(msgs)
 
+template brightPrint*(color: ForegroundColor, msg, value: string) =
+  stdout.styledWriteLine color, msg, {styleBright, styleItalic}, value
+
 template printConnections*(agent: typed) =
-  stdout.styledWriteLine fgBlue, "connections for Agent: ", {styleBright, styleItalic}, $agent.getId()
-  stdout.styledWriteLine fgMagenta, "\t subscriptions:"
+  brightPrint fgBlue, "connections for Agent: ", $agent.getId()
+  brightPrint fgMagenta, "\t subscriptions:", ""
   for sig, subs in agent.subcriptionsTable.pairs():
-    stdout.styledWriteLine fgRed, "\t\t signal: ", {styleBright, styleItalic}, $sig
+    brightPrint fgRed, "\t\t signal: ", $sig
     for sub in subs:
-      stdout.styledWriteLine fgGreen, "\t\t\t target: ", {styleBright, styleItalic}, $sub.tgt
+      brightPrint fgGreen, "\t\t\t target: ", $sub.tgt
   
 
 type

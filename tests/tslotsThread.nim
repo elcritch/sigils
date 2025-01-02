@@ -120,8 +120,8 @@ suite "threaded agent slots":
         var
           b = Counter.new()
         echo "thread runner!", " (th: ", getThreadId(), ")"
-        echo "obj a: ", a.getId
-        echo "obj b: ", b.getId
+        echo "obj a: ", a.unsafeWeakRef()
+        echo "obj b: ", b.unsafeWeakRef()
         let thread = newSigilThread()
         thread.start()
 
@@ -129,7 +129,7 @@ suite "threaded agent slots":
 
         printConnections(a)
         let bp: AgentProxy[Counter] = b.moveToThread(thread)
-        echo "obj bp: ", bp.getId()
+        echo "obj bp: ", bp.unsafeWeakRef.getId()
 
         emit a.valueChanged(568)
       echo "block done"
