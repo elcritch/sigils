@@ -281,9 +281,6 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
 
   agent.unsubscribeFrom(agent[].listening)
   agent.removeSubscriptions(agent[].subcriptionsTable)
-
-  agent[].listening.unsubscribe(agent)
-  agent[].subcriptionsTable.removeSubscription(agent)
   agent[].listening.clear()
   agent[].subcriptionsTable.clear()
 
@@ -306,10 +303,8 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
       localProxy.addSubscription(signal, sub.tgt[], sub.slot)
   
   thread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Move, item: move agentTy))
-  # thread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Move, item: proxy))
-  # ct[].references.incl(proxy)
 
-  return proxy
+  return localProxy
 
 
 # template connect*[T, S](
