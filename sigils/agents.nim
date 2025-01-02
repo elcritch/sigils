@@ -197,7 +197,7 @@ proc `$`*[T: Agent](obj: WeakRef[T]): string =
   when defined(sigilsDebug):
     result &= obj[].debugName
     result &= "; "
-  result &= obj.toPtr().repr
+  result &= $(T)
   result &= "]"
   result &= "(0x"
   result &= obj.toPtr().repr
