@@ -32,6 +32,7 @@ type
   ThreadSignalKind* {.pure.} = enum
     Call
     Move
+    Trigger
     Deref
 
   ThreadSignal* = object
@@ -43,6 +44,8 @@ type
       src*: WeakRef[AgentProxyShared]
     of Move:
       item*: Agent
+    of Trigger:
+      discard
     of Deref:
       deref*: WeakRef[Agent]
 
@@ -139,6 +142,7 @@ method callMethod*(
       proxy.inbox.send(msg)
       withLock proxy.remoteThread[].signaledLock:
         proxy.remoteThread[].signaled.incl(proxy.remote)
+      proxy.remoteThread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Trigger))
 
 method removeSubscriptionsFor*(
     self: AgentProxyShared, subscriber: WeakRef[Agent]
@@ -202,6 +206,19 @@ proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
     let src: WeakRef[Agent] = toKind(sig.src, Agent)
     # if not sig.src[].isNil:
     #   sig.src[].inbound[].send(unsafeIsolate ThreadSignal(kind: Deref, deref: src))
+  of Trigger:
+    debugPrint "Triggering"
+    var signaled: HashSet[WeakRef[Agent]]
+    withLock thread.signaledLock:
+      signaled = move thread.signaled
+
+    for signaled in signaled:
+      debugPrint "triggering: ", signaled
+      var sig: ThreadSignal
+      while thread.inputs[].tryRecv(sig):
+        debugPrint "\t threadExec:tgt: ", $sig.tgt[].getId(), " rc: ", $sig.tgt[].unsafeGcCount()
+        debugPrint "\t threadExec:deref: ", $sig.src[].getId(), " rc: ", $sig.src[].unsafeGcCount()
+        # let src: WeakRef[Agent] = toKind(sig.src, Agent)
 
 proc poll*[R: SigilThreadBase](thread: var R) =
   let sig = thread.inputs[].recv()
@@ -267,12 +284,12 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
 
     localProxy = AgentProxy[T](
         remote: agent,
-        remoteThread: ct,
+        remoteThread: thread,
         inbox: newChan[ThreadSignal](1_000),
     )
     remoteProxy = AgentProxy[T](
         remote: agent,
-        remoteThread: thread,
+        remoteThread: ct,
         inbox: newChan[ThreadSignal](1_000),
     )
   localProxy.lock.initLock()
