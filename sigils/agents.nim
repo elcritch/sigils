@@ -145,7 +145,7 @@ method unregisterSubscriber*(
 
 proc unsubscribeFrom*(self: WeakRef[Agent], listening: HashSet[WeakRef[Agent]]) =
   ## unsubscribe myself from agents I'm subscribed (listening) to
-  debugPrint fmt"agent: {$self.getId()} unsubscribeFrom: {$listening.len()}"
+  debugPrint fmt"agent: {$self} unsubscribeFrom:cnt: {$listening.len()}"
   for agent in listening:
     agent[].removeSubscriptionsFor(self)
 
