@@ -114,11 +114,11 @@ suite "threaded agent slots":
     test "agent connect single then moveToThread then destroy proxy":
       let ct = getCurrentSigilThread()
       var
-        a = SomeAction(debugName: "a")
+        a = SomeAction(debugName: "A")
 
       block:
         var
-          b = Counter(debugName: "b")
+          b = Counter(debugName: "B")
         brightPrint "thread runner!", &" (th: {getThreadId()})"
         brightPrint "obj a: ", $a.unsafeWeakRef()
         brightPrint "obj b: ", $b.unsafeWeakRef()

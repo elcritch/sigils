@@ -193,7 +193,12 @@ template toAgentObj*[T: Agent](agent: T): AgentObj =
   Agent(agent)[]
 
 proc `$`*[T: Agent](obj: WeakRef[T]): string =
-  result = "Weak[" & $(T) & "]"
+  result = "Weak["
+  when defined(sigilsDebug):
+    result &= obj[].debugName
+    result &= "; "
+  result &= obj.toPtr().repr
+  result &= "]"
   result &= "(0x"
   result &= obj.toPtr().repr
   result &= ")"
