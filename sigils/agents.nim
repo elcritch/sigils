@@ -7,9 +7,6 @@ import stack_strings
 import protocol
 import weakrefs
 
-export IndexableChars
-export weakrefs
-
 when defined(nimscript):
   import std/json
   import ../runtime/jsonutils_lite
@@ -21,10 +18,13 @@ elif defined(useJsonSerde):
 else:
   import pkg/variant
 
-export protocol
 export sets
 export options
 export variant
+
+export IndexableChars
+export weakrefs
+export protocol
 
 import std/[terminal, strutils, strformat, sequtils]
 export strformat
