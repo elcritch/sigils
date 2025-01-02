@@ -60,8 +60,10 @@ template debugPrint*(msgs: varargs[untyped]) =
   when defined(sigilsDebugPrint):
     debugPrintImpl(msgs)
 
-template brightPrint*(color: ForegroundColor, msg, value: string) =
+proc brightPrint*(color: ForegroundColor, msg, value: string) =
   stdout.styledWriteLine color, msg, {styleBright, styleItalic}, value
+proc brightPrint*(msg, value: string) =
+  brightPrint(fgGreen, msg, value)
 
 template printConnections*(agent: typed) =
   brightPrint fgBlue, "connections for Agent: ", $agent.getId()

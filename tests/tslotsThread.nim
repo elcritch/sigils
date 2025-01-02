@@ -119,9 +119,9 @@ suite "threaded agent slots":
       block:
         var
           b = Counter.new()
-        brightPrint "thread runner!", fmt" (th: {getThreadId()})"
-        brightPrint "obj a: ", a.unsafeWeakRef()
-        brightPrint "obj b: ", b.unsafeWeakRef()
+        brightPrint "thread runner!", &" (th: {getThreadId()})"
+        brightPrint "obj a: ", $a.unsafeWeakRef()
+        brightPrint "obj b: ", $b.unsafeWeakRef()
         let thread = newSigilThread()
         thread.start()
 
@@ -129,7 +129,7 @@ suite "threaded agent slots":
 
         printConnections(a)
         let bp: AgentProxy[Counter] = b.moveToThread(thread)
-        echo "obj bp: ", bp.unsafeWeakRef.getId()
+        brightPrint "obj bp: ", $bp.unsafeWeakRef()
 
         emit a.valueChanged(568)
       echo "block done"
