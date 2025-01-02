@@ -40,6 +40,14 @@ proc setValue*(self: Counter, value: int) {.slot.} =
     os.sleep(1)
   emit self.updated(self.value)
 
+var globalCounter = 0
+
+proc setValueGlobal*(self: Counter, value: int) {.slot.} =
+  echo "setValueGlobal! ", value, " id: ", self.getId().int, " (th: ", getThreadId(), ")"
+  if self.value != value:
+    self.value = value
+  globalCounter = value
+
 proc completed*(self: SomeAction, final: int) {.slot.} =
   # echo "Action done! final: ", final, " id: ", self.getId().int, " (th: ", getThreadId(), ")"
   self.value = final
@@ -101,6 +109,32 @@ suite "threaded agent slots":
         connect(a, valueChanged, bp, Counter.setValue())
         check not compiles(connect(a, valueChanged, bp, someAction))
       GC_fullCollect()
+
+  when true:
+    test "agent connect single then moveToThread then destroy proxy":
+      let ct = getCurrentSigilThread()
+      var
+        a = SomeAction.new()
+
+      block:
+        var
+          b = Counter.new()
+        echo "thread runner!", " (th: ", getThreadId(), ")"
+        echo "obj a: ", a.getId
+        echo "obj b: ", b.getId
+        let thread = newSigilThread()
+        thread.start()
+        startLocalThread()
+
+        connect(a, valueChanged, b, setValueGlobal)
+
+        let bp: AgentProxy[Counter] = b.moveToThread(thread)
+        echo "obj bp: ", bp.getId()
+
+        emit a.valueChanged(568)
+      echo "block done"
+      os.sleep(10)
+      check globalCounter == 568
 
   when false:
     test "agent connect then moveToThread and run":
