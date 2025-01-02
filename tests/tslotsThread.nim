@@ -139,6 +139,7 @@ suite "threaded agent slots":
         brightPrint "obj bp: ", $bp.unsafeWeakRef()
         printConnections(a)
         printConnections(bp)
+        printConnections(bp.proxyTwin[])
         printConnections(bp.remote[])
         let subLocalProxy = Subscription(tgt: bp.unsafeWeakRef().asAgent(), slot: setValueGlobal(Counter))
         check a.subcriptionsTable["valueChanged".toSigilName].contains(subLocalProxy)

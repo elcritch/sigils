@@ -269,6 +269,7 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
         # inbound: ct[].inputs,
     )
     remoteProxy = AgentProxy[T](
+        # remote: WeakRef[Agent](pt: nil),
         remote: agent,
         # outbound: thread[].inputs,
         # inbound: ct[].inputs,

@@ -66,17 +66,6 @@ proc brightPrint*(color: ForegroundColor, msg, value: string, msg2 = "", value2 
 proc brightPrint*(msg, value: string, msg2 = "", value2 = "") =
   brightPrint(fgGreen, msg, value, msg2, value2)
 
-template printConnections*(agent: typed) =
-  brightPrint fgBlue, "connections for Agent: ", $agent.unsafeWeakRef()
-  brightPrint fgMagenta, "\t subscribers:", ""
-  for sig, subs in agent.subcriptionsTable.pairs():
-    # brightPrint fgRed, "\t\t signal: ", $sig
-    for sub in subs:
-      brightPrint fgGreen, "\t\t:", $sig, ": => ", $sub.tgt
-  brightPrint fgMagenta, "\t listening:", ""
-  for listening in agent.listening:
-    brightPrint fgRed, "\t\t listen: ", $listening
-  
 
 type
   AgentObj = object of RootObj
@@ -199,12 +188,18 @@ template toAgentObj*[T: Agent](agent: T): AgentObj =
 proc `$`*[T: Agent](obj: WeakRef[T]): string =
   result = "Weak["
   when defined(sigilsDebug):
-    result &= obj[].debugName
+    if obj.pt == nil:
+      result &= "nil"
+    else:
+      result &= obj[].debugName
     result &= "; "
   result &= $(T)
   result &= "]"
   result &= "(0x"
-  result &= obj.toPtr().repr
+  if obj.pt == nil:
+    result &= "nil"
+  else:
+    result &= obj.toPtr().repr
   result &= ")"
 
 proc hash*(a: Agent): Hash =
@@ -258,3 +253,21 @@ template addSubscription*(
     obj: Agent, sig: IndexableChars, tgt: Agent | WeakRef[Agent], slot: AgentProc
 ): void =
   addSubscription(obj, sig.toSigilName(), tgt, slot)
+
+proc printConnections*(agent: Agent) =
+  if agent.isNil:
+    brightPrint fgBlue, "connections for Agent: ", "nil"
+    return
+  if agent[].freedByThread != 0:
+    brightPrint fgBlue, "connections for Agent: ", $agent.unsafeWeakRef(), " freedByThread: ", $agent[].freedByThread
+    return
+  brightPrint fgBlue, "connections for Agent: ", $agent.unsafeWeakRef()
+  brightPrint fgMagenta, "\t subscribers:", ""
+  for sig, subs in agent.subcriptionsTable.pairs():
+    # brightPrint fgRed, "\t\t signal: ", $sig
+    for sub in subs:
+      brightPrint fgGreen, "\t\t:", $sig, ": => ", $sub.tgt
+  brightPrint fgMagenta, "\t listening:", ""
+  for listening in agent.listening:
+    brightPrint fgRed, "\t\t listen: ", $listening[].getId()
+  
