@@ -102,6 +102,23 @@ else:
   proc getId*(a: Agent): SigilId =
     cast[SigilId](cast[pointer](a))
 
+proc `$`*[T: Agent](obj: WeakRef[T]): string =
+  result = "Weak["
+  when defined(sigilsDebug):
+    if obj.pt == nil:
+      result &= "nil"
+    else:
+      result &= obj[].debugName
+    result &= "; "
+  result &= $(T)
+  result &= "]"
+  result &= "(0x"
+  if obj.pt == nil:
+    result &= "nil"
+  else:
+    result &= obj.toPtr().repr
+  result &= ")"
+
 template removeSubscriptionsForImpl*(
     self: Agent, subscriber: WeakRef[Agent]
 ) =
@@ -125,7 +142,7 @@ template removeSubscriptionsForImpl*(
 method removeSubscriptionsFor*(
     self: Agent, subscriber: WeakRef[Agent]
 ) {.base, gcsafe, raises: [].} =
-  debugPrint "removeSubscriptionsFor:agent: ", " self:id: ", $self.getId()
+  debugPrint "removeSubscriptionsFor:agent: ", " self:id: ", $self.unsafeWeakRef()
   removeSubscriptionsForImpl(self, subscriber)
 
 template unregisterSubscriberImpl*(
@@ -180,27 +197,12 @@ proc `=destroy`*(agentObj: AgentObj) {.forbids: [DestructorUnsafe].} =
 
   `=destroy`(agent[].subcriptionsTable)
   `=destroy`(agent[].listening)
-  debugPrint "finished destroy: agent: ", " pt: 0x", agent.toPtr.repr
+  debugPrint "finished destroy: agent: ", " pt: ", agent.repr
+  when defined(sigilsDebug):
+    `=destroy`(agent[].debugName)
 
 template toAgentObj*[T: Agent](agent: T): AgentObj =
   Agent(agent)[]
-
-proc `$`*[T: Agent](obj: WeakRef[T]): string =
-  result = "Weak["
-  when defined(sigilsDebug):
-    if obj.pt == nil:
-      result &= "nil"
-    else:
-      result &= obj[].debugName
-    result &= "; "
-  result &= $(T)
-  result &= "]"
-  result &= "(0x"
-  if obj.pt == nil:
-    result &= "nil"
-  else:
-    result &= obj.toPtr().repr
-  result &= ")"
 
 proc hash*(a: Agent): Hash =
   hash(a.getId())
