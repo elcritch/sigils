@@ -160,6 +160,7 @@ suite "threaded agent slots":
 
       emit a.valueChanged(111)
       check globalCounter == 568
+      os.sleep(10)
 
   when false:
     test "agent connect then moveToThread and run":
