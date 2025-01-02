@@ -60,6 +60,15 @@ template debugPrint*(msgs: varargs[untyped]) =
   when defined(sigilsDebugPrint):
     debugPrintImpl(msgs)
 
+template printConnections*(agent: typed) =
+  stdout.styledWriteLine fgBlue, "connections for Agent: ", {styleBright, styleItalic}, $agent.getId()
+  stdout.styledWriteLine fgMagenta, "\t subscriptions:"
+  for sig, subs in agent.subcriptionsTable.pairs():
+    stdout.styledWriteLine fgRed, "\t\t signal: ", {styleBright, styleItalic}, $sig
+    for sub in subs:
+      stdout.styledWriteLine fgGreen, "\t\t\t target: ", {styleBright, styleItalic}, $sub.tgt
+  
+
 type
   AgentObj = object of RootObj
     subcriptionsTable*: Table[SigilName, OrderedSet[Subscription]] ## agents listening to me

@@ -124,10 +124,10 @@ suite "threaded agent slots":
         echo "obj b: ", b.getId
         let thread = newSigilThread()
         thread.start()
-        startLocalThread()
 
         connect(a, valueChanged, b, setValueGlobal)
 
+        printConnections(a)
         let bp: AgentProxy[Counter] = b.moveToThread(thread)
         echo "obj bp: ", bp.getId()
 
