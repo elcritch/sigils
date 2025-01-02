@@ -269,16 +269,11 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
         remote: agent,
         remoteThread: ct,
         inbox: newChan[ThreadSignal](1_000),
-        # outbound: thread[].inputs,
-        # inbound: ct[].inputs,
     )
     remoteProxy = AgentProxy[T](
-        # remote: WeakRef[Agent](pt: nil),
         remote: agent,
         remoteThread: thread,
         inbox: newChan[ThreadSignal](1_000),
-        # outbound: thread[].inputs,
-        # inbound: ct[].inputs,
     )
   localProxy.lock.initLock()
   remoteProxy.lock.initLock()
