@@ -53,6 +53,7 @@ type
 
     signaledLock*: Lock
     signaled*: HashSet[WeakRef[Agent]]
+    references*: HashSet[Agent]
 
   SigilThreadObj* = object of SigilThreadBase
     thr*: Thread[SharedPtr[SigilThreadObj]]
@@ -174,7 +175,7 @@ proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
   of Move:
     debugPrint "\t threadExec:move: ", $sig.item.getId(), " refcount: ", $sig.item.unsafeGcCount()
     var item = sig.item
-    # thread.references.incl(item)
+    thread.references.incl(item)
   of Deref:
     debugPrint "\t threadExec:deref: ", $sig.deref[].getId(), " refcount: ", $sig.deref[].unsafeGcCount()
     if not sig.deref[].isNil:
