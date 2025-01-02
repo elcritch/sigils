@@ -195,10 +195,18 @@ proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
     var item = sig.item
     thread.references.incl(item)
   of Deref:
-    debugPrint "\t threadExec:deref: ", $sig.deref[].getId(), " refcount: ", $sig.deref[].unsafeGcCount()
+    debugPrint "\t threadExec:deref: ", $sig.deref, " refcount: ", $sig.deref[].unsafeGcCount()
     if not sig.deref[].isNil:
       # GC_unref(sig.deref[])
       thread.references.excl(sig.deref[])
+    var derefs: seq[Agent]
+    for agent in thread.references:
+      if not agent.hasConnections():
+        derefs.add(agent)
+    for agent in derefs:
+      debugPrint "\t\tDEREF: ", agent.unsafeWeakRef(), " hasConnection: ", agent.hasConnections()
+      thread.references.excl(agent)
+
   of Call:
     debugPrint "\t threadExec:call: ", $sig.tgt[].getId()
     # for item in thread.references.items():

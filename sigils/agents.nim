@@ -206,6 +206,9 @@ template toAgentObj*[T: Agent](agent: T): AgentObj =
 proc hash*(a: Agent): Hash =
   hash(a.getId())
 
+method hasConnections*(self: Agent): bool {.base, gcsafe, raises: [].} =
+  self.subcriptionsTable.len() != 0 or self.listening.len() != 0
+
 proc getSubscriptions*(
     obj: Agent, sig: SigilName
 ): OrderedSet[Subscription] =
