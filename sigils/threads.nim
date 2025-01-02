@@ -149,19 +149,19 @@ method callMethod*(
 method removeSubscriptionsFor*(
     self: AgentProxyShared, subscriber: WeakRef[Agent]
 ) {.gcsafe, raises: [].} =
-  debugPrint "removeSubscriptionsFor:proxy: self:id: ", $self.unsafeWeakRef()
+  debugPrint "   removeSubscriptionsFor:proxy: self:id: ", $self.unsafeWeakRef()
   withLock self.lock:
     # block:
-    debugPrint "removeSubscriptionsFor:proxy:ready: self:id: ", $self.unsafeWeakRef()
+    debugPrint "   removeSubscriptionsFor:proxy:ready: self:id: ", $self.unsafeWeakRef()
     removeSubscriptionsForImpl(self, subscriber)
 
 method unregisterSubscriber*(
     self: AgentProxyShared, listener: WeakRef[Agent]
 ) {.gcsafe, raises: [].} =
-  debugPrint "unregisterSubscriber:proxy: self:id: ", $self.unsafeWeakRef()
+  debugPrint "   unregisterSubscriber:proxy: self:id: ", $self.unsafeWeakRef()
   withLock self.lock:
     # block:
-    debugPrint "unregisterSubscriber:proxy:ready: self:id: ", $self.unsafeWeakRef()
+    debugPrint "   unregisterSubscriber:proxy:ready: self:id: ", $self.unsafeWeakRef()
     unregisterSubscriberImpl(self, listener)
 
 proc newSigilThread*(): SigilThread =
