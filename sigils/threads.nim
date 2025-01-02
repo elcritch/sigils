@@ -56,10 +56,10 @@ type
     signaled*: HashSet[WeakRef[AgentProxyShared]]
     references*: HashSet[Agent]
 
-  SigilThreadObj* = ref object of SigilThreadBase
-    thr*: Thread[SharedPtr[SigilThreadObj]]
+  SigilThreadRegular* = ref object of SigilThreadBase
+    thr*: Thread[SharedPtr[SigilThreadRegular]]
 
-  SigilThread* = SharedPtr[SigilThreadObj]
+  SigilThread* = SharedPtr[SigilThreadRegular]
 
 var localSigilThread {.threadVar.}: Option[SigilThread]
 
@@ -175,7 +175,7 @@ method unregisterSubscriber*(
         echo "error sending deref message for ", $selfRef
 
 proc newSigilThread*(): SigilThread =
-  result = newSharedPtr(isolate SigilThreadObj())
+  result = newSharedPtr(isolate SigilThreadRegular())
   result[].inputs = newSigilChan()
 
 proc startLocalThread*() =
