@@ -82,8 +82,6 @@ proc newSigilChan*(): SigilChan =
   result = newSharedPtr(unsafeIsolate cref)
   result[].ch = newChan[ThreadSignal](1_000)
 
-proc started*(tp: SigilThreadBase) {.signal.}
-
 method trySend*(chan: SigilChanRef, msg: sink Isolated[ThreadSignal]): bool {.gcsafe, base.} =
   # debugPrint &"chan:trySend:"
   result = chan[].ch.trySend(msg)
@@ -237,6 +235,8 @@ proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
       while signaled[].inbox.tryRecv(sig):
         debugPrint "\t threadExec:tgt: ", $sig.tgt[].getId(), " rc: ", $sig.tgt[].unsafeGcCount()
         let res = sig.tgt[].callMethod(sig.req, sig.slot)
+
+proc started*(tp: SigilThreadBase) {.signal.}
 
 proc poll*[R: SigilThreadBase](thread: var R) =
   let sig = thread.inputs[].recv()

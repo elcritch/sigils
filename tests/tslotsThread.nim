@@ -204,12 +204,18 @@ suite "threaded agent slots":
         brightPrint "obj a: ", $a.unsafeWeakRef()
         brightPrint "obj b: ", $b.unsafeWeakRef()
         let thread = newSigilThread()
-        thread.start()
 
         connect(thread[], started, b, ticker)
+
+        echo "\n==== moveToThread"
+        let bp: AgentProxy[Counter] = b.moveToThread(thread)
+        brightPrint "obj bp: ", $bp.unsafeWeakRef()
+
         printConnections(a)
         printConnections(b)
 
+        thread.start()
+        os.sleep(100)
         echo "inner done"
       echo "outer done"
 
