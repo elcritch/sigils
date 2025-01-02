@@ -115,10 +115,15 @@ suite "threaded agent slots":
       let ct = getCurrentSigilThread()
       var
         a = SomeAction(debugName: "A")
+      when defined(sigilsDebug):
+        a.debugName = "A"
 
       block:
         var
-          b = Counter(debugName: "B")
+          b = Counter()
+        when defined(sigilsDebug):
+          b.debugName = "B"
+
         brightPrint "thread runner!", &" (th: {getThreadId()})"
         brightPrint "obj a: ", $a.unsafeWeakRef()
         brightPrint "obj b: ", $b.unsafeWeakRef()

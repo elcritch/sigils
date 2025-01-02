@@ -274,6 +274,9 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
     )
   localProxy.lock.initLock()
   remoteProxy.lock.initLock()
+  when defined(sigilsDebug):
+    localProxy.debugName = "localProxy::" & agentTy.debugName 
+    remoteProxy.debugName = "remoteProxy::" & agentTy.debugName 
 
   # handle things subscribed to `agent`, ie the inverse
   var
