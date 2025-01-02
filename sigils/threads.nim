@@ -238,7 +238,7 @@ proc findSubscribedToSignals(
   for obj in listening:
     debugPrint "freeing subscribed: ", $obj[].getId()
     var toAdd = initOrderedSet[Subscription]()
-    for signal, subscriberPairs in obj[].subscribers.mpairs():
+    for signal, subscriberPairs in obj[].suscriptionsTable.mpairs():
       for item in subscriberPairs:
         if item.tgt == xid:
           toAdd.incl(Subscription(tgt: obj, slot: item.slot))
@@ -276,13 +276,13 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
 
   # handle things subscribed to `agent`, ie the inverse
   var
-    oldSubscribers = agent[].subscribers
+    oldSubscribers = agent[].suscriptionsTable
     oldSubscribedTo = agent[].listening.findSubscribedToSignals(agent[].unsafeWeakRef)
 
   agent[].listening.unsubscribe(agent)
-  agent[].subscribers.removeSubscription(agent)
+  agent[].suscriptionsTable.removeSubscription(agent)
   agent[].listening.clear()
-  agent[].subscribers.clear()
+  agent[].suscriptionsTable.clear()
 
   # update add proxy to listen to subs which agent was subscribed to
   # so they'll send proxy events which the remote thread will process
@@ -294,7 +294,7 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
   localProxy.addSubscription(AnySigilName, remoteProxy, localSlot)
   remoteProxy.addSubscription(AnySigilName, agent[], localSlot)
 
-  # update my subscribers so I use a new proxy to send events
+  # update my suscriptionsTable so I use a new proxy to send events
   # to them
   agent[].addSubscription(AnySigilName, remoteProxy, remoteSlot)
   for signal, subscriberPairs in oldSubscribers.mpairs():

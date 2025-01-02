@@ -15,7 +15,7 @@ proc toRef*[T: ref](obj: WeakRef[T]): T =
 
 type
   AgentObj = object of RootObj
-    subscribers*: Table[int, WeakRef[Agent]] ## agents listening to me
+    suscriptionsTable*: Table[int, WeakRef[Agent]] ## agents listening to me
     when defined(debug):
       freed*: bool
       moved*: bool
@@ -36,25 +36,25 @@ proc `=destroy`*(agentObj: AgentObj) =
     echo "Destroying agent: ",
             " pt: ", cast[pointer](xid.pt).repr,
             " freed: ", agentObj.freed,
-            " lstCnt: ", xid[].subscribers.len()
+            " lstCnt: ", xid[].suscriptionsTable.len()
     if agentObj.freed:
       raise newException(Defect, "already freed!")
 
     xid[].freed = true
 
-  ## remove subscribers via their WeakRef's
+  ## remove suscriptionsTable via their WeakRef's
   ## this is where we create a problem
   ## by using `toRef` which creates a *new* Agent reference
   ## which gets added to ORC as a potential cycle check (?)
   ## adding `{.acyclic.}` to 
   when defined(breakOrc):
-    if xid.toRef().subscribers.len() > 0:
-      echo "has subscribers"
+    if xid.toRef().suscriptionsTable.len() > 0:
+      echo "has suscriptionsTable"
   else:
-    if xid[].subscribers.len() > 0:
-      echo "has subscribers"
+    if xid[].suscriptionsTable.len() > 0:
+      echo "has suscriptionsTable"
 
-  `=destroy`(xid[].subscribers)
+  `=destroy`(xid[].suscriptionsTable)
   echo "finished destroy: agent: ", " pt: 0x", cast[pointer](xid.pt).repr
 
 type

@@ -33,7 +33,7 @@ proc `=destroy`*(obj: TestObj) =
   lastDestroyedTestObj = obj.val
 
 suite "agent weak refs":
-  test "subscribers freed":
+  test "suscriptionsTable freed":
     var x = Counter.new()
 
     block:
@@ -46,32 +46,32 @@ suite "agent weak refs":
       check y.value == 0
       emit x.valueChanged(137)
 
-      echo "x:subscribers: ", x.subscribers
+      echo "x:suscriptionsTable: ", x.suscriptionsTable
       # echo "x:subscribed: ", x.subscribed
-      echo "y:subscribers: ", y.subscribers
+      echo "y:suscriptionsTable: ", y.suscriptionsTable
       # echo "y:subscribed: ", y.subscribed
 
-      check y.subscribers.len() == 0
+      check y.suscriptionsTable.len() == 0
       check y.listening.len() == 1
 
-      check x.subscribers["valueChanged".toSigilName].len() == 1
+      check x.suscriptionsTable["valueChanged".toSigilName].len() == 1
       check x.listening.len() == 0
 
       echo "block done"
 
     echo "finishing outer block "
     # check x.listening.len() == 0
-    echo "x:subscribers: ", x.subscribers
+    echo "x:suscriptionsTable: ", x.suscriptionsTable
     # echo "x:subscribed: ", x.subscribed
-    # check x.subscribers["valueChanged"].len() == 0
-    check x.subscribers.len() == 0
+    # check x.suscriptionsTable["valueChanged"].len() == 0
+    check x.suscriptionsTable.len() == 0
     check x.listening.len() == 0
 
     # check a.value == 0
     # check b.value == 137
     echo "done outer block"
 
-  test "subscribers freed":
+  test "suscriptionsTable freed":
     var y = Counter.new()
 
     block:
@@ -84,25 +84,25 @@ suite "agent weak refs":
       check y.value == 0
       emit x.valueChanged(137)
 
-      echo "x:subscribers: ", x.subscribers
+      echo "x:suscriptionsTable: ", x.suscriptionsTable
       # echo "x:subscribed: ", x.subscribed
-      echo "y:subscribers: ", y.subscribers
+      echo "y:suscriptionsTable: ", y.suscriptionsTable
       # echo "y:subscribed: ", y.subscribed
 
-      check y.subscribers.len() == 0
+      check y.suscriptionsTable.len() == 0
       check y.listening.len() == 1
 
-      check x.subscribers["valueChanged".toSigilName].len() == 1
+      check x.suscriptionsTable["valueChanged".toSigilName].len() == 1
       check x.listening.len() == 0
 
       echo "block done"
 
     echo "finishing outer block "
     # check x.listening.len() == 0
-    echo "y:subscribers: ", y.subscribers
+    echo "y:suscriptionsTable: ", y.suscriptionsTable
     # echo "y:subscribed: ", y.listening.mapIt(it)
-    # check x.subscribers["valueChanged"].len() == 0
-    check y.subscribers.len() == 0
+    # check x.suscriptionsTable["valueChanged"].len() == 0
+    check y.suscriptionsTable.len() == 0
     check y.listening.len() == 0
 
     # check a.value == 0
@@ -154,6 +154,6 @@ test "weak refs":
 
   echo "done with y"
   echo "X::count: ", x.unsafeGcCount()
-  check x.subscribers.len() == 0
+  check x.suscriptionsTable.len() == 0
   check x.listening.len() == 0
   check x.unsafeGcCount() == 1
