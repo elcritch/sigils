@@ -281,7 +281,7 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
   # handle things subscribed to `agent`, ie the inverse
   var
     oldSubscribers = agent[].subcriptionsTable
-    oldSubscribedTo = agent[].listening.findSubscribedToSignals(agent[].unsafeWeakRef)
+    oldListeningSubs = agent[].listening.findSubscribedToSignals(agent[].unsafeWeakRef)
 
   agent.unsubscribeFrom(agent[].listening)
   agent.removeSubscriptions(agent[].subcriptionsTable)
@@ -290,9 +290,10 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
 
   # update add proxy to listen to subs which agent was subscribed to
   # so they'll send proxy events which the remote thread will process
-  for signal, subscriptions in oldSubscribedTo.mpairs():
+  for signal, subscriptions in oldListeningSubs.mpairs():
     for subscription in subscriptions:
       # let tgt = sub.tgt.toRef()
+      printBright "moveToThread:oldListeningSubs: ", subscription.tgt
       subscription.tgt[].addSubscription(signal, localProxy, subscription.slot)
 
   localProxy.addSubscription(AnySigilName, remoteProxy, remoteSlot)
