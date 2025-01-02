@@ -48,7 +48,7 @@ type
     of Deref:
       deref*: WeakRef[Agent]
 
-  SigilThreadBase* = object of RootObj
+  SigilThreadBase* = ref object of Agent
     id*: int
     inputs*: SigilChan
 
@@ -56,7 +56,7 @@ type
     signaled*: HashSet[WeakRef[AgentProxyShared]]
     references*: HashSet[Agent]
 
-  SigilThreadObj* = object of SigilThreadBase
+  SigilThreadObj* = ref object of SigilThreadBase
     thr*: Thread[SharedPtr[SigilThreadObj]]
 
   SigilThread* = SharedPtr[SigilThreadObj]
