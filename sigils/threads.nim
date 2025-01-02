@@ -178,7 +178,9 @@ proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
     thread.references.incl(item)
   of Deref:
     debugPrint "\t threadExec:deref: ", $sig.deref[].getId(), " refcount: ", $sig.deref[].unsafeGcCount()
-    thread.references.excl(sig.deref[])
+    if not sig.deref[].isNil:
+      GC_unref(sig.deref[])
+    # thread.references.excl(sig.deref[])
   of Call:
     debugPrint "\t threadExec:call: ", $sig.tgt[].getId()
     for item in thread.references.items():
@@ -194,7 +196,11 @@ proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
         # discard c_raise(11.cint)
       assert sig.tgt[].freedByThread == 0
     let res = sig.tgt[].callMethod(sig.req, sig.slot)
-    # sig.src[].inbound[].send(unsafeIsolate ThreadSignal(kind: Deref, item: toKind(sig.src, Agent)))
+    debugPrint "\t threadExec:tgt: ", $sig.tgt[].getId(), " rc: ", $sig.tgt[].unsafeGcCount()
+    debugPrint "\t threadExec:deref: ", $sig.src[].getId(), " rc: ", $sig.src[].unsafeGcCount()
+    let src: WeakRef[Agent] = toKind(sig.src, Agent)
+    if not sig.src[].isNil:
+      sig.src[].inbound[].send(unsafeIsolate ThreadSignal(kind: Deref, deref: src))
 
 proc poll*[R: SigilThreadBase](thread: var R) =
   let sig = thread.inputs[].recv()
@@ -293,7 +299,7 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
   
   thread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Move, item: move agentTy))
   # thread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Move, item: proxy))
-  ct[].references.incl(proxy)
+  # ct[].references.incl(proxy)
 
   return proxy
 

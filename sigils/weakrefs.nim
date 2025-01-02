@@ -23,8 +23,8 @@ proc verifyUnique*[T: WeakRef, V](field: T, parent: V) =
 proc toPtr*[T](obj: WeakRef[T]): pointer =
   result = cast[pointer](obj.pt)
 
-template toKind*[T, U](obj: WeakRef[T], tp: typedesc[U]): WeakRef[U] =
-  cast[WeakRef[U]](U(obj[]))
+proc toKind*[T, U](obj: WeakRef[T], tp: typedesc[U]): WeakRef[U] =
+  unsafeWeakRef(U(obj[]))
 
 proc hash*[T](obj: WeakRef[T]): Hash =
   result = hash cast[pointer](obj.pt)
