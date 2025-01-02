@@ -82,6 +82,8 @@ proc newSigilChan*(): SigilChan =
   result = newSharedPtr(unsafeIsolate cref)
   result[].ch = newChan[ThreadSignal](1_000)
 
+proc started*(tp: SigilThreadBase) {.signal.}
+
 method trySend*(chan: SigilChanRef, msg: sink Isolated[ThreadSignal]): bool {.gcsafe, base.} =
   # debugPrint &"chan:trySend:"
   result = chan[].ch.trySend(msg)
