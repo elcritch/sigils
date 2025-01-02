@@ -232,10 +232,10 @@ proc start*(thread: SigilThread) =
   createThread(thread[].thr, runThread, thread)
 
 proc findSubscribedToSignals(
-    subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]
+    listening: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]
 ): Table[SigilName, OrderedSet[Subscription]] =
   ## remove myself from agents I'm subscribed to
-  for obj in subscribedTo:
+  for obj in listening:
     debugPrint "freeing subscribed: ", $obj[].getId()
     var toAdd = initOrderedSet[Subscription]()
     for signal, subscriberPairs in obj[].subscribers.mpairs():
@@ -277,11 +277,11 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
   # handle things subscribed to `agent`, ie the inverse
   var
     oldSubscribers = agent[].subscribers
-    oldSubscribedTo = agent[].subscribedTo.findSubscribedToSignals(agent[].unsafeWeakRef)
+    oldSubscribedTo = agent[].listening.findSubscribedToSignals(agent[].unsafeWeakRef)
 
-  agent[].subscribedTo.unsubscribe(agent)
+  agent[].listening.unsubscribe(agent)
   agent[].subscribers.removeSubscription(agent)
-  agent[].subscribedTo.clear()
+  agent[].listening.clear()
   agent[].subscribers.clear()
 
   # update add proxy to listen to subs which agent was subscribed to

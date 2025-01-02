@@ -22,7 +22,7 @@ proc setValue*(self: Counter, value: int) {.slot.} =
     self.value = value
   echo "setValue:subscribers: ",
     self.subscribers.pairs().toSeq.mapIt(it[1].mapIt(it.tgt.getId))
-  echo "setValue:subscribedTo: ", self.subscribedTo.toSeq.mapIt(it.getId)
+  echo "setValue:listening: ", self.listening.toSeq.mapIt(it.getId)
   emit self.updated(self.value)
 
 proc completed*(self: SomeAction, final: int) {.slot.} =

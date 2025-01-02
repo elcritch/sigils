@@ -63,7 +63,7 @@ template debugPrint*(msgs: varargs[untyped]) =
 type
   AgentObj = object of RootObj
     subscribers*: Table[SigilName, OrderedSet[Subscription]] ## agents listening to me
-    subscribedTo*: HashSet[WeakRef[Agent]] ## agents I'm listening to
+    listening*: HashSet[WeakRef[Agent]] ## agents I'm listening to
     when defined(sigilDebugFreed) or defined(debug):
       freedByThread*: int
 
@@ -124,8 +124,8 @@ template unregisterSubscriberImpl*(
 ) =
   # debugPrint "\unregisterSubscriber: ", subscriber.tgt
   # debugPrint "\tlisterners:subscribed ", subscriber.tgt[].subscribed
-  assert listener in self.subscribedTo
-  self.subscribedTo.excl(listener)
+  assert listener in self.listening
+  self.listening.excl(listener)
   # debugPrint "\tlisterners:subscribed ", subscriber.tgt[].subscribed
 
 method unregisterSubscriber*(
@@ -134,10 +134,10 @@ method unregisterSubscriber*(
   debugPrint &"unregisterSubscriber:agent: self: {$self.getId()}"
   unregisterSubscriberImpl(self, listener)
 
-proc unsubscribe*(subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]) =
+proc unsubscribe*(listening: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]) =
   ## unsubscribe myself from agents I'm subscribed (listening) to
-  debugPrint &"unsubscribe: {$subscribedTo.len()}"
-  for obj in subscribedTo:
+  debugPrint &"unsubscribe: {$listening.len()}"
+  for obj in listening:
     obj[].removeSubscriptionsFor(xid)
 
 template removeSubscription*(
@@ -159,17 +159,17 @@ proc `=destroy`*(agent: AgentObj) {.forbids: [DestructorUnsafe].} =
           &" pt: 0x{xid.toPtr.repr}",
           &" freed: {agent.freedByThread}",
           &" subs: {xid[].subscribers.len()}",
-          &" subTo: {xid[].subscribedTo.len()}"
+          &" subTo: {xid[].listening.len()}"
   # debugPrint "destroy agent: ", getStackTrace().replace("\n", "\n\t")
   when defined(debug) or defined(sigilDebugFreed):
     assert agent.freedByThread == 0
     xid[].freedByThread = getThreadId()
 
-  agent.subscribedTo.unsubscribe(xid)
+  agent.listening.unsubscribe(xid)
   agent.subscribers.removeSubscription(xid)
 
   `=destroy`(xid[].subscribers)
-  `=destroy`(xid[].subscribedTo)
+  `=destroy`(xid[].listening)
   debugPrint "finished destroy: agent: ", " pt: 0x", xid.toPtr.repr
 
 template toAgentObj*[T: Agent](agent: T): AgentObj =
@@ -220,7 +220,7 @@ proc addSubscription*(obj: Agent, sig: SigilName, tgt: Agent | WeakRef[Agent], s
     subs.incl(Subscription(tgt: tgt.unsafeWeakRef().asAgent(), slot: slot))
     obj.subscribers[sig] = ensureMove subs
 
-  tgt.subscribedTo.incl(obj.unsafeWeakRef().asAgent())
+  tgt.listening.incl(obj.unsafeWeakRef().asAgent())
   # echo "subscribers: ", obj.subscribers.len, " SUBSC: ", tgt.subscribed.len
 
 template addSubscription*(
