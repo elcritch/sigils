@@ -103,7 +103,37 @@ suite "threaded agent slots":
       GC_fullCollect()
 
   when false:
-    test "sigil object thread runner":
+    test "agent connect then moveToThread and run":
+      var
+        a = SomeAction.new()
+
+      block:
+        echo "sigil object thread connect change"
+        var
+          b = Counter.new()
+          c = SomeAction.new()
+        echo "thread runner!", " (th: ", getThreadId(), ")"
+        echo "obj a: ", a.getId
+        echo "obj b: ", b.getId
+        echo "obj c: ", c.getId
+        let thread = newSigilThread()
+        thread.start()
+        startLocalThread()
+
+        connect(a, valueChanged, b, setValue)
+        connect(b, updated, c, SomeAction.completed())
+
+        let bp: AgentProxy[Counter] = b.moveToThread(thread)
+        echo "obj bp: ", bp.getId()
+
+        emit a.valueChanged(314)
+        let ct = getCurrentSigilThread()
+        ct[].poll()
+        check c.value == 314
+      GC_fullCollect()
+
+  when false:
+    test "agent move to thread then connect and run":
 
       var
         a = SomeAction.new()
@@ -140,36 +170,6 @@ suite "threaded agent slots":
         echo "a.subcriptionsTable: ", a.subcriptionsTable
       if a.listening.len() > 0:
         echo "a.listening: ", a.listening
-      GC_fullCollect()
-
-  when false:
-    test "sigil object thread connect change":
-      var
-        a = SomeAction.new()
-
-      block:
-        echo "sigil object thread connect change"
-        var
-          b = Counter.new()
-          c = SomeAction.new()
-        echo "thread runner!", " (th: ", getThreadId(), ")"
-        echo "obj a: ", a.getId
-        echo "obj b: ", b.getId
-        echo "obj c: ", c.getId
-        let thread = newSigilThread()
-        thread.start()
-        startLocalThread()
-
-        connect(a, valueChanged, b, setValue)
-        connect(b, updated, c, SomeAction.completed())
-
-        let bp: AgentProxy[Counter] = b.moveToThread(thread)
-        echo "obj bp: ", bp.getId()
-
-        emit a.valueChanged(314)
-        let ct = getCurrentSigilThread()
-        ct[].poll()
-        check c.value == 314
       GC_fullCollect()
 
   when false:
