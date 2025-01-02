@@ -1,5 +1,6 @@
 import std/[macros, options]
 import std/times
+
 import slots
 
 import agents
