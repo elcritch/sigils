@@ -29,11 +29,13 @@ proc `=destroy`*(obj: var typeof(AgentProxyShared()[])) =
   try:
     let
       thr = obj.remoteThread
-      remoteProxy = obj.proxyTwin.toKind(Agent)
-    debugPrint "send deref: ", $remoteProxy, " thr: ", thr[].id
-    thr[].inputs.send(unsafeIsolate ThreadSignal(kind: Deref, deref: remoteProxy))
+      proxyTwin = obj.proxyTwin.toKind(Agent)
+    if proxyTwin.pt != nil:
+      debugPrint "send deref: ", $proxyTwin, " thr: ", thr[].id
+      thr[].inputs.send(unsafeIsolate ThreadSignal(kind: Deref, deref: proxyTwin))
   except Exception:
     echo "error sending deref message for ", $obj.proxyTwin
+  obj.proxyTwin.pt = nil
 
   `=destroy`(obj.remote)
   `=destroy`(obj.remoteThread)
@@ -77,10 +79,7 @@ method callMethod*(
     callSlots(proxy, req)
   else:
     var req = req.deepCopy()
-    # echo "proxy:callMethod: ", " proxy:refcount: ", proxy.unsafeGcCount()
-    # echo "proxy:callMethod: ", " proxy.obj.remote:refcount: ", proxy.obj.remote[].unsafeGcCount()
     debugPrint "\t callMethod:agentProxy:InitCall:Outbound: ", req.procName, " proxy:remote:obj: ", proxy.remote.getId()
-    # GC_ref(proxy)
     var msg = isolateRuntime ThreadSignal(kind: Call, slot: slot, req: move req, tgt: proxy.remote)
     when defined(sigilNonBlockingThreads):
       discard
