@@ -59,6 +59,7 @@ proc ticker*(self: Counter) {.slot.} =
   for i in 1..3:
     echo "tick! i:", i, " ", self.unsafeWeakRef(), " (th: ", getThreadId(), ")"
     globalLastTicker = i
+    # printConnections(self)
     emit self.updated(i)
 
 proc completed*(self: SomeAction, final: int) {.slot.} =
@@ -213,7 +214,7 @@ suite "threaded agent slots":
         connect(b, updated, a, SomeAction.completed())
         printConnections(a)
         printConnections(b)
-        printConnections(thread[])
+        # printConnections(thread[])
 
         echo "\n==== moveToThread"
         let bp: AgentProxy[Counter] = b.moveToThread(thread)
@@ -222,8 +223,9 @@ suite "threaded agent slots":
 
         printConnections(a)
         printConnections(bp)
-        printConnections(thread[])
+        printConnections(bp.proxyTwin[])
         printConnections(bp.getRemote()[])
+        # printConnections(thread[])
 
         thread.start()
 

@@ -189,8 +189,8 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
       localProxy.addSubscription(signal, sub.tgt[], sub.slot)
       hasSubs = true
   if hasSubs:
-    remoteProxy.addSubscription(AnySigilName, localProxy, remoteSlot)
-    localProxy.addSubscription(AnySigilName, agentTy, localSlot)
+    agent[].addSubscription(AnySigilName, remoteProxy, remoteSlot)
+    remoteProxy.addSubscription(AnySigilName, localProxy, localSlot)
 
   thread[].inputs.send(unsafeIsolate ThreadSignal(kind: Move, item: move agentTy))
   thread[].inputs.send(unsafeIsolate ThreadSignal(kind: Move, item: move remoteProxy))
