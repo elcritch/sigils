@@ -45,7 +45,7 @@ type
 
     signaledLock*: Lock
     signaled*: HashSet[WeakRef[AgentRemote]]
-    references*: HashSet[Agent]
+    references*: HashSet[WeakRef[Agent]]
 
   SigilThreadRegular* = ref object of SigilThreadBase
     thr*: Thread[SharedPtr[SigilThreadRegular]]
@@ -76,19 +76,23 @@ proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
   of Move:
     debugPrint "\t threadExec:move: ", $sig.item.unsafeWeakRef(), " refcount: ", $sig.item.unsafeGcCount()
     var item = sig.item
-    thread.references.incl(item)
+    GC_ref(item)
+    thread.references.incl(item.unsafeWeakRef())
   of Deref:
     if not sig.deref[].isNil:
       debugPrint "\t threadExec:deref: ", $sig.deref.unsafeWeakRef()
       # GC_unref(sig.deref[])
-      thread.references.excl(sig.deref[])
-    var derefs: seq[Agent]
+      if thread.references.contains(sig.deref):
+        thread.references.excl(sig.deref)
+        GC_unref(sig.deref[])
+    var derefs: seq[WeakRef[Agent]]
     for agent in thread.references:
-      if not agent.hasConnections():
+      if not agent[].hasConnections():
         derefs.add(agent)
     for agent in derefs:
       debugPrint "\tderef cleanup: ", agent.unsafeWeakRef()
       thread.references.excl(agent)
+      GC_unref(agent[])
   of Call:
     debugPrint "\t threadExec:call: ", $sig.tgt[].getId()
     # for item in thread.references.items():
