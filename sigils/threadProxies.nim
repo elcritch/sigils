@@ -26,18 +26,17 @@ proc `=destroy`*(obj: var typeof(AgentProxyShared()[])) =
   debugPrint "PROXY Destroy: ", cast[AgentProxyShared](addr(obj)).unsafeWeakRef()
   `=destroy`(toAgentObj(cast[AgentProxyShared](addr obj)))
 
+  obj.proxyTwin[].proxyTwin.pt = nil
   try:
     let
       thr = obj.remoteThread
       proxyTwin = obj.proxyTwin.toKind(Agent)
-    if proxyTwin.pt != nil:
+    if not proxyTwin.isNil:
       debugPrint "send deref: ", $proxyTwin, " thr: ", thr[].id
       thr[].inputs.send(unsafeIsolate ThreadSignal(kind: Deref, deref: proxyTwin))
   except Exception:
     echo "error sending deref message for ", $obj.proxyTwin
-  obj.proxyTwin.pt = nil
 
-  `=destroy`(obj.remote)
   `=destroy`(obj.remoteThread)
   `=destroy`(obj.lock) # careful on this one -- should probably figure out a test
 
