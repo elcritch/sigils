@@ -71,10 +71,10 @@ proc getCurrentSigilThread*(): SigilThread =
   return localSigilThread.get()
 
 proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
-  debugPrint "\nthread got request: ", $sig
+  debugPrint "\nthread got request: ", $sig.kind
   case sig.kind:
   of Move:
-    debugPrint "\t threadExec:move: ", $sig.item.getId(), " refcount: ", $sig.item.unsafeGcCount()
+    debugPrint "\t threadExec:move: ", $sig.item.unsafeWeakRef(), " refcount: ", $sig.item.unsafeGcCount()
     var item = sig.item
     thread.references.incl(item)
   of Deref:
