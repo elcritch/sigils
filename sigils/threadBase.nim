@@ -89,7 +89,6 @@ proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
     for agent in derefs:
       debugPrint "\tderef cleanup: ", agent.unsafeWeakRef()
       thread.references.excl(agent)
-
   of Call:
     debugPrint "\t threadExec:call: ", $sig.tgt[].getId()
     # for item in thread.references.items():
@@ -111,7 +110,6 @@ proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
     var signaled: HashSet[WeakRef[AgentRemote]]
     withLock thread.signaledLock:
       signaled = move thread.signaled
-
     for signaled in signaled:
       debugPrint "triggering: ", signaled
       var sig: ThreadSignal
