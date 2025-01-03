@@ -151,21 +151,21 @@ suite "threaded agent slots":
         thread.start()
 
         connect(a, valueChanged, b, setValueGlobal)
-        # printConnections(a)
-        # printConnections(b)
+        printConnections(a)
+        printConnections(b)
 
-        # echo "\n==== moveToThread"
+        echo "\n==== moveToThread"
         let bp: AgentProxy[Counter] = b.moveToThread(thread)
         brightPrint "obj bp: ", $bp.unsafeWeakRef()
-        # printConnections(a)
-        # printConnections(bp)
-        # printConnections(bp.proxyTwin[])
-        # printConnections(bp.remote[])
+        printConnections(a)
+        printConnections(bp)
+        printConnections(bp.proxyTwin[])
+        printConnections(bp.remote[])
         let
           subLocalProxy = Subscription(tgt: bp.unsafeWeakRef().asAgent(), slot: setValueGlobal(Counter))
         check a.subcriptionsTable["valueChanged".toSigilName].contains(subLocalProxy)
         check bp.listening.contains(a.unsafeWeakRef().asAgent())
-        # check bp.subcriptionsTable[AnySigilName].contains(subLocalProxy)
+        check bp.subcriptionsTable.len() == 0
         # check bp.subcriptionsTable[]
 
         emit a.valueChanged(568)

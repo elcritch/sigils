@@ -56,7 +56,6 @@ method callMethod*(
     when defined(sigilsDebug) or defined(debug):
       assert proxy.freedByThread == 0
     when defined(sigilNonBlockingThreads):
-      # let res = proxy.inbound[].trySend(msg) # if not res: #   raise newException(AgentSlotError, "error sending signal to thread")
       discard
     else:
       proxy.proxyTwin[].inbox.send(msg)
@@ -76,7 +75,6 @@ method callMethod*(
     # GC_ref(proxy)
     var msg = isolateRuntime ThreadSignal(kind: Call, slot: slot, req: move req, tgt: proxy.remote)
     when defined(sigilNonBlockingThreads):
-      # let res = proxy.obj.outbound[].trySend(msg) # if not res: #   raise newException(AgentSlotError, "error sending signal to thread")
       discard
     else:
       debugPrint "\t callMethod:agentProxy:proxyTwin: ", proxy.proxyTwin
@@ -177,8 +175,7 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
       subscription.tgt[].addSubscription(signal, localProxy, subscription.slot)
       listenSubs = true
   if listenSubs:
-    localProxy.addSubscription(AnySigilName, remoteProxy, remoteSlot)
-    remoteProxy.addSubscription(AnySigilName, agentTy, localSlot)
+    remoteProxy.addSubscription(AnySigilName, agentTy, remoteSlot)
 
   # update my subcriptionsTable so agent uses the remote proxy to send events back
   var hasSubs = false
