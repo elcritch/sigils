@@ -26,7 +26,9 @@ proc `=destroy`*(obj: var typeof(AgentProxyShared()[])) =
   debugPrint "PROXY Destroy: ", cast[AgentProxyShared](addr(obj)).unsafeWeakRef()
   `=destroy`(toAgentObj(cast[AgentProxyShared](addr obj)))
 
-  obj.proxyTwin[].proxyTwin.pt = nil
+  debugPrint "PROXY Destroy: proxyTwin: ", obj.proxyTwin
+  if not obj.proxyTwin.isNil:
+    obj.proxyTwin[].proxyTwin.pt = nil
   try:
     let
       thr = obj.remoteThread
@@ -108,15 +110,15 @@ method unregisterSubscriber*(
     unregisterSubscriberImpl(self, listener)
 
 proc findSubscribedToSignals(
-    listening: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]
+    listening: HashSet[WeakRef[Agent]], agent: WeakRef[Agent]
 ): Table[SigilName, OrderedSet[Subscription]] =
   ## remove myself from agents I'm subscribed to
   for obj in listening:
-    debugPrint "freeing subscribed: ", $obj[].getId()
+    debugPrint "finding subscribed: ", $obj
     var toAdd = initOrderedSet[Subscription]()
     for signal, subscriberPairs in obj[].subcriptionsTable.mpairs():
       for item in subscriberPairs:
-        if item.tgt == xid:
+        if item.tgt == agent:
           toAdd.incl(Subscription(tgt: obj, slot: item.slot))
           # echo "agentRemoved: ", "tgt: ", xid.toPtr.repr, " id: ", agent.debugId, " obj: ", obj[].debugId, " name: ", signal
       result[signal] = move toAdd
