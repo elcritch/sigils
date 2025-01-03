@@ -59,9 +59,10 @@ proc ticker*(self: Counter) {.slot.} =
   for i in 1..3:
     echo "tick! i:", i, " ", self.unsafeWeakRef(), " (th: ", getThreadId(), ")"
     globalLastTicker = i
+    emit self.updated(i)
 
 proc completed*(self: SomeAction, final: int) {.slot.} =
-  # echo "Action done! final: ", final, " id: ", self.getId().int, " (th: ", getThreadId(), ")"
+  echo "Action done! final: ", final, " id: ", $self.unsafeWeakRef(), " (th: ", getThreadId(), ")"
   self.value = final
 
 proc value*(self: Counter): int =
@@ -209,6 +210,7 @@ suite "threaded agent slots":
         when defined(sigilsDebug):
           thread[].debugName = "thread"
 
+        connect(b, updated, a, SomeAction.completed())
         printConnections(a)
         printConnections(b)
         printConnections(thread[])
@@ -224,12 +226,12 @@ suite "threaded agent slots":
 
         thread.start()
 
+        for i in 1..3:
+          if globalLastTicker != 3:
+            os.sleep(1)
+        check globalLastTicker == 3
         echo "inner done"
       
-      for i in 1..3:
-        if globalLastTicker != 3:
-          os.sleep(1)
-      check globalLastTicker == 3
       echo "outer done"
 
 
