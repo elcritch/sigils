@@ -126,7 +126,7 @@ suite "threaded agent slots":
 
   when true:
     test "agent connect a->b then moveToThread then destroy proxy":
-      debugPrintQuiet = true
+      debugPrintQuiet = false
       echo "slot:remoteSlot: ", remoteSlot.repr
       echo "slot:localSlot: ", localSlot.repr
 
@@ -233,6 +233,9 @@ suite "threaded agent slots":
           if globalLastTicker != 3:
             os.sleep(1)
         check globalLastTicker == 3
+        os.sleep(100)
+        let polled = ct[].pollAll()
+        echo "polled: ", polled
         echo "inner done"
       
       echo "outer done"

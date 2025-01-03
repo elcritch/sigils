@@ -49,21 +49,19 @@ method callMethod*(
   ## Route's an rpc request. 
   debugPrint "callMethod: proxy: ", $proxy.unsafeWeakRef().asAgent(), " refcount: ", proxy.unsafeGcCount(), " slot: ", repr(slot)
   if slot == remoteSlot:
-    discard
-  #   var req = req.deepCopy()
-  #   debugPrint "\t proxy:callMethod:remoteSlot: ", "req: ", $req
-  #   var msg = isolateRuntime ThreadSignal(kind: Call, slot: localSlot, req: move req, tgt: proxy.Agent.unsafeWeakRef)
-  #   debugPrint "\t proxy:callMethod:remoteSlot: ", "msg: ", $msg
-  #   debugPrint "\t proxy:callMethod:remoteSlot: ", "proxy: ", proxy.getId()
-  #   when defined(sigilsDebug) or defined(debug):
-  #     assert proxy.freedByThread == 0
-  #   when defined(sigilNonBlockingThreads):
-  #     let res = proxy.inbound[].trySend(msg)
-  #     if not res:
-  #       raise newException(AgentSlotError, "error sending signal to thread")
-  #   else:
-  #     proxy.msgs[].send(msg)
+    var req = req.deepCopy()
+    debugPrint "\t proxy:callMethod:remoteSlot: ", "req: ", $req
+    var msg = isolateRuntime ThreadSignal(kind: Call, slot: localSlot, req: move req, tgt: proxy.Agent.unsafeWeakRef)
+    debugPrint "\t proxy:callMethod:remoteSlot: ", "msg: ", $msg, " proxyTwin: ", $proxy.proxyTwin
+    when defined(sigilsDebug) or defined(debug):
+      assert proxy.freedByThread == 0
+    when defined(sigilNonBlockingThreads):
+      # let res = proxy.inbound[].trySend(msg) # if not res: #   raise newException(AgentSlotError, "error sending signal to thread")
+      discard
+    else:
+      proxy.proxyTwin[].inbox.send(msg)
   elif slot == localSlot:
+    debugPrint "callMethod: proxy: ", "localSlot"
     discard
   #   debugPrint "\t callMethod:agentProxy:localSlot: req: ", $req
   #   callSlots(proxy, req)
@@ -75,9 +73,7 @@ method callMethod*(
     # GC_ref(proxy)
     var msg = isolateRuntime ThreadSignal(kind: Call, slot: slot, req: move req, tgt: proxy.remote)
     when defined(sigilNonBlockingThreads):
-      # let res = proxy.obj.outbound[].trySend(msg)
-      # if not res:
-      #   raise newException(AgentSlotError, "error sending signal to thread")
+      # let res = proxy.obj.outbound[].trySend(msg) # if not res: #   raise newException(AgentSlotError, "error sending signal to thread")
       discard
     else:
       debugPrint "\t callMethod:agentProxy:proxyTwin: ", proxy.proxyTwin
