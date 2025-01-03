@@ -55,7 +55,7 @@ proc setValueGlobal*(self: Counter, value: int) {.slot.} =
   globalCounter = value
 
 proc ticker*(self: Counter) {.slot.} =
-  for i in 1..10:
+  for i in 1..3:
     echo "tick! i:", i, " ", self.unsafeWeakRef(), " (th: ", getThreadId(), ")"
 
 proc completed*(self: SomeAction, final: int) {.slot.} =
