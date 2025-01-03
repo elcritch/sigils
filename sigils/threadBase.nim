@@ -78,8 +78,8 @@ proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
     var item = sig.item
     thread.references.incl(item)
   of Deref:
-    debugPrint "\t threadExec:deref: ", $sig.deref
     if not sig.deref[].isNil:
+      debugPrint "\t threadExec:deref: ", $sig.deref.unsafeWeakRef()
       # GC_unref(sig.deref[])
       thread.references.excl(sig.deref[])
     var derefs: seq[Agent]

@@ -30,7 +30,7 @@ proc `=destroy`*(obj: var typeof(AgentProxyShared()[])) =
     let
       thr = obj.remoteThread
       remoteProxy = obj.proxyTwin.toKind(Agent)
-    debugPrint "send deref: ", thr[].id
+    debugPrint "send deref: ", $remoteProxy, " thr: ", thr[].id
     thr[].inputs.send(unsafeIsolate ThreadSignal(kind: Deref, deref: remoteProxy))
   except Exception:
     echo "error sending deref message for ", $obj.proxyTwin
