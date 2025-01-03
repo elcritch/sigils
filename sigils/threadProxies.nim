@@ -67,10 +67,8 @@ method callMethod*(
         proxy.remoteThread[].signaled.incl(proxy.proxyTwin.toKind(AgentRemote))
       proxy.remoteThread[].inputs.send(unsafeIsolate ThreadSignal(kind: Trigger))
   elif slot == localSlot:
-    debugPrint "callMethod: proxy: ", "localSlot"
-    discard
-  #   debugPrint "\t callMethod:agentProxy:localSlot: req: ", $req
-  #   callSlots(proxy, req)
+    debugPrint "\t proxy:callMethod:localSlot: "
+    callSlots(proxy, req)
   else:
     var req = req.deepCopy()
     # echo "proxy:callMethod: ", " proxy:refcount: ", proxy.unsafeGcCount()
@@ -170,7 +168,7 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
       subscription.tgt[].addSubscription(signal, localProxy, subscription.slot)
       listenSubs = true
   if listenSubs:
-    remoteProxy.addSubscription(AnySigilName, agentTy, remoteSlot)
+    remoteProxy.addSubscription(AnySigilName, agentTy, localSlot)
 
   # update my subcriptionsTable so agent uses the remote proxy to send events back
   var hasSubs = false
@@ -180,7 +178,7 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
       localProxy.addSubscription(signal, sub.tgt[], sub.slot)
       hasSubs = true
   if hasSubs:
-    agent[].addSubscription(AnySigilName, remoteProxy, localSlot)
+    agent[].addSubscription(AnySigilName, remoteProxy, remoteSlot)
 
   thread[].inputs.send(unsafeIsolate ThreadSignal(kind: Move, item: move agentTy))
   thread[].inputs.send(unsafeIsolate ThreadSignal(kind: Move, item: move remoteProxy))

@@ -56,7 +56,7 @@ proc setValueGlobal*(self: Counter, value: int) {.slot.} =
 
 var globalLastTicker = 0
 proc ticker*(self: Counter) {.slot.} =
-  for i in 1..3:
+  for i in 3..3:
     echo "tick! i:", i, " ", self.unsafeWeakRef(), " (th: ", getThreadId(), ")"
     globalLastTicker = i
     # printConnections(self)
@@ -135,10 +135,7 @@ suite "threaded agent slots":
 
   when true:
     test "agent connect a->b then moveToThread then destroy proxy":
-      debugPrintQuiet = true
-      echo "slot:remoteSlot: ", remoteSlot.repr
-      echo "slot:localSlot: ", localSlot.repr
-
+      # debugPrintQuiet = true
       let ct = getCurrentSigilThread()
       var
         a = SomeAction(debugName: "A")
@@ -196,8 +193,6 @@ suite "threaded agent slots":
   when true:
     test "agent connect b->a then moveToThread then destroy proxy":
       debugPrintQuiet = false
-      echo "slot:remoteSlot: ", remoteSlot.repr
-      echo "slot:localSlot: ", localSlot.repr
 
       let ct = getCurrentSigilThread()
       var

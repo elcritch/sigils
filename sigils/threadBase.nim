@@ -78,7 +78,7 @@ proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
     var item = sig.item
     thread.references.incl(item)
   of Deref:
-    debugPrint "\t threadExec:deref: ", $sig.deref, " refcount: ", $sig.deref[].unsafeGcCount()
+    debugPrint "\t threadExec:deref: ", $sig.deref
     if not sig.deref[].isNil:
       # GC_unref(sig.deref[])
       thread.references.excl(sig.deref[])
