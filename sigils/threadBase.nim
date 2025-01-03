@@ -15,11 +15,6 @@ export smartptrs, isolation, channels
 export isolateutils
 
 type
-  # SigilChanRef* = ref object of RootObj
-  #   ch*: Chan[ThreadSignal]
-
-  # SigilChan* = SharedPtr[SigilChanRef]
-
   ThreadSignalKind* {.pure.} = enum
     Call
     Move
@@ -60,28 +55,7 @@ type
 var localSigilThread {.threadVar.}: Option[SigilThread]
 
 proc newSigilChan*(): SigilChan =
-  # let cref = SigilChanRef.new()
-  # GC_ref(cref)
-  # result = newSharedPtr(unsafeIsolate cref)
-  # result[].ch = newChan[ThreadSignal](1_000)
   result = newChan[ThreadSignal](1_000)
-
-# method trySend*(chan: SigilChanRef, msg: sink Isolated[ThreadSignal]): bool {.gcsafe, base.} =
-#   # debugPrint &"chan:trySend:"
-#   result = chan[].ch.trySend(msg)
-#   # debugPrint &"chan:trySend: res: {$result}"
-
-# method send*(chan: SigilChanRef, msg: sink Isolated[ThreadSignal]) {.gcsafe, base.} =
-#   # debugPrint "chan:send: "
-#   chan[].ch.send(msg)
-
-# method tryRecv*(chan: SigilChanRef, dst: var ThreadSignal): bool {.gcsafe, base.} =
-#   # debugPrint "chan:tryRecv:"
-#   result = chan[].ch.tryRecv(dst)
-
-# method recv*(chan: SigilChanRef): ThreadSignal {.gcsafe, base.} =
-#   # debugPrint "chan:recv: "
-#   chan[].ch.recv()
 
 proc newSigilThread*(): SigilThread =
   result = newSharedPtr(isolate SigilThreadRegular())
