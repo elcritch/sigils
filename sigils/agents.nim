@@ -261,7 +261,9 @@ template addSubscription*(
 ): void =
   addSubscription(obj, sig.toSigilName(), tgt, slot)
 
-proc printConnections*(agent: Agent) =
+var printConnectionsSlotNames* = initTable[pointer, string]()
+
+proc printConnections*(agent: Agent; ) =
   withLock plock:
     if agent.isNil:
       brightPrint fgBlue, "connections for Agent: ", "nil"
@@ -274,7 +276,8 @@ proc printConnections*(agent: Agent) =
     for sig, subs in agent.subcriptionsTable.pairs():
       # brightPrint fgRed, "\t\t signal: ", $sig
       for sub in subs:
-        brightPrint fgGreen, "\t\t:", $sig, ": => ", $sub.tgt & " slot: " & $sub.slot.repr
+        let sname = printConnectionsSlotNames.getOrDefault(sub.slot, sub.slot.repr)
+        brightPrint fgGreen, "\t\t:", $sig, ": => ", $sub.tgt & " slot: " & $sname
     brightPrint fgMagenta, "\t listening:", ""
     for listening in agent.listening:
       brightPrint fgRed, "\t\t listen: ", $listening

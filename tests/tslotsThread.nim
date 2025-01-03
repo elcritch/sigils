@@ -70,6 +70,15 @@ proc value*(self: Counter): int =
   self.value
 
 suite "threaded agent slots":
+  setup:
+    printConnectionsSlotNames = {
+      remoteSlot.pointer: "remoteSlot",
+      localSlot.pointer: "localSlot",
+      SomeAction.completed().pointer: "completed",
+      ticker.pointer: "ticker",
+      Counter.setValue().pointer: "setValue",
+      setValueGlobal.pointer: "setValueGlobal",
+    }.toTable()
 
   when false:
     test "simple threading test":
@@ -126,7 +135,7 @@ suite "threaded agent slots":
 
   when true:
     test "agent connect a->b then moveToThread then destroy proxy":
-      debugPrintQuiet = false
+      debugPrintQuiet = true
       echo "slot:remoteSlot: ", remoteSlot.repr
       echo "slot:localSlot: ", localSlot.repr
 
