@@ -24,25 +24,20 @@ type
 
 proc `=destroy`*(obj: var typeof(AgentProxyShared()[])) =
   debugPrint "PROXY Destroy: ", cast[AgentProxyShared](addr(obj)).unsafeWeakRef()
-  # withLock obj.lock:
-  block:
-    `=destroy`(toAgentObj(cast[AgentProxyShared](addr obj)))
+  `=destroy`(toAgentObj(cast[AgentProxyShared](addr obj)))
 
-    `=destroy`(obj.remote)
-    `=destroy`(obj.remoteThread)
+  try:
+    let
+      thr = obj.remoteThread
+      remoteProxy = obj.proxyTwin.toKind(Agent)
+    debugPrint "send deref: ", thr[].id
+    thr[].inputs.send(unsafeIsolate ThreadSignal(kind: Deref, deref: remoteProxy))
+  except Exception:
+    echo "error sending deref message for ", $obj.proxyTwin
 
-    try:
-      let
-        thr = obj.remoteThread
-        remoteProxy = obj.proxyTwin.toKind(Agent)
-      debugPrint "send deref: ", thr[].id
-      thr[].inputs.send(unsafeIsolate ThreadSignal(kind: Deref, deref: remoteProxy))
-    except Exception:
-      echo "error sending deref message for ", $obj.proxyTwin
-
-    # careful on this one -- should probably figure out a test
-    # in case the compiler ever changes
-    `=destroy`(obj.lock)
+  `=destroy`(obj.remote)
+  `=destroy`(obj.remoteThread)
+  `=destroy`(obj.lock) # careful on this one -- should probably figure out a test
 
 proc getRemote*[T](proxy: AgentProxy[T]): WeakRef[T] =
   proxy.remote.toKind(T)
