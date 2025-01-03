@@ -175,7 +175,7 @@ suite "threaded agent slots":
         # check bp.subcriptionsTable[]
 
         emit a.valueChanged(568)
-        os.sleep(10)
+        os.sleep(1)
         check globalCounter == 568
       echo "block done"
       # printConnections(a)
@@ -185,9 +185,9 @@ suite "threaded agent slots":
       emit a.valueChanged(111)
       check globalCounter == 568
 
-      for i in 1..100:
-        if globalLastInnerCDestroyed != 2020:
-          os.sleep(1)
+      for i in 1..10:
+        if globalLastInnerCDestroyed == 2020: break
+        os.sleep(1)
       check globalLastInnerCDestroyed == 2020
 
   when true:
@@ -237,7 +237,8 @@ suite "threaded agent slots":
           if globalLastTicker != 3:
             os.sleep(1)
         check globalLastTicker == 3
-        os.sleep(100)
+        # os.sleep(10)
+        ct[].poll()
         let polled = ct[].pollAll()
         echo "polled: ", polled
         check a.value == 3
