@@ -237,7 +237,6 @@ suite "threaded agent slots":
           if globalLastTicker != 3:
             os.sleep(1)
         check globalLastTicker == 3
-        # os.sleep(10)
         ct[].poll()
         let polled = ct[].pollAll()
         echo "polled: ", polled
