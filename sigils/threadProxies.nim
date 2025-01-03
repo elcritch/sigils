@@ -55,7 +55,13 @@ method callMethod*(
   if slot == remoteSlot:
     var req = req.deepCopy()
     debugPrint "\t proxy:callMethod:remoteSlot: ", "req: ", $req
-    var msg = isolateRuntime ThreadSignal(kind: Call, slot: localSlot, req: move req, tgt: proxy.Agent.unsafeWeakRef)
+    debugPrint "\t proxy:callMethod:remoteSlot: ", "proxy.remote: ", $proxy.remote
+    var msg = isolateRuntime ThreadSignal(
+      kind: Call,
+      slot: localSlot,
+      req: move req,
+      tgt: proxy.proxyTwin.toKind(Agent)
+    )
     debugPrint "\t proxy:callMethod:remoteSlot: ", "msg: ", $msg, " proxyTwin: ", $proxy.proxyTwin
     when defined(sigilsDebug) or defined(debug):
       assert proxy.freedByThread == 0

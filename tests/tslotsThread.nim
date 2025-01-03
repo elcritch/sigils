@@ -240,6 +240,7 @@ suite "threaded agent slots":
         os.sleep(100)
         let polled = ct[].pollAll()
         echo "polled: ", polled
+        check a.value == 3
         echo "inner done"
       
       echo "outer done"

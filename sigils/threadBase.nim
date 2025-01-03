@@ -114,7 +114,7 @@ proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
       debugPrint "triggering: ", signaled
       var sig: ThreadSignal
       while signaled[].inbox.tryRecv(sig):
-        debugPrint "\t threadExec:tgt: ", $sig.tgt[].getId(), " rc: ", $sig.tgt[].unsafeGcCount()
+        debugPrint "\t threadExec:tgt: ", $sig.tgt, " rc: ", $sig.tgt[].unsafeGcCount()
         let res = sig.tgt[].callMethod(sig.req, sig.slot)
 
 proc started*(tp: SigilThreadBase) {.signal.}
