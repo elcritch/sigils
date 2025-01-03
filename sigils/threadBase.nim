@@ -78,7 +78,6 @@ proc gcCollectReferences(thread: SigilThreadBase) =
   for agent in derefs:
     debugPrint "\tderef cleanup: ", agent.unsafeWeakRef()
     thread.references.del(agent)
-    # GC_unref(agent[])
 
 proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
   debugPrint "\nthread got request: ", $sig.kind
@@ -86,7 +85,6 @@ proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
   of Move:
     debugPrint "\t threadExec:move: ", $sig.item.unsafeWeakRef(), " refcount: ", $sig.item.unsafeGcCount()
     var item = sig.item
-    # GC_ref(item)
     thread.references[item.unsafeWeakRef()] = move item
   of Deref:
     debugPrint "\t threadExec:deref: ", $sig.deref.unsafeWeakRef()

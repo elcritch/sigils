@@ -27,6 +27,11 @@ proc `=destroy`*(obj: var typeof(AgentProxyShared()[])) =
   `=destroy`(toAgentObj(cast[AgentProxyShared](addr obj)))
 
   debugPrint "PROXY Destroy: proxyTwin: ", obj.proxyTwin
+  # need to break to proxyTwin cycle on dirst destroy
+  # we should avoid race conditions by using the derefs
+  # e.g. even if we send an extra deref while the remote is being destroyed
+  #      then we it won't be found in the `references` table on the remote thread
+  # we could do locking here, but that seems unneeded
   if not obj.proxyTwin.isNil:
     obj.proxyTwin[].proxyTwin.pt = nil
   try:
