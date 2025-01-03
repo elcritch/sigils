@@ -221,6 +221,7 @@ suite "threaded agent slots":
         connect(thread[], started, bp.getRemote()[], ticker)
 
         printConnections(a)
+        printConnections(bp)
         printConnections(thread[])
         printConnections(bp.getRemote()[])
 
