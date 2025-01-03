@@ -15,10 +15,10 @@ export smartptrs, isolation, channels
 export isolateutils
 
 type
-  SigilChanRef* = ref object of RootObj
-    ch*: Chan[ThreadSignal]
+  # SigilChanRef* = ref object of RootObj
+  #   ch*: Chan[ThreadSignal]
 
-  SigilChan* = SharedPtr[SigilChanRef]
+  # SigilChan* = SharedPtr[SigilChanRef]
 
   ThreadSignalKind* {.pure.} = enum
     Call
@@ -39,6 +39,8 @@ type
     of Deref:
       deref*: WeakRef[Agent]
 
+  SigilChan* = Chan[ThreadSignal]
+
   AgentRemote* = ref object of Agent
     inbox*: Chan[ThreadSignal]
 
@@ -58,27 +60,29 @@ type
 var localSigilThread {.threadVar.}: Option[SigilThread]
 
 proc newSigilChan*(): SigilChan =
-  let cref = SigilChanRef.new()
-  GC_ref(cref)
-  result = newSharedPtr(unsafeIsolate cref)
-  result[].ch = newChan[ThreadSignal](1_000)
+  # let cref = SigilChanRef.new()
+  # GC_ref(cref)
+  # result = newSharedPtr(unsafeIsolate cref)
+  # result[].ch = newChan[ThreadSignal](1_000)
+  result = newChan[ThreadSignal](1_000)
 
-method trySend*(chan: SigilChanRef, msg: sink Isolated[ThreadSignal]): bool {.gcsafe, base.} =
-  # debugPrint &"chan:trySend:"
-  result = chan[].ch.trySend(msg)
-  # debugPrint &"chan:trySend: res: {$result}"
 
-method send*(chan: SigilChanRef, msg: sink Isolated[ThreadSignal]) {.gcsafe, base.} =
-  # debugPrint "chan:send: "
-  chan[].ch.send(msg)
+# method trySend*(chan: SigilChanRef, msg: sink Isolated[ThreadSignal]): bool {.gcsafe, base.} =
+#   # debugPrint &"chan:trySend:"
+#   result = chan[].ch.trySend(msg)
+#   # debugPrint &"chan:trySend: res: {$result}"
 
-method tryRecv*(chan: SigilChanRef, dst: var ThreadSignal): bool {.gcsafe, base.} =
-  # debugPrint "chan:tryRecv:"
-  result = chan[].ch.tryRecv(dst)
+# method send*(chan: SigilChanRef, msg: sink Isolated[ThreadSignal]) {.gcsafe, base.} =
+#   # debugPrint "chan:send: "
+#   chan[].ch.send(msg)
 
-method recv*(chan: SigilChanRef): ThreadSignal {.gcsafe, base.} =
-  # debugPrint "chan:recv: "
-  chan[].ch.recv()
+# method tryRecv*(chan: SigilChanRef, dst: var ThreadSignal): bool {.gcsafe, base.} =
+#   # debugPrint "chan:tryRecv:"
+#   result = chan[].ch.tryRecv(dst)
+
+# method recv*(chan: SigilChanRef): ThreadSignal {.gcsafe, base.} =
+#   # debugPrint "chan:recv: "
+#   chan[].ch.recv()
 
 proc remoteSlot*(context: Agent, params: SigilParams) {.nimcall.} =
   raise newException(AssertionDefect, "this should never be called!")
@@ -150,18 +154,18 @@ proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
 proc started*(tp: SigilThreadBase) {.signal.}
 
 proc poll*[R: SigilThreadBase](thread: var R) =
-  let sig = thread.inputs[].recv()
+  let sig = thread.inputs.recv()
   thread.exec(sig)
 
 proc tryPoll*[R: SigilThreadBase](thread: var R) =
   var sig: ThreadSignal
-  if thread.inputs[].tryRecv(sig):
+  if thread.inputs.tryRecv(sig):
     thread.exec(sig)
 
 proc pollAll*[R: SigilThreadBase](thread: var R): int {.discardable.} =
   var sig: ThreadSignal
   result = 0
-  while thread.inputs[].tryRecv(sig):
+  while thread.inputs.tryRecv(sig):
     thread.exec(sig)
     result.inc()
 
