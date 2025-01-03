@@ -66,7 +66,6 @@ proc newSigilChan*(): SigilChan =
   # result[].ch = newChan[ThreadSignal](1_000)
   result = newChan[ThreadSignal](1_000)
 
-
 # method trySend*(chan: SigilChanRef, msg: sink Isolated[ThreadSignal]): bool {.gcsafe, base.} =
 #   # debugPrint &"chan:trySend:"
 #   result = chan[].ch.trySend(msg)
@@ -186,7 +185,7 @@ proc runThread*(thread: SigilThread) {.thread.} =
 proc start*(thread: SigilThread) =
   createThread(thread[].thr, runThread, thread)
 
-proc findSubscribedToSignals(
+proc findSubscribedToSignals*(
     listening: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]
 ): Table[SigilName, OrderedSet[Subscription]] =
   ## remove myself from agents I'm subscribed to

@@ -13,10 +13,6 @@ import threadBase
 from system/ansi_c import c_raise
 
 type
-  SigilChanRef* = ref object of RootObj
-    ch*: Chan[ThreadSignal]
-
-  SigilChan* = SharedPtr[SigilChanRef]
 
   AgentProxyShared* = ref object of AgentRemote
     remote*: WeakRef[Agent]
@@ -25,40 +21,6 @@ type
     remoteThread*: SigilThread
 
   AgentProxy*[T] = ref object of AgentProxyShared
-
-  ThreadSignalKind* {.pure.} = enum
-    Call
-    Move
-    Trigger
-    Deref
-
-  ThreadSignal* = object
-    case kind*: ThreadSignalKind
-    of Call:
-      slot*: AgentProc
-      req*: SigilRequest
-      tgt*: WeakRef[Agent]
-    of Move:
-      item*: Agent
-    of Trigger:
-      discard
-    of Deref:
-      deref*: WeakRef[Agent]
-
-  SigilThreadBase* = ref object of Agent
-    id*: int
-    inputs*: SigilChan
-
-    signaledLock*: Lock
-    signaled*: HashSet[WeakRef[AgentProxyShared]]
-    references*: HashSet[Agent]
-
-  SigilThreadRegular* = ref object of SigilThreadBase
-    thr*: Thread[SharedPtr[SigilThreadRegular]]
-
-  SigilThread* = SharedPtr[SigilThreadRegular]
-
-var localSigilThread {.threadVar.}: Option[SigilThread]
 
 proc `=destroy`*(obj: var typeof(AgentProxyShared()[])) =
   debugPrint "PROXY Destroy: ", cast[AgentProxyShared](addr(obj)).unsafeWeakRef()
