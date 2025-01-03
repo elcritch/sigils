@@ -93,8 +93,7 @@ proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
     if thread.references.contains(sig.deref):
       debugPrint "\t threadExec:run:deref: ", $sig.deref.unsafeWeakRef()
       thread.references.del(sig.deref)
-      # GC_unref(sig.deref[])
-    # thread.gcCollectReferences()
+    thread.gcCollectReferences()
   of Call:
     debugPrint "\t threadExec:call: ", $sig.tgt[].getId()
     # for item in thread.references.items():
