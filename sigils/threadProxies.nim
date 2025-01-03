@@ -60,6 +60,9 @@ method callMethod*(
       discard
     else:
       proxy.proxyTwin[].inbox.send(msg)
+      withLock proxy.remoteThread[].signaledLock:
+        proxy.remoteThread[].signaled.incl(proxy.proxyTwin.toKind(AgentRemote))
+      proxy.remoteThread[].inputs.send(unsafeIsolate ThreadSignal(kind: Trigger))
   elif slot == localSlot:
     debugPrint "callMethod: proxy: ", "localSlot"
     discard
