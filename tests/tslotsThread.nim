@@ -181,7 +181,7 @@ suite "threaded agent slots":
 
       for i in 1..100:
         if globalLastInnerCDestroyed != 2020:
-          os.sleep(10)
+          os.sleep(1)
       check globalLastInnerCDestroyed == 2020
 
   when true:
