@@ -76,6 +76,9 @@ proc `=destroy`*(obj: var typeof(AgentProxyShared()[])) =
     # in case the compiler ever changes
     `=destroy`(obj.lock)
 
+proc getRemote*[T](proxy: AgentProxy[T]): WeakRef[T] =
+  proxy.remote.toKind(T)
+
 proc newSigilChan*(): SigilChan =
   let cref = SigilChanRef.new()
   GC_ref(cref)

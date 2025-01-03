@@ -204,15 +204,20 @@ suite "threaded agent slots":
         brightPrint "obj a: ", $a.unsafeWeakRef()
         brightPrint "obj b: ", $b.unsafeWeakRef()
         let thread = newSigilThread()
+        when defined(sigilsDebug):
+          thread[].debugName = "thread"
 
-        connect(thread[], started, b, ticker)
+        printConnections(a)
+        printConnections(b)
+        printConnections(thread[])
 
         echo "\n==== moveToThread"
         let bp: AgentProxy[Counter] = b.moveToThread(thread)
         brightPrint "obj bp: ", $bp.unsafeWeakRef()
+        connect(thread[], started, bp.getRemote()[], ticker)
 
         printConnections(a)
-        printConnections(b)
+        printConnections(thread[])
 
         thread.start()
         os.sleep(100)
