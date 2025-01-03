@@ -218,6 +218,7 @@ suite "threaded agent slots":
 
         printConnections(a)
         printConnections(thread[])
+        printConnections(bp.getRemote()[])
 
         thread.start()
         os.sleep(100)
