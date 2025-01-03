@@ -31,6 +31,15 @@ proc `=destroy`*(obj: var typeof(AgentProxyShared()[])) =
     `=destroy`(obj.remote)
     `=destroy`(obj.remoteThread)
 
+    try:
+      let
+        thr = obj.remoteThread
+        remoteProxy = obj.proxyTwin.toKind(Agent)
+      debugPrint "send deref: ", thr[].id
+      thr[].inputs.send(unsafeIsolate ThreadSignal(kind: Deref, deref: remoteProxy))
+    except Exception:
+      echo "error sending deref message for ", $obj.proxyTwin
+
     # careful on this one -- should probably figure out a test
     # in case the compiler ever changes
     `=destroy`(obj.lock)
@@ -100,15 +109,6 @@ method unregisterSubscriber*(
     # block:
     debugPrint "   unregisterSubscriber:proxy:ready: self:id: ", $self.unsafeWeakRef()
     unregisterSubscriberImpl(self, listener)
-    if self.listening.len() == 0:
-      let
-        thr = self.proxyTwin[].remoteThread
-        selfRef = self.unsafeWeakRef().asAgent()
-      debugPrint "\tproxy:listening:empty: ", self.listening.len()
-      try:
-        thr[].inputs.send(unsafeIsolate ThreadSignal(kind: Deref, deref: selfRef))
-      except Exception:
-        echo "error sending deref message for ", $selfRef
 
 proc findSubscribedToSignals(
     listening: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]
