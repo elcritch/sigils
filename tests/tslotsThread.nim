@@ -54,9 +54,11 @@ proc setValueGlobal*(self: Counter, value: int) {.slot.} =
     self.value = value
   globalCounter = value
 
+var globalLastTicker = 0
 proc ticker*(self: Counter) {.slot.} =
   for i in 1..3:
     echo "tick! i:", i, " ", self.unsafeWeakRef(), " (th: ", getThreadId(), ")"
+    globalLastTicker = i
 
 proc completed*(self: SomeAction, final: int) {.slot.} =
   # echo "Action done! final: ", final, " id: ", self.getId().int, " (th: ", getThreadId(), ")"
@@ -221,8 +223,13 @@ suite "threaded agent slots":
         printConnections(bp.getRemote()[])
 
         thread.start()
-        os.sleep(100)
+
         echo "inner done"
+      
+      for i in 1..3:
+        if globalLastTicker != 3:
+          os.sleep(1)
+      check globalLastTicker == 3
       echo "outer done"
 
 

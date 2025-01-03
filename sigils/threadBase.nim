@@ -138,8 +138,8 @@ proc pollAll*[R: SigilThreadBase](thread: var R): int {.discardable.} =
     result.inc()
 
 proc runForever*(thread: SigilThread) =
+  emit thread[].started()
   while true:
-    emit thread[].started()
     thread[].poll()
 
 proc runThread*(thread: SigilThread) {.thread.} =
