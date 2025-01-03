@@ -83,11 +83,6 @@ proc newSigilChan*(): SigilChan =
 #   # debugPrint "chan:recv: "
 #   chan[].ch.recv()
 
-proc remoteSlot*(context: Agent, params: SigilParams) {.nimcall.} =
-  raise newException(AssertionDefect, "this should never be called!")
-proc localSlot*(context: Agent, params: SigilParams) {.nimcall.} =
-  raise newException(AssertionDefect, "this should never be called!")
-
 proc newSigilThread*(): SigilThread =
   result = newSharedPtr(isolate SigilThreadRegular())
   result[].inputs = newSigilChan()
@@ -184,17 +179,3 @@ proc runThread*(thread: SigilThread) {.thread.} =
 
 proc start*(thread: SigilThread) =
   createThread(thread[].thr, runThread, thread)
-
-proc findSubscribedToSignals*(
-    listening: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]
-): Table[SigilName, OrderedSet[Subscription]] =
-  ## remove myself from agents I'm subscribed to
-  for obj in listening:
-    debugPrint "freeing subscribed: ", $obj[].getId()
-    var toAdd = initOrderedSet[Subscription]()
-    for signal, subscriberPairs in obj[].subcriptionsTable.mpairs():
-      for item in subscriberPairs:
-        if item.tgt == xid:
-          toAdd.incl(Subscription(tgt: obj, slot: item.slot))
-          # echo "agentRemoved: ", "tgt: ", xid.toPtr.repr, " id: ", agent.debugId, " obj: ", obj[].debugId, " name: ", signal
-      result[signal] = move toAdd

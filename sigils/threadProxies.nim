@@ -83,8 +83,8 @@ method callMethod*(
       debugPrint "\t callMethod:agentProxy:proxyTwin: ", proxy.proxyTwin
       proxy.proxyTwin[].inbox.send(msg)
       withLock proxy.remoteThread[].signaledLock:
-        proxy.remoteThread[].signaled.incl(proxy.proxyTwin)
-      proxy.remoteThread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Trigger))
+        proxy.remoteThread[].signaled.incl(proxy.proxyTwin.toKind(AgentRemote))
+      proxy.remoteThread[].inputs.send(unsafeIsolate ThreadSignal(kind: Trigger))
 
 method removeSubscriptionsFor*(
     self: AgentProxyShared, subscriber: WeakRef[Agent]
@@ -109,7 +109,7 @@ method unregisterSubscriber*(
         selfRef = self.unsafeWeakRef().asAgent()
       debugPrint "\tproxy:listening:empty: ", self.listening.len()
       try:
-        thr[].inputs[].send(unsafeIsolate ThreadSignal(kind: Deref, deref: selfRef))
+        thr[].inputs.send(unsafeIsolate ThreadSignal(kind: Deref, deref: selfRef))
       except Exception:
         echo "error sending deref message for ", $selfRef
 
@@ -190,8 +190,8 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
   #     # echo "signal: ", signal, " subscriber: ", tgt.getId
   #     localProxy.addSubscription(signal, sub.tgt[], sub.slot)
 
-  thread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Move, item: move agentTy))
-  thread[].inputs[].send(unsafeIsolate ThreadSignal(kind: Move, item: move remoteProxy))
+  thread[].inputs.send(unsafeIsolate ThreadSignal(kind: Move, item: move agentTy))
+  thread[].inputs.send(unsafeIsolate ThreadSignal(kind: Move, item: move remoteProxy))
 
   return localProxy
 
