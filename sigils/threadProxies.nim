@@ -173,18 +173,20 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
 
   # update add proxy to listen to subs which agent was subscribed to
   # so they'll send proxy events which the remote thread will process
+  var listenSubs = false
   for signal, subscriptions in oldListeningSubs.mpairs():
     for subscription in subscriptions:
-      # let tgt = sub.tgt.toRef()
-      # brightPrint "moveToThread:oldListeningSubs: ", $subscription.tgt
       subscription.tgt[].addSubscription(signal, localProxy, subscription.slot)
+      listenSubs = true
 
-  localProxy.addSubscription(AnySigilName, remoteProxy, remoteSlot)
-  remoteProxy.addSubscription(AnySigilName, agentTy, localSlot)
+  if listenSubs:
+    localProxy.addSubscription(AnySigilName, remoteProxy, remoteSlot)
+    remoteProxy.addSubscription(AnySigilName, agentTy, localSlot)
 
-  # # update my subcriptionsTable so I use a new proxy to send events
-  # agent[].addSubscription(AnySigilName, remoteProxy, localSlot)
+  # update my subcriptionsTable so I use a new proxy to send events
   # remoteProxy.addSubscription(AnySigilName, localProxy, remoteSlot)
+  # localProxy.addSubscription(AnySigilName, agentTy, localSlot)
+
   # for signal, subscriberPairs in oldSubscribers.mpairs():
   #   for sub in subscriberPairs:
   #     # echo "signal: ", signal, " subscriber: ", tgt.getId
