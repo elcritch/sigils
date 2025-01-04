@@ -144,7 +144,6 @@ suite "threaded agent slots":
   when true:
     test "agent connect a->b then moveToThread then destroy proxy":
       # debugPrintQuiet = true
-      let ct = getCurrentSigilThread()
       var
         a = SomeAction(debugName: "A")
       when defined(sigilsDebug):
