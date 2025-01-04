@@ -176,7 +176,7 @@ template removeSubscriptions*(
   for signal, subscriptions in subcriptionsTable.pairs():
     # echo "freeing signal: ", signal, " subcriptionsTable: ", subscriberPairs
     for subscription in subscriptions:
-      subscription.tgt.pt.unregisterSubscriber(agent)
+      subscription.tgt[].unregisterSubscriber(agent)
 
 proc `=destroy`*(agentObj: AgentObj) {.forbids: [DestructorUnsafe].} =
   when defined(sigilsWeakRefCursor):
@@ -198,8 +198,8 @@ proc `=destroy`*(agentObj: AgentObj) {.forbids: [DestructorUnsafe].} =
   agent.unsubscribeFrom(agentObj.listening)
   agent.removeSubscriptions(agentObj.subcriptionsTable)
 
-  `=destroy`(agent.pt.subcriptionsTable)
-  `=destroy`(agent.pt.listening)
+  `=destroy`(agent[].subcriptionsTable)
+  `=destroy`(agent[].listening)
   debugPrint "\tfinished destroy: agent: ", " pt: ", $agent
   when defined(sigilsDebug):
     `=destroy`(agent{}.debugName)

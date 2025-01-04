@@ -10,8 +10,11 @@ type WeakRef*[T] {.acyclic.} = object
   else:
     pt*: pointer
 
-template `[]`*[T](r: WeakRef[T]): lent T =
-  cast[T](r.pt)
+proc `[]`*[T](r: WeakRef[T]): lent T {.inline.} =
+  when defined(sigilsWeakRefCursor):
+    r.pt
+  else:
+    cast[T](r.pt)
 
 template `{}`*[T](r: WeakRef[T]): auto =
   cast[
