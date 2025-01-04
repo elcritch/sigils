@@ -46,10 +46,11 @@ proc verifyUnique[T, V](field: T, parent: V) =
   when T is ref:
     # static:
     #   echo "verifyUnique: ref: ", $T
-    if not field.isNil and not field.isUniqueRef():
-      raise newException(IsolationError, &"reference not unique! Cannot safely isolate {$typeof(field)} parent: {$typeof(parent)} ")
-    for v in field[].fields():
-      verifyUnique(v, parent)
+    if not field.isNil:
+      if not field.isUniqueRef():
+        raise newException(IsolationError, &"reference not unique! Cannot safely isolate {$typeof(field)} parent: {$typeof(parent)} ")
+      for v in field[].fields():
+        verifyUnique(v, parent)
   elif T is tuple or T is object:
     when compiles(verifyUniqueSkip(T)):
       # static:
@@ -67,7 +68,7 @@ proc verifyUnique[T, V](field: T, parent: V) =
     #   echo "verifyUnique: skip: ", $T
     discard
 
-proc isolateRuntime*[T](item: T): Isolated[T] {.raises: [IsolationError].} =
+proc isolateRuntime*[T](item: sink T): Isolated[T] {.raises: [IsolationError].} =
   ## Isolates a ref type or type with ref's and ensure that
   ## each ref is unique. This allows safely isolating it.
   when compiles(isolate(item)):
@@ -78,4 +79,4 @@ proc isolateRuntime*[T](item: T): Isolated[T] {.raises: [IsolationError].} =
     # static:
     #   echo "\n### IsolateRuntime: runtime isolate: ", $T
     verifyUnique(item, item)
-    result = unsafeIsolate(move item)
+    result = unsafeIsolate(item)
