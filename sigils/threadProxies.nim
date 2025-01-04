@@ -31,7 +31,8 @@ proc `=destroy`*(obj: var typeof(AgentProxyShared()[])) =
   # TODO: seems like there's race condtions here as we could destroy
   # both remote and local proxies at the same time
   if not obj.proxyTwin.isNil:
-    obj.proxyTwin[].proxyTwin.pt = nil
+    withLock obj.proxyTwin[].lock:
+      obj.proxyTwin[].proxyTwin.pt = nil
   try:
     let
       thr = obj.remoteThread
@@ -74,9 +75,11 @@ method callMethod*(
     when defined(sigilNonBlockingThreads):
       discard
     else:
-      proxy.proxyTwin[].inbox.send(msg)
-      withLock proxy.remoteThread[].signaledLock:
-        proxy.remoteThread[].signaled.incl(proxy.proxyTwin.toKind(AgentRemote))
+      withLock proxy.lock:
+        if not proxy.proxyTwin.isNil:
+          proxy.proxyTwin[].inbox.send(msg)
+          withLock proxy.remoteThread[].signaledLock:
+            proxy.remoteThread[].signaled.incl(proxy.proxyTwin.toKind(AgentRemote))
       proxy.remoteThread[].send(ThreadSignal(kind: Trigger))
   elif slot == localSlot:
     debugPrint "\t proxy:callMethod:localSlot: "

@@ -359,6 +359,7 @@ suite "threaded agent slots":
           # echo "obj bp.remote: ", bp.remote[].unsafeWeakRef
           connect(a, valueChanged, b, setValue)
           connect(b, updated, a, SomeAction.completed())
+
           let bp: AgentProxy[Counter] = b.moveToThread(thread)
           echo "BP: ", bp.getId()
 
@@ -369,8 +370,9 @@ suite "threaded agent slots":
           check a.value == 89
         echo "block done"
 
-        ct[].poll()
-        check a.value == 628
+        let cnt = ct[].pollAll()
+        check cnt == 0
+        check a.value == 89
 
         # ct[].poll()
         # check a.value == 756809
