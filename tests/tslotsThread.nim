@@ -407,8 +407,12 @@ suite "threaded agent slots":
 
           # thread.thread.joinThread(500)
           let ct = getCurrentSigilThread()
+          os.sleep(10)
+          echo "polling event"
           ct[].poll()
+          echo "checking event"
           check a.value == 756809
+          echo "done event"
           ct[].poll()
           check a.value == 628
         GC_fullCollect()
