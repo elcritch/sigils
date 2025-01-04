@@ -59,7 +59,7 @@ var localSigilThread {.threadVar.}: Option[SharedPtr[SigilThread]]
 proc newSigilChan*(): SigilChan =
   result = newChan[ThreadSignal](1_000)
 
-method send*(thread: SigilThread, msg: sink ThreadSignal, blocking: BlockingKinds) {.base, gcsafe.} =
+method send*(thread: SigilThread, msg: sink ThreadSignal, blocking: BlockingKinds = Blocking) {.base, gcsafe.} =
   discard
 
 method recv*(thread: SigilThread, msg: var ThreadSignal, blocking: BlockingKinds): bool {.base, gcsafe.} =
@@ -67,7 +67,13 @@ method recv*(thread: SigilThread, msg: var ThreadSignal, blocking: BlockingKinds
 
 method send*(thread: SigilThreadImpl, msg: sink ThreadSignal, blocking: BlockingKinds) {.gcsafe.} =
   var msg = isolateRuntime(msg)
-  thread.inputs.send(msg)
+  case blocking
+  of Blocking:
+    thread.inputs.send(msg)
+  of NonBlocking:
+    let sent = thread.inputs.trySend(msg)
+    if not sent:
+      raise newException(Defect, "could not send!")
 
 method recv*(thread: SigilThreadImpl, msg: var ThreadSignal, blocking: BlockingKinds): bool {.gcsafe.} =
   case blocking
