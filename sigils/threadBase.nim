@@ -43,14 +43,17 @@ type
   AgentRemote* = ref object of Agent
     inbox*: Chan[ThreadSignal]
 
-  SigilThread* = ref object of Agent
+  AgentThread* = ref object of Agent
+
+  SigilThread* = object of RootObj
     id*: int
 
     signaledLock*: Lock
     signaled*: HashSet[WeakRef[AgentRemote]]
     references*: Table[WeakRef[Agent], Agent]
+    agent*: AgentThread
 
-  SigilThreadImpl* = ref object of SigilThread
+  SigilThreadImpl* = object of SigilThread
     inputs*: SigilChan
     thr*: Thread[SharedPtr[SigilThreadImpl]]
 
@@ -101,7 +104,7 @@ proc getCurrentSigilThread*(): SharedPtr[SigilThread] =
   startLocalThread()
   return localSigilThread.get()
 
-proc gcCollectReferences(thread: SigilThread) =
+proc gcCollectReferences(thread: var SigilThread) =
   var derefs: seq[WeakRef[Agent]]
   for agent in thread.references.keys():
     if not agent[].hasConnections():
@@ -151,7 +154,7 @@ proc exec*(thread: var SigilThread, sig: ThreadSignal) =
         debugPrint "\t threadExec:tgt: ", $sig.tgt, " rc: ", $sig.tgt[].unsafeGcCount()
         let res = sig.tgt[].callMethod(sig.req, sig.slot)
 
-proc started*(tp: SigilThread) {.signal.}
+proc started*(tp: AgentThread) {.signal.}
 
 proc poll*(thread: var SigilThread) =
   var sig: ThreadSignal
@@ -171,7 +174,7 @@ proc pollAll*(thread: var SigilThread): int {.discardable.} =
     result.inc()
 
 proc runForever*[R: var SigilThread](thread: SharedPtr[R]) =
-  emit thread[].started()
+  emit thread[].agent.started()
   while true:
     thread[].poll()
 
