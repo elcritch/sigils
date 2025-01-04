@@ -296,7 +296,7 @@ suite "threaded agent slots":
         check c.value == 314
       GC_fullCollect()
 
-  when false:
+  when true:
     test "agent move to thread then connect and run":
 
       var
