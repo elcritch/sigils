@@ -58,22 +58,19 @@ proc newSigilChan*(): SigilChan =
 method send*(thread: SigilThread, msg: sink ThreadSignal) {.base, gcsafe.} =
   discard
 
-method recv*(thread: SigilThread, blocking: bool = true): Option[ThreadSignal] {.base, gcsafe.} =
+method recv*(thread: SigilThread, msg: var ThreadSignal, blocking = true): bool {.base, gcsafe.} =
   discard
 
 method send*(thread: SigilThreadImpl, msg: sink ThreadSignal) {.gcsafe.} =
   var msg = isolateRuntime(msg)
   thread.inputs.send(msg)
 
-method recv*(thread: SigilThreadImpl, blocking: bool): Option[ThreadSignal] {.gcsafe.} =
+method recv*(thread: SigilThreadImpl, msg: var ThreadSignal, blocking: bool): bool {.gcsafe.} =
   if blocking:
-    result = some thread.inputs.recv()
+    msg = thread.inputs.recv()
+    return true
   else:
-    var msg: ThreadSignal
-    if thread.inputs.tryRecv(msg):
-      result = some(msg)
-    else:
-      result = none[ThreadSignal]()
+    result = thread.inputs.tryRecv(msg)
 
 proc newSigilThread*(): SharedPtr[SigilThread] =
   var thr = SigilThreadImpl(inputs: newSigilChan())
@@ -141,8 +138,8 @@ proc exec*[R: SigilThread](thread: var R, sig: ThreadSignal) =
 proc started*(tp: SigilThread) {.signal.}
 
 proc poll*[R: SigilThread](thread: var R) =
-  let sig = thread.recv().get()
-  thread.exec(sig)
+  var sig: ThreadSignal
+  discard thread.recv(sig, blocking=true)
 
 proc tryPoll*[R: SigilThread](thread: var R) =
   var sig: ThreadSignal

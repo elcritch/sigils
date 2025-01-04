@@ -38,7 +38,7 @@ proc runAsyncThread*(targ: SharedPtr[AsyncSigilThread]) {.thread.} =
     {.cast(gcsafe).}:
       var sig: ThreadSignal
       echo "async thread running "
-      while thread[].inputs.tryRecv(sig):
+      while thread[].recv(sig, blocking=false):
         echo "async thread got msg: "
         thread[].poll(sig)
 
