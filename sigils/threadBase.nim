@@ -150,17 +150,17 @@ proc exec*[R: SigilThread](thread: var R, sig: ThreadSignal) =
 
 proc started*(tp: SigilThread) {.signal.}
 
-proc poll*[R: SigilThread](thread: var R) =
+proc poll*(thread: var SigilThread) =
   var sig: ThreadSignal
   discard thread.recv(sig, Blocking)
   thread.exec(sig)
 
-proc tryPoll*[R: SigilThread](thread: var R) =
+proc tryPoll*(thread: var SigilThread) =
   var sig: ThreadSignal
-  if thread.inputs.tryRecv(sig):
+  if thread.recv(sig, NonBlocking):
     thread.exec(sig)
 
-proc pollAll*[R: SigilThread](thread: var R): int {.discardable.} =
+proc pollAll*(thread: var SigilThread): int {.discardable.} =
   var sig: ThreadSignal
   result = 0
   while thread.recv(sig, NonBlocking):
