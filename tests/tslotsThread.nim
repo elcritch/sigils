@@ -178,9 +178,9 @@ suite "threaded agent slots":
         check bp.subcriptionsTable.len() == 0
 
         check remoteProxy[].subcriptionsTable.len() == 1
-        check remoteProxy[].listening.len() == 0
+        check remoteProxy[].listening.len() == 1
         check bp[].remote[].subcriptionsTable.len() == 0
-        check bp[].remote[].listening.len() == 1
+        check bp[].remote[].listening.len() == 2
 
         emit a.valueChanged(568)
         os.sleep(1)
