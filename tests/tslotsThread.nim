@@ -404,21 +404,22 @@ suite "threaded agent slots":
           # echo "obj bp: ", bp.unsafeWeakRef
           # echo "obj bp.remote: ", bp.remote[].unsafeWeakRef
           connect(a, valueChanged, bp, setValue)
-          connect(bp, updated, a, SomeAction.completed())
+          connect(bp, updated, a, SomeAction.completedSum())
 
           emit a.valueChanged(756809)
           emit a.valueChanged(628)
 
           # thread.thread.joinThread(500)
+          # os.sleep(10)
           let ct = getCurrentSigilThread()
-          os.sleep(10)
-          echo "polling event"
-          ct[].poll()
-          echo "checking event"
-          check a.value == 756809
-          echo "done event"
-          ct[].poll()
-          check a.value == 628
+          var cnt = 0
+          for i in 1..20:
+            cnt.inc(ct[].pollAll())
+            if cnt >= 3:
+              break
+            os.sleep(1)
+          echo "polled: ", cnt
+          check a.value == 756809 + 628
         GC_fullCollect()
       GC_fullCollect()
 
@@ -458,7 +459,7 @@ suite "threaded agent slots":
               emit a.valueChanged(314)
               emit a.valueChanged(271)
 
-              os.sleep(10)
+              os.sleep(1)
               ct[].pollAll()
               check a.value == 314 + 271
               ct[].pollAll()
