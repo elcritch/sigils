@@ -18,7 +18,7 @@ type
     remote*: WeakRef[Agent]
     proxyTwin*: WeakRef[AgentProxyShared]
     lock*: Lock
-    remoteThread*: SharedPtr[SigilThread]
+    remoteThread*: SharedPtr[SigilThreadImpl]
 
   AgentProxy*[T] = ref object of AgentProxyShared
 
@@ -126,7 +126,7 @@ proc findSubscribedToSignals(
           # echo "agentRemoved: ", "tgt: ", xid.toPtr.repr, " id: ", agent.debugId, " obj: ", obj[].debugId, " name: ", signal
       result[signal] = move toAdd
 
-proc moveToThread*[T: Agent, R: SigilThreadBase](
+proc moveToThread*[T: Agent, R: SigilThread](
     agentTy: var T,
     thread: SharedPtr[R]
 ): AgentProxy[T] =

@@ -39,7 +39,7 @@ type
   AgentRemote* = ref object of Agent
     inbox*: Chan[ThreadSignal]
 
-  SigilThreadBase* = ref object of Agent
+  SigilThread* = ref object of Agent
     id*: int
     inputs*: SigilChan
 
@@ -47,20 +47,21 @@ type
     signaled*: HashSet[WeakRef[AgentRemote]]
     references*: Table[WeakRef[Agent], Agent]
 
-  SigilThread* = ref object of SigilThreadBase
-    thr*: Thread[SharedPtr[SigilThread]]
+  SigilThreadImpl* = ref object of SigilThread
+    thr*: Thread[SharedPtr[SigilThreadImpl]]
 
 var localSigilThread {.threadVar.}: Option[SharedPtr[SigilThread]]
 
 proc newSigilChan*(): SigilChan =
   result = newChan[ThreadSignal](1_000)
 
-method send*(thread: SigilThreadBase, msg: sink ThreadSignal) {.base, gcsafe.} =
+method send*(thread: SigilThread, msg: sink ThreadSignal) {.base, gcsafe.} =
   var msg = isolateRuntime(msg)
   thread.inputs.send(msg)
 
 proc newSigilThread*(): SharedPtr[SigilThread] =
-  result = newSharedPtr(isolate SigilThread())
+  var thr = SigilThreadImpl()
+  result = newSharedPtr(isolateRuntime SigilThread(thr))
   result[].inputs = newSigilChan()
 
 proc startLocalThread*() =
@@ -72,7 +73,7 @@ proc getCurrentSigilThread*(): SharedPtr[SigilThread] =
   startLocalThread()
   return localSigilThread.get()
 
-proc gcCollectReferences(thread: SigilThreadBase) =
+proc gcCollectReferences(thread: SigilThread) =
   var derefs: seq[WeakRef[Agent]]
   for agent in thread.references.keys():
     if not agent[].hasConnections():
@@ -81,7 +82,7 @@ proc gcCollectReferences(thread: SigilThreadBase) =
     debugPrint "\tderef cleanup: ", agent.unsafeWeakRef()
     thread.references.del(agent)
 
-proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
+proc exec*[R: SigilThread](thread: var R, sig: ThreadSignal) =
   debugPrint "\nthread got request: ", $sig.kind
   case sig.kind:
   of Move:
@@ -122,25 +123,25 @@ proc exec*[R: SigilThreadBase](thread: var R, sig: ThreadSignal) =
         debugPrint "\t threadExec:tgt: ", $sig.tgt, " rc: ", $sig.tgt[].unsafeGcCount()
         let res = sig.tgt[].callMethod(sig.req, sig.slot)
 
-proc started*(tp: SigilThreadBase) {.signal.}
+proc started*(tp: SigilThread) {.signal.}
 
-proc poll*[R: SigilThreadBase](thread: var R) =
+proc poll*[R: SigilThread](thread: var R) =
   let sig = thread.inputs.recv()
   thread.exec(sig)
 
-proc tryPoll*[R: SigilThreadBase](thread: var R) =
+proc tryPoll*[R: SigilThread](thread: var R) =
   var sig: ThreadSignal
   if thread.inputs.tryRecv(sig):
     thread.exec(sig)
 
-proc pollAll*[R: SigilThreadBase](thread: var R): int {.discardable.} =
+proc pollAll*[R: SigilThread](thread: var R): int {.discardable.} =
   var sig: ThreadSignal
   result = 0
   while thread.inputs.tryRecv(sig):
     thread.exec(sig)
     result.inc()
 
-proc runForever*(thread: SharedPtr[SigilThread]) =
+proc runForever*[R: SigilThread](thread: SharedPtr[R]) =
   emit thread[].started()
   while true:
     thread[].poll()
@@ -155,5 +156,5 @@ proc runThread*(thread: SharedPtr[SigilThread]) {.thread.} =
     debugPrint "Sigil worker thread waiting!"
     thread.runForever()
 
-proc start*(thread: SharedPtr[SigilThread]) =
+proc start*[R: SigilThread](thread: SharedPtr[R]) =
   createThread(thread[].thr, runThread, thread)

@@ -19,7 +19,7 @@ import std/asyncdispatch
 
 type
 
-  AsyncSigilThread* = ref object of SigilThreadBase
+  AsyncSigilThread* = ref object of SigilThread
     thr*: Thread[SharedPtr[AsyncSigilThread]]
     event*: AsyncEvent
 
