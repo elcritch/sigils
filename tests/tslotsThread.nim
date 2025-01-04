@@ -70,7 +70,8 @@ proc completed*(self: SomeAction, final: int) {.slot.} =
   self.value = final
 
 proc completedSum*(self: SomeAction, final: int) {.slot.} =
-  echo "Action done! final: ", final, " id: ", $self.unsafeWeakRef(), " (th: ", getThreadId(), ")"
+  when defined(debug):
+    echo "Action done! final: ", final, " id: ", $self.unsafeWeakRef(), " (th: ", getThreadId(), ")"
   self.value = self.value + final
 
 proc value*(self: Counter): int =
@@ -449,10 +450,10 @@ suite "threaded agent slots":
               echo "Loop: ", i, ".", j, " (th: ", getThreadId(), ")"
               a.value = 0
               var b = Counter.new()
-              echo "B: ", b.getId()
+              # echo "B: ", b.getId()
 
               let bp: AgentProxy[Counter] = b.moveToThread(thread)
-              echo "BP: ", bp.getId()
+              # echo "BP: ", bp.getId()
 
               connect(a, valueChanged, bp, setValue)
               connect(bp, updated, a, SomeAction.completedSum())
