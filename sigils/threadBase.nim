@@ -15,6 +15,10 @@ export smartptrs, isolation, channels
 export isolateutils
 
 type
+  BlockingKinds* {.pure.} = enum
+    Blocking
+    NonBlocking
+
   ThreadSignalKind* {.pure.} = enum
     Call
     Move
@@ -58,18 +62,19 @@ proc newSigilChan*(): SigilChan =
 method send*(thread: SigilThread, msg: sink ThreadSignal) {.base, gcsafe.} =
   discard
 
-method recv*(thread: SigilThread, msg: var ThreadSignal, blocking = true): bool {.base, gcsafe.} =
+method recv*(thread: SigilThread, msg: var ThreadSignal, blocking: BlockingKinds): bool {.base, gcsafe.} =
   discard
 
 method send*(thread: SigilThreadImpl, msg: sink ThreadSignal) {.gcsafe.} =
   var msg = isolateRuntime(msg)
   thread.inputs.send(msg)
 
-method recv*(thread: SigilThreadImpl, msg: var ThreadSignal, blocking: bool): bool {.gcsafe.} =
-  if blocking:
+method recv*(thread: SigilThreadImpl, msg: var ThreadSignal, blocking: BlockingKinds): bool {.gcsafe.} =
+  case blocking
+  of Blocking:
     msg = thread.inputs.recv()
     return true
-  else:
+  of NonBlocking:
     result = thread.inputs.tryRecv(msg)
 
 proc newSigilThread*(): SharedPtr[SigilThread] =
@@ -139,7 +144,7 @@ proc started*(tp: SigilThread) {.signal.}
 
 proc poll*[R: SigilThread](thread: var R) =
   var sig: ThreadSignal
-  discard thread.recv(sig, blocking=true)
+  discard thread.recv(sig, Blocking)
 
 proc tryPoll*[R: SigilThread](thread: var R) =
   var sig: ThreadSignal
@@ -149,11 +154,8 @@ proc tryPoll*[R: SigilThread](thread: var R) =
 proc pollAll*[R: SigilThread](thread: var R): int {.discardable.} =
   var sig: ThreadSignal
   result = 0
-  while true:
-    let sig = thread.recv(blocking=false)
-    if sig.isNone:
-      break
-    thread.exec(sig.get())
+  while thread.recv(sig, NonBlocking):
+    thread.exec(sig)
     result.inc()
 
 proc runForever*[R: SigilThread](thread: SharedPtr[R]) =
