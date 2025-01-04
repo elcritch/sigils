@@ -59,7 +59,7 @@ proc runAsyncThread*(targ: SharedPtr[AsyncSigilThread]) {.thread.} =
 
   let cb = proc(fd: AsyncFD): bool {.closure, gcsafe.} =
     {.cast(gcsafe).}:
-      echo "async thread running "
+      # echo "async thread running "
       var sig: ThreadSignal
       while thread[].recv(sig, NonBlocking):
         echo "async thread got msg: "
