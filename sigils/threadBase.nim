@@ -45,7 +45,6 @@ type
 
   SigilThread* = ref object of Agent
     id*: int
-    thr*: Thread[SharedPtr[SigilThread]]
 
     signaledLock*: Lock
     signaled*: HashSet[WeakRef[AgentRemote]]
@@ -53,6 +52,7 @@ type
 
   SigilThreadImpl* = ref object of SigilThread
     inputs*: SigilChan
+    thr*: Thread[SharedPtr[SigilThreadImpl]]
 
 var localSigilThread {.threadVar.}: Option[SharedPtr[SigilThread]]
 
@@ -85,13 +85,16 @@ method recv*(thread: SigilThreadImpl, msg: var ThreadSignal, blocking: BlockingK
   of NonBlocking:
     result = thread.inputs.tryRecv(msg)
 
-proc newSigilThread*(): SharedPtr[SigilThread] =
+proc toSigilThread*[R: SigilThread](t: SharedPtr[R]): SharedPtr[SigilThread] =
+  cast[SharedPtr[SigilThread]](t)
+
+proc newSigilThread*(): SharedPtr[SigilThreadImpl] =
   var thr = SigilThreadImpl(inputs: newSigilChan())
-  result = newSharedPtr(isolateRuntime SigilThread(thr))
+  result = newSharedPtr(isolateRuntime thr)
 
 proc startLocalThread*() =
   if localSigilThread.isNone:
-    localSigilThread = some newSigilThread()
+    localSigilThread = some newSigilThread().toSigilThread()
     localSigilThread.get()[].id = getThreadId()
 
 proc getCurrentSigilThread*(): SharedPtr[SigilThread] =
@@ -172,15 +175,15 @@ proc runForever*[R: SigilThread](thread: SharedPtr[R]) =
   while true:
     thread[].poll()
 
-proc runThread*(thread: SharedPtr[SigilThread]) {.thread.} =
+proc runThread*(thread: SharedPtr[SigilThreadImpl]) {.thread.} =
   {.cast(gcsafe).}:
     pcnt.inc
     pidx = pcnt
     assert localSigilThread.isNone()
-    localSigilThread = some(thread)
+    localSigilThread = some(thread.toSigilThread())
     thread[].id = getThreadId()
     debugPrint "Sigil worker thread waiting!"
     thread.runForever()
 
-proc start*[R: SigilThread](thread: SharedPtr[R]) =
+proc start*(thread: SharedPtr[SigilThreadImpl]) =
   createThread(thread[].thr, runThread, thread)

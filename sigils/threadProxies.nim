@@ -144,7 +144,7 @@ proc moveToThread*[T: Agent, R: SigilThread](
 
     localProxy = AgentProxy[T](
         remote: agent,
-        remoteThread: thread,
+        remoteThread: thread.toSigilThread(),
         inbox: newChan[ThreadSignal](1_000),
     )
     remoteProxy = AgentProxy[T](
