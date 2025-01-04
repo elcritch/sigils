@@ -20,7 +20,7 @@ import std/asyncdispatch
 type
 
   AsyncSigilThread* = ref object of SigilThread
-    thr*: Thread[SharedPtr[AsyncSigilThread]]
+    inputs*: SigilChan
     event*: AsyncEvent
 
 proc newSigilAsyncThread*(): SharedPtr[AsyncSigilThread] =
@@ -38,7 +38,7 @@ proc runAsyncThread*(targ: SharedPtr[AsyncSigilThread]) {.thread.} =
     {.cast(gcsafe).}:
       var sig: ThreadSignal
       echo "async thread running "
-      while thread[].recv(sig, blocking=false):
+      while thread[].recv(sig, NonBlocking):
         echo "async thread got msg: "
         thread[].poll(sig)
 
