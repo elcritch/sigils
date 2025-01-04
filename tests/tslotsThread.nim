@@ -6,6 +6,9 @@ import std/sequtils
 import sigils
 import sigils/threads
 
+import std/terminal
+import std/strutils
+
 type
   SomeAction* = ref object of Agent
     value: int

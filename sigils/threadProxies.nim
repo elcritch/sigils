@@ -131,7 +131,7 @@ proc moveToThread*[T: Agent, R: SigilThreadBase](
     thread: SharedPtr[R]
 ): AgentProxy[T] =
   ## move agent to another thread
-  debugPrint "moveToThread: ", $agentTy.getId()
+  debugPrint "moveToThread: ", $agentTy.unsafeWeakRef()
   if not isUniqueRef(agentTy):
     raise newException(
       AccessViolationDefect,
