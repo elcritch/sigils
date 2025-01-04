@@ -83,7 +83,7 @@ suite "threaded agent slots":
       setValueGlobal.pointer: "setValueGlobal",
     }.toTable()
 
-  when false:
+  when true:
     test "simple threading test":
       var
         a = SomeAction.new()
@@ -120,7 +120,7 @@ suite "threaded agent slots":
       check b.value == 1337
       check c.value == 1337
 
-  when false:
+  when true:
     test "threaded connect":
       block:
         var

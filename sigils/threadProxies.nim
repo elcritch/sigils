@@ -195,49 +195,49 @@ proc moveToThread*[T: Agent, R: SigilThread](
   return localProxy
 
 
-# template connect*[T, S](
-#     a: Agent,
-#     signal: typed,
-#     b: AgentProxy[T],
-#     slot: Signal[S],
-#     acceptVoidSlot: static bool = false,
-# ): void =
-#   ## connects `AgentProxy[T]` to remote signals
-#   ## 
-#   checkSignalTypes(a, signal, T(), slot, acceptVoidSlot)
-#   a.addSubscription(signalName(signal), b, slot)
+template connect*[T, S](
+    a: Agent,
+    signal: typed,
+    localProxy: AgentProxy[T],
+    slot: Signal[S],
+    acceptVoidSlot: static bool = false,
+): void =
+  ## connects `AgentProxy[T]` to remote signals
+  ## 
+  checkSignalTypes(a, signal, T(), slot, acceptVoidSlot)
+  a.addSubscription(signalName(signal), localProxy, slot)
 
-# template connect*[T](
-#     a: Agent,
-#     signal: typed,
-#     b: AgentProxy[T],
-#     slot: typed,
-#     acceptVoidSlot: static bool = false,
-# ): void =
-#   ## connects `AgentProxy[T]` to remote signals
-#   ## 
-#   checkSignalThreadSafety(SignalTypes.`signal`(typeof(a)))
-#   let agentSlot = `slot`(T)
-#   checkSignalTypes(a, signal, T(), agentSlot, acceptVoidSlot)
-#   a.addSubscription(signalName(signal), b, agentSlot)
+template connect*[T](
+    a: Agent,
+    signal: typed,
+    localProxy: AgentProxy[T],
+    slot: typed,
+    acceptVoidSlot: static bool = false,
+): void =
+  ## connects `AgentProxy[T]` to remote signals
+  ## 
+  checkSignalThreadSafety(SignalTypes.`signal`(typeof(a)))
+  let agentSlot = `slot`(T)
+  checkSignalTypes(a, signal, T(), agentSlot, acceptVoidSlot)
+  a.addSubscription(signalName(signal), localProxy, agentSlot)
 
-# template connect*[T, S](
-#     proxyTy: AgentProxy[T],
-#     signal: typed,
-#     b: Agent,
-#     slot: Signal[S],
-#     acceptVoidSlot: static bool = false,
-# ): void =
-#   ## connects `AgentProxy[T]` to remote signals
-#   ## 
-#   checkSignalTypes(T(), signal, b, slot, acceptVoidSlot)
-#   let ct = getCurrentSigilThread()
-#   let proxy = Agent(proxyTy)
-#   # let bref = unsafeWeakRef[Agent](b)
-#   # proxy.extract()[].addSubscription(signalName(signal), proxy, slot)
-#   proxy.addSubscription(signalName(signal), b, slot)
+template connect*[T, S](
+    proxyTy: AgentProxy[T],
+    signal: typed,
+    b: Agent,
+    slot: Signal[S],
+    acceptVoidSlot: static bool = false,
+): void =
+  ## connects `AgentProxy[T]` to remote signals
+  ## 
+  checkSignalTypes(T(), signal, b, slot, acceptVoidSlot)
+  let ct = getCurrentSigilThread()
+  let proxy = Agent(proxyTy)
+  # let bref = unsafeWeakRef[Agent](b)
+  # proxy.extract()[].addSubscription(signalName(signal), proxy, slot)
+  proxy.addSubscription(signalName(signal), b, slot)
 
-#   # thread[].inputs.send( unsafeIsolate ThreadSignal(kind: Register, shared: ensureMove agent))
+  # thread[].inputs.send( unsafeIsolate ThreadSignal(kind: Register, shared: ensureMove agent))
 
-#   # TODO: This is wrong! but I wanted to get something running...
-#   # ct[].proxies.incl(proxy)
+  # TODO: This is wrong! but I wanted to get something running...
+  # ct[].proxies.incl(proxy)
