@@ -54,12 +54,13 @@ proc verifyUnique[T, V](field: T, parent: V) =
     when compiles(verifyUniqueSkip(T)):
       static:
         echo "verifyUnique: skipping type: ", $T
-    static:
-      echo "verifyUnique: object: ", $(T)
-    for n, v in field.fieldPairs():
+    else:
       static:
-        echo "verifyUnique: field: ", n, " tp: ", typeof(v)
-      verifyUnique(v, parent)
+        echo "verifyUnique: object: ", $(T)
+      for n, v in field.fieldPairs():
+        static:
+          echo "verifyUnique: field: ", n, " tp: ", typeof(v)
+        verifyUnique(v, parent)
   else:
     static:
       echo "verifyUnique: skip: ", $T
