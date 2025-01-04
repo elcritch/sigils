@@ -424,7 +424,7 @@ suite "threaded agent slots":
       GC_fullCollect()
 
 
-  when false:
+  when true:
     test "sigil object thread runner (loop)":
       block:
         block:
@@ -447,6 +447,7 @@ suite "threaded agent slots":
             for j in 1 .. n:
               # if j mod n == 0:
               echo "Loop: ", i, ".", j, " (th: ", getThreadId(), ")"
+              a.value = 0
               var b = Counter.new()
               echo "B: ", b.getId()
 
@@ -454,12 +455,17 @@ suite "threaded agent slots":
               echo "BP: ", bp.getId()
 
               connect(a, valueChanged, bp, setValue)
-              connect(bp, updated, a, SomeAction.completed())
+              connect(bp, updated, a, SomeAction.completedSum())
 
               emit a.valueChanged(314)
               emit a.valueChanged(271)
 
-              os.sleep(1)
+              var cnt = 0
+              for i in 1..20:
+                cnt.inc(ct[].pollAll())
+                if cnt >= 3:
+                  break
+                os.sleep(1)
               ct[].pollAll()
               check a.value == 314 + 271
               ct[].pollAll()
