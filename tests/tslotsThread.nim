@@ -247,10 +247,10 @@ suite "threaded agent slots":
         check bp.subcriptionsTable.len() == 1
         check bp.listening.len() == 0
 
-        check remoteProxy[].subcriptionsTable.len() == 0
+        check remoteProxy[].subcriptionsTable.len() == 1
         check remoteProxy[].listening.len() == 1
         check bp[].remote[].subcriptionsTable.len() == 1
-        check bp[].remote[].listening.len() == 1 # listening to thread
+        check bp[].remote[].listening.len() == 2 # listening to thread
 
         thread.start()
 

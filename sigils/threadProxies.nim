@@ -176,8 +176,7 @@ proc moveToThread*[T: Agent, R: SigilThread](
     for subscription in subscriptions:
       subscription.tgt[].addSubscription(signal, localProxy, subscription.slot)
       listenSubs = true
-  if listenSubs:
-    remoteProxy.addSubscription(AnySigilName, agentTy, localSlot)
+  remoteProxy.addSubscription(AnySigilName, agentTy, localSlot)
 
   # update my subcriptionsTable so agent uses the remote proxy to send events back
   var hasSubs = false
@@ -186,8 +185,7 @@ proc moveToThread*[T: Agent, R: SigilThread](
       # echo "signal: ", signal, " subscriber: ", tgt.getId
       localProxy.addSubscription(signal, sub.tgt[], sub.slot)
       hasSubs = true
-  if hasSubs:
-    agent[].addSubscription(AnySigilName, remoteProxy, remoteSlot)
+  agent[].addSubscription(AnySigilName, remoteProxy, remoteSlot)
 
   thread[].send(ThreadSignal(kind: Move, item: move agentTy))
   thread[].send(ThreadSignal(kind: Move, item: move remoteProxy))
@@ -242,4 +240,3 @@ template connect*[T, S](
   let ct = getCurrentSigilThread()
   let localProxy = Agent(proxyTy)
   localProxy.addSubscription(signalName(signal), b, slot)
-  agent[].addSubscription(AnySigilName, remoteProxy, remoteSlot)
