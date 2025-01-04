@@ -108,7 +108,7 @@ else:
 proc `$`*[T: Agent](obj: WeakRef[T]): string =
   result = "Weak["
   when defined(sigilsDebug):
-    if obj.pt == nil:
+    if obj.isNil:
       result &= "nil"
     else:
       result &= obj[].debugName
@@ -116,7 +116,7 @@ proc `$`*[T: Agent](obj: WeakRef[T]): string =
   result &= $(T)
   result &= "]"
   result &= "(0x"
-  if obj.pt == nil:
+  if obj.isNil:
     result &= "nil"
   else:
     result &= obj.toPtr().repr
