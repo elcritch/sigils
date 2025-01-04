@@ -22,6 +22,7 @@ type
   AsyncSigilThread* = ref object of SigilThread
     inputs*: SigilChan
     event*: AsyncEvent
+    thr*: Thread[SharedPtr[AsyncSigilThread]]
 
 proc newSigilAsyncThread*(): SharedPtr[AsyncSigilThread] =
   result = newSharedPtr(isolate AsyncSigilThread())
@@ -29,7 +30,7 @@ proc newSigilAsyncThread*(): SharedPtr[AsyncSigilThread] =
   result[].inputs = newSigilChan()
   echo "newSigilAsyncThread: ", result[].event.repr
 
-proc runAsyncThread*(targ: SharedPtr[SigilThread]) {.thread.} =
+proc runAsyncThread*(targ: SharedPtr[AsyncSigilThread]) {.thread.} =
   var
     thread = targ
   echo "async sigil thread waiting!", " (th: ", getThreadId(), ")"
