@@ -181,7 +181,6 @@ suite "threaded agent slots":
         check remoteProxy[].listening.len() == 0
         check bp[].remote[].subcriptionsTable.len() == 0
         check bp[].remote[].listening.len() == 1
-        # check bp.subcriptionsTable[]
 
         emit a.valueChanged(568)
         os.sleep(1)
@@ -239,6 +238,19 @@ suite "threaded agent slots":
         printConnections(bp.proxyTwin[])
         printConnections(bp.getRemote()[])
         # printConnections(thread[])
+
+        let
+          subLocalProxy = Subscription(tgt: bp.unsafeWeakRef().asAgent(), slot: setValueGlobal(Counter))
+          remoteProxy = bp.proxyTwin
+        check a.subcriptionsTable.len() == 0
+        check a.listening.len() == 1
+        check bp.subcriptionsTable.len() == 1
+        check bp.listening.len() == 0
+
+        check remoteProxy[].subcriptionsTable.len() == 0
+        check remoteProxy[].listening.len() == 1
+        check bp[].remote[].subcriptionsTable.len() == 1
+        check bp[].remote[].listening.len() == 1 # listening to thread
 
         thread.start()
 
