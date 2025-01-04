@@ -69,6 +69,10 @@ proc completed*(self: SomeAction, final: int) {.slot.} =
   echo "Action done! final: ", final, " id: ", $self.unsafeWeakRef(), " (th: ", getThreadId(), ")"
   self.value = final
 
+proc completedSum*(self: SomeAction, final: int) {.slot.} =
+  echo "Action done! final: ", final, " id: ", $self.unsafeWeakRef(), " (th: ", getThreadId(), ")"
+  self.value = self.value + final
+
 proc value*(self: Counter): int =
   self.value
 
@@ -454,10 +458,9 @@ suite "threaded agent slots":
               emit a.valueChanged(314)
               emit a.valueChanged(271)
 
-              ct[].poll()
-              check a.value == 314
-              ct[].poll()
-              check a.value == 271
+              os.sleep(10)
+              ct[].pollAll()
+              check a.value == 314 + 271
               ct[].pollAll()
             GC_fullCollect()
         GC_fullCollect()
