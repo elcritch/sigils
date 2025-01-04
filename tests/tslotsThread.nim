@@ -248,7 +248,6 @@ suite "threaded agent slots":
       
       echo "outer done"
 
-
   when false:
     test "agent connect then moveToThread and run":
       var
