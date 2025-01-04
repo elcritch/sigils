@@ -59,13 +59,13 @@ var localSigilThread {.threadVar.}: Option[SharedPtr[SigilThread]]
 proc newSigilChan*(): SigilChan =
   result = newChan[ThreadSignal](1_000)
 
-method send*(thread: SigilThread, msg: sink ThreadSignal) {.base, gcsafe.} =
+method send*(thread: SigilThread, msg: sink ThreadSignal, blocking: BlockingKinds) {.base, gcsafe.} =
   discard
 
 method recv*(thread: SigilThread, msg: var ThreadSignal, blocking: BlockingKinds): bool {.base, gcsafe.} =
   discard
 
-method send*(thread: SigilThreadImpl, msg: sink ThreadSignal) {.gcsafe.} =
+method send*(thread: SigilThreadImpl, msg: sink ThreadSignal, blocking: BlockingKinds) {.gcsafe.} =
   var msg = isolateRuntime(msg)
   thread.inputs.send(msg)
 
