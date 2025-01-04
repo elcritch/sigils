@@ -206,6 +206,8 @@ template connect*[T, S](
   ## 
   checkSignalTypes(a, signal, T(), slot, acceptVoidSlot)
   a.addSubscription(signalName(signal), localProxy, slot)
+  assert not localProxy.proxyTwin.isNil
+  localProxy.proxyTwin[].addSubscription(AnySigilName, agentTy, localSlot)
 
 template connect*[T](
     a: Agent,
