@@ -110,7 +110,7 @@ proc gcCollectReferences(thread: SigilThread) =
     debugPrint "\tderef cleanup: ", agent.unsafeWeakRef()
     thread.references.del(agent)
 
-template exec*(thread: var SigilThread, sig: ThreadSignal) =
+proc exec*(thread: var SigilThread, sig: ThreadSignal) =
   debugPrint "\nthread got request: ", $sig.kind
   case sig.kind:
   of Move:
