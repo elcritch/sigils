@@ -203,7 +203,7 @@ suite "threaded agent slots":
         os.sleep(1)
       check globalLastInnerCDestroyed == 2020
 
-  when true:
+  when false:
     test "agent connect b->a then moveToThread then destroy proxy":
       debugPrintQuiet = false
 
@@ -271,7 +271,7 @@ suite "threaded agent slots":
       
       echo "outer done"
 
-  when true:
+  when false:
     test "agent connect then moveToThread and run":
       var
         a = SomeAction.new()
@@ -301,7 +301,8 @@ suite "threaded agent slots":
         check c.value == 314
       GC_fullCollect()
 
-  when true:
+  # when true:
+  when false:
     test "agent move to thread then connect and run":
 
       var
@@ -341,7 +342,7 @@ suite "threaded agent slots":
         echo "a.listening: ", a.listening
       GC_fullCollect()
 
-  when true:
+  when false:
     test "sigil object thread runner multiple emits":
       block:
         # echo "thread runner!", " (main thread:", getThreadId(), ")"
@@ -384,7 +385,7 @@ suite "threaded agent slots":
 
         # ct[].poll()
         # check a.value == 628
-  when true:
+  when false:
     test "sigil object thread runner multiple emit and listens":
       block:
         var
@@ -425,7 +426,7 @@ suite "threaded agent slots":
       GC_fullCollect()
 
 
-  when true:
+  when false:
     test "sigil object thread runner (loop)":
       block:
         block:

@@ -44,22 +44,23 @@ proc verifyUniqueSkip(tp: typedesc[SysLock]) = discard
 proc verifyUnique[T, V](field: T, parent: V) =
   mixin verifyUnique
   when T is ref:
-    static:
-      echo "verifyUnique: ref: ", $T
+    # static:
+    #   echo "verifyUnique: ref: ", $T
     if not field.isNil and not field.isUniqueRef():
       raise newException(IsolationError, &"reference not unique! Cannot safely isolate {$typeof(field)} parent: {$typeof(parent)} ")
     for v in field[].fields():
       verifyUnique(v, parent)
   elif T is tuple or T is object:
     when compiles(verifyUniqueSkip(T)):
-      static:
-        echo "verifyUnique: skipping type: ", $T
+      # static:
+      #   echo "verifyUnique: skipping type: ", $T
+      discard
     else:
-      static:
-        echo "verifyUnique: object: ", $(T)
+      # static:
+      #   echo "verifyUnique: object: ", $(T)
       for n, v in field.fieldPairs():
-        static:
-          echo "verifyUnique: field: ", n, " tp: ", typeof(v)
+        # static:
+        #   echo "verifyUnique: field: ", n, " tp: ", typeof(v)
         verifyUnique(v, parent)
   else:
     static:
@@ -70,11 +71,11 @@ proc isolateRuntime*[T](item: T): Isolated[T] {.raises: [IsolationError].} =
   ## Isolates a ref type or type with ref's and ensure that
   ## each ref is unique. This allows safely isolating it.
   when compiles(isolate(item)):
-    static:
-      echo "\n### IsolateRuntime: compile isolate: ", $T
+    # static:
+    #   echo "\n### IsolateRuntime: compile isolate: ", $T
     result = isolate(item)
   else:
-    static:
-      echo "\n### IsolateRuntime: runtime isolate: ", $T
+    # static:
+    #   echo "\n### IsolateRuntime: runtime isolate: ", $T
     verifyUnique(item, item)
     result = unsafeIsolate(item)
