@@ -266,7 +266,7 @@ suite "threaded agent slots":
       
       echo "outer done"
 
-  when false:
+  when true:
     test "agent connect then moveToThread and run":
       var
         a = SomeAction.new()
