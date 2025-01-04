@@ -112,51 +112,64 @@ suite "agent weak refs":
     # check b.value == 137
     echo "done outer block"
 
-test "refcount":
-  type TestRef = ref TestObj
+  test "refcount":
+    type TestRef = ref TestObj
 
-  var x = TestRef(val: 33)
-  echo "X::count: ", x.unsafeGcCount()
-  check x.unsafeGcCount() == 1
-  block:
-    let y = x
-    echo "X::count: ", x.unsafeGcCount()
-    check x.unsafeGcCount() == 2
-    check y.unsafeGcCount() == 2
-  echo "X::count: ", x.unsafeGcCount()
-  check x.unsafeGcCount() == 1
-  var y = move x
-  echo "y: ", repr y
-  check lastDestroyedTestObj != 33
-  check x.isNil
-  check y.unsafeGcCount() == 1
-
-test "weak refs":
-
-  var x = Counter.new()
-  echo "X::count: ", x.unsafeGcCount()
-  check x.unsafeGcCount() == 1
-  block:
-    var obj {.used.} = TestObj(val: 100)
-    var y = Counter.new()
+    var x = TestRef(val: 33)
     echo "X::count: ", x.unsafeGcCount()
     check x.unsafeGcCount() == 1
+    block:
+      let y = x
+      echo "X::count: ", x.unsafeGcCount()
+      check x.unsafeGcCount() == 2
+      check y.unsafeGcCount() == 2
+    echo "X::count: ", x.unsafeGcCount()
+    check x.unsafeGcCount() == 1
+    var y = move x
+    echo "y: ", repr y
+    check lastDestroyedTestObj != 33
+    check x.isNil
+    check y.unsafeGcCount() == 1
 
-    # echo "Counter.setValue: ", "x: ", x.debugId, " y: ", y.debugId
-    connect(x, valueChanged, y, setValue)
+  test "weak refs":
+
+    var x = Counter.new()
+    echo "X::count: ", x.unsafeGcCount()
+    check x.unsafeGcCount() == 1
+    block:
+      var obj {.used.} = TestObj(val: 100)
+      var y = Counter.new()
+      echo "X::count: ", x.unsafeGcCount()
+      check x.unsafeGcCount() == 1
+
+      # echo "Counter.setValue: ", "x: ", x.debugId, " y: ", y.debugId
+      connect(x, valueChanged, y, setValue)
+      check x.unsafeGcCount() == 1
+
+      check y.value == 0
+      emit x.valueChanged(137)
+      echo "X::count:end: ", x.unsafeGcCount()
+      echo "Y::count:end: ", y.unsafeGcCount()
+      check x.unsafeGcCount() == 2
+
+      # var xx = x
+      # check x.unsafeGcCount() == 2
+
+    echo "done with y"
+    echo "X::count: ", x.unsafeGcCount()
+    check x.subcriptionsTable.len() == 0
+    check x.listening.len() == 0
     check x.unsafeGcCount() == 1
 
-    check y.value == 0
-    emit x.valueChanged(137)
-    echo "X::count:end: ", x.unsafeGcCount()
-    echo "Y::count:end: ", y.unsafeGcCount()
-    check x.unsafeGcCount() == 2
+type
+  Foo = object
+    value: int
 
-    # var xx = x
-    # check x.unsafeGcCount() == 2
+method test(obj: Foo) {.base.} =
+  echo "test! value: ", obj.value
 
-  echo "done with y"
-  echo "X::count: ", x.unsafeGcCount()
-  check x.subcriptionsTable.len() == 0
-  check x.listening.len() == 0
-  check x.unsafeGcCount() == 1
+suite "check object methods":
+  test "methods":
+
+    check Foo(value: 1).value == 1
+    check Foo(value: 1).value == 1
