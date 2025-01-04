@@ -237,6 +237,5 @@ template connect*[T, S](
   ## connects `AgentProxy[T]` to remote signals
   ## 
   checkSignalTypes(T(), signal, b, slot, acceptVoidSlot)
-  let ct = getCurrentSigilThread()
   let localProxy = Agent(proxyTy)
   localProxy.addSubscription(signalName(signal), b, slot)
