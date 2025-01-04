@@ -206,6 +206,7 @@ template connect*[T, S](
   ## 
   checkSignalTypes(a, signal, T(), slot, acceptVoidSlot)
   a.addSubscription(signalName(signal), localProxy, slot)
+  # ugh, this should be locked based on remote proxy still existing?
   assert not localProxy.proxyTwin.isNil
   assert not localProxy.remote.isNil
   localProxy.proxyTwin[].addSubscription(AnySigilName, localProxy.remote[], localSlot)
@@ -223,7 +224,9 @@ template connect*[T](
   let agentSlot = `slot`(T)
   checkSignalTypes(a, signal, T(), agentSlot, acceptVoidSlot)
   a.addSubscription(signalName(signal), localProxy, agentSlot)
+  # ugh, this should be locked based on remote proxy still existing?
   assert not localProxy.proxyTwin.isNil
+  assert not localProxy.remote.isNil
   localProxy.proxyTwin[].addSubscription(AnySigilName, localProxy.remote[], localSlot)
 
 template connect*[T, S](
