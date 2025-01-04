@@ -6,12 +6,17 @@ import std/sequtils
 import sigils
 import sigils/isolateutils
 
+import std/private/syslocks
+
+
 type
   SomeAction* = ref object of Agent
     value: int
+    lock: SysLock
 
   Counter* = ref object of Agent
     value: int
+
 
 proc valueChanged*(tp: SomeAction, val: int) {.signal.}
 proc updated*(tp: Counter, final: int) {.signal.}
@@ -20,9 +25,9 @@ proc setValue*(self: Counter, value: int) {.slot.} =
   echo "setValue! ", value, " id: ", self.getId, " (th:", getThreadId(), ")"
   if self.value != value:
     self.value = value
-  echo "setValue:subscribers: ",
-    self.subscribers.pairs().toSeq.mapIt(it[1].mapIt(it.tgt.getId))
-  echo "setValue:subscribedTo: ", self.subscribedTo.toSeq.mapIt(it.getId)
+  echo "setValue:subcriptionsTable: ",
+    self.subcriptionsTable.pairs().toSeq.mapIt(it[1].mapIt(it.tgt.getId))
+  echo "setValue:listening: ", self.listening.toSeq.mapIt(it.getId)
   emit self.updated(self.value)
 
 proc completed*(self: SomeAction, final: int) {.slot.} =

@@ -1,10 +1,11 @@
 import std/[options, tables, sets, macros, hashes]
 import std/times
-
-import protocol
+import std/isolation
+import std/[locks, options]
 import stack_strings
 
-export IndexableChars
+import protocol
+import weakrefs
 
 when defined(nimscript):
   import std/json
@@ -17,45 +18,72 @@ elif defined(useJsonSerde):
 else:
   import pkg/variant
 
-export protocol
 export sets
 export options
 export variant
 
-type WeakRef*[T] = object
-  pt* {.cursor.}: T
-  ## type alias descring a weak ref that *must* be cleaned
-  ## up when an object is set to be destroyed
+export IndexableChars
+export weakrefs
+export protocol
 
-proc `[]`*[T](r: WeakRef[T]): lent T =
-  result = r.pt
+import std/[terminal, strutils, strformat, sequtils]
+export strformat
 
-proc toPtr*[T](obj: WeakRef[T]): pointer =
-  result = cast[pointer](obj.pt)
+var
+  pcolors* = [fgRed, fgYellow, fgMagenta, fgCyan]
+  pcnt*: int = 0
+  pidx* {.threadVar.}: int
+  plock: Lock
+  debugPrintQuiet* = false
 
-proc hash*[T](obj: WeakRef[T]): Hash =
-  result = hash cast[pointer](obj.pt)
+plock.initLock()
 
-proc toRef*[T: ref](obj: WeakRef[T]): T =
-  result = cast[T](obj)
+proc debugPrintImpl*(msgs: varargs[string, `$`]) {.raises: [].} =
+  {.cast(gcsafe).}:
+      try:
+        withLock plock:
+        # block:
+          let
+            tid = getThreadId()
+            color =
+              if pidx == 0:
+                fgBlue
+              else:
+                pcolors[pidx mod pcolors.len()]
+          var msg = ""
+          for m in msgs: msg &= m
+          stdout.styledWriteLine color, msg, {styleBright}, &" [th: {$tid}]"
+          stdout.flushFile()
+      except IOError:
+        discard
 
-proc toRef*[T: ref](obj: T): T =
-  result = obj
+template debugPrint*(msgs: varargs[untyped]) =
+  when defined(sigilsDebugPrint):
+    if not debugPrintQuiet:
+      debugPrintImpl(msgs)
 
-proc `$`*[T](obj: WeakRef[T]): string =
-  result = $(T)
-  result &= "("
-  result &= obj.toPtr().repr
-  result &= ")"
+proc brightPrint*(color: ForegroundColor, msg, value: string, msg2 = "", value2 = "") =
+  if not debugPrintQuiet:
+    stdout.styledWriteLine color, msg, {styleBright, styleItalic}, value, resetStyle,
+                           color, msg2, {styleBright, styleItalic}, value2
+proc brightPrint*(msg, value: string, msg2 = "", value2 = "") =
+  brightPrint(fgGreen, msg, value, msg2, value2)
+
 
 type
   AgentObj = object of RootObj
-    subscribers*: Table[SigilName, OrderedSet[AgentPairing]] ## agents listening to me
-    subscribedTo*: HashSet[WeakRef[Agent]] ## agents I'm listening to
+    subcriptionsTable*: Table[SigilName, OrderedSet[Subscription]] ## agents listening to me
+    listening*: HashSet[WeakRef[Agent]] ## agents I'm listening to
+    when defined(sigilsDebug) or defined(debug):
+      freedByThread*: int
+    when defined(sigilsDebug):
+      debugName*: string
 
   Agent* = ref object of AgentObj
 
-  AgentPairing* = tuple[tgt: WeakRef[Agent], fn: AgentProc]
+  Subscription* = object
+    tgt*: WeakRef[Agent]
+    slot*: AgentProc
 
   # Procedure signature accepted as an RPC call by server
   AgentProc* = proc(context: Agent, params: SigilParams) {.nimcall.}
@@ -65,50 +93,6 @@ type
   Signal*[S] = AgentProcTy[S]
   SignalTypes* = distinct object
 
-proc unsubscribe*(subscribedTo: HashSet[WeakRef[Agent]], xid: WeakRef[Agent]) =
-  ## remove myself from agents I'm subscribed to
-  # echo "subscribed: ", xid[].subscribed.toSeq.mapIt(it[].debugId).repr
-  var delSigs: seq[SigilName]
-  var toDel: seq[AgentPairing]
-  for obj in subscribedTo:
-    # echo "freeing subscribed: ", obj[].debugId
-    delSigs.setLen(0)
-    for signal, subscriberPairs in obj[].subscribers.mpairs():
-      toDel.setLen(0)
-      for item in subscriberPairs:
-        if item.tgt == xid:
-          toDel.add(item)
-          # echo "agentRemoved: ", "tgt: ", xid.toPtr.repr, " id: ", agent.debugId, " obj: ", obj[].debugId, " name: ", signal
-      for item in toDel:
-        subscriberPairs.excl(item)
-      if subscriberPairs.len() == 0:
-        delSigs.add(signal)
-    for sig in delSigs:
-      obj[].subscribers.del(sig)
-
-proc remove*(
-    subscribers: var Table[SigilName, OrderedSet[AgentPairing]], xid: WeakRef[Agent]
-) =
-  ## remove myself from agents listening to me
-  for signal, subscriberPairs in subscribers.mpairs():
-    # echo "freeing signal: ", signal, " subscribers: ", subscriberPairs
-    for subscriber in subscriberPairs:
-      # echo "\tlisterners: ", subscriber.tgt
-      # echo "\tlisterners:subscribed ", subscriber.tgt[].subscribed
-      subscriber.tgt[].subscribedTo.excl(xid)
-      # echo "\tlisterners:subscribed ", subscriber.tgt[].subscribed
-
-proc `=destroy`*(agent: AgentObj) =
-  let xid: WeakRef[Agent] = WeakRef[Agent](pt: cast[Agent](addr agent))
-
-  # echo "\ndestroy: agent: ", xid[].debugId, " pt: ", xid.toPtr.repr, " lstCnt: ", xid[].subscribers.len(), " subCnt: ", xid[].subscribed.len
-  xid.toRef().subscribedTo.unsubscribe(xid)
-  xid.toRef().subscribers.remove(xid)
-
-  # xid[].subscribers.clear()
-  `=destroy`(xid[].subscribers)
-  `=destroy`(xid[].subscribedTo)
-
 when defined(nimscript):
   proc getId*(a: Agent): SigilId =
     a.debugId
@@ -116,28 +100,131 @@ when defined(nimscript):
   var lastUId {.compileTime.}: int = 1
 else:
   proc getId*[T: Agent](a: WeakRef[T]): SigilId =
-    cast[int](a.toPtr())
+    cast[SigilId](a.toPtr())
 
   proc getId*(a: Agent): SigilId =
-    cast[int](cast[pointer](a))
+    cast[SigilId](cast[pointer](a))
+
+proc `$`*[T: Agent](obj: WeakRef[T]): string =
+  result = "Weak["
+  when defined(sigilsDebug):
+    if obj.pt == nil:
+      result &= "nil"
+    else:
+      result &= obj[].debugName
+    result &= "; "
+  result &= $(T)
+  result &= "]"
+  result &= "(0x"
+  if obj.pt == nil:
+    result &= "nil"
+  else:
+    result &= obj.toPtr().repr
+  result &= ")"
+
+template removeSubscriptionsForImpl*(
+    self: Agent, subscriber: WeakRef[Agent]
+) =
+  ## Route's an rpc request. 
+  var delSigs: seq[SigilName]
+  var toDel: seq[Subscription]
+  for signal, subscriptions in self.subcriptionsTable.mpairs():
+    debugPrint "   removeSubscriptionsFor subs sig: ", $signal
+    toDel.setLen(0)
+    for subscription in subscriptions:
+      if subscription.tgt == subscriber:
+        toDel.add(subscription)
+        # debugPrint "agentRemoved: ", "tgt: ", xid.toPtr.repr, " id: ", agent.debugId, " obj: ", obj[].debugId, " name: ", signal
+    for subscription in toDel:
+      subscriptions.excl(subscription)
+    if subscriptions.len() == 0:
+      delSigs.add(signal)
+  for sig in delSigs:
+    self.subcriptionsTable.del(sig)
+
+method removeSubscriptionsFor*(
+    self: Agent, subscriber: WeakRef[Agent]
+) {.base, gcsafe, raises: [].} =
+  debugPrint "   removeSubscriptionsFor:agent: ", " self:id: ", $self.unsafeWeakRef()
+  removeSubscriptionsForImpl(self, subscriber)
+
+template unregisterSubscriberImpl*(
+    self: Agent, listener: WeakRef[Agent]
+) =
+  debugPrint "\tunregisterSubscriber: ", $listener, " from self: ", self.unsafeWeakRef()
+  # debugPrint "\tlisterners:subscribed ", subscriber.tgt[].subscribed
+  assert listener in self.listening
+  self.listening.excl(listener)
+
+method unregisterSubscriber*(
+    self: Agent, listener: WeakRef[Agent]
+) {.base, gcsafe, raises: [].} =
+  debugPrint &"   unregisterSubscriber:agent: self: {$self.unsafeWeakRef()}"
+  unregisterSubscriberImpl(self, listener)
+
+proc unsubscribeFrom*(self: WeakRef[Agent], listening: HashSet[WeakRef[Agent]]) =
+  ## unsubscribe myself from agents I'm subscribed (listening) to
+  debugPrint fmt"   unsubscribeFrom:cnt: {$listening.len()} self: {$self}"
+  for agent in listening:
+    agent[].removeSubscriptionsFor(self)
+
+template removeSubscriptions*(
+    agent: WeakRef[Agent],
+    subcriptionsTable: Table[SigilName, OrderedSet[Subscription]],
+) =
+  ## remove myself from agents listening to me
+  for signal, subscriptions in subcriptionsTable.pairs():
+    # echo "freeing signal: ", signal, " subcriptionsTable: ", subscriberPairs
+    for subscription in subscriptions:
+      subscription.tgt[].unregisterSubscriber(agent)
+
+proc `=destroy`*(agentObj: AgentObj) {.forbids: [DestructorUnsafe].} =
+  when defined(sigilsWeakRefCursor):
+    let agent: WeakRef[Agent] = WeakRef[Agent](pt: cast[Agent](addr agentObj))
+  else:
+    let agent: WeakRef[Agent] = WeakRef[Agent](pt: cast[pointer](addr agentObj))
+
+  debugPrint &"destroy: agent: ",
+          &" pt: {$agent}",
+          &" freedByThread: {agentObj.freedByThread}",
+          &" subs: {agent[].subcriptionsTable.len()}",
+          &" subTo: {agent[].listening.len()}"
+  # debugPrint "destroy agent: ", getStackTrace().replace("\n", "\n\t")
+  when defined(debug) or defined(sigilsDebug):
+    assert agentObj.freedByThread == 0
+    agent[].freedByThread = getThreadId()
+
+  agent.unsubscribeFrom(agentObj.listening)
+  agent.removeSubscriptions(agentObj.subcriptionsTable)
+
+  `=destroy`(agent[].subcriptionsTable)
+  `=destroy`(agent[].listening)
+  debugPrint "\tfinished destroy: agent: ", " pt: ", $agent
+  when defined(sigilsDebug):
+    `=destroy`(agent[].debugName)
+
+template toAgentObj*[T: Agent](agent: T): AgentObj =
+  Agent(agent)[]
 
 proc hash*(a: Agent): Hash =
   hash(a.getId())
 
-proc getAgentListeners*(
-    obj: Agent, sig: SigilName
-): OrderedSet[(WeakRef[Agent], AgentProc)] =
-  # echo "FIND:subscribers: ", obj.subscribers
-  if obj.subscribers.hasKey(sig):
-    result = obj.subscribers[sig]
+method hasConnections*(self: Agent): bool {.base, gcsafe, raises: [].} =
+  self.subcriptionsTable.len() != 0 or self.listening.len() != 0
 
-template getAgentListeners*(
+proc getSubscriptions*(
+    obj: Agent, sig: SigilName
+): OrderedSet[Subscription] =
+  # echo "FIND:subcriptionsTable: ", obj.subcriptionsTable
+  if obj.subcriptionsTable.hasKey(sig):
+    result = obj.subcriptionsTable[sig]
+  elif obj.subcriptionsTable.hasKey(AnySigilName):
+    result = obj.subcriptionsTable[AnySigilName]
+
+template getSubscriptions*(
     obj: Agent, sig: string
 ): OrderedSet[(WeakRef[Agent], AgentProc)] =
-  obj.getAgentListeners(sig)
-
-proc unsafeWeakRef*[T: Agent](obj: T): WeakRef[T] =
-  result = WeakRef[T](pt: obj)
+  obj.getSubscriptions(sig)
 
 proc asAgent*[T: Agent](obj: WeakRef[T]): WeakRef[Agent] =
   result = WeakRef[Agent](pt: obj.pt)
@@ -145,41 +232,53 @@ proc asAgent*[T: Agent](obj: WeakRef[T]): WeakRef[Agent] =
 proc asAgent*[T: Agent](obj: T): Agent =
   result = obj
 
-proc addAgentListeners*(obj: Agent, sig: SigilName, tgt: Agent, slot: AgentProc): void =
+proc addSubscription*(
+    obj: Agent,
+    sig: SigilName,
+    tgt: Agent | WeakRef[Agent],
+    slot: AgentProc
+): void =
   # echo "add agent listener: ", sig, " obj: ", obj.debugId, " tgt: ", tgt.debugId
-  # if obj.subscribers.hasKey(sig):
-  #   echo "listener:count: ", obj.subscribers[sig].len()
+  # if obj.subcriptionsTable.hasKey(sig):
+  #   echo "listener:count: ", obj.subcriptionsTable[sig].len()
   assert slot != nil
 
-  obj.subscribers.withValue(sig, agents):
+  obj.subcriptionsTable.withValue(sig, subs):
     # if (tgt.unsafeWeakRef(), slot,) notin agents[]:
-    #   echo "addAgentsubscribers: ", "tgt: ", tgt.unsafeWeakRef().toPtr().pointer.repr, " id: ", tgt.debugId, " obj: ", obj.debugId, " name: ", sig
-    agents[].incl((tgt.unsafeWeakRef(), slot))
+    #   echo "addAgentsubscribers: ", "tgt: 0x", tgt.unsafeWeakRef().toPtr().pointer.repr, " id: ", tgt.debugId, " obj: ", obj.debugId, " name: ", sig
+    subs[].incl(Subscription(tgt: tgt.unsafeWeakRef().asAgent(), slot: slot))
   do:
-    # echo "addAgentsubscribers: ", "tgt: ", tgt.unsafeWeakRef().toPtr().pointer.repr, " id: ", tgt.debugId, " obj: ", obj.debugId, " name: ", sig
-    var agents = initOrderedSet[AgentPairing]()
-    agents.incl((tgt.unsafeWeakRef(), slot))
-    obj.subscribers[sig] = ensureMove agents
+    # echo "addAgentsubscribers: ", "tgt: 0x", tgt.unsafeWeakRef().toPtr().pointer.repr, " id: ", tgt.debugId, " obj: ", obj.debugId, " name: ", sig
+    var subs = initOrderedSet[Subscription]()
+    subs.incl(Subscription(tgt: tgt.unsafeWeakRef().asAgent(), slot: slot))
+    obj.subcriptionsTable[sig] = ensureMove subs
 
-  tgt.subscribedTo.incl(obj.unsafeWeakRef())
-  # echo "subscribers: ", obj.subscribers.len, " SUBSC: ", tgt.subscribed.len
+  tgt.listening.incl(obj.unsafeWeakRef().asAgent())
+  # echo "subcriptionsTable: ", obj.subcriptionsTable.len, " SUBSC: ", tgt.subscribed.len
 
-template addAgentListeners*(
-    obj: Agent, sig: IndexableChars, tgt: Agent, slot: AgentProc
+template addSubscription*(
+    obj: Agent, sig: IndexableChars, tgt: Agent | WeakRef[Agent], slot: AgentProc
 ): void =
-  addAgentListeners(obj, sig.toSigilName(), tgt, slot)
+  addSubscription(obj, sig.toSigilName(), tgt, slot)
 
-method callMethod*(
-    ctx: Agent, req: SigilRequest, slot: AgentProc
-): SigilResponse {.base, gcsafe, effectsOf: slot.} =
-  ## Route's an rpc request. 
+var printConnectionsSlotNames* = initTable[pointer, string]()
 
-  if slot.isNil:
-    let msg = $req.procName & " is not a registered RPC method."
-    let err = SigilError(code: METHOD_NOT_FOUND, msg: msg)
-    result = wrapResponseError(req.origin, err)
-  else:
-    slot(ctx, req.params)
-    let res = rpcPack(true)
-
-    result = SigilResponse(kind: Response, id: req.origin, result: res)
+proc printConnections*(agent: Agent; ) =
+  withLock plock:
+    if agent.isNil:
+      brightPrint fgBlue, "connections for Agent: ", "nil"
+      return
+    if agent[].freedByThread != 0:
+      brightPrint fgBlue, "connections for Agent: ", $agent.unsafeWeakRef(), " freedByThread: ", $agent[].freedByThread
+      return
+    brightPrint fgBlue, "connections for Agent: ", $agent.unsafeWeakRef()
+    brightPrint fgMagenta, "\t subscribers:", ""
+    for sig, subs in agent.subcriptionsTable.pairs():
+      # brightPrint fgRed, "\t\t signal: ", $sig
+      for sub in subs:
+        let sname = printConnectionsSlotNames.getOrDefault(sub.slot, sub.slot.repr)
+        brightPrint fgGreen, "\t\t:", $sig, ": => ", $sub.tgt & " slot: " & $sname
+    brightPrint fgMagenta, "\t listening:", ""
+    for listening in agent.listening:
+      brightPrint fgRed, "\t\t listen: ", $listening
+    

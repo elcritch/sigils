@@ -1,21 +1,56 @@
 import signals
 import slots
+import agents
 
-export signals, slots
+from system/ansi_c import c_raise
+
+export signals, slots, agents
+
+method callMethod*(
+    ctx: Agent, req: SigilRequest, slot: AgentProc
+): SigilResponse {.base, gcsafe, effectsOf: slot.} =
+  ## Route's an rpc request. 
+
+  if slot.isNil:
+    let msg = $req.procName & " is not a registered RPC method."
+    let err = SigilError(code: METHOD_NOT_FOUND, msg: msg)
+    result = wrapResponseError(req.origin, err)
+  else:
+    slot(ctx, req.params)
+    let res = rpcPack(true)
+
+    result = SigilResponse(kind: Response, id: req.origin.int, result: res)
+
+from system/ansi_c import c_raise
 
 type AgentSlotError* = object of CatchableError
 
 proc callSlots*(obj: Agent | WeakRef[Agent], req: SigilRequest) {.gcsafe.} =
   {.cast(gcsafe).}:
-    let listeners = obj.toRef().getAgentListeners(req.procName)
+    let subscriptions =
+      when typeof(obj) is Agent:
+        obj.getSubscriptions(req.procName)
+      elif typeof(obj) is WeakRef[Agent]:
+        obj[].getSubscriptions(req.procName)
+      else:
+        {.error: "bad type".}
     # echo "call slots:req: ", req.repr
-    # echo "call slots:all: ", req.procName, " ", obj.agentId, " :: ", obj.listeners
-    for (tgt, slot) in listeners.items():
+    # echo "call slots:all: ", req.procName, " ", " subscriptions: ", subscriptions
+    for sub in subscriptions.items():
       # echo ""
-      # echo "call listener:tgt: ", tgt, " ", req.procName
-      # echo "call listener:slot: ", repr slot
-      let tgtRef = tgt.toRef()
-      var res: SigilResponse = tgtRef.callMethod(req, slot)
+      # echo "call listener:tgt: ", sub.tgt, " ", req.procName
+      # echo "call listener:slot: ", repr sub.slot
+      # let tgtRef = sub.tgt.toRef()
+      when defined(sigilsDebug):
+        if sub.tgt[].freedByThread != 0:
+          echo "exec:call:thread: ", $getThreadId()
+          echo "exec:call:sub.tgt[].freed:thread: ", $sub.tgt[].freedByThread
+          echo "exec:call:sub.tgt[]:id: ", $sub.tgt[].getId()
+          echo "exec:call:sub.req: ", req.repr
+          echo "exec:call:obj:id: ", $obj.getId()
+          discard c_raise(11.cint)
+        assert sub.tgt[].freedByThread == 0
+      var res: SigilResponse = sub.tgt[].callMethod(req, sub.slot)
 
       when defined(nimscript) or defined(useJsonSerde):
         discard

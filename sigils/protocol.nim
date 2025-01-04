@@ -1,4 +1,4 @@
-import tables
+import std/[tables, strutils]
 import variant
 import stack_strings
 
@@ -19,7 +19,7 @@ when defined(nimscript) or defined(useJsonSerde):
   import std/json
   export json
 
-type SigilParams* = object ## implementation specific -- handles data buffer
+type SigilParams* {.acyclic.} = object ## implementation specific -- handles data buffer
   when defined(nimscript) or defined(useJsonSerde):
     buf*: JsonNode
   else:
@@ -40,9 +40,9 @@ type
     Unsupported = 23
     # rtpMax = 23 # numbers less than this store in single mpack/cbor byte
 
-  SigilId* = int
+  SigilId* = distinct int
 
-  SigilName* = StackString[64]
+  SigilName* = StackString[48]
 
   SigilRequest* = object
     kind*: RequestType
@@ -69,12 +69,16 @@ type
     msg*: string
     stacktrace*: seq[string]
 
+proc `$`*(id: SigilId): string =
+  "0x" & id.int.toHex(16)
+
 proc pack*[T](ss: var Variant, val: sink T) =
   # echo "Pack Type: ", getTypeId(T), " <- ", typeof(val)
   ss = newVariant(ensureMove val)
 
 proc unpack*[T](ss: Variant, obj: var T) =
   # if ss.ofType(T):
+  assert not ss.isNil
   obj = ss.get(T)
   # else:
   # raise newException(ConversionError, "couldn't convert to: " & $(T))
@@ -99,13 +103,13 @@ proc rpcUnpack*[T](obj: var T, ss: SigilParams) =
 proc wrapResponse*(id: SigilId, resp: SigilParams, kind = Response): SigilResponse =
   # echo "WRAP RESP: ", id, " kind: ", kind
   result.kind = kind
-  result.id = id
+  result.id = id.int
   result.result = resp
 
 proc wrapResponseError*(id: SigilId, err: SigilError): SigilResponse =
   echo "WRAP ERROR: ", id, " err: ", err.repr
   result.kind = Error
-  result.id = id
+  result.id = id.int
   result.result = rpcPack(err)
 
 template packResponse*(res: SigilResponse): Variant =
@@ -125,10 +129,13 @@ proc initSigilRequest*[S, T](
   )
 
 proc toSigilName*(name: IndexableChars): SigilName =
-  return toStackString(name, 64)
+  return toStackString(name, 48)
 
 proc toSigilName*(name: static string): SigilName =
-  return toStackString(name, 64)
+  return toStackString(name, 48)
 
 proc toSigilName*(name: string): SigilName =
-  return toStackString(name, 64)
+  return toStackString(name, 48)
+
+const
+  AnySigilName* = toSigilName(":any:")

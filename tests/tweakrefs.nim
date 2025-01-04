@@ -1,5 +1,9 @@
 import std/[unittest, sequtils]
-import sigils
+
+import sigils/signals
+import sigils/slots
+import sigils/core
+import sigils/weakrefs
 
 type
   Counter* = ref object of Agent
@@ -25,11 +29,14 @@ proc setValue*(self: Counter, value: int) {.slot.} =
 type TestObj = object
   val: int
 
+var lastDestroyedTestObj = -1
+
 proc `=destroy`*(obj: TestObj) =
   echo "destroying test object: ", obj.val
+  lastDestroyedTestObj = obj.val
 
 suite "agent weak refs":
-  test "subscribers freed":
+  test "subcriptionsTable freed":
     var x = Counter.new()
 
     block:
@@ -42,32 +49,32 @@ suite "agent weak refs":
       check y.value == 0
       emit x.valueChanged(137)
 
-      echo "x:subscribers: ", x.subscribers
+      echo "x:subcriptionsTable: ", x.subcriptionsTable
       # echo "x:subscribed: ", x.subscribed
-      echo "y:subscribers: ", y.subscribers
+      echo "y:subcriptionsTable: ", y.subcriptionsTable
       # echo "y:subscribed: ", y.subscribed
 
-      check y.subscribers.len() == 0
-      check y.subscribedTo.len() == 1
+      check y.subcriptionsTable.len() == 0
+      check y.listening.len() == 1
 
-      check x.subscribers["valueChanged".toSigilName].len() == 1
-      check x.subscribedTo.len() == 0
+      check x.subcriptionsTable["valueChanged".toSigilName].len() == 1
+      check x.listening.len() == 0
 
       echo "block done"
 
     echo "finishing outer block "
-    # check x.subscribedTo.len() == 0
-    echo "x:subscribers: ", x.subscribers
+    # check x.listening.len() == 0
+    echo "x:subcriptionsTable: ", x.subcriptionsTable
     # echo "x:subscribed: ", x.subscribed
-    # check x.subscribers["valueChanged"].len() == 0
-    check x.subscribers.len() == 0
-    check x.subscribedTo.len() == 0
+    # check x.subcriptionsTable["valueChanged"].len() == 0
+    check x.subcriptionsTable.len() == 0
+    check x.listening.len() == 0
 
     # check a.value == 0
     # check b.value == 137
     echo "done outer block"
 
-  test "subscribers freed":
+  test "subcriptionsTable freed":
     var y = Counter.new()
 
     block:
@@ -80,78 +87,76 @@ suite "agent weak refs":
       check y.value == 0
       emit x.valueChanged(137)
 
-      echo "x:subscribers: ", x.subscribers
+      echo "x:subcriptionsTable: ", x.subcriptionsTable
       # echo "x:subscribed: ", x.subscribed
-      echo "y:subscribers: ", y.subscribers
+      echo "y:subcriptionsTable: ", y.subcriptionsTable
       # echo "y:subscribed: ", y.subscribed
 
-      check y.subscribers.len() == 0
-      check y.subscribedTo.len() == 1
+      check y.subcriptionsTable.len() == 0
+      check y.listening.len() == 1
 
-      check x.subscribers["valueChanged".toSigilName].len() == 1
-      check x.subscribedTo.len() == 0
+      check x.subcriptionsTable["valueChanged".toSigilName].len() == 1
+      check x.listening.len() == 0
 
       echo "block done"
 
     echo "finishing outer block "
-    # check x.subscribedTo.len() == 0
-    echo "y:subscribers: ", y.subscribers
-    echo "y:subscribed: ", y.subscribedTo.mapIt(it)
-    # check x.subscribers["valueChanged"].len() == 0
-    check y.subscribers.len() == 0
-    check y.subscribedTo.len() == 0
+    # check x.listening.len() == 0
+    echo "y:subcriptionsTable: ", y.subcriptionsTable
+    # echo "y:subscribed: ", y.listening.mapIt(it)
+    # check x.subcriptionsTable["valueChanged"].len() == 0
+    check y.subcriptionsTable.len() == 0
+    check y.listening.len() == 0
 
     # check a.value == 0
     # check b.value == 137
     echo "done outer block"
 
+test "refcount":
+  type TestRef = ref TestObj
+
+  var x = TestRef(val: 33)
+  echo "X::count: ", x.unsafeGcCount()
+  check x.unsafeGcCount() == 1
+  block:
+    let y = x
+    echo "X::count: ", x.unsafeGcCount()
+    check x.unsafeGcCount() == 2
+    check y.unsafeGcCount() == 2
+  echo "X::count: ", x.unsafeGcCount()
+  check x.unsafeGcCount() == 1
+  var y = move x
+  echo "y: ", repr y
+  check lastDestroyedTestObj != 33
+  check x.isNil
+  check y.unsafeGcCount() == 1
+
 test "weak refs":
-  when defined(gcOrc):
-    const
-      rcMask = 0b1111
-      rcShift = 4 # shift by rcShift to get the reference counter
-  else:
-    const
-      rcMask = 0b111
-      rcShift = 3 # shift by rcShift to get the reference counter
-
-  type
-    RefHeader = object
-      rc: int
-      when defined(gcOrc):
-        rootIdx: int
-          # thanks to this we can delete potential cycle roots
-          # in O(1) without doubly linked lists
-
-    Cell = ptr RefHeader
-
-  template head[T](p: ref T): Cell =
-    cast[Cell](cast[int](cast[pointer](p)) -% sizeof(RefHeader))
-
-  template count(x: Cell): int =
-    (x.rc shr rcShift)
 
   var x = Counter.new()
-  echo "X::count: ", x.head().count()
-  check x.head().count() == 0
+  echo "X::count: ", x.unsafeGcCount()
+  check x.unsafeGcCount() == 1
   block:
     var obj {.used.} = TestObj(val: 100)
     var y = Counter.new()
-    echo "X::count: ", x.head().count()
-    check x.head().count() == 0
+    echo "X::count: ", x.unsafeGcCount()
+    check x.unsafeGcCount() == 1
 
     # echo "Counter.setValue: ", "x: ", x.debugId, " y: ", y.debugId
     connect(x, valueChanged, y, setValue)
-    check x.head().count() == 0
+    check x.unsafeGcCount() == 1
 
     check y.value == 0
     emit x.valueChanged(137)
-    echo "X::count:end: ", x.head().count()
-    echo "Y::count:end: ", y.head().count()
-    check x.head().count() == 1
+    echo "X::count:end: ", x.unsafeGcCount()
+    echo "Y::count:end: ", y.unsafeGcCount()
+    check x.unsafeGcCount() == 2
+
+    # var xx = x
+    # check x.unsafeGcCount() == 2
 
   echo "done with y"
-  echo "X::count: ", x.head().count()
-  check x.subscribers.len() == 0
-  check x.subscribedTo.len() == 0
-  check x.head().count() == 0
+  echo "X::count: ", x.unsafeGcCount()
+  check x.subcriptionsTable.len() == 0
+  check x.listening.len() == 0
+  check x.unsafeGcCount() == 1

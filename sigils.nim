@@ -1,10 +1,10 @@
+import sigils/agents
 import sigils/signals
 import sigils/slots
-import sigils/threads
 import sigils/core
-import sigils/request
+import sigils/threads
 
-export signals, slots, threads, core, request
+export agents, signals, slots, threads, core
 
 when not defined(gcArc) and not defined(gcOrc) and not defined(nimdoc):
   {.error: "Sigils requires --gc:arc or --gc:orc".}

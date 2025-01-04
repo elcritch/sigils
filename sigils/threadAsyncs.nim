@@ -7,7 +7,8 @@ import agents
 import threads
 import core
 
-export channels, smartptrs, threads, isolation
+export smartptrs, isolation
+export threads
 
 import std/os
 import std/monotimes
@@ -17,73 +18,55 @@ import std/uri
 import std/asyncdispatch
 
 type
-  AsyncAgentProxy*[T] = ref object of AgentProxy[T]
+
+  AsyncSigilThread* = ref object of SigilThread
+    inputs*: SigilChan
     event*: AsyncEvent
+    thr*: Thread[SharedPtr[AsyncSigilThread]]
 
-  AsyncSigilThreadObj* = object of Agent
-    thread*: Thread[(AsyncEvent, Chan[ThreadSignal])]
-    inputs*: Chan[ThreadSignal]
-    event*: AsyncEvent
-
-  AsyncSigilThread* = SharedPtr[AsyncSigilThreadObj]
-
-proc moveToThread*[T: Agent](agent: T, thread: AsyncSigilThread): AgentProxy[T] =
-  if not isUniqueRef(agent):
-    raise newException(
-      AccessViolationDefect,
-      "agent must be unique and not shared to be passed to another thread!",
-    )
-
-  let proxy = AsyncAgentProxy[T](
-    remote: newSharedPtr(unsafeIsolate(Agent(agent))),
-    chan: thread[].inputs,
-    event: thread[].event,
-  )
-  return AgentProxy[T](proxy)
-
-method callMethod*[T](
-    ctx: AsyncAgentProxy[T], req: SigilRequest, slot: AgentProc
-): SigilResponse {.gcsafe, effectsOf: slot.} =
-  ## Route's an rpc request. 
-  # echo "threaded Agent!"
-  let proxy = ctx
-  let sig = ThreadSignal(slot: slot, req: req, tgt: proxy.remote)
-  echo "executeRequest:asyncAgentProxy: ", "chan: ", $proxy.chan
-  let res = proxy.chan.trySend(unsafeIsolate sig)
-  proxy.event.trigger()
-  if not res:
-    raise newException(AgentSlotError, "error sending signal to thread")
-
-proc newSigilAsyncThread*(): AsyncSigilThread =
-  result = newSharedPtr(AsyncSigilThreadObj())
-  result[].inputs = newChan[ThreadSignal]()
+proc newSigilAsyncThread*(): SharedPtr[AsyncSigilThread] =
+  result = newSharedPtr(isolate AsyncSigilThread())
   result[].event = newAsyncEvent()
+  result[].inputs = newSigilChan()
+  echo "newSigilAsyncThread: ", result[].event.repr
 
-proc asyncExecute*(inputs: Chan[ThreadSignal]) =
-  while true:
-    echo "asyncExecute..."
-    # proc addEvent(ev: AsyncEvent; cb: Callback)
-    poll(inputs)
+method send*(thread: AsyncSigilThread, msg: sink ThreadSignal, blocking: BlockingKinds) {.gcsafe.} =
+  debugPrint "threadSend: ", thread.id
+  var msg = isolateRuntime(msg)
+  case blocking
+  of Blocking:
+    thread.inputs.send(msg)
+  of NonBlocking:
+    let sent = thread.inputs.trySend(msg)
+    if not sent:
+      raise newException(Defect, "could not send!")
+  thread.event.trigger()
 
-proc asyncExecute*(thread: AsyncSigilThread) =
-  thread[].inputs.asyncExecute()
+method recv*(thread: AsyncSigilThread, msg: var ThreadSignal, blocking: BlockingKinds): bool {.gcsafe.} =
+  debugPrint "threadRecv: ", thread.id
+  case blocking
+  of Blocking:
+    msg = thread.inputs.recv()
+    return true
+  of NonBlocking:
+    result = thread.inputs.tryRecv(msg)
+  thread.event.trigger()
 
-proc runAsyncThread*(args: (AsyncEvent, Chan[ThreadSignal])) {.thread.} =
+proc runAsyncThread*(targ: SharedPtr[AsyncSigilThread]) {.thread.} =
   var
-    event: AsyncEvent = args[0]
-    inputs = args[1]
-  echo "sigil thread waiting!", " (", getThreadId(), ")"
+    thread = targ
+  echo "async sigil thread waiting!", " (th: ", getThreadId(), ")"
 
   let cb = proc(fd: AsyncFD): bool {.closure, gcsafe.} =
     {.cast(gcsafe).}:
+      # echo "async thread running "
       var sig: ThreadSignal
-      if inputs.tryRecv(sig):
-        echo "async thread run: "
-        discard sig.tgt[].callMethod(sig.req, sig.slot)
+      while thread[].recv(sig, NonBlocking):
+        echo "async thread got msg: "
+        thread[].exec(sig)
 
-  event.addEvent(cb)
+  thread[].event.addEvent(cb)
   runForever()
 
-proc start*(thread: AsyncSigilThread) =
-  let args = (thread[].event, thread[].inputs)
-  createThread(thread[].thread, runAsyncThread, args)
+proc start*(thread: SharedPtr[AsyncSigilThread]) =
+  createThread(thread[].thr, runAsyncThread, thread)

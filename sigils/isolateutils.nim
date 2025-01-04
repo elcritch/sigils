@@ -1,4 +1,7 @@
+import std/strformat
 import std/isolation
+
+import weakrefs
 export isolation
 
 # template checkThreadSafety(field: object, parent: typed): static bool =
@@ -33,19 +36,31 @@ template checkSignalThreadSafety*(sig: typed) =
 
 type IsolationError* = object of CatchableError
 
+import std/macros
+
+import std/private/syslocks
+proc verifyUniqueSkip(tp: typedesc[SysLock]) = discard
+
 proc verifyUnique[T, V](field: T, parent: V) =
+  mixin verifyUnique
   when T is ref:
     static:
       echo "verifyUnique: ref: ", $T
     if not field.isNil and not field.isUniqueRef():
-      raise newException(IsolationError, "reference not unique! Cannot safely isolate it")
+      raise newException(IsolationError, &"reference not unique! Cannot safely isolate {$typeof(field)} parent: {$typeof(parent)} ")
     for v in field[].fields():
       verifyUnique(v, parent)
   elif T is tuple or T is object:
-    static:
-      echo "verifyUnique: object: ", $(T)
-    for n, v in field.fieldPairs():
-      verifyUnique(v, parent)
+    when compiles(verifyUniqueSkip(T)):
+      static:
+        echo "verifyUnique: skipping type: ", $T
+    else:
+      static:
+        echo "verifyUnique: object: ", $(T)
+      for n, v in field.fieldPairs():
+        static:
+          echo "verifyUnique: field: ", n, " tp: ", typeof(v)
+        verifyUnique(v, parent)
   else:
     static:
       echo "verifyUnique: skip: ", $T
