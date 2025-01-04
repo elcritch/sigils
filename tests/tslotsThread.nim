@@ -355,12 +355,12 @@ suite "threaded agent slots":
             b = Counter.new()
 
           echo "B: ", b.getId()
-          let bp: AgentProxy[Counter] = b.moveToThread(thread)
-          echo "BP: ", bp.getId()
           # echo "obj bp: ", bp.unsafeWeakRef
           # echo "obj bp.remote: ", bp.remote[].unsafeWeakRef
-          connect(a, valueChanged, bp, setValue)
-          connect(bp, updated, a, SomeAction.completed())
+          connect(a, valueChanged, b, setValue)
+          connect(b, updated, a, SomeAction.completed())
+          let bp: AgentProxy[Counter] = b.moveToThread(thread)
+          echo "BP: ", bp.getId()
 
           emit a.valueChanged(89)
           emit a.valueChanged(756809)
