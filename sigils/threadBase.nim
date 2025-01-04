@@ -41,13 +41,13 @@ type
 
   SigilThread* = ref object of Agent
     id*: int
+    thr*: Thread[SharedPtr[SigilThread]]
 
     signaledLock*: Lock
     signaled*: HashSet[WeakRef[AgentRemote]]
     references*: Table[WeakRef[Agent], Agent]
 
   SigilThreadImpl* = ref object of SigilThread
-    thr*: Thread[SharedPtr[SigilThreadImpl]]
     inputs*: SigilChan
 
 var localSigilThread {.threadVar.}: Option[SharedPtr[SigilThread]]
@@ -58,15 +58,22 @@ proc newSigilChan*(): SigilChan =
 method send*(thread: SigilThread, msg: sink ThreadSignal) {.base, gcsafe.} =
   discard
 
-method recv*(thread: SigilThread): ThreadSignal {.base, gcsafe.} =
+method recv*(thread: SigilThread, blocking: bool = true): Option[ThreadSignal] {.base, gcsafe.} =
   discard
 
 method send*(thread: SigilThreadImpl, msg: sink ThreadSignal) {.gcsafe.} =
   var msg = isolateRuntime(msg)
   thread.inputs.send(msg)
 
-method recv*(thread: SigilThreadImpl): ThreadSignal {.gcsafe.} =
-  result = thread.inputs.recv()
+method recv*(thread: SigilThreadImpl, blocking: bool): Option[ThreadSignal] {.gcsafe.} =
+  if blocking:
+    result = some thread.inputs.recv()
+  else:
+    var msg: ThreadSignal
+    if thread.inputs.tryRecv(msg):
+      result = some(msg)
+    else:
+      result = none[ThreadSignal]()
 
 proc newSigilThread*(): SharedPtr[SigilThread] =
   var thr = SigilThreadImpl(inputs: newSigilChan())
@@ -134,7 +141,7 @@ proc exec*[R: SigilThread](thread: var R, sig: ThreadSignal) =
 proc started*(tp: SigilThread) {.signal.}
 
 proc poll*[R: SigilThread](thread: var R) =
-  let sig = thread.recv()
+  let sig = thread.recv().get()
   thread.exec(sig)
 
 proc tryPoll*[R: SigilThread](thread: var R) =
@@ -145,8 +152,11 @@ proc tryPoll*[R: SigilThread](thread: var R) =
 proc pollAll*[R: SigilThread](thread: var R): int {.discardable.} =
   var sig: ThreadSignal
   result = 0
-  while thread.inputs.tryRecv(sig):
-    thread.exec(sig)
+  while true:
+    let sig = thread.recv(blocking=false)
+    if sig.isNone:
+      break
+    thread.exec(sig.get())
     result.inc()
 
 proc runForever*[R: SigilThread](thread: SharedPtr[R]) =

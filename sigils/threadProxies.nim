@@ -18,7 +18,7 @@ type
     remote*: WeakRef[Agent]
     proxyTwin*: WeakRef[AgentProxyShared]
     lock*: Lock
-    remoteThread*: SharedPtr[SigilThreadImpl]
+    remoteThread*: SharedPtr[SigilThread]
 
   AgentProxy*[T] = ref object of AgentProxyShared
 
@@ -38,7 +38,7 @@ proc `=destroy`*(obj: var typeof(AgentProxyShared()[])) =
       proxyTwin = obj.proxyTwin.toKind(Agent)
     if not proxyTwin.isNil:
       debugPrint "send deref: ", $proxyTwin, " thr: ", thr[].id
-      thr[].inputs.send(unsafeIsolate ThreadSignal(kind: Deref, deref: proxyTwin))
+      thr[].send(ThreadSignal(kind: Deref, deref: proxyTwin))
   except Exception:
     echo "error sending deref message for ", $obj.proxyTwin
 
@@ -77,7 +77,7 @@ method callMethod*(
       proxy.proxyTwin[].inbox.send(msg)
       withLock proxy.remoteThread[].signaledLock:
         proxy.remoteThread[].signaled.incl(proxy.proxyTwin.toKind(AgentRemote))
-      proxy.remoteThread[].inputs.send(unsafeIsolate ThreadSignal(kind: Trigger))
+      proxy.remoteThread[].send(ThreadSignal(kind: Trigger))
   elif slot == localSlot:
     debugPrint "\t proxy:callMethod:localSlot: "
     callSlots(proxy, req)
@@ -92,7 +92,7 @@ method callMethod*(
       proxy.proxyTwin[].inbox.send(msg)
       withLock proxy.remoteThread[].signaledLock:
         proxy.remoteThread[].signaled.incl(proxy.proxyTwin.toKind(AgentRemote))
-      proxy.remoteThread[].inputs.send(unsafeIsolate ThreadSignal(kind: Trigger))
+      proxy.remoteThread[].send(ThreadSignal(kind: Trigger))
 
 method removeSubscriptionsFor*(
     self: AgentProxyShared, subscriber: WeakRef[Agent]
@@ -189,8 +189,8 @@ proc moveToThread*[T: Agent, R: SigilThread](
   if hasSubs:
     agent[].addSubscription(AnySigilName, remoteProxy, remoteSlot)
 
-  thread[].inputs.send(unsafeIsolate ThreadSignal(kind: Move, item: move agentTy))
-  thread[].inputs.send(unsafeIsolate ThreadSignal(kind: Move, item: move remoteProxy))
+  thread[].send(ThreadSignal(kind: Move, item: move agentTy))
+  thread[].send(ThreadSignal(kind: Move, item: move remoteProxy))
 
   return localProxy
 
