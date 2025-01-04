@@ -446,8 +446,11 @@ suite "threaded agent slots":
           for i in 1 .. m:
             var a = SomeAction.new()
             for j in 1 .. n:
-              # if j mod n == 0:
-              echo "Loop: ", i, ".", j, " (th: ", getThreadId(), ")"
+              when defined(debug):
+                echo "Loop: ", i, ".", j, " (th: ", getThreadId(), ")"
+              else:
+                if j mod n == 0:
+                  echo "Loop: ", i, ".", j, " (th: ", getThreadId(), ")"
               a.value = 0
               var b = Counter.new()
               # echo "B: ", b.getId()
