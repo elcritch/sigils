@@ -60,12 +60,13 @@ proc newSigilChan*(): SigilChan =
   result = newChan[ThreadSignal](1_000)
 
 method send*(thread: SigilThread, msg: sink ThreadSignal, blocking: BlockingKinds = Blocking) {.base, gcsafe.} =
-  discard
+  raise newException(AssertionDefect, "this should never be called!")
 
 method recv*(thread: SigilThread, msg: var ThreadSignal, blocking: BlockingKinds): bool {.base, gcsafe.} =
-  discard
+  raise newException(AssertionDefect, "this should never be called!")
 
 method send*(thread: SigilThreadImpl, msg: sink ThreadSignal, blocking: BlockingKinds) {.gcsafe.} =
+  debugPrint "threadSend: ", thread.id
   var msg = isolateRuntime(msg)
   case blocking
   of Blocking:
@@ -76,6 +77,7 @@ method send*(thread: SigilThreadImpl, msg: sink ThreadSignal, blocking: Blocking
       raise newException(Defect, "could not send!")
 
 method recv*(thread: SigilThreadImpl, msg: var ThreadSignal, blocking: BlockingKinds): bool {.gcsafe.} =
+  debugPrint "threadRecv: ", thread.id
   case blocking
   of Blocking:
     msg = thread.inputs.recv()
@@ -151,6 +153,7 @@ proc started*(tp: SigilThread) {.signal.}
 proc poll*[R: SigilThread](thread: var R) =
   var sig: ThreadSignal
   discard thread.recv(sig, Blocking)
+  thread.exec(sig)
 
 proc tryPoll*[R: SigilThread](thread: var R) =
   var sig: ThreadSignal
