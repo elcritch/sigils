@@ -162,14 +162,24 @@ suite "agent weak refs":
     check x.unsafeGcCount() == 1
 
 type
-  Foo = object
+  Foo = object of RootObj
     value: int
 
+  FooBar = object of Foo
+
 method test(obj: Foo) {.base.} =
-  echo "test! value: ", obj.value
+  echo "test foos! value: ", obj.value
+
+method test(obj: FooBar) =
+  echo "test foobar! value: ", obj.value
 
 suite "check object methods":
   test "methods":
 
-    check Foo(value: 1).value == 1
-    check Foo(value: 1).value == 1
+    let f = Foo(value: 1)
+    let fb = FooBar(value: 2)
+    f.test()
+    fb.test()
+    let f1 = fb
+    f1.test()
+    check f.value == 1
