@@ -78,4 +78,4 @@ proc isolateRuntime*[T](item: T): Isolated[T] {.raises: [IsolationError].} =
     # static:
     #   echo "\n### IsolateRuntime: runtime isolate: ", $T
     verifyUnique(item, item)
-    result = unsafeIsolate(item)
+    result = unsafeIsolate(move item)
