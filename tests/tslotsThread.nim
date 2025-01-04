@@ -436,12 +436,15 @@ suite "threaded agent slots":
           let ct = getCurrentSigilThread()
           let polled = ct[].pollAll()
           echo "polled: ", polled
-          when defined(debug):
+          when defined(extraLoopTests):
+            let m = 10
+            let n = 200
+          elif defined(debug):
             let m = 2
             let n = 2
           else:
             let m = 10
-            let n = 100
+            let n = 10
 
           for i in 1 .. m:
             var a = SomeAction.new()
