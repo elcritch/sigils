@@ -63,8 +63,8 @@ proc verifyUnique[T, V](field: T, parent: V) =
         #   echo "verifyUnique: field: ", n, " tp: ", typeof(v)
         verifyUnique(v, parent)
   else:
-    static:
-      echo "verifyUnique: skip: ", $T
+    # static:
+    #   echo "verifyUnique: skip: ", $T
     discard
 
 proc isolateRuntime*[T](item: T): Isolated[T] {.raises: [IsolationError].} =
