@@ -8,7 +8,7 @@ type WeakRef*[T] {.acyclic.} = object
   ## type alias descring a weak ref that *must* be cleaned up
   ## when it's actual object is set to be destroyed
 
-template `[]`*[T](r: WeakRef[T]): var T =
+template `[]`*[T](r: WeakRef[T]): lent T =
   cast[T](r.pt)
 
 template isNil*[T](r: WeakRef[T]): bool =
