@@ -36,6 +36,11 @@ template checkSignalThreadSafety*(sig: typed) =
 
 type IsolationError* = object of CatchableError
 
+import std/macros
+
+import std/private/syslocks
+proc verifyUniqueSkip(tp: typedesc[SysLock]) = discard
+
 proc verifyUnique[T, V](field: T, parent: V) =
   mixin verifyUnique
   when T is ref:
@@ -46,6 +51,9 @@ proc verifyUnique[T, V](field: T, parent: V) =
     for v in field[].fields():
       verifyUnique(v, parent)
   elif T is tuple or T is object:
+    when compiles(verifyUniqueSkip(T)):
+      static:
+        echo "verifyUnique: skipping type: ", $T
     static:
       echo "verifyUnique: object: ", $(T)
     for n, v in field.fieldPairs():

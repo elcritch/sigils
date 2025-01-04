@@ -6,12 +6,17 @@ import std/sequtils
 import sigils
 import sigils/isolateutils
 
+import std/private/syslocks
+
+
 type
   SomeAction* = ref object of Agent
     value: int
+    lock: SysLock
 
   Counter* = ref object of Agent
     value: int
+
 
 proc valueChanged*(tp: SomeAction, val: int) {.signal.}
 proc updated*(tp: Counter, final: int) {.signal.}
