@@ -19,30 +19,28 @@ import std/asyncdispatch
 
 type
 
-  AsyncSigilThreadObj* = object of SigilThreadBase
+  AsyncSigilThreadObj* = ref object of SigilThreadBase
     thr*: Thread[SharedPtr[AsyncSigilThreadObj]]
     event*: AsyncEvent
 
   AsyncSigilThread* = SharedPtr[AsyncSigilThreadObj]
 
 proc newSigilAsyncThread*(): AsyncSigilThread =
-  result = newSharedPtr(AsyncSigilThreadObj())
+  result = newSharedPtr(isolate AsyncSigilThreadObj())
   result[].event = newAsyncEvent()
-  result[].inputs = inputs
+  result[].inputs = newSigilChan()
   echo "newSigilAsyncThread: ", result[].event.repr
-  echo "newSigilAsyncThread: ", result[].inputs[].AsyncSigilChan.repr
 
 proc runAsyncThread*(thread: AsyncSigilThread) {.thread.} =
   var
     event: AsyncEvent = thread[].event
-    inputs = thread[].inputs[].AsyncSigilChan
-  echo "async sigil thread waiting!", " evt: ", inputs.repr, " (th: ", getThreadId(), ")"
+  echo "async sigil thread waiting!", " (th: ", getThreadId(), ")"
 
   let cb = proc(fd: AsyncFD): bool {.closure, gcsafe.} =
     {.cast(gcsafe).}:
       var sig: ThreadSignal
       echo "async thread running "
-      while inputs.tryRecv(sig):
+      while thread.inputs.tryRecv(sig):
         echo "async thread got msg: "
         thread[].poll(sig)
 
