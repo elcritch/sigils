@@ -110,7 +110,7 @@ proc gcCollectReferences(thread: SigilThread) =
     debugPrint "\tderef cleanup: ", agent.unsafeWeakRef()
     thread.references.del(agent)
 
-proc exec*(thread: SigilThread, sig: ThreadSignal) =
+template exec*(thread: var SigilThread, sig: ThreadSignal) =
   debugPrint "\nthread got request: ", $sig.kind
   case sig.kind:
   of Move:
@@ -153,24 +153,24 @@ proc exec*(thread: SigilThread, sig: ThreadSignal) =
 
 proc started*(tp: SigilThread) {.signal.}
 
-proc poll*(thread: SigilThread) =
+proc poll*(thread: var SigilThread) =
   var sig: ThreadSignal
   discard thread.recv(sig, Blocking)
   thread.exec(sig)
 
-proc tryPoll*(thread: SigilThread) =
+proc tryPoll*(thread: var SigilThread) =
   var sig: ThreadSignal
   if thread.recv(sig, NonBlocking):
     thread.exec(sig)
 
-proc pollAll*(thread: SigilThread): int {.discardable.} =
+proc pollAll*(thread: var SigilThread): int {.discardable.} =
   var sig: ThreadSignal
   result = 0
   while thread.recv(sig, NonBlocking):
     thread.exec(sig)
     result.inc()
 
-proc runForever*[R: SigilThread](thread: SharedPtr[R]) =
+proc runForever*[R: var SigilThread](thread: SharedPtr[R]) =
   emit thread[].started()
   while true:
     thread[].poll()
@@ -183,7 +183,8 @@ proc runThread*(thread: SharedPtr[SigilThreadImpl]) {.thread.} =
     localSigilThread = some(thread.toSigilThread())
     thread[].id = getThreadId()
     debugPrint "Sigil worker thread waiting!"
-    thread.runForever()
+    var thr = cast[SharedPtr[SigilThread]](thread)
+    thr.runForever()
 
 proc start*(thread: SharedPtr[SigilThreadImpl]) =
   createThread(thread[].thr, runThread, thread)
