@@ -207,7 +207,7 @@ template connect*[T, S](
   checkSignalTypes(a, signal, T(), slot, acceptVoidSlot)
   a.addSubscription(signalName(signal), localProxy, slot)
   assert not localProxy.proxyTwin.isNil
-  localProxy.proxyTwin[].addSubscription(AnySigilName, agentTy, localSlot)
+  localProxy.proxyTwin[].addSubscription(AnySigilName, localProxy.remote, localSlot)
 
 template connect*[T](
     a: Agent,
@@ -222,6 +222,8 @@ template connect*[T](
   let agentSlot = `slot`(T)
   checkSignalTypes(a, signal, T(), agentSlot, acceptVoidSlot)
   a.addSubscription(signalName(signal), localProxy, agentSlot)
+  assert not localProxy.proxyTwin.isNil
+  localProxy.proxyTwin[].addSubscription(AnySigilName, localProxy.remote, localSlot)
 
 template connect*[T, S](
     proxyTy: AgentProxy[T],
@@ -234,12 +236,6 @@ template connect*[T, S](
   ## 
   checkSignalTypes(T(), signal, b, slot, acceptVoidSlot)
   let ct = getCurrentSigilThread()
-  let proxy = Agent(proxyTy)
-  # let bref = unsafeWeakRef[Agent](b)
-  # proxy.extract()[].addSubscription(signalName(signal), proxy, slot)
-  proxy.addSubscription(signalName(signal), b, slot)
-
-  # thread[].inputs.send( unsafeIsolate ThreadSignal(kind: Register, shared: ensureMove agent))
-
-  # TODO: This is wrong! but I wanted to get something running...
-  # ct[].proxies.incl(proxy)
+  let localProxy = Agent(proxyTy)
+  localProxy.addSubscription(signalName(signal), b, slot)
+  agent[].addSubscription(AnySigilName, remoteProxy, remoteSlot)
