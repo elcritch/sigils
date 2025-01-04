@@ -30,6 +30,28 @@ proc newSigilAsyncThread*(): SharedPtr[AsyncSigilThread] =
   result[].inputs = newSigilChan()
   echo "newSigilAsyncThread: ", result[].event.repr
 
+method send*(thread: AsyncSigilThread, msg: sink ThreadSignal, blocking: BlockingKinds) {.gcsafe.} =
+  debugPrint "threadSend: ", thread.id
+  var msg = isolateRuntime(msg)
+  case blocking
+  of Blocking:
+    thread.inputs.send(msg)
+  of NonBlocking:
+    let sent = thread.inputs.trySend(msg)
+    if not sent:
+      raise newException(Defect, "could not send!")
+  thread.event.trigger()
+
+method recv*(thread: AsyncSigilThread, msg: var ThreadSignal, blocking: BlockingKinds): bool {.gcsafe.} =
+  debugPrint "threadRecv: ", thread.id
+  case blocking
+  of Blocking:
+    msg = thread.inputs.recv()
+    return true
+  of NonBlocking:
+    result = thread.inputs.tryRecv(msg)
+  thread.event.trigger()
+
 proc runAsyncThread*(targ: SharedPtr[AsyncSigilThread]) {.thread.} =
   var
     thread = targ
