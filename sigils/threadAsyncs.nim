@@ -36,11 +36,11 @@ proc runAsyncThread*(targ: SharedPtr[AsyncSigilThread]) {.thread.} =
 
   let cb = proc(fd: AsyncFD): bool {.closure, gcsafe.} =
     {.cast(gcsafe).}:
-      var sig: ThreadSignal
       echo "async thread running "
+      var sig: ThreadSignal
       while thread[].recv(sig, NonBlocking):
         echo "async thread got msg: "
-        thread[].poll(sig)
+        thread[].exec(sig)
 
   thread[].event.addEvent(cb)
   runForever()

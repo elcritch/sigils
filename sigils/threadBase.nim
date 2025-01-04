@@ -107,7 +107,7 @@ proc gcCollectReferences(thread: SigilThread) =
     debugPrint "\tderef cleanup: ", agent.unsafeWeakRef()
     thread.references.del(agent)
 
-proc exec*[R: SigilThread](thread: var R, sig: ThreadSignal) =
+proc exec*(thread: SigilThread, sig: ThreadSignal) =
   debugPrint "\nthread got request: ", $sig.kind
   case sig.kind:
   of Move:
@@ -150,17 +150,17 @@ proc exec*[R: SigilThread](thread: var R, sig: ThreadSignal) =
 
 proc started*(tp: SigilThread) {.signal.}
 
-proc poll*(thread: var SigilThread) =
+proc poll*(thread: SigilThread) =
   var sig: ThreadSignal
   discard thread.recv(sig, Blocking)
   thread.exec(sig)
 
-proc tryPoll*(thread: var SigilThread) =
+proc tryPoll*(thread: SigilThread) =
   var sig: ThreadSignal
   if thread.recv(sig, NonBlocking):
     thread.exec(sig)
 
-proc pollAll*(thread: var SigilThread): int {.discardable.} =
+proc pollAll*(thread: SigilThread): int {.discardable.} =
   var sig: ThreadSignal
   result = 0
   while thread.recv(sig, NonBlocking):
