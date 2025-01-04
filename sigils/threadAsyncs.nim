@@ -25,41 +25,9 @@ type
 
   AsyncSigilThread* = SharedPtr[AsyncSigilThreadObj]
 
-  AsyncSigilChan* = ref object of SigilChanRef
-    event*: AsyncEvent
-
-method trySend*(chan: AsyncSigilChan, msg: sink Isolated[ThreadSignal]): bool {.gcsafe.} =
-  echo "TRIGGER send try: ", " msg: ", $msg, " (th: ", getThreadId(), ")"
-  result = chan.ch.trySend(msg)
-  echo "TRIGGER send try: ", result, " (th: ", getThreadId(), ")"
-  if result:
-    chan.event.trigger()
-
-method send*(chan: AsyncSigilChan, msg: sink Isolated[ThreadSignal]) {.gcsafe.} =
-  echo "TRIGGER send: ", $msg, " evt: ", chan.event.repr, " (th: ", getThreadId(), ")"
-  chan.ch.send(msg)
-  chan.event.trigger()
-
-method tryRecv*(chan: AsyncSigilChan, dst: var ThreadSignal): bool {.gcsafe.} =
-  result = chan.ch.tryRecv(dst)
-  echo "TRIGGER recv try: ", result, " (th: ", getThreadId(), ")"
-
-method recv*(chan: AsyncSigilChan): ThreadSignal {.gcsafe.} =
-  echo "TRIGGER recv: ", " (th: ", getThreadId(), ")"
-  chan.ch.recv()
-
-proc newAsyncSigilChan*[T](event: AsyncEvent): SigilChan =
-  var sch = AsyncSigilChan.new()
-  sch.ch = newChan[ThreadSignal]()
-  sch.event = event
-  result = newSharedPtr(isolateRuntime sch.SigilChanRef)
-
 proc newSigilAsyncThread*(): AsyncSigilThread =
   result = newSharedPtr(AsyncSigilThreadObj())
-  let
-    event = newAsyncEvent()
-    inputs = newAsyncSigilChan[ThreadSignal](event)
-  result[].event = event
+  result[].event = newAsyncEvent()
   result[].inputs = inputs
   echo "newSigilAsyncThread: ", result[].event.repr
   echo "newSigilAsyncThread: ", result[].inputs[].AsyncSigilChan.repr
