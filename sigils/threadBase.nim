@@ -41,7 +41,6 @@ type
 
   SigilThread* = ref object of Agent
     id*: int
-    inputs*: SigilChan
 
     signaledLock*: Lock
     signaled*: HashSet[WeakRef[AgentRemote]]
@@ -49,6 +48,7 @@ type
 
   SigilThreadImpl* = ref object of SigilThread
     thr*: Thread[SharedPtr[SigilThreadImpl]]
+    inputs*: SigilChan
 
 var localSigilThread {.threadVar.}: Option[SharedPtr[SigilThread]]
 
@@ -56,13 +56,21 @@ proc newSigilChan*(): SigilChan =
   result = newChan[ThreadSignal](1_000)
 
 method send*(thread: SigilThread, msg: sink ThreadSignal) {.base, gcsafe.} =
+  discard
+
+method recv*(thread: SigilThread): ThreadSignal {.base, gcsafe.} =
+  discard
+
+method send*(thread: SigilThreadImpl, msg: sink ThreadSignal) {.gcsafe.} =
   var msg = isolateRuntime(msg)
   thread.inputs.send(msg)
 
+method recv*(thread: SigilThreadImpl): ThreadSignal {.gcsafe.} =
+  result = thread.inputs.recv()
+
 proc newSigilThread*(): SharedPtr[SigilThread] =
-  var thr = SigilThreadImpl()
+  var thr = SigilThreadImpl(inputs: newSigilChan())
   result = newSharedPtr(isolateRuntime SigilThread(thr))
-  result[].inputs = newSigilChan()
 
 proc startLocalThread*() =
   if localSigilThread.isNone:
@@ -126,7 +134,7 @@ proc exec*[R: SigilThread](thread: var R, sig: ThreadSignal) =
 proc started*(tp: SigilThread) {.signal.}
 
 proc poll*[R: SigilThread](thread: var R) =
-  let sig = thread.inputs.recv()
+  let sig = thread.recv()
   thread.exec(sig)
 
 proc tryPoll*[R: SigilThread](thread: var R) =
