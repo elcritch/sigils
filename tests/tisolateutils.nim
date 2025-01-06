@@ -102,10 +102,10 @@ type
 proc `=copy`*(a: var NonCopy; b: NonCopy) {.error.}
 
 method test*(obj: Foo) {.base.} =
-  echo "foo"
+  echo "foo: ", obj.repr
 
 method test*(obj: BarImpl) =
-  echo "var"
+  echo "barImpl: ", obj.repr
 
 proc newBarImpl*(): SharedPtr[BarImpl] =
   var thr = BarImpl(id: 1234)
@@ -130,13 +130,21 @@ proc getCurrentFoo*(): SharedPtr[Foo] =
   return localFoo
 
 suite "isolate utils":
-  test "test foors":
-
+  test "test foos":
     var b = BarImpl(id: 34, value: 101)
     var a: Foo
     a = b
     b.test()
     a.test()
+    echo "a: ", a.repr
+
+  test "test lets":
+    let b = BarImpl(id: 34, value: 101)
+    let a: Foo = b
+    let c: Foo = a
+    b.test()
+    a.test()
+    c.test()
     echo "a: ", a.repr
 
   test "isolateRuntime sharedPointer":
