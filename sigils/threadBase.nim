@@ -96,6 +96,7 @@ proc newSigilThread*(): ptr SigilThreadImpl =
   result[] = SigilThreadImpl() # important!
   result[].agent = ThreadAgent()
   result[].inputs = newSigilChan()
+  result[].signaledLock.initLock()
   result[].id = -1
 
 proc toSigilThread*[R: SigilThread](t: ptr R): ptr SigilThread =

@@ -1,5 +1,6 @@
 import std/sets
 import std/isolation
+import std/locks
 import threading/smartptrs
 import threading/channels
 
@@ -27,6 +28,7 @@ type
 proc newSigilAsyncThread*(): SharedPtr[AsyncSigilThread] =
   result = newSharedPtr(isolate AsyncSigilThread())
   result[].event = newAsyncEvent()
+  result[].signaledLock.initLock()
   result[].inputs = newSigilChan()
   echo "newSigilAsyncThread: ", result[].event.repr
 
