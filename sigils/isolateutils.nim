@@ -68,9 +68,11 @@ proc verifyUnique[T, V](field: T, parent: V) =
     #   echo "verifyUnique: skip: ", $T
     discard
 
-proc isolateRuntime*[T](item: T): Isolated[T] {.raises: [IsolationError].} =
+# proc isolateRuntime*[T](item: sink T): Isolated[T] {.raises: [IsolationError].} =
+proc isolateRuntime*[T](item: T): Isolated[T] =
   ## Isolates a ref type or type with ref's and ensure that
   ## each ref is unique. This allows safely isolating it.
+  echo "isolateRuntime: ", item.repr
   when compiles(isolate(item)):
     # static:
     #   echo "\n### IsolateRuntime: compile isolate: ", $T

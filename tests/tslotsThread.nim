@@ -89,6 +89,14 @@ suite "threaded agent slots":
     }.toTable()
 
   when true:
+    test "simple thread setup":
+
+      let ct = getCurrentSigilThread()
+      echo "getCurrentSigilThread: ", ct.repr
+      check not ct.isNil
+
+
+  when true:
     test "simple threading test":
       var
         a = SomeAction.new()

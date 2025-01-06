@@ -57,7 +57,7 @@ type
     inputs*: SigilChan
     thr*: Thread[SharedPtr[SigilThreadImpl]]
 
-var localSigilThread {.threadVar.}: Option[SharedPtr[SigilThread]]
+var localSigilThread {.threadVar.}: SharedPtr[SigilThread]
 
 proc newSigilChan*(): SigilChan =
   result = newChan[ThreadSignal](1_000)
@@ -96,14 +96,18 @@ proc newSigilThread*(): SharedPtr[SigilThreadImpl] =
   result = newSharedPtr(isolateRuntime(thr))
 
 proc startLocalThread*() =
-  if localSigilThread.isNone:
+  echo "startLocalThread"
+  if localSigilThread.isNil:
     var st = newSigilThread()
     st[].id = getThreadId()
-    localSigilThread = some(st.toSigilThread())
+    localSigilThread = st.toSigilThread()
+  echo "startLocalThread: ", localSigilThread.repr
 
 proc getCurrentSigilThread*(): SharedPtr[SigilThread] =
+  echo "getCurrentSigilThread"
   startLocalThread()
-  return localSigilThread.get()
+  assert not localSigilThread.isNil
+  return localSigilThread
 
 proc gcCollectReferences(thread: var SigilThread) =
   var derefs: seq[WeakRef[Agent]]
@@ -183,8 +187,8 @@ proc runThread*(thread: SharedPtr[SigilThreadImpl]) {.thread.} =
   {.cast(gcsafe).}:
     pcnt.inc
     pidx = pcnt
-    assert localSigilThread.isNone()
-    localSigilThread = some(thread.toSigilThread())
+    assert localSigilThread.isNil()
+    localSigilThread = thread.toSigilThread()
     thread[].id = getThreadId()
     debugPrint "Sigil worker thread waiting!"
     var thr = cast[SharedPtr[SigilThread]](thread)

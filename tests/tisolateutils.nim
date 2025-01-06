@@ -8,6 +8,8 @@ import sigils/isolateutils
 
 import std/private/syslocks
 
+import threading/smartptrs
+import threading/channels
 
 type
   SomeAction* = ref object of Agent
@@ -16,7 +18,6 @@ type
 
   Counter* = ref object of Agent
     value: int
-
 
 proc valueChanged*(tp: SomeAction, val: int) {.signal.}
 proc updated*(tp: Counter, final: int) {.signal.}
@@ -81,3 +82,35 @@ suite "isolate utils":
       f = TestInner()
     var isoF = isolateRuntime(f)
     check isoF.extract() == f
+
+type
+  Foo = object of RootObj
+    id*: int
+
+  BarImpl = object of Foo
+
+proc newBarImpl*(): SharedPtr[BarImpl] =
+  var thr = BarImpl()
+  result = newSharedPtr(isolateRuntime(thr))
+
+var localFoo {.threadVar.}: SharedPtr[Foo]
+
+proc toFoo*[R: Foo](t: SharedPtr[R]): SharedPtr[Foo] =
+  cast[SharedPtr[Foo]](t)
+
+proc startLocalFoo*() =
+  echo "startLocalFoo"
+  if localFoo.isNil:
+    var st = newBarImpl()
+    localFoo = st.toFoo()
+  echo "startLocalThread: ", localFoo.repr
+
+proc getCurrentSigilThread*(): SharedPtr[Foo] =
+  echo "getCurrentSigilThread"
+  startLocalThread()
+  assert not localFoo.isNil
+  return localFoo
+
+suite "isolate utils":
+  test "isolateRuntime sharedPointer":
+    echo "test"
