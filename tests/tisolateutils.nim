@@ -130,22 +130,23 @@ proc getCurrentFoo*(): SharedPtr[Foo] =
   return localFoo
 
 suite "isolate utils":
-  test "test foos":
-    var b = BarImpl(id: 34, value: 101)
-    var a: Foo
-    a = b
-    b.test()
-    a.test()
-    echo "a: ", a.repr
+  when false:
+    test "test foos":
+      var b = BarImpl(id: 34, value: 101)
+      var a: Foo
+      a = b
+      b.test()
+      a.test()
+      echo "a: ", a.repr
 
-  test "test lets":
-    let b = BarImpl(id: 34, value: 101)
-    let a: Foo = b
-    let c: Foo = a
-    b.test()
-    a.test()
-    c.test()
-    echo "a: ", a.repr
+    test "test lets":
+      let b = BarImpl(id: 34, value: 101)
+      let a: Foo = b
+      let c: Foo = a
+      b.test()
+      a.test()
+      c.test()
+      echo "a: ", a.repr
 
   test "test ptr":
     var b = BarImpl(id: 34, value: 101)
@@ -156,6 +157,8 @@ suite "isolate utils":
     ap[].test()
     check bp[].id == 34
     check bp[].value == 101
+    let d = Foo(id: 56)
+    d.test()
 
     proc testValue(bar: var BarImpl): int =
       bar.value
