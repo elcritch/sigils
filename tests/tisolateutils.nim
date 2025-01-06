@@ -84,10 +84,15 @@ suite "isolate utils":
     check isoF.extract() == f
 
 type
+  NonCopy = object
+
   Foo = object of RootObj
-    id*: int
+    id: int
+    obj: NonCopy
 
   BarImpl = object of Foo
+
+proc `=destroy`(obj: NonCopy) {.error: "no copy".}
 
 proc newBarImpl*(): SharedPtr[BarImpl] =
   var thr = BarImpl(id: 1234)
