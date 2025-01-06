@@ -186,7 +186,7 @@ proc runForever*[R: var SigilThread](thread: SharedPtr[R]) =
   while true:
     thread[].poll()
 
-proc runThread*(thread: ptr SigilThreadImpl) {.thread.} =
+proc runThread*(thread: SigilThreadPtr) {.thread.} =
   {.cast(gcsafe).}:
     pcnt.inc
     pidx = pcnt
@@ -194,8 +194,7 @@ proc runThread*(thread: ptr SigilThreadImpl) {.thread.} =
     localSigilThread = thread
     thread[].id = getThreadId()
     debugPrint "Sigil worker thread waiting!"
-    var thr = cast[SharedPtr[SigilThread]](thread)
-    thr.runForever()
+    thread.runForever()
 
 proc start*(thread: ptr SigilThreadImpl) =
   createThread(thread[].thr, runThread, thread)
