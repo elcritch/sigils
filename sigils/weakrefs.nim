@@ -10,6 +10,9 @@ type WeakRef*[T] {.acyclic.} = object
   else:
     pt* {.cursor.}: T
 
+proc `=destroy`*[T](obj: WeakRef[T]) =
+  discard
+
 proc `==`*[T](x, y: WeakRef[T]): bool =
   x.pt == y.pt
 
