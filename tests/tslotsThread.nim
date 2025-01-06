@@ -77,6 +77,10 @@ proc completedSum*(self: SomeAction, final: int) {.slot.} =
 proc value*(self: Counter): int =
   self.value
 
+proc sender(thread: var SigilThreadImpl, msg: ThreadSignal) =
+  echo "SENDER: ", thread.repr
+  thread.send(msg)
+
 suite "threaded agent slots":
   setup:
     printConnectionsSlotNames = {
@@ -91,9 +95,13 @@ suite "threaded agent slots":
   when true:
     test "simple thread setup":
 
-      let ct = getCurrentSigilThread()
+      # let ct = getCurrentSigilThread()
+      let ct = newSigilThread()
       echo "getCurrentSigilThread: ", ct.repr
       check not ct.isNil
+
+      var a = SomeAction.new()
+      ct[].sender(ThreadSignal(kind: Move, item: move a))
 
 
   when true:

@@ -62,9 +62,11 @@ proc newSigilChan*(): SigilChan =
   result = newChan[ThreadSignal](1_000)
 
 method send*(thread: SigilThread, msg: sink ThreadSignal, blocking: BlockingKinds = Blocking) {.base, gcsafe.} =
+  echo "send raw!"
   raise newException(AssertionDefect, "this should never be called!")
 
 method recv*(thread: SigilThread, msg: var ThreadSignal, blocking: BlockingKinds): bool {.base, gcsafe.} =
+  echo "recv raw!"
   raise newException(AssertionDefect, "this should never be called!")
 
 method send*(thread: SigilThreadImpl, msg: sink ThreadSignal, blocking: BlockingKinds) {.gcsafe.} =
@@ -94,7 +96,7 @@ var localSigilThread {.threadVar.}: ptr SigilThread
 
 proc newSigilThread*(): ptr SigilThreadImpl =
   echo "newSigilThread"
-  result = cast[typeof(result)](allocShared0(sizeof(result[])))
+  result = cast[ptr SigilThreadImpl](allocShared0(sizeof(SigilThreadImpl)))
   result[].inputs = newSigilChan()
   result[].id = -1
 

@@ -149,8 +149,10 @@ suite "isolate utils":
       echo "a: ", a.repr
 
   test "test ptr":
-    var b = BarImpl(id: 34, value: 101)
-    var bp: ptr BarImpl = addr(b)
+    # var b = BarImpl(id: 34, value: 101)
+    var bp: ptr BarImpl = cast[ptr BarImpl](allocShared0(sizeof(BarImpl)))
+
+    bp[] = BarImpl(id: 34, value: 101)
     var ap: ptr Foo = bp
 
     bp[].test()

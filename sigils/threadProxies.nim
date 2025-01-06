@@ -191,7 +191,7 @@ proc moveToThread*[T: Agent, R: SigilThread](
   agent[].addSubscription(AnySigilName, remoteProxy, remoteSlot)
 
   echo "moveToThread: Thread:ptr: ", thread.pointer.repr
-  echo "moveToThread: Thread: ", thread.repr
+  # echo "moveToThread: Thread: ", thread.repr
   thread[].send(ThreadSignal(kind: Move, item: move agentTy))
   thread[].send(ThreadSignal(kind: Move, item: move remoteProxy))
 
