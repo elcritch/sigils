@@ -90,7 +90,7 @@ type
   BarImpl = object of Foo
 
 proc newBarImpl*(): SharedPtr[BarImpl] =
-  var thr = BarImpl()
+  var thr = BarImpl(id: 1234)
   result = newSharedPtr(isolateRuntime(thr))
 
 var localFoo {.threadVar.}: SharedPtr[Foo]
@@ -105,12 +105,17 @@ proc startLocalFoo*() =
     localFoo = st.toFoo()
   echo "startLocalThread: ", localFoo.repr
 
-proc getCurrentSigilThread*(): SharedPtr[Foo] =
-  echo "getCurrentSigilThread"
-  startLocalThread()
+proc getCurrentFoo*(): SharedPtr[Foo] =
+  echo "getCurrentFoo"
+  startLocalFoo()
   assert not localFoo.isNil
   return localFoo
 
 suite "isolate utils":
   test "isolateRuntime sharedPointer":
     echo "test"
+
+    let test = getCurrentFoo()
+    echo "test: ", test
+    check not test.isNil
+    check test[].id == 1234
