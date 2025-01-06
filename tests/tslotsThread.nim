@@ -2,6 +2,7 @@ import std/isolation
 import std/unittest
 import std/os
 import std/sequtils
+import threading/atomics
 
 import sigils
 import sigils/threads
@@ -49,13 +50,14 @@ proc setValue*(self: Counter, value: int) {.slot.} =
     os.sleep(1)
   emit self.updated(self.value)
 
-var globalCounter = 0
+var globalCounter: Atomic[int]
+globalCounter.store(0)
 
 proc setValueGlobal*(self: Counter, value: int) {.slot.} =
   echo "setValueGlobal! ", value, " id: ", self.getId().int, " (th: ", getThreadId(), ")"
   if self.value != value:
     self.value = value
-  globalCounter = value
+  globalCounter.store(value)
 
 var globalLastTicker = 0
 proc ticker*(self: Counter) {.slot.} =
@@ -143,8 +145,6 @@ suite "threaded agent slots":
           b = Counter.new()
         # echo "thread runner!"
         let thread = newSigilThread()
-        echo "thread:isNil: ", thread.isNil
-        echo "thread: ", thread.repr
         let bp: AgentProxy[Counter] = b.moveToThread(thread)
         check b.isNil
 
@@ -200,14 +200,14 @@ suite "threaded agent slots":
 
         emit a.valueChanged(568)
         os.sleep(1)
-        check globalCounter == 568
+        check globalCounter.load() == 568
       echo "block done"
       # printConnections(a)
 
       # check a is disconnected
       check not a.hasConnections()
       emit a.valueChanged(111)
-      check globalCounter == 568
+      check globalCounter.load() == 568
 
       for i in 1..10:
         if globalLastInnerCDestroyed == 2020: break
