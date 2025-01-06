@@ -5,19 +5,19 @@ type DestructorUnsafe* = object ## input/output effect
 type WeakRef*[T] {.acyclic.} = object
   ## type alias descring a weak ref that *must* be cleaned up
   ## when it's actual object is set to be destroyed
-  when defined(sigilsWeakRefCursor):
-    pt* {.cursor.}: T
-  else:
+  when defined(sigilsWeakRefPointer):
     pt*: pointer
+  else:
+    pt* {.cursor.}: T
 
 proc `==`*[T](x, y: WeakRef[T]): bool =
   x.pt == y.pt
 
 proc `[]`*[T](r: WeakRef[T]): lent T {.inline.} =
-  when defined(sigilsWeakRefCursor):
-    r.pt
-  else:
+  when defined(sigilsWeakRefPointer):
     cast[T](r.pt)
+  else:
+    r.pt
 
 template `{}`*[T](r: WeakRef[T]): auto =
   cast[

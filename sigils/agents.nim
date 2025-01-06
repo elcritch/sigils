@@ -166,7 +166,7 @@ template unsubscribeFrom*(self: WeakRef[Agent], listening: HashSet[WeakRef[Agent
   ## unsubscribe myself from agents I'm subscribed (listening) to
   debugPrint "   unsubscribeFrom:cnt: ", $listening.len(), " self: {$self}"
   for agent in listening:
-    agent.pt.removeSubscriptionsFor(self)
+    agent[].removeSubscriptionsFor(self)
 
 template removeSubscriptions*(
     agent: WeakRef[Agent],
@@ -179,11 +179,11 @@ template removeSubscriptions*(
       subscription.tgt[].unregisterSubscriber(agent)
 
 proc `=destroy`*(agentObj: AgentObj) {.forbids: [DestructorUnsafe].} =
-  when defined(sigilsWeakRefCursor):
+  when defined(sigilsWeakRefPointer):
+    let agent: WeakRef[Agent] = WeakRef[Agent](pt: cast[pointer](addr agentObj))
+  else:
     let pt: WeakRef[pointer] = WeakRef[pointer](pt: cast[pointer](addr agentObj))
     let agent: WeakRef[Agent] = cast[WeakRef[Agent]](pt)
-  else:
-    let agent: WeakRef[Agent] = WeakRef[Agent](pt: cast[pointer](addr agentObj))
 
   debugPrint &"destroy: agent: ",
           &" pt: {$agent}",
