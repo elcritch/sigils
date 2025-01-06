@@ -23,6 +23,11 @@ type
   AgentProxy*[T] = ref object of AgentProxyShared
 
 proc `=destroy`*(obj: var typeof(AgentProxyShared()[])) =
+  when defined(sigilsWeakRefPointer):
+    let agent = WeakRef[AgentRemote](pt: cast[pointer](addr obj))
+  else:
+    let pt: WeakRef[pointer] = WeakRef[pointer](pt: cast[pointer](addr obj))
+    let agent = cast[WeakRef[AgentRemote]](pt)
   debugPrint "PROXY Destroy: ", cast[AgentProxyShared](addr(obj)).unsafeWeakRef()
   `=destroy`(toAgentObj(cast[AgentProxyShared](addr obj)))
 
@@ -33,6 +38,8 @@ proc `=destroy`*(obj: var typeof(AgentProxyShared()[])) =
   if not obj.proxyTwin.isNil:
     withLock obj.proxyTwin[].lock:
       obj.proxyTwin[].proxyTwin.pt = nil
+      withLock obj.proxyTwin[].remoteThread[].signaledLock:
+        obj.proxyTwin[].remoteThread[].signaled.excl(agent)
   try:
     let
       thr = obj.remoteThread

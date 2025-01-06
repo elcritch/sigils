@@ -134,6 +134,8 @@ proc exec*(thread: var SigilThread, sig: ThreadSignal) =
     if thread.references.contains(sig.deref):
       debugPrint "\t threadExec:run:deref: ", $sig.deref.unsafeWeakRef()
       thread.references.del(sig.deref)
+    withLock thread.signaledLock:
+      thread.signaled.excl(cast[WeakRef[AgentRemote]](sig.deref))
     thread.gcCollectReferences()
   of Call:
     debugPrint "\t threadExec:call: ", $sig.tgt[].getId()
@@ -159,6 +161,7 @@ proc exec*(thread: var SigilThread, sig: ThreadSignal) =
     for signaled in signaled:
       debugPrint "triggering: ", signaled
       var sig: ThreadSignal
+      debugPrint "triggering:inbox: ", signaled[].inbox.repr
       while signaled[].inbox.tryRecv(sig):
         debugPrint "\t threadExec:tgt: ", $sig.tgt, " rc: ", $sig.tgt[].unsafeGcCount()
         let res = sig.tgt[].callMethod(sig.req, sig.slot)
