@@ -85,6 +85,3 @@ proc isolateRuntime*[T](item: sink T): Isolated[T] =
     #   echo "\n### IsolateRuntime: runtime isolate: ", $T
     verifyUnique(item, item)
     result = unsafeIsolate(item)
-
-template isolateRuntime*[T: ref](item: var T): Isolated[T] =
-  isolateRuntime(move item)

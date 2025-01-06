@@ -70,8 +70,6 @@ method recv*(thread: SigilThread, msg: var ThreadSignal, blocking: BlockingKinds
   raise newException(AssertionDefect, "this should never be called!")
 
 method send*(thread: SigilThreadImpl, msg: sink ThreadSignal, blocking: BlockingKinds) {.gcsafe.} =
-  echo "threadSend: "
-  echo "threadSend: ", thread.id
   var msg = isolateRuntime(msg)
   case blocking
   of Blocking:
@@ -82,9 +80,6 @@ method send*(thread: SigilThreadImpl, msg: sink ThreadSignal, blocking: Blocking
       raise newException(Defect, "could not send!")
 
 method recv*(thread: SigilThreadImpl, msg: var ThreadSignal, blocking: BlockingKinds): bool {.gcsafe.} =
-  # echo "threadRecv: "
-  # echo "threadRecv: ", thread.addr.pointer.repr
-  # echo "threadRecv: ", thread.id
   case blocking
   of Blocking:
     msg = thread.inputs.recv()
@@ -95,7 +90,6 @@ method recv*(thread: SigilThreadImpl, msg: var ThreadSignal, blocking: BlockingK
 var localSigilThread {.threadVar.}: ptr SigilThread
 
 proc newSigilThread*(): ptr SigilThreadImpl =
-  echo "newSigilThread"
   result = cast[ptr SigilThreadImpl](allocShared0(sizeof(SigilThreadImpl)))
   result[] = SigilThreadImpl() # important!
   result[].agent = ThreadAgent()
@@ -106,15 +100,12 @@ proc toSigilThread*[R: SigilThread](t: ptr R): ptr SigilThread =
   cast[ptr SigilThread](t)
 
 proc startLocalThread*() =
-  echo "startLocalThread"
   if localSigilThread.isNil:
     var st = newSigilThread()
     st[].id = getThreadId()
     localSigilThread = st.toSigilThread()
-  echo "startLocalThread: ", localSigilThread.repr
 
 proc getCurrentSigilThread*(): ptr SigilThread =
-  echo "getCurrentSigilThread"
   startLocalThread()
   assert not localSigilThread.isNil
   return localSigilThread
