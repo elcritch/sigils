@@ -147,6 +147,16 @@ suite "isolate utils":
     c.test()
     echo "a: ", a.repr
 
+  test "test ptr":
+    var b = BarImpl(id: 34, value: 101)
+    var bp: ptr BarImpl = addr(b)
+    var ap: ptr Foo = bp
+
+    bp[].test()
+    ap[].test()
+    check bp[].id == 34
+    check bp[].value == 101
+
   test "isolateRuntime sharedPointer":
     echo "test"
 
