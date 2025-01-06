@@ -55,7 +55,7 @@ type
 
   SigilThreadImpl* = object of SigilThread
     inputs*: SigilChan
-    thr*: Thread[ptr SigilThread]
+    thr*: Thread[WeakRef[SigilThread]]
 
 
 proc newSigilChan*(): SigilChan =
@@ -68,7 +68,8 @@ method recv*(thread: SigilThread, msg: var ThreadSignal, blocking: BlockingKinds
   raise newException(AssertionDefect, "this should never be called!")
 
 method send*(thread: SigilThreadImpl, msg: sink ThreadSignal, blocking: BlockingKinds) {.gcsafe.} =
-  debugPrint "threadSend: ", thread.id
+  echo "threadSend: "
+  echo "threadSend: ", thread.id
   var msg = isolateRuntime(msg)
   case blocking
   of Blocking:
@@ -79,7 +80,9 @@ method send*(thread: SigilThreadImpl, msg: sink ThreadSignal, blocking: Blocking
       raise newException(Defect, "could not send!")
 
 method recv*(thread: SigilThreadImpl, msg: var ThreadSignal, blocking: BlockingKinds): bool {.gcsafe.} =
-  debugPrint "threadRecv: ", thread.id
+  # echo "threadRecv: "
+  # echo "threadRecv: ", thread.addr.pointer.repr
+  # echo "threadRecv: ", thread.id
   case blocking
   of Blocking:
     msg = thread.inputs.recv()
@@ -87,15 +90,16 @@ method recv*(thread: SigilThreadImpl, msg: var ThreadSignal, blocking: BlockingK
   of NonBlocking:
     result = thread.inputs.tryRecv(msg)
 
-var localSigilThread {.threadVar.}: ptr SigilThread
+var localSigilThread {.threadVar.}: WeakRef[SigilThread]
 
-proc newSigilThread*(): ptr SigilThreadImpl =
+proc newSigilThread*(): WeakRef[SigilThreadImpl] =
   echo "newSigilThread"
   result = cast[typeof(result)](allocShared0(sizeof(result[])))
   result[].inputs = newSigilChan()
+  result[].id = -1
 
-proc toSigilThread*[R: SigilThread](t: ptr R): ptr SigilThread =
-  cast[ptr SigilThread](t)
+proc toSigilThread*[R: SigilThread](t: ptr R): WeakRef[SigilThread] =
+  cast[WeakRef[SigilThread]](t)
 
 proc startLocalThread*() =
   echo "startLocalThread"
@@ -105,13 +109,13 @@ proc startLocalThread*() =
     localSigilThread = st.toSigilThread()
   echo "startLocalThread: ", localSigilThread.repr
 
-proc getCurrentSigilThread*(): ptr SigilThread =
+proc getCurrentSigilThread*(): WeakRef[SigilThread] =
   echo "getCurrentSigilThread"
   startLocalThread()
   assert not localSigilThread.isNil
   return localSigilThread
 
-proc gcCollectReferences(thread: ptr SigilThread) =
+proc gcCollectReferences(thread: WeakRef[SigilThread]) =
   var derefs: seq[WeakRef[Agent]]
   for agent in thread.references.keys():
     if not agent[].hasConnections():
@@ -120,7 +124,7 @@ proc gcCollectReferences(thread: ptr SigilThread) =
     debugPrint "\tderef cleanup: ", agent.unsafeWeakRef()
     thread.references.del(agent)
 
-proc exec*(thread: ptr SigilThread, sig: ThreadSignal) =
+proc exec*(thread: WeakRef[SigilThread], sig: ThreadSignal) =
   debugPrint "\nthread got request: ", $sig.kind
   case sig.kind:
   of Move:
@@ -163,17 +167,17 @@ proc exec*(thread: ptr SigilThread, sig: ThreadSignal) =
 
 proc started*(tp: AgentThread) {.signal.}
 
-proc poll*(thread: ptr SigilThread) =
+proc poll*(thread: WeakRef[SigilThread]) =
   var sig: ThreadSignal
   discard thread[].recv(sig, Blocking)
   thread.exec(sig)
 
-proc tryPoll*(thread: ptr SigilThread) =
+proc tryPoll*(thread: WeakRef[SigilThread]) =
   var sig: ThreadSignal
   if thread[].recv(sig, NonBlocking):
     thread.exec(sig)
 
-proc pollAll*(thread: ptr SigilThread): int {.discardable.} =
+proc pollAll*(thread: WeakRef[SigilThread]): int {.discardable.} =
   var sig: ThreadSignal
   result = 0
   while thread[].recv(sig, NonBlocking):
@@ -185,7 +189,7 @@ proc runForever*[R: SigilThread](thread: ptr R) =
   while true:
     thread.poll()
 
-proc runThread*(thread: ptr SigilThread) {.thread.} =
+proc runThread*(thread: WeakRef[SigilThread]) {.thread.} =
   {.cast(gcsafe).}:
     pcnt.inc
     pidx = pcnt
@@ -195,5 +199,5 @@ proc runThread*(thread: ptr SigilThread) {.thread.} =
     debugPrint "Sigil worker thread waiting!"
     thread.runForever()
 
-proc start*(thread: ptr SigilThreadImpl) =
+proc start*(thread: WeakRef[SigilThreadImpl]) =
   createThread(thread[].thr, runThread, thread)

@@ -164,7 +164,7 @@ method unregisterSubscriber*(
 
 template unsubscribeFrom*(self: WeakRef[Agent], listening: HashSet[WeakRef[Agent]]) =
   ## unsubscribe myself from agents I'm subscribed (listening) to
-  debugPrint fmt"   unsubscribeFrom:cnt: {$listening.len()} self: {$self}"
+  debugPrint "   unsubscribeFrom:cnt: ", $listening.len(), " self: {$self}"
   for agent in listening:
     agent.pt.removeSubscriptionsFor(self)
 
