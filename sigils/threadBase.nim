@@ -43,7 +43,7 @@ type
   AgentRemote* = ref object of Agent
     inbox*: Chan[ThreadSignal]
 
-  AgentThread* = ref object of Agent
+  ThreadAgent* = ref object of Agent
 
   SigilThread* = object of RootObj
     id*: int
@@ -51,7 +51,7 @@ type
     signaledLock*: Lock
     signaled*: HashSet[WeakRef[AgentRemote]]
     references*: Table[WeakRef[Agent], Agent]
-    agent*: AgentThread
+    agent*: ThreadAgent
 
   SigilThreadImpl* = object of SigilThread
     inputs*: SigilChan
@@ -98,6 +98,7 @@ proc newSigilThread*(): ptr SigilThreadImpl =
   echo "newSigilThread"
   result = cast[ptr SigilThreadImpl](allocShared0(sizeof(SigilThreadImpl)))
   result[] = SigilThreadImpl() # important!
+  result[].agent = ThreadAgent()
   result[].inputs = newSigilChan()
   result[].id = -1
 
@@ -168,7 +169,7 @@ proc exec*(thread: var SigilThread, sig: ThreadSignal) =
         debugPrint "\t threadExec:tgt: ", $sig.tgt, " rc: ", $sig.tgt[].unsafeGcCount()
         let res = sig.tgt[].callMethod(sig.req, sig.slot)
 
-proc started*(tp: AgentThread) {.signal.}
+proc started*(tp: ThreadAgent) {.signal.}
 
 proc poll*(thread: var SigilThread) =
   var sig: ThreadSignal
