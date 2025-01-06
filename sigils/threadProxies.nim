@@ -131,7 +131,7 @@ proc findSubscribedToSignals(
 
 proc moveToThread*[T: Agent, R: SigilThread](
     agentTy: var T,
-    thread: SharedPtr[R]
+    thread: ptr R
 ): AgentProxy[T] =
   ## move agent to another thread
   debugPrint "moveToThread: ", $agentTy.unsafeWeakRef()
