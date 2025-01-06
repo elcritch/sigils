@@ -19,7 +19,6 @@ import std/uri
 import std/asyncdispatch
 
 type
-
   AsyncSigilThread* = object of SigilThread
     inputs*: SigilChan
     event*: AsyncEvent
