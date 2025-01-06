@@ -1,5 +1,6 @@
 import std/strformat
 import std/isolation
+import threading/smartptrs
 
 import weakrefs
 export isolation
@@ -85,3 +86,6 @@ proc isolateRuntime*[T](item: sink T): Isolated[T] =
     #   echo "\n### IsolateRuntime: runtime isolate: ", $T
     verifyUnique(item, item)
     result = unsafeIsolate(item)
+
+proc isolateRuntime*[T](item: SharedPtr[T]): Isolated[T] =
+  unsafeIsolate item.extract()
