@@ -157,6 +157,11 @@ suite "isolate utils":
     check bp[].id == 34
     check bp[].value == 101
 
+    proc testValue(bar: var BarImpl): int =
+      bar.value
+    
+    check bp[].testValue() == 101
+
   test "isolateRuntime sharedPointer":
     echo "test"
 
