@@ -63,11 +63,15 @@ method callMethod*(
     var req = req.deepCopy()
     debugPrint "\t proxy:callMethod:remoteSlot: ", "req: ", $req
     debugPrint "\t proxy:callMethod:remoteSlot: ", "proxy.remote: ", $proxy.remote
+    var pt: WeakRef[AgentProxyShared]
+    withLock proxy.lock:
+      pt = proxy.proxyTwin
+
     var msg = isolateRuntime ThreadSignal(
       kind: Call,
       slot: localSlot,
       req: move req,
-      tgt: proxy.proxyTwin.toKind(Agent)
+      tgt: pt.toKind(Agent)
     )
     debugPrint "\t proxy:callMethod:remoteSlot: ", "msg: ", $msg, " proxyTwin: ", $proxy.proxyTwin
     when defined(sigilsDebug) or defined(debug):
