@@ -316,7 +316,7 @@ suite "threaded agent slots":
       GC_fullCollect()
 
   # when true:
-  when false:
+  when true:
     test "agent move to thread then connect and run":
 
       var
