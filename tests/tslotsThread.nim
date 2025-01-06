@@ -440,7 +440,7 @@ suite "threaded agent slots":
       GC_fullCollect()
 
 
-  when false:
+  when true:
     test "sigil object thread runner (loop)":
       block:
         block:
@@ -495,7 +495,7 @@ suite "threaded agent slots":
         GC_fullCollect()
       GC_fullCollect()
 
-  when false:
+  when true:
     test "sigil object one way runner (loop)":
       let ct = getCurrentSigilThread()
       block:
