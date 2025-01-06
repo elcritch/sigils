@@ -90,24 +90,22 @@ method recv*(thread: SigilThreadImpl, msg: var ThreadSignal, blocking: BlockingK
   of NonBlocking:
     result = thread.inputs.tryRecv(msg)
 
-var localSigilThread {.threadVar.}: WeakRef[SigilThread]
+var localSigilThread {.threadVar.}: ptr SigilThread
 
-proc newSigilThread*(): WeakRef[SigilThreadImpl] =
+proc newSigilThread*(): ptr SigilThreadImpl =
   echo "newSigilThread"
-  var thr: ptr SigilThreadImpl
-  thr = cast[typeof(thr)](allocShared0(sizeof(thr[])))
-  result = thr.unsafeWeakRef()
-  result{}.inputs = newSigilChan()
-  result{}.id = -1
+  result = cast[typeof(result)](allocShared0(sizeof(result[])))
+  result[].inputs = newSigilChan()
+  result[].id = -1
 
-proc toSigilThread*[R: SigilThread](t: WeakRef[R]): WeakRef[SigilThread] =
-  cast[WeakRef[SigilThread]](t)
+proc toSigilThread*[R: SigilThread](t: ptr R): ptr SigilThread =
+  cast[ptr SigilThread](t)
 
 proc startLocalThread*() =
   echo "startLocalThread"
   if localSigilThread.isNil:
     var st = newSigilThread()
-    st{}.id = getThreadId()
+    st[].id = getThreadId()
     localSigilThread = st.toSigilThread()
   echo "startLocalThread: ", localSigilThread.repr
 
@@ -191,15 +189,15 @@ proc runForever*[R: SigilThread](thread: var R) =
   while true:
     thread.poll()
 
-proc runThread*(thread: WeakRef[SigilThread]) {.thread.} =
+proc runThread*(thread: ptr SigilThread) {.thread.} =
   {.cast(gcsafe).}:
     pcnt.inc
     pidx = pcnt
     assert localSigilThread.isNil()
-    localSigilThread = thread
-    thread{}.id = getThreadId()
+    localSigilThread = thread.toSigilThread()
+    thread[].id = getThreadId()
     debugPrint "Sigil worker thread waiting!"
-    thread{}.runForever()
+    thread[].runForever()
 
 proc start*(thread: ptr SigilThreadImpl) =
   createThread(thread[].thr, runThread, thread)
