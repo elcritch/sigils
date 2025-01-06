@@ -79,11 +79,11 @@ method callMethod*(
     when defined(sigilNonBlockingThreads):
       discard
     else:
-      if not pt.isNil:
-        let rt = proxy.remoteThread
-        withLock rt[].signaledLock:
-          rt[].signaled.incl(pt.toKind(AgentRemote))
-        proxy.proxyTwin[].inbox.send(msg)
+      withLock proxy.lock:
+        if not proxy.proxyTwin.isNil:
+          withLock proxy.remoteThread[].signaledLock:
+            proxy.remoteThread[].signaled.incl(proxy.proxyTwin.toKind(AgentRemote))
+          proxy.proxyTwin[].inbox.send(msg)
       proxy.remoteThread[].send(ThreadSignal(kind: Trigger))
   elif slot == localSlot:
     debugPrint "\t proxy:callMethod:localSlot: "
