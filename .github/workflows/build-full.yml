@@ -9,7 +9,7 @@ jobs:
     strategy:
       matrix:
         nimversion:
-          - '2.0.12'
+          - '2.0.14'
 
         os:
           - ubuntu-latest
@@ -33,7 +33,9 @@ jobs:
     - name: Install Nimble
       run: |
         # nimble install nimble@\#master
+        echo "Nim:: "
         nim -v
+        echo "Nimble:: "
         nimble -v
 
     - name: Install Deps
