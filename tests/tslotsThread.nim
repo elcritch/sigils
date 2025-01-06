@@ -356,7 +356,7 @@ suite "threaded agent slots":
         echo "a.listening: ", a.listening
       GC_fullCollect()
 
-  when false:
+  when true:
     test "sigil object thread runner multiple emits":
       block:
         # echo "thread runner!", " (main thread:", getThreadId(), ")"
