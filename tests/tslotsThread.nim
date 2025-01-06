@@ -24,17 +24,20 @@ type
   InnerC = object
     id: int
 
-var globalLastInnerADestroyed = 0
+var globalLastInnerADestroyed: Atomic[int]
+globalLastInnerADestroyed.store(0)
 proc `=destroy`*(obj: InnerA) = 
   if obj.id != 0:
     echo "destroyed InnerA!"
-  globalLastInnerADestroyed = obj.id
+  globalLastInnerADestroyed.store obj.id
 
-var globalLastInnerCDestroyed = 0
+var globalLastInnerCDestroyed: Atomic[int]
+globalLastInnerCDestroyed.store(0)
+
 proc `=destroy`*(obj: InnerC) = 
   if obj.id != 0:
     echo "destroyed InnerC!"
-  globalLastInnerCDestroyed = obj.id
+  globalLastInnerCDestroyed.store obj.id
 
 proc valueChanged*(tp: SomeAction, val: int) {.signal.}
 proc updated*(tp: Counter, final: int) {.signal.}
@@ -210,9 +213,9 @@ suite "threaded agent slots":
       check globalCounter.load() == 568
 
       for i in 1..10:
-        if globalLastInnerCDestroyed == 2020: break
+        if globalLastInnerCDestroyed.load == 2020: break
         os.sleep(1)
-      check globalLastInnerCDestroyed == 2020
+      check globalLastInnerCDestroyed.load == 2020
 
   when false:
     test "agent connect b->a then moveToThread then destroy proxy":
