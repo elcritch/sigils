@@ -55,9 +55,9 @@ type
 
   SigilThreadImpl* = object of SigilThread
     inputs*: SigilChan
-    thr*: Thread[SharedPtr[SigilThreadImpl]]
+    thr*: Thread[SigilThreadPtr]
 
-var localSigilThread {.threadVar.}: SharedPtr[SigilThread]
+  SigilThreadPtr* = ptr SigilThread
 
 proc newSigilChan*(): SigilChan =
   result = newChan[ThreadSignal](1_000)
@@ -88,14 +88,15 @@ method recv*(thread: SigilThreadImpl, msg: var ThreadSignal, blocking: BlockingK
   of NonBlocking:
     result = thread.inputs.tryRecv(msg)
 
-proc toSigilThread*[R: SigilThread](t: SharedPtr[R]): SharedPtr[SigilThread] =
-  cast[SharedPtr[SigilThread]](t)
+var localSigilThread {.threadVar.}: SigilThreadPtr
 
-proc newSigilThread*(): SharedPtr[SigilThreadImpl] =
+proc newSigilThread*(): ptr SigilThreadImpl =
   echo "newSigilThread"
-  let thr = SigilThreadImpl(inputs: newSigilChan())
-  echo "thr: ", thr.repr
-  result = newSharedPtr(isolateRuntime(thr))
+  result = cast[typeof(result)](allocShared0(sizeof(result[])))
+  result[].inputs = newSigilChan()
+
+proc toSigilThread*[R: SigilThread](t: ptr R): SigilThreadPtr =
+  cast[SigilThreadPtr](t)
 
 proc startLocalThread*() =
   echo "startLocalThread"
@@ -105,7 +106,7 @@ proc startLocalThread*() =
     localSigilThread = st.toSigilThread()
   echo "startLocalThread: ", localSigilThread.repr
 
-proc getCurrentSigilThread*(): SharedPtr[SigilThread] =
+proc getCurrentSigilThread*(): SigilThreadPtr =
   echo "getCurrentSigilThread"
   startLocalThread()
   assert not localSigilThread.isNil
@@ -185,16 +186,16 @@ proc runForever*[R: var SigilThread](thread: SharedPtr[R]) =
   while true:
     thread[].poll()
 
-proc runThread*(thread: SharedPtr[SigilThreadImpl]) {.thread.} =
+proc runThread*(thread: ptr SigilThreadImpl) {.thread.} =
   {.cast(gcsafe).}:
     pcnt.inc
     pidx = pcnt
     assert localSigilThread.isNil()
-    localSigilThread = thread.toSigilThread()
+    localSigilThread = thread
     thread[].id = getThreadId()
     debugPrint "Sigil worker thread waiting!"
     var thr = cast[SharedPtr[SigilThread]](thread)
     thr.runForever()
 
-proc start*(thread: SharedPtr[SigilThreadImpl]) =
+proc start*(thread: ptr SigilThreadImpl) =
   createThread(thread[].thr, runThread, thread)
