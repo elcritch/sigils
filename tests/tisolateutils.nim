@@ -101,6 +101,12 @@ type
 
 proc `=copy`*(a: var NonCopy; b: NonCopy) {.error.}
 
+method test*(obj: Foo) {.base.} =
+  echo "foo"
+
+method test*(obj: BarImpl) =
+  echo "var"
+
 proc newBarImpl*(): SharedPtr[BarImpl] =
   var thr = BarImpl(id: 1234)
   result = newSharedPtr(thr)
@@ -129,6 +135,8 @@ suite "isolate utils":
     var b = BarImpl(id: 34, value: 101)
     var a: Foo
     a = b
+    b.test()
+    a.test()
     echo "a: ", a.repr
 
   test "isolateRuntime sharedPointer":
