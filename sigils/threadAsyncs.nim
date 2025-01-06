@@ -20,13 +20,14 @@ import std/asyncdispatch
 
 type
 
-  AsyncSigilThread* = ref object of SigilThread
+  AsyncSigilThread* = object of SigilThread
     inputs*: SigilChan
     event*: AsyncEvent
-    thr*: Thread[SharedPtr[AsyncSigilThread]]
+    thr*: Thread[ptr AsyncSigilThread]
 
-proc newSigilAsyncThread*(): SharedPtr[AsyncSigilThread] =
-  result = newSharedPtr(isolate AsyncSigilThread())
+proc newSigilAsyncThread*(): ptr AsyncSigilThread =
+  result = cast[ptr AsyncSigilThread](allocShared0(sizeof(AsyncSigilThread)))
+  result[] = AsyncSigilThread() # important!
   result[].event = newAsyncEvent()
   result[].signaledLock.initLock()
   result[].inputs = newSigilChan()
@@ -54,9 +55,10 @@ method recv*(thread: AsyncSigilThread, msg: var ThreadSignal, blocking: Blocking
     result = thread.inputs.tryRecv(msg)
   thread.event.trigger()
 
-proc runAsyncThread*(targ: SharedPtr[AsyncSigilThread]) {.thread.} =
+proc runAsyncThread*(targ: ptr AsyncSigilThread) {.thread.} =
   var
     thread = targ
+    sthr = thread.toSigilThread()
   echo "async sigil thread waiting!", " (th: ", getThreadId(), ")"
 
   let cb = proc(fd: AsyncFD): bool {.closure, gcsafe.} =
@@ -65,10 +67,10 @@ proc runAsyncThread*(targ: SharedPtr[AsyncSigilThread]) {.thread.} =
       var sig: ThreadSignal
       while thread[].recv(sig, NonBlocking):
         echo "async thread got msg: "
-        thread[].exec(sig)
+        sthr[].exec(sig)
 
   thread[].event.addEvent(cb)
   runForever()
 
-proc start*(thread: SharedPtr[AsyncSigilThread]) =
+proc start*(thread: ptr AsyncSigilThread) =
   createThread(thread[].thr, runAsyncThread, thread)
