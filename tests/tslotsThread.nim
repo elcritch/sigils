@@ -141,6 +141,8 @@ suite "threaded agent slots":
           b = Counter.new()
         # echo "thread runner!"
         let thread = newSigilThread()
+        echo "thread:isNil: ", thread.isNil
+        echo "thread: ", thread.repr
         let bp: AgentProxy[Counter] = b.moveToThread(thread)
         check b.isNil
 
