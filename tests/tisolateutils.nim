@@ -93,10 +93,10 @@ type
 
   Foo = object of RootObj
     id: int
-    thr: Thread[int]
-    ch: Chan[int]
 
   BarImpl = object of Foo
+    thr: Thread[int]
+    ch: Chan[int]
 
 proc `=copy`*(a: var NonCopy; b: NonCopy) {.error.}
 
