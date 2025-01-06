@@ -62,11 +62,11 @@ proc setValueGlobal*(self: Counter, value: int) {.slot.} =
     self.value = value
   globalCounter.store(value)
 
-var globalLastTicker = 0
+var globalLastTicker: Atomic[int]
 proc ticker*(self: Counter) {.slot.} =
   for i in 3..3:
     echo "tick! i:", i, " ", self.unsafeWeakRef(), " (th: ", getThreadId(), ")"
-    globalLastTicker = i
+    globalLastTicker.store i
     # printConnections(self)
     emit self.updated(i)
 
@@ -274,9 +274,9 @@ suite "threaded agent slots":
         thread.start()
 
         for i in 1..3:
-          if globalLastTicker != 3:
+          if globalLastTicker.load != 3:
             os.sleep(1)
-        check globalLastTicker == 3
+        check globalLastTicker.load == 3
         ct[].poll()
         let polled = ct[].pollAll()
         echo "polled: ", polled
