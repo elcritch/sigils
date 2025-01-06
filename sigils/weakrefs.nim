@@ -10,6 +10,9 @@ type WeakRef*[T] {.acyclic.} = object
   else:
     pt*: pointer
 
+proc `==`*[T](x, y: WeakRef[T]): bool =
+  x.pt == y.pt
+
 proc `[]`*[T](r: WeakRef[T]): lent T {.inline.} =
   when defined(sigilsWeakRefCursor):
     r.pt

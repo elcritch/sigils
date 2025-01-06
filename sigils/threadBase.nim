@@ -154,8 +154,7 @@ proc exec*(thread: var SigilThread, sig: ThreadSignal) =
     debugPrint "Triggering"
     var signaled: HashSet[WeakRef[AgentRemote]]
     withLock thread.signaledLock:
-      signaled = thread.signaled
-      thread.signaled.clear()
+      signaled = move thread.signaled
     for signaled in signaled:
       debugPrint "triggering: ", signaled
       var sig: ThreadSignal
