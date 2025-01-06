@@ -111,7 +111,7 @@ proc startLocalThread*() =
     localSigilThread = st.toSigilThread()
   echo "startLocalThread: ", localSigilThread.repr
 
-proc getCurrentSigilThread*(): WeakRef[SigilThread] =
+proc getCurrentSigilThread*(): ptr SigilThread =
   echo "getCurrentSigilThread"
   startLocalThread()
   assert not localSigilThread.isNil
