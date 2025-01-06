@@ -32,7 +32,7 @@ proc `=destroy`*(agentObj: AgentObj) =
     ## This is pretty hacky, but we need to get the address of the original
     ## Agent (ref object) since it's used to unsubscribe from other agents in the actual code,
     ## Luckily the agent address is the same as `addr agent` of the agent object here.
-  when defined(sigilsWeakRefCursor):
+  when not defined(sigilsWeakRefPointer):
     echo "Destroying agent: ",
             " pt: ", cast[pointer](xid.pt).repr,
             " freed: ", agentObj.freed,
