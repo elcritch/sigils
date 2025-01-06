@@ -103,7 +103,6 @@ proc `=copy`*(a: var NonCopy; b: NonCopy) {.error.}
 
 proc newBarImpl*(): SharedPtr[BarImpl] =
   var thr = BarImpl(id: 1234)
-  # result = newSharedPtr(isolateRuntime(thr))
   result = newSharedPtr(thr)
 
 var localFoo {.threadVar.}: SharedPtr[Foo]
