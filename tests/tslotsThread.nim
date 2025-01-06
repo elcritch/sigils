@@ -250,7 +250,7 @@ suite "threaded agent slots":
         echo "\n==== moveToThread"
         let bp: AgentProxy[Counter] = b.moveToThread(thread)
         brightPrint "obj bp: ", $bp.unsafeWeakRef()
-        connect(thread[], started, bp.getRemote()[], ticker)
+        connect(thread[].agent, started, bp.getRemote()[], ticker)
 
         printConnections(a)
         printConnections(bp)
