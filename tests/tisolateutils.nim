@@ -92,7 +92,7 @@ type
 
   BarImpl = object of Foo
 
-proc `=destroy`(obj: NonCopy) {.error: "no copy".}
+proc `=copy`*(a: var NonCopy; b: NonCopy) {.error.}
 
 proc newBarImpl*(): SharedPtr[BarImpl] =
   var thr = BarImpl(id: 1234)
