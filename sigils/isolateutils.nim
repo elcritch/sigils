@@ -87,5 +87,6 @@ proc isolateRuntime*[T](item: sink T): Isolated[T] =
     verifyUnique(item, item)
     result = unsafeIsolate(item)
 
-proc isolateRuntime*[T](item: SharedPtr[T]): Isolated[T] =
-  unsafeIsolate item.extract()
+proc isolateRuntime*[T](item: SharedPtr[T]): Isolated[SharedPtr[T]] =
+  var item = item
+  unsafeIsolate(move item)
