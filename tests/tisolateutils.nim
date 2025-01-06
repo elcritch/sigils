@@ -5,6 +5,7 @@ import std/sequtils
 
 import sigils
 import sigils/isolateutils
+import sigils/weakrefs
 
 import std/private/syslocks
 
@@ -51,9 +52,13 @@ suite "isolate utils":
         value: TestRef
 
     var
-      a = SomeAction()
-      isoA = isolateRuntime(a)
-    check isoA.extract() == a
+      a = SomeAction(value: 10)
+    
+    echo "A: ", a.unsafeGcCount()
+    var
+      isoA = isolateRuntime(move a)
+    check a.isNil
+    check isoA.extract().value == 10
 
     var
       b = 33
