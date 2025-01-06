@@ -12,6 +12,8 @@ type WeakRef*[T] {.acyclic.} = object
 
 proc `=destroy`*[T](obj: WeakRef[T]) =
   discard
+proc `=copy`*[T](dst: var WeakRef[T], src: WeakRef[T]) =
+  dst.pt = src.pt
 
 proc `==`*[T](x, y: WeakRef[T]): bool =
   x.pt == y.pt
