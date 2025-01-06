@@ -92,13 +92,14 @@ proc toSigilThread*[R: SigilThread](t: SharedPtr[R]): SharedPtr[SigilThread] =
   cast[SharedPtr[SigilThread]](t)
 
 proc newSigilThread*(): SharedPtr[SigilThreadImpl] =
-  var thr = SigilThreadImpl(inputs: newSigilChan(), )
-  result = newSharedPtr(isolateRuntime thr)
+  let thr = SigilThreadImpl(inputs: newSigilChan())
+  result = newSharedPtr(isolateRuntime(thr))
 
 proc startLocalThread*() =
   if localSigilThread.isNone:
-    localSigilThread = some newSigilThread().toSigilThread()
-    localSigilThread.get()[].id = getThreadId()
+    var st = newSigilThread()
+    st[].id = getThreadId()
+    localSigilThread = some(st.toSigilThread())
 
 proc getCurrentSigilThread*(): SharedPtr[SigilThread] =
   startLocalThread()
