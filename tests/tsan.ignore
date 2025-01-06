@@ -1,3 +1,0 @@
-fun:*createThread*
-fun:*pthread*
-fun:pthread_create
