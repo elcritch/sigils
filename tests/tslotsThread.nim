@@ -217,7 +217,7 @@ suite "threaded agent slots":
         os.sleep(1)
       check globalLastInnerCDestroyed.load == 2020
 
-  when false:
+  when true:
     test "agent connect b->a then moveToThread then destroy proxy":
       debugPrintQuiet = false
 

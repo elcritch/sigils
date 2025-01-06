@@ -52,6 +52,8 @@ type
     signaled*: HashSet[WeakRef[AgentRemote]]
     references*: Table[WeakRef[Agent], Agent]
     agent*: ThreadAgent
+    when defined(sigilsDebug):
+      debugName*: string
 
   SigilThreadImpl* = object of SigilThread
     inputs*: SigilChan
