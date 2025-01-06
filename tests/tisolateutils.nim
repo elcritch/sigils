@@ -93,7 +93,8 @@ type
 
   Foo = object of RootObj
     id: int
-    obj: NonCopy
+    thr: Thread[int]
+    ch: Chan[int]
 
   BarImpl = object of Foo
 

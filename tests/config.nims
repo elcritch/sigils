@@ -10,6 +10,8 @@
 
 --d:sigilsDebug
 
+--passc:"-Wno-int-conversion"
+
 when defined(tsan):
   --debugger:native 
   --passc:"-fsanitize=thread -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer" 

@@ -92,7 +92,9 @@ proc toSigilThread*[R: SigilThread](t: SharedPtr[R]): SharedPtr[SigilThread] =
   cast[SharedPtr[SigilThread]](t)
 
 proc newSigilThread*(): SharedPtr[SigilThreadImpl] =
+  echo "newSigilThread"
   let thr = SigilThreadImpl(inputs: newSigilChan())
+  echo "thr: ", thr.repr
   result = newSharedPtr(isolateRuntime(thr))
 
 proc startLocalThread*() =
