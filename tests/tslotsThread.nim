@@ -399,7 +399,7 @@ suite "threaded agent slots":
 
         # ct[].poll()
         # check a.value == 628
-  when false:
+  when true:
     test "sigil object thread runner multiple emit and listens":
       block:
         var

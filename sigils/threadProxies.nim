@@ -96,9 +96,10 @@ method callMethod*(
       discard
     else:
       debugPrint "\t callMethod:agentProxy:proxyTwin: ", proxy.proxyTwin
-      proxy.proxyTwin[].inbox.send(msg)
-      withLock proxy.remoteThread[].signaledLock:
-        proxy.remoteThread[].signaled.incl(proxy.proxyTwin.toKind(AgentRemote))
+      withLock proxy.lock:
+        proxy.proxyTwin[].inbox.send(msg)
+        withLock proxy.remoteThread[].signaledLock:
+          proxy.remoteThread[].signaled.incl(proxy.proxyTwin.toKind(AgentRemote))
       proxy.remoteThread[].send(ThreadSignal(kind: Trigger))
 
 method removeSubscriptionsFor*(
