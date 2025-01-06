@@ -24,14 +24,7 @@ template `{}`*[T](r: WeakRef[T]): auto =
 template isNil*[T](r: WeakRef[T]): bool =
   r.pt == nil
 
-proc unsafeWeakRef*[T](obj: T): WeakRef[T] =
-  when defined(sigilsWeakRefCursor):
-    let pt: WeakRef[pointer] = WeakRef[pointer](pt: cast[pointer](obj))
-    result = cast[WeakRef[T]](pt)
-  else:
-    result = WeakRef[T](pt: cast[pointer](obj))
-
-proc unsafeWeakRef*[T](obj: ptr T): WeakRef[T] =
+proc unsafeWeakRef*[T: ref](obj: T): WeakRef[T] =
   when defined(sigilsWeakRefCursor):
     let pt: WeakRef[pointer] = WeakRef[pointer](pt: cast[pointer](obj))
     result = cast[WeakRef[T]](pt)
