@@ -97,6 +97,7 @@ var localSigilThread {.threadVar.}: ptr SigilThread
 proc newSigilThread*(): ptr SigilThreadImpl =
   echo "newSigilThread"
   result = cast[ptr SigilThreadImpl](allocShared0(sizeof(SigilThreadImpl)))
+  result[] = SigilThreadImpl()
   result[].inputs = newSigilChan()
   result[].id = -1
 
