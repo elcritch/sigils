@@ -59,6 +59,13 @@ type
     inputs*: SigilChan
     thr*: Thread[ptr SigilThread]
 
+proc repr*(obj: SigilThread): string =
+  when defined(sigilsDebug):
+    let dname = "name: " & obj.debugName & ", "
+  else:
+    let dname = ""
+
+  result = fmt"SigilThread(id: {$obj.id}, {dname}signaled: {$obj.signaled.len} agent: {$obj.agent.unsafeWeakRef} )"
 
 proc newSigilChan*(): SigilChan =
   result = newChan[ThreadSignal](1_000)
