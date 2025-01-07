@@ -15,7 +15,6 @@ import threading/channels
 type
   SomeAction* = ref object of Agent
     value: int
-    lock: SysLock
 
   Counter* = ref object of Agent
     value: int
