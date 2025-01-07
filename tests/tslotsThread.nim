@@ -453,7 +453,7 @@ suite "threaded agent slots":
           echo "polled: ", polled
           when defined(extraLoopTests):
             let m = 10
-            let n = 200
+            let n = 1_000
           elif defined(debug):
             let m = 2
             let n = 2
@@ -467,7 +467,7 @@ suite "threaded agent slots":
               when defined(debug):
                 echo "Loop: ", i, ".", j, " (th: ", getThreadId(), ")"
               else:
-                if j mod n == 0:
+                if j mod 100 == 0:
                   echo "Loop: ", i, ".", j, " (th: ", getThreadId(), ")"
               a.value = 0
               var b = Counter.new()
