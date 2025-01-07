@@ -16,9 +16,7 @@ proc toRef*[T: ref](obj: WeakRef[T]): T =
 type
   AgentObj = object of RootObj
     subcriptionsTable*: Table[int, WeakRef[Agent]] ## agents listening to me
-    when defined(debug):
-      freed*: bool
-      moved*: bool
+    freedByThread*: int
 
   Agent* = ref object of AgentObj
   # Agent* {.acyclic.} = ref object of AgentObj ## this also avoids the issue
@@ -32,15 +30,14 @@ proc `=destroy`*(agentObj: AgentObj) =
     ## This is pretty hacky, but we need to get the address of the original
     ## Agent (ref object) since it's used to unsubscribe from other agents in the actual code,
     ## Luckily the agent address is the same as `addr agent` of the agent object here.
-  when defined(sigilsWeakRefCursor):
-    echo "Destroying agent: ",
-            " pt: ", cast[pointer](xid.pt).repr,
-            " freed: ", agentObj.freed,
-            " lstCnt: ", xid[].subcriptionsTable.len()
-    if agentObj.freed:
-      raise newException(Defect, "already freed!")
+  echo "Destroying agent: ",
+          " pt: ", cast[pointer](xid.pt).repr,
+          " freed: ", agentObj.freedByThread,
+          " lstCnt: ", xid[].subcriptionsTable.len()
+  if agentObj.freedByThread != 0:
+    raise newException(Defect, "already freed!")
 
-    xid[].freed = true
+  xid[].freedByThread = getThreadId()
 
   ## remove subcriptionsTable via their WeakRef's
   ## this is where we create a problem

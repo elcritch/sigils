@@ -2,6 +2,7 @@ import std/isolation
 import std/unittest
 import std/os
 import std/sequtils
+import threading/atomics
 
 import sigils
 import sigils/threads
@@ -23,17 +24,20 @@ type
   InnerC = object
     id: int
 
-var globalLastInnerADestroyed = 0
+var globalLastInnerADestroyed: Atomic[int]
+globalLastInnerADestroyed.store(0)
 proc `=destroy`*(obj: InnerA) = 
   if obj.id != 0:
     echo "destroyed InnerA!"
-  globalLastInnerADestroyed = obj.id
+  globalLastInnerADestroyed.store obj.id
 
-var globalLastInnerCDestroyed = 0
+var globalLastInnerCDestroyed: Atomic[int]
+globalLastInnerCDestroyed.store(0)
+
 proc `=destroy`*(obj: InnerC) = 
   if obj.id != 0:
     echo "destroyed InnerC!"
-  globalLastInnerCDestroyed = obj.id
+  globalLastInnerCDestroyed.store obj.id
 
 proc valueChanged*(tp: SomeAction, val: int) {.signal.}
 proc updated*(tp: Counter, final: int) {.signal.}
@@ -49,19 +53,20 @@ proc setValue*(self: Counter, value: int) {.slot.} =
     os.sleep(1)
   emit self.updated(self.value)
 
-var globalCounter = 0
+var globalCounter: Atomic[int]
+globalCounter.store(0)
 
 proc setValueGlobal*(self: Counter, value: int) {.slot.} =
   echo "setValueGlobal! ", value, " id: ", self.getId().int, " (th: ", getThreadId(), ")"
   if self.value != value:
     self.value = value
-  globalCounter = value
+  globalCounter.store(value)
 
-var globalLastTicker = 0
+var globalLastTicker: Atomic[int]
 proc ticker*(self: Counter) {.slot.} =
   for i in 3..3:
     echo "tick! i:", i, " ", self.unsafeWeakRef(), " (th: ", getThreadId(), ")"
-    globalLastTicker = i
+    globalLastTicker.store i
     # printConnections(self)
     emit self.updated(i)
 
@@ -87,6 +92,16 @@ suite "threaded agent slots":
       Counter.setValue().pointer: "setValue",
       setValueGlobal.pointer: "setValueGlobal",
     }.toTable()
+
+  when true:
+    test "simple thread setup":
+
+      let ct = newSigilThread()
+      check not ct.isNil
+
+      var a = SomeAction.new()
+      ct[].send(ThreadSignal(kind: Move, item: move a))
+
 
   when true:
     test "simple threading test":
@@ -144,7 +159,6 @@ suite "threaded agent slots":
   when true:
     test "agent connect a->b then moveToThread then destroy proxy":
       # debugPrintQuiet = true
-      let ct = getCurrentSigilThread()
       var
         a = SomeAction(debugName: "A")
       when defined(sigilsDebug):
@@ -189,21 +203,21 @@ suite "threaded agent slots":
 
         emit a.valueChanged(568)
         os.sleep(1)
-        check globalCounter == 568
+        check globalCounter.load() == 568
       echo "block done"
       # printConnections(a)
 
       # check a is disconnected
       check not a.hasConnections()
       emit a.valueChanged(111)
-      check globalCounter == 568
+      check globalCounter.load() == 568
 
       for i in 1..10:
-        if globalLastInnerCDestroyed == 2020: break
+        if globalLastInnerCDestroyed.load == 2020: break
         os.sleep(1)
-      check globalLastInnerCDestroyed == 2020
+      check globalLastInnerCDestroyed.load == 2020
 
-  when false:
+  when true:
     test "agent connect b->a then moveToThread then destroy proxy":
       debugPrintQuiet = false
 
@@ -236,7 +250,7 @@ suite "threaded agent slots":
         echo "\n==== moveToThread"
         let bp: AgentProxy[Counter] = b.moveToThread(thread)
         brightPrint "obj bp: ", $bp.unsafeWeakRef()
-        connect(thread[], started, bp.getRemote()[], ticker)
+        connect(thread[].agent, started, bp.getRemote()[], ticker)
 
         printConnections(a)
         printConnections(bp)
@@ -260,9 +274,9 @@ suite "threaded agent slots":
         thread.start()
 
         for i in 1..3:
-          if globalLastTicker != 3:
+          if globalLastTicker.load != 3:
             os.sleep(1)
-        check globalLastTicker == 3
+        check globalLastTicker.load == 3
         ct[].poll()
         let polled = ct[].pollAll()
         echo "polled: ", polled
@@ -271,7 +285,7 @@ suite "threaded agent slots":
       
       echo "outer done"
 
-  when false:
+  when true:
     test "agent connect then moveToThread and run":
       var
         a = SomeAction.new()
@@ -302,7 +316,7 @@ suite "threaded agent slots":
       GC_fullCollect()
 
   # when true:
-  when false:
+  when true:
     test "agent move to thread then connect and run":
 
       var
@@ -342,7 +356,7 @@ suite "threaded agent slots":
         echo "a.listening: ", a.listening
       GC_fullCollect()
 
-  when false:
+  when true:
     test "sigil object thread runner multiple emits":
       block:
         # echo "thread runner!", " (main thread:", getThreadId(), ")"
@@ -385,7 +399,7 @@ suite "threaded agent slots":
 
         # ct[].poll()
         # check a.value == 628
-  when false:
+  when true:
     test "sigil object thread runner multiple emit and listens":
       block:
         var
@@ -426,7 +440,7 @@ suite "threaded agent slots":
       GC_fullCollect()
 
 
-  when false:
+  when true:
     test "sigil object thread runner (loop)":
       block:
         block:
@@ -481,7 +495,7 @@ suite "threaded agent slots":
         GC_fullCollect()
       GC_fullCollect()
 
-  when false:
+  when true:
     test "sigil object one way runner (loop)":
       let ct = getCurrentSigilThread()
       block:

@@ -18,11 +18,16 @@ type
     remote*: WeakRef[Agent]
     proxyTwin*: WeakRef[AgentProxyShared]
     lock*: Lock
-    remoteThread*: SharedPtr[SigilThread]
+    remoteThread*: ptr SigilThread
 
   AgentProxy*[T] = ref object of AgentProxyShared
 
 proc `=destroy`*(obj: var typeof(AgentProxyShared()[])) =
+  when defined(sigilsWeakRefPointer):
+    let agent = WeakRef[AgentRemote](pt: cast[pointer](addr obj))
+  else:
+    let pt: WeakRef[pointer] = WeakRef[pointer](pt: cast[pointer](addr obj))
+    let agent = cast[WeakRef[AgentRemote]](pt)
   debugPrint "PROXY Destroy: ", cast[AgentProxyShared](addr(obj)).unsafeWeakRef()
   `=destroy`(toAgentObj(cast[AgentProxyShared](addr obj)))
 
@@ -33,6 +38,8 @@ proc `=destroy`*(obj: var typeof(AgentProxyShared()[])) =
   if not obj.proxyTwin.isNil:
     withLock obj.proxyTwin[].lock:
       obj.proxyTwin[].proxyTwin.pt = nil
+      withLock obj.proxyTwin[].remoteThread[].signaledLock:
+        obj.proxyTwin[].remoteThread[].signaled.excl(agent)
   try:
     let
       thr = obj.remoteThread
@@ -63,11 +70,15 @@ method callMethod*(
     var req = req.deepCopy()
     debugPrint "\t proxy:callMethod:remoteSlot: ", "req: ", $req
     debugPrint "\t proxy:callMethod:remoteSlot: ", "proxy.remote: ", $proxy.remote
+    var pt: WeakRef[AgentProxyShared]
+    withLock proxy.lock:
+      pt = proxy.proxyTwin
+
     var msg = isolateRuntime ThreadSignal(
       kind: Call,
       slot: localSlot,
       req: move req,
-      tgt: proxy.proxyTwin.toKind(Agent)
+      tgt: pt.toKind(Agent)
     )
     debugPrint "\t proxy:callMethod:remoteSlot: ", "msg: ", $msg, " proxyTwin: ", $proxy.proxyTwin
     when defined(sigilsDebug) or defined(debug):
@@ -92,9 +103,10 @@ method callMethod*(
       discard
     else:
       debugPrint "\t callMethod:agentProxy:proxyTwin: ", proxy.proxyTwin
-      proxy.proxyTwin[].inbox.send(msg)
-      withLock proxy.remoteThread[].signaledLock:
-        proxy.remoteThread[].signaled.incl(proxy.proxyTwin.toKind(AgentRemote))
+      withLock proxy.lock:
+        proxy.proxyTwin[].inbox.send(msg)
+        withLock proxy.remoteThread[].signaledLock:
+          proxy.remoteThread[].signaled.incl(proxy.proxyTwin.toKind(AgentRemote))
       proxy.remoteThread[].send(ThreadSignal(kind: Trigger))
 
 method removeSubscriptionsFor*(
@@ -131,7 +143,7 @@ proc findSubscribedToSignals(
 
 proc moveToThread*[T: Agent, R: SigilThread](
     agentTy: var T,
-    thread: SharedPtr[R]
+    thread: ptr R
 ): AgentProxy[T] =
   ## move agent to another thread
   debugPrint "moveToThread: ", $agentTy.unsafeWeakRef()

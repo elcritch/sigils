@@ -41,8 +41,8 @@ plock.initLock()
 proc debugPrintImpl*(msgs: varargs[string, `$`]) {.raises: [].} =
   {.cast(gcsafe).}:
       try:
-        withLock plock:
-        # block:
+        # withLock plock:
+        block:
           let
             tid = getThreadId()
             color =
@@ -108,7 +108,7 @@ else:
 proc `$`*[T: Agent](obj: WeakRef[T]): string =
   result = "Weak["
   when defined(sigilsDebug):
-    if obj.pt == nil:
+    if obj.isNil:
       result &= "nil"
     else:
       result &= obj[].debugName
@@ -116,7 +116,7 @@ proc `$`*[T: Agent](obj: WeakRef[T]): string =
   result &= $(T)
   result &= "]"
   result &= "(0x"
-  if obj.pt == nil:
+  if obj.isNil:
     result &= "nil"
   else:
     result &= obj.toPtr().repr
@@ -162,9 +162,9 @@ method unregisterSubscriber*(
   debugPrint &"   unregisterSubscriber:agent: self: {$self.unsafeWeakRef()}"
   unregisterSubscriberImpl(self, listener)
 
-proc unsubscribeFrom*(self: WeakRef[Agent], listening: HashSet[WeakRef[Agent]]) =
+template unsubscribeFrom*(self: WeakRef[Agent], listening: HashSet[WeakRef[Agent]]) =
   ## unsubscribe myself from agents I'm subscribed (listening) to
-  debugPrint fmt"   unsubscribeFrom:cnt: {$listening.len()} self: {$self}"
+  debugPrint "   unsubscribeFrom:cnt: ", $listening.len(), " self: {$self}"
   for agent in listening:
     agent[].removeSubscriptionsFor(self)
 
@@ -179,10 +179,11 @@ template removeSubscriptions*(
       subscription.tgt[].unregisterSubscriber(agent)
 
 proc `=destroy`*(agentObj: AgentObj) {.forbids: [DestructorUnsafe].} =
-  when defined(sigilsWeakRefCursor):
-    let agent: WeakRef[Agent] = WeakRef[Agent](pt: cast[Agent](addr agentObj))
-  else:
+  when defined(sigilsWeakRefPointer):
     let agent: WeakRef[Agent] = WeakRef[Agent](pt: cast[pointer](addr agentObj))
+  else:
+    let pt: WeakRef[pointer] = WeakRef[pointer](pt: cast[pointer](addr agentObj))
+    let agent: WeakRef[Agent] = cast[WeakRef[Agent]](pt)
 
   debugPrint &"destroy: agent: ",
           &" pt: {$agent}",
@@ -192,7 +193,7 @@ proc `=destroy`*(agentObj: AgentObj) {.forbids: [DestructorUnsafe].} =
   # debugPrint "destroy agent: ", getStackTrace().replace("\n", "\n\t")
   when defined(debug) or defined(sigilsDebug):
     assert agentObj.freedByThread == 0
-    agent[].freedByThread = getThreadId()
+    agent{}.freedByThread = getThreadId()
 
   agent.unsubscribeFrom(agentObj.listening)
   agent.removeSubscriptions(agentObj.subcriptionsTable)
@@ -201,7 +202,7 @@ proc `=destroy`*(agentObj: AgentObj) {.forbids: [DestructorUnsafe].} =
   `=destroy`(agent[].listening)
   debugPrint "\tfinished destroy: agent: ", " pt: ", $agent
   when defined(sigilsDebug):
-    `=destroy`(agent[].debugName)
+    `=destroy`(agent{}.debugName)
 
 template toAgentObj*[T: Agent](agent: T): AgentObj =
   Agent(agent)[]

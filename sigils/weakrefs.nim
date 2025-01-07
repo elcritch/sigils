@@ -3,28 +3,46 @@ import std/[hashes, isolation]
 type DestructorUnsafe* = object ## input/output effect
 
 type WeakRef*[T] {.acyclic.} = object
-  # pt* {.cursor.}: T
-  pt*: pointer
   ## type alias descring a weak ref that *must* be cleaned up
   ## when it's actual object is set to be destroyed
+  when defined(sigilsWeakRefPointer):
+    pt*: pointer
+  else:
+    pt* {.cursor.}: T
 
-template `[]`*[T](r: WeakRef[T]): lent T =
-  cast[T](r.pt)
+proc `=destroy`*[T](obj: WeakRef[T]) =
+  discard
+proc `=copy`*[T](dst: var WeakRef[T], src: WeakRef[T]) =
+  dst.pt = src.pt
+
+proc `==`*[T](x, y: WeakRef[T]): bool =
+  x.pt == y.pt
+
+proc `[]`*[T](r: WeakRef[T]): lent T {.inline.} =
+  when defined(sigilsWeakRefPointer):
+    cast[T](r.pt)
+  else:
+    r.pt
+
+template `{}`*[T](r: WeakRef[T]): auto =
+  cast[
+    ptr typeof(T()[]) 
+  ](r.pt)
 
 template isNil*[T](r: WeakRef[T]): bool =
   r.pt == nil
 
-proc unsafeWeakRef*[T](obj: T): WeakRef[T] =
-  when defined(sigilsWeakRefCursor):
-    result = WeakRef[T](pt: obj)
-  else:
+proc unsafeWeakRef*[T: ref](obj: T): WeakRef[T] =
+  when defined(sigilsWeakRefPointer):
     result = WeakRef[T](pt: cast[pointer](obj))
+  else:
+    let pt: WeakRef[pointer] = WeakRef[pointer](pt: cast[pointer](obj))
+    result = cast[WeakRef[T]](pt)
 
 proc unsafeWeakRef*[T](obj: WeakRef[T]): WeakRef[T] =
   result = obj
 
-proc verifyUnique*[T: WeakRef, V](field: T, parent: V) =
-  discard # "verifyUnique: skipping weakref: ", $T
+proc verifyUniqueSkip*(tp: typedesc[WeakRef]) = discard
 
 proc toPtr*[T](obj: WeakRef[T]): pointer =
   result = cast[pointer](obj.pt)

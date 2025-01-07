@@ -1,5 +1,6 @@
 import std/strformat
 import std/isolation
+import threading/smartptrs
 
 import weakrefs
 export isolation
@@ -42,14 +43,16 @@ import std/private/syslocks
 proc verifyUniqueSkip(tp: typedesc[SysLock]) = discard
 
 proc verifyUnique[T, V](field: T, parent: V) =
-  mixin verifyUnique
+  # mixin verifyUnique
   when T is ref:
     # static:
     #   echo "verifyUnique: ref: ", $T
-    if not field.isNil and not field.isUniqueRef():
-      raise newException(IsolationError, &"reference not unique! Cannot safely isolate {$typeof(field)} parent: {$typeof(parent)} ")
-    for v in field[].fields():
-      verifyUnique(v, parent)
+    if not field.isNil:
+      if not field.isUniqueRef():
+        echo "verifyUnique: count: ", field.unsafeGcCount(), " ", field.repr
+        raise newException(IsolationError, &"reference not unique! Cannot safely isolate {$typeof(field)} parent: {$typeof(parent)} ")
+      for v in field[].fields():
+        verifyUnique(v, parent)
   elif T is tuple or T is object:
     when compiles(verifyUniqueSkip(T)):
       # static:
@@ -67,9 +70,13 @@ proc verifyUnique[T, V](field: T, parent: V) =
     #   echo "verifyUnique: skip: ", $T
     discard
 
-proc isolateRuntime*[T](item: T): Isolated[T] {.raises: [IsolationError].} =
+
+# proc isolateRuntime*[T](item: sink T): Isolated[T] {.raises: [IsolationError].} =
+proc isolateRuntime*[T](item: sink T): Isolated[T] =
   ## Isolates a ref type or type with ref's and ensure that
   ## each ref is unique. This allows safely isolating it.
+  when T is ref:
+    echo "isolateRuntime:call: ", item.unsafeGcCount()
   when compiles(isolate(item)):
     # static:
     #   echo "\n### IsolateRuntime: compile isolate: ", $T
@@ -79,3 +86,7 @@ proc isolateRuntime*[T](item: T): Isolated[T] {.raises: [IsolationError].} =
     #   echo "\n### IsolateRuntime: runtime isolate: ", $T
     verifyUnique(item, item)
     result = unsafeIsolate(item)
+
+proc isolateRuntime*[T](item: SharedPtr[T]): Isolated[SharedPtr[T]] =
+  var item = item
+  unsafeIsolate(move item)

@@ -5,18 +5,19 @@ import std/sequtils
 
 import sigils
 import sigils/isolateutils
+import sigils/weakrefs
 
 import std/private/syslocks
 
+import threading/smartptrs
+import threading/channels
 
 type
   SomeAction* = ref object of Agent
     value: int
-    lock: SysLock
 
   Counter* = ref object of Agent
     value: int
-
 
 proc valueChanged*(tp: SomeAction, val: int) {.signal.}
 proc updated*(tp: Counter, final: int) {.signal.}
@@ -50,9 +51,13 @@ suite "isolate utils":
         value: TestRef
 
     var
-      a = SomeAction()
-      isoA = isolateRuntime(a)
-    check isoA.extract() == a
+      a = SomeAction(value: 10)
+    
+    echo "A: ", a.unsafeGcCount()
+    var
+      isoA = isolateRuntime(move a)
+    check a.isNil
+    check isoA.extract().value == 10
 
     var
       b = 33
@@ -81,3 +86,90 @@ suite "isolate utils":
       f = TestInner()
     var isoF = isolateRuntime(f)
     check isoF.extract() == f
+
+type
+  NonCopy = object
+
+  Foo = object of RootObj
+    id: int
+
+  BarImpl = object of Foo
+    value: int
+    # thr: Thread[int]
+    # ch: Chan[int]
+
+proc `=copy`*(a: var NonCopy; b: NonCopy) {.error.}
+
+method test*(obj: Foo) {.base.} =
+  echo "foo: ", obj.repr
+
+method test*(obj: BarImpl) =
+  echo "barImpl: ", obj.repr
+
+proc newBarImpl*(): SharedPtr[BarImpl] =
+  var thr = BarImpl(id: 1234)
+  result = newSharedPtr(thr)
+
+var localFoo {.threadVar.}: SharedPtr[Foo]
+
+proc toFoo*[R: Foo](t: SharedPtr[R]): SharedPtr[Foo] =
+  cast[SharedPtr[Foo]](t)
+
+proc startLocalFoo*() =
+  echo "startLocalFoo"
+  if localFoo.isNil:
+    var st = newBarImpl()
+    localFoo = st.toFoo()
+  echo "startLocalThread: ", localFoo.repr
+
+proc getCurrentFoo*(): SharedPtr[Foo] =
+  echo "getCurrentFoo"
+  startLocalFoo()
+  assert not localFoo.isNil
+  return localFoo
+
+suite "isolate utils":
+  when false:
+    test "test foos":
+      var b = BarImpl(id: 34, value: 101)
+      var a: Foo
+      a = b
+      b.test()
+      a.test()
+      echo "a: ", a.repr
+
+    test "test lets":
+      let b = BarImpl(id: 34, value: 101)
+      let a: Foo = b
+      let c: Foo = a
+      b.test()
+      a.test()
+      c.test()
+      echo "a: ", a.repr
+
+  test "test ptr":
+    # var b = BarImpl(id: 34, value: 101)
+    var bp: ptr BarImpl = cast[ptr BarImpl](allocShared0(sizeof(BarImpl)))
+
+    bp[] = BarImpl(id: 34, value: 101)
+    var ap: ptr Foo = bp
+
+    bp[].test()
+    ap[].test()
+    check bp[].id == 34
+    check bp[].value == 101
+    let d = Foo(id: 56)
+    d.test()
+
+    proc testValue(bar: var BarImpl): int =
+      bar.value
+    
+    check bp[].testValue() == 101
+
+  test "isolateRuntime sharedPointer":
+    echo "test"
+
+    # let test = getCurrentFoo()
+    # echo "test: ", test
+    # check not test.isNil
+    # check test[].id == 1234
