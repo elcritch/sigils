@@ -132,7 +132,7 @@ template connectTo*(
     a: Agent,
     signal: typed,
     blk: typed
-): auto =
+): ClosureAgent =
 
   closureTyp(blk)
 
@@ -153,6 +153,6 @@ template connectTo*(
   closureSlot(typeof(fnSig), fnInst)
 
   let agent = ClosureAgent[typeof(signalType)]()
-  # echo "fnSlot: type: ", typeof(fnSlot)
+  echo "fnSlot: type: ", typeof(fnSlot)
 
   agent
