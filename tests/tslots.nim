@@ -157,7 +157,7 @@ when isMainModule:
             base = a
         e = c1.rawEnv()
         p = c1.rawProc()
-        cc = ClosureRunner[proc (a: int) {.nimcall.}](rawEnv: e, rawProc: p)
+        cc = ClosureRunner[proc (a: int)](rawEnv: e, rawProc: p)
       connect(a, valueChanged, cc, ClosureRunner[proc (a: int) {.nimcall.}].callClosure)
 
       a.setValue(42)

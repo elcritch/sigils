@@ -2,7 +2,8 @@ import signals
 import slots
 import agents
 
-from system/ansi_c import c_raise
+when defined(sigilsDebug):
+  from system/ansi_c import c_raise
 
 export signals, slots, agents
 
