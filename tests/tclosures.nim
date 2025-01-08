@@ -73,8 +73,5 @@ suite "agent closure slots":
     )
 
     echo "cc3: Type: ", $typeof(cc3)
-
     emit a.valueChanged(42)
-
-    echo "done: "
     check base == 42
