@@ -22,6 +22,7 @@ proc setValue*(self: Counter, value: int) {.slot.} =
 
 import unittest
 import std/sequtils
+import std/macros
 
 suite "agent closure slots":
 
@@ -64,19 +65,20 @@ suite "agent closure slots":
       a {.used.} = Counter.new()
       base = 100
 
-    let
-      cc = newClosureAgent(
-            proc (a: int) {.closure.} =
-              base = a
-          )
-      cc2 = newClosureAgent() do (a: int) {.closure.}:
-              base = a
-      # cc2 = closure(a: int):
-      #         base = aw
+    expandMacros:
+      let
+        cc = newClosureAgent(
+              proc (a: int) {.closure.} =
+                base = a
+            )
+        cc2 = newClosureAgent() do (a: int) {.closure.}:
+                base = a
+        # cc2 = closure(a: int):
+        #         base = aw
 
-      cc3 = connectTo(a, valueChanged) do (val: int):
-          base = val
-    
+        cc3 = connectTo(a, valueChanged) do (val: int):
+            base = val
+      
     check not compiles(
       connectTo(a, valueChanged) do (val: float):
           base = val

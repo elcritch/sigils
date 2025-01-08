@@ -42,7 +42,7 @@ macro closureTyp(blk: typed) =
     blk = blk.copyNimTree()
     params = blk.params
     sigParams = blk.params.copyNimTree()
-  sigParams.del(0)
+  # sigParams.del(0, 1)
 
   # blk.addPragma(ident "closure")
   for i in 1 ..< params.len:
@@ -58,6 +58,8 @@ macro closureTyp(blk: typed) =
     fnSlot = ident("fnSlot")
     paramsIdent = ident("args")
     paramSetups = mkParamsVars(paramsIdent, genSym(ident="fnApply"), sigParams)
+    c1 = ident"c1"
+    c2 = ident"c2"
 
   var fnCall1 = getTypeImpl(blk).copyNimTree()
   fnCall1.addPragma(ident "nimcall")
@@ -67,36 +69,36 @@ macro closureTyp(blk: typed) =
   echo "FN CALL1: ", fnCall1.lispRepr
   echo "FN CALL2: ", fnCall2.repr
   echo "FN CALL2: ", fnCall2.lispRepr
+  echo "FN paramSetups: ", paramSetups.treeRepr
 
   let mcall = nnkCall.newTree(fnInst)
   for param in params[1 ..^ 1]:
     mcall.add param[0]
+  echo "FN MCALL: ", mcall.repr
 
   result = quote do:
     var `fnSig`: `signalTyp`
     var `fnInst`: `fnTyp` = `blk`
 
-    var `fnSlot`: AgentProc =
-      proc(context: Agent, params: SigilParams) {.nimcall.} =
-        let `self` = ClosureAgent[`signalTyp`](context)
-        if `self` == nil:
-          raise newException(ConversionError, "bad cast")
-        if context == nil:
-          raise newException(ValueError, "bad value")
-        when `signalTyp` isnot tuple[]:
-          var `paramsIdent`: `signalTyp`
-          rpcUnpack(`paramsIdent`, params)
-        `paramSetups`
-        let rawProc: pointer = `self`.rawProc
-        # if `self`.rawEnv.isNil():
-        #   let c2 = cast[`fnCall1`](rawProc)
-        #   # c2(value)
-        #   discard
-        # else:
-        let c3 = cast[`fnCall2`](rawProc)
-        # c3(value, `self`.rawEnv)
-        # `mcall`
-        discard
+    let `fnSlot`: AgentProc = proc(context: Agent, params: SigilParams) {.nimcall.} =
+      let `self` = ClosureAgent[`signalTyp`](context)
+      if `self` == nil:
+        raise newException(ConversionError, "bad cast")
+      if context == nil:
+        raise newException(ValueError, "bad value")
+      var `paramsIdent`: `signalTyp`
+      rpcUnpack(`paramsIdent`, params)
+      # `paramSetups`
+      # let rawProc: pointer = `self`.rawProc
+      # if `self`.rawEnv.isNil():
+      #   let `c1` = cast[`fnCall1`](rawProc)
+      #   `c1`()
+      #   discard
+      # else:
+      #   let `c2` = cast[`fnCall2`](rawProc)
+      #   # c3(value, `self`.rawEnv)
+      #   # `mcall`
+      #   discard
 
   echo "CALL:\n", repr(result)
 
