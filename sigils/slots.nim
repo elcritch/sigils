@@ -18,7 +18,7 @@ iterator paramsIter(params: NimNode): tuple[name, ntype: NimNode] =
     for j in 0 ..< arg.len - 2:
       yield (arg[j], argType)
 
-proc mkParamsVars(paramsIdent, paramsType, params: NimNode): NimNode =
+proc mkParamsVars*(paramsIdent, paramsType, params: NimNode): NimNode =
   ## Create local variables for each parameter in the actual RPC call proc
   if params.isNil:
     return

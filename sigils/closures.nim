@@ -41,7 +41,9 @@ macro closureTyp(blk: typed) =
     signalTyp = nnkTupleConstr.newTree()
     blk = blk.copyNimTree()
     params = blk.params
-  
+    sigParams = blk.params.copyNimTree()
+  sigParams.del(0)
+
   # blk.addPragma(ident "closure")
   for i in 1 ..< params.len:
     signalTyp.add params[i][1]
@@ -49,17 +51,35 @@ macro closureTyp(blk: typed) =
   echo "CC:: signalTyp from blk: ", repr signalTyp
   echo "CC:: signalTyp from blk: ", repr signalTyp
   let
+    objId = ident"obj"
     fnSig = ident("fnSig")
     fnInst = ident("fnInst")
     fnTyp = getTypeImpl(blk)
     fnSlot = ident("fnSlot")
+    paramsIdent = ident("args")
+    paramSetups = mkParamsVars(paramsIdent, genSym(ident="fnApply"), sigParams)
+
+  let mcall = nnkCall.newTree(fnInst)
+  for param in params[1 ..^ 1]:
+    mcall.add param[0]
+
   result = quote do:
     var `fnSig`: `signalTyp`
     var `fnInst`: `fnTyp` = `blk`
 
     var `fnSlot`: AgentProc =
       proc(context: Agent, params: SigilParams) {.nimcall.} =
-        discard
+        let `objId` = ClosureAgent[`signalTyp`](context)
+        if `objId` == nil:
+          raise newException(ConversionError, "bad cast")
+        if context == nil:
+          raise newException(ValueError, "bad value")
+        when `signalTyp` isnot tuple[]:
+          var `paramsIdent`: `signalTyp`
+          rpcUnpack(`paramsIdent`, params)
+        `paramSetups`
+        `mcall`
+  echo "CALL:\n", repr(result)
 
 template connectTo*(
     a: Agent,
