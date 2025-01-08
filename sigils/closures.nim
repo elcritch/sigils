@@ -83,6 +83,8 @@ template connectTo*(
     signal: typed,
     blk: typed
 ): ClosureAgent =
+  ## creates an anonymous agent and slot that calls the given closure
+  ## when the `signal` event is emitted. 
 
   closureTyp(blk)
 
@@ -100,9 +102,6 @@ template connectTo*(
     e = fnInst.rawEnv()
     p = fnInst.rawProc()
   let agent = ClosureAgent[typeof(signalType)](rawEnv: e, rawProc: p)
-  echo "fnSlot: type: ", typeof(fnSlot)
-  echo "fnSlot: signal: ", signalName(signal)
-  echo "fnSlot: proc: ", repr(fnSlot)
   a.addSubscription(signalName(signal), agent, fnSlot)
 
   agent
