@@ -34,7 +34,7 @@ proc newClosureAgent*[T: proc {.closure.}](fn: T): ClosureAgent[T] =
 
 macro closureTyp(blk: typed) =
   echo "CC:: blk:tp: ", repr getTypeImpl(blk)
-  echo "CC:: blk: ", treeRepr(blk)
+  # echo "CC:: blk: ", treeRepr(blk)
   echo "CC:: blk:params: ", treeRepr(blk.params)
 
   var
@@ -58,7 +58,7 @@ macro closureTyp(blk: typed) =
     var `fnInst`: `fnTyp` = `blk`
 
   echo "<<<CALL:\n", repr(result)
-  echo ">>>"
+  echo ">>>\n"
 
 macro closureSlotImpl(fnSig, fnInst: typed) =
   echo ""
@@ -89,20 +89,30 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
     paramSetups = mkParamsVars(paramsIdent, genSym(ident="fnApply"), sigParams)
     c1 = ident"c1"
     c2 = ident"c2"
+    e = ident"e"
 
-  let fnCallEx = quote do:
-    proc () {.nimcall.}
-  echo "FN CALL:EX: ", fnCallEx.repr
-  echo "FN CALL:EX: ", fnCallEx.treeRepr
-  var fnSigCall1 = fnCallEx.copyNimTree()
+  var
+    fnSigCall1 = quote do:
+      proc () {.nimcall.}
+    fnCall1 = nnkCall.newTree(c1)
   for idx, param in params[1 ..^ 1]:
     fnSigCall1.params.add(newIdentDefs(ident("a" & $idx), param[1]))
+    let i = newLit(idx)
+    fnCall1.add quote do:
+      `paramsIdent`[`i`]
+  echo "FN SIGCALL1: ", fnSigCall1.repr
+  echo "FN SIGCALL1: ", fnSigCall1.treeRepr
+  echo "FN CALL1: ", fnCall1.repr
+  echo "FN CALL1: ", fnCall1.treeRepr
 
-  var fnSigCall2 = fnSigCall1.copyNimTree()
-  fnSigCall2.params.add(newIdentDefs(ident("e"), ident("pointer")))
-  echo "FN CALL1: ", fnSigCall1.repr
-  echo "FN CALL1: ", fnSigCall1.treeRepr
-  echo "FN CALL2: ", fnSigCall2.repr
+  var
+    fnSigCall2 = fnSigCall1.copyNimTree()
+    fnCall2 = fnCall1.copyNimTree()
+  fnSigCall2.params.add(newIdentDefs(e, ident("pointer")))
+  fnCall2[0] = c2
+  fnCall2.add(e)
+
+  echo "FN SIGCALL2: ", fnSigCall2.repr
   # echo "FN CALL2: ", fnSigCall2.lispRepr
   echo "FN paramSetups: ", paramSetups.treeRepr
 
