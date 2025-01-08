@@ -12,7 +12,6 @@ type
 # const optag  optag_exn_raise  = { effect_exn, 1 };
 
 type
-  Allocation* = object
   Resume* = object
   OpTag* = object
     name: cstring
@@ -52,8 +51,11 @@ const exn_ops = [
 # const exn_def: handlerdef = { EFFECT(exn), NULL, NULL, NULL, _exn_ops };
 # proc my_exn_handle(action: proc (arg: pointer): pointer, arg: pointer): pointer =
 #   return handle(addr exn_def, nil, action, arg)
+type
+  Cont* = object
+  Allocation*[T] = object
 
-proc new*[T](obj: var T) {.tags: [Allocation].} =
+proc new*[T](obj: var T) {.tags: [Allocation[T]].} =
   discard
 
 proc newFoo*(value: int): Foo =
@@ -72,7 +74,7 @@ proc main*() =
   withEffects:
     let f = newFoo(23)
     echo "f: ", f.value, " at 0x", cast[pointer](f).repr
-  except Allocation as (r: Resume, local: pointer, arg: pointer):
+  except Allocation[T] as (r: ptr Cont, local, arg: var T):
     echo "allocation: "
 
 main()
