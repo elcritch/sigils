@@ -1,6 +1,7 @@
 import sigils/signals
 import sigils/slots
 import sigils/core
+import sigils/closures
 
 type
   Counter* = ref object of Agent
@@ -22,7 +23,7 @@ import std/sequtils
 
 suite "agent closure slots":
 
-  test "callback creation":
+  test "callback manual creation":
     type
       ClosureRunner[T] = ref object of Agent
         rawEnv: pointer
@@ -54,3 +55,7 @@ suite "agent closure slots":
 
     check a.value == 42
     check base == 42
+
+  test "callback creation":
+
+    discard
