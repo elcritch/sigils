@@ -104,7 +104,10 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
       rpcUnpack(`paramsIdent`, params)
       let rawProc: pointer = `self`.rawProc
       let `e`: pointer = `self`.rawEnv
-      if `self`.rawEnv.isNil():
+      echo "closureAgent: ", `self`.isNil
+      echo "closureAgent: e: ", `e`.repr
+      echo "closureAgent: rawProc: ", rawProc.repr
+      if `e`.isNil():
         let `c1` = cast[`fnSigCall1`](rawProc)
         `fnCall1`
       else:
@@ -124,7 +127,6 @@ template closureSlot*[T, V](
 
   static:
     echo "closureSlot: fnInst: tp: ", $typeof(fnInst)
-  
   closureSlotImpl(fnSig, fnInst)
 
 
@@ -152,7 +154,13 @@ template connectTo*(
 
   closureSlot(typeof(fnSig), fnInst)
 
-  let agent = ClosureAgent[typeof(signalType)]()
+  let
+    e = fnInst.rawEnv()
+    p = fnInst.rawProc()
+  let agent = ClosureAgent[typeof(signalType)](rawEnv: e, rawProc: p)
   echo "fnSlot: type: ", typeof(fnSlot)
+  echo "fnSlot: signal: ", signalName(signal)
+  echo "fnSlot: proc: ", repr(fnSlot)
+  a.addSubscription(signalName(signal), agent, fnSlot)
 
   agent

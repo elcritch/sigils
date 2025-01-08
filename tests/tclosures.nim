@@ -21,8 +21,6 @@ proc setValue*(self: Counter, value: int) {.slot.} =
     emit self.valueChanged(value)
 
 import unittest
-import std/sequtils
-import std/macros
 
 suite "agent closure slots":
 
@@ -62,7 +60,7 @@ suite "agent closure slots":
   test "callback creation":
 
     var
-      a {.used.} = Counter.new()
+      a = Counter.new()
       base = 100
 
     let
@@ -86,3 +84,7 @@ suite "agent closure slots":
     echo "cc: Type: ", $typeof(cc)
     echo "cc2: Type: ", $typeof(cc2)
     echo "cc3: Type: ", $typeof(cc3)
+
+    emit a.valueChanged(42)
+
+    echo "done: "
