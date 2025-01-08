@@ -128,14 +128,16 @@ proc initSigilRequest*[S, T](
     kind: reqKind, origin: origin, procName: procName, params: rpcPack(ensureMove args)
   )
 
+const sigilsMaxSignalLength* {.intdefine.} = 48
+
 proc toSigilName*(name: IndexableChars): SigilName =
-  return toStackString(name, 48)
+  return toStackString(name, sigilsMaxSignalLength)
 
 proc toSigilName*(name: static string): SigilName =
-  return toStackString(name, 48)
+  return toStackString(name, sigilsMaxSignalLength)
 
 proc toSigilName*(name: string): SigilName =
-  return toStackString(name, 48)
+  return toStackString(name, sigilsMaxSignalLength)
 
 const
   AnySigilName* = toSigilName(":any:")

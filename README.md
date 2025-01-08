@@ -135,6 +135,8 @@ test "callback creation":
 
 ## Advanced
 
+Signal names aren't `string` types for performance considerations. Instead they're arrays with a maximum name size of 48 bytes currently. This can be changed if needed.
+
 ### Void Slots
 
 There's an exception to the type checking. It's common in UI programming to want to trigger a `slot` without caring about the actual values in the signal. To achieve this you can call `connect` like this:
