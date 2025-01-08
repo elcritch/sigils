@@ -52,9 +52,12 @@ macro closureTyp(blk: typed) =
     fnSig = ident("fnSig")
     fnInst = ident("fnInst")
     fnTyp = getTypeImpl(blk)
+    fnSlot = ident("fnSlot")
   result = quote do:
     var `fnSig`: `signalTyp`
     var `fnInst`: `fnTyp` = `blk`
+
+    var `fnSlot`: AgentProc
 
 template connectTo*(
     a: Agent,
@@ -66,6 +69,7 @@ template connectTo*(
 
   var signalType {.used, inject.}: typeof(SignalTypes.`signal`(typeof(a)))
   var slotType {.used, inject.}: typeof(fnSig)
+  # var slot: AgentProc
 
   when compiles(signalType = slotType):
     discard # don't need compile check when compiles
