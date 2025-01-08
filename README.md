@@ -95,9 +95,9 @@ test "callback creation":
         b.value = val
   
   emit a.valueChanged(42)
-  check base == 42 # callback modifies base
-                   # beware capturing values like this
-                   # it causes headaches, but can be handy
+  check b.value == 42 # callback modifies base
+                      # beware capturing values like this
+                      # it causes headaches, but can be handy
   check clsAgent.typeof() is ClosureAgent[(int,)]
 ```
 
