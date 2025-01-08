@@ -77,3 +77,4 @@ suite "agent closure slots":
     emit a.valueChanged(42)
 
     echo "done: "
+    check base == 42
