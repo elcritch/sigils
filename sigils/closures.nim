@@ -11,9 +11,6 @@ type
     rawEnv: pointer
     rawProc: pointer
 
-macro callWithEnv(fn, args, env: typed): NimNode =
-  discard
-
 proc callClosure[T](self: ClosureAgent[T], value: int) {.slot.} =
   echo "calling closure"
   if self.rawEnv.isNil():
@@ -23,20 +20,8 @@ proc callClosure[T](self: ClosureAgent[T], value: int) {.slot.} =
     let c3 = cast[proc (a: int, env: pointer) {.nimcall.}](self.rawProc)
     c3(value, self.rawEnv)
 
-# macro mkClosure(fn: typed) =
-#   mkParamsType()
-
-proc newClosureAgent*[T: proc {.closure.}](fn: T): ClosureAgent[T] =
-  let
-    e = fn.rawEnv()
-    p = fn.rawProc()
-  result = ClosureAgent[T](rawEnv: e, rawProc: p)
-
 macro closureTyp(blk: typed) =
-  echo "CC:: blk:tp: ", repr getTypeImpl(blk)
-  # echo "CC:: blk: ", treeRepr(blk)
-  echo "CC:: blk:params: ", treeRepr(blk.params)
-
+  ## figure out the signal type from the lambda and the function sig
   var
     signalTyp = nnkTupleConstr.newTree()
     blk = blk.copyNimTree()
@@ -45,13 +30,10 @@ macro closureTyp(blk: typed) =
   for i in 1 ..< params.len:
     signalTyp.add params[i][1]
   
-  echo "CC:: signalTyp from blk: ", repr signalTyp
-  echo "CC:: signalTyp from blk: ", repr signalTyp
   let
     fnSig = ident("fnSig")
     fnInst = ident("fnInst")
     fnTyp = getTypeImpl(blk)
-    paramsIdent = ident("args")
 
   result = quote do:
     var `fnSig`: `signalTyp`
@@ -61,12 +43,12 @@ macro closureTyp(blk: typed) =
   echo ">>>\n"
 
 macro closureSlotImpl(fnSig, fnInst: typed) =
+  ## figure out the slot implementation for the lambda type
   var
     blk = fnInst.getTypeImpl().copyNimTree()
     params = blk.params
   let
     self = ident"self"
-    fnInst = ident("fnInst")
     fnSlot = ident("fnSlot")
     paramsIdent = ident("args")
     c1 = ident"c1"

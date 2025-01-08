@@ -64,15 +64,6 @@ suite "agent closure slots":
       base = 100
 
     let
-      cc = newClosureAgent(
-            proc (a: int) {.closure.} =
-              base = a
-          )
-      cc2 = newClosureAgent() do (a: int) {.closure.}:
-              base = a
-      # cc2 = closure(a: int):
-      #         base = aw
-
       cc3 = connectTo(a, valueChanged) do (val: int):
           base = val
     
@@ -81,8 +72,6 @@ suite "agent closure slots":
           base = val
     )
 
-    echo "cc: Type: ", $typeof(cc)
-    echo "cc2: Type: ", $typeof(cc2)
     echo "cc3: Type: ", $typeof(cc3)
 
     emit a.valueChanged(42)
