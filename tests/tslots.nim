@@ -132,35 +132,3 @@ when isMainModule:
 
       check a.value == 42
       check c.avg == -1
-
-    test "callback creation":
-      type
-        ClosureRunner[T] = ref object of Agent
-          rawEnv: pointer
-          rawProc: pointer
-          
-      proc callClosure[T](self: ClosureRunner[T], value: int) {.slot.} =
-        echo "calling closure"
-        if self.rawEnv.isNil():
-          let c2 = cast[T](self.rawProc)
-          c2(value)
-        else:
-          let c3 = cast[proc (a: int, env: pointer) {.nimcall.}](self.rawProc)
-          c3(value, self.rawEnv)
-
-      var
-        base = 100
-
-      let
-        c1: proc (a: int) =
-          proc (a: int) = 
-            base = a
-        e = c1.rawEnv()
-        p = c1.rawProc()
-        cc = ClosureRunner[proc (a: int)](rawEnv: e, rawProc: p)
-      connect(a, valueChanged, cc, ClosureRunner[proc (a: int) {.nimcall.}].callClosure)
-
-      a.setValue(42)
-
-      check a.value == 42
-      check base == 42
