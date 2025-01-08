@@ -56,15 +56,21 @@ macro closureTyp(blk: typed) =
     var `fnSig`: `signalTyp`
     var `fnInst`: `fnTyp` = `blk`
 
-
 template connectTo*(
     a: Agent,
     signal: typed,
     blk: typed
 ): auto =
-  var signalType {.used, inject.}: typeof(SignalTypes.`signal`(typeof(a)))
 
   closureTyp(blk)
+
+  var signalType {.used, inject.}: typeof(SignalTypes.`signal`(typeof(a)))
+  var slotType {.used, inject.}: typeof(fnSig)
+
+  when compiles(signalType = slotType):
+    discard # don't need compile check when compiles
+  else:
+    signalType = slotType # let the compiler show the type mismatches
 
   static:
     echo "CC:: signalType: ", $typeof(SignalTypes.`signal`(typeof(a)))

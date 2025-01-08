@@ -77,6 +77,12 @@ suite "agent closure slots":
       cc3 = connectTo(a, valueChanged) do (a: int):
           base = a
 
+    
+    check not compiles(
+      connectTo(a, valueChanged) do (a: float):
+          base = a
+    )
+
     echo "cc: Type: ", $typeof(cc)
     echo "cc2: Type: ", $typeof(cc2)
     echo "cc3: Type: ", $typeof(cc3)
