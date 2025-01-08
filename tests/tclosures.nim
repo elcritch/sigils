@@ -65,20 +65,19 @@ suite "agent closure slots":
       a {.used.} = Counter.new()
       base = 100
 
-    expandMacros:
-      let
-        cc = newClosureAgent(
-              proc (a: int) {.closure.} =
-                base = a
-            )
-        cc2 = newClosureAgent() do (a: int) {.closure.}:
-                base = a
-        # cc2 = closure(a: int):
-        #         base = aw
+    let
+      cc = newClosureAgent(
+            proc (a: int) {.closure.} =
+              base = a
+          )
+      cc2 = newClosureAgent() do (a: int) {.closure.}:
+              base = a
+      # cc2 = closure(a: int):
+      #         base = aw
 
-        cc3 = connectTo(a, valueChanged) do (val: int):
-            base = val
-      
+      cc3 = connectTo(a, valueChanged) do (val: int):
+          base = val
+    
     check not compiles(
       connectTo(a, valueChanged) do (val: float):
           base = val

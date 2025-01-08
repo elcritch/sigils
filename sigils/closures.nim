@@ -41,6 +41,33 @@ macro closureTyp(blk: typed) =
     signalTyp = nnkTupleConstr.newTree()
     blk = blk.copyNimTree()
     params = blk.params
+
+  for i in 1 ..< params.len:
+    signalTyp.add params[i][1]
+  
+  echo "CC:: signalTyp from blk: ", repr signalTyp
+  echo "CC:: signalTyp from blk: ", repr signalTyp
+  let
+    fnSig = ident("fnSig")
+    fnInst = ident("fnInst")
+    fnTyp = getTypeImpl(blk)
+    paramsIdent = ident("args")
+
+  result = quote do:
+    var `fnSig`: `signalTyp`
+    var `fnInst`: `fnTyp` = `blk`
+
+  echo "CALL:\n", repr(result)
+
+macro closureSlot(blk: typed) =
+  echo "CC:: blk:tp: ", repr getTypeImpl(blk)
+  echo "CC:: blk: ", lispRepr(blk)
+  echo "CC:: blk:params: ", lispRepr(blk.params)
+
+  var
+    signalTyp = nnkTupleConstr.newTree()
+    blk = blk.copyNimTree()
+    params = blk.params
     sigParams = blk.params.copyNimTree()
   # sigParams.del(0, 1)
 
@@ -112,7 +139,6 @@ template connectTo*(
 
   var signalType {.used, inject.}: typeof(SignalTypes.`signal`(typeof(a)))
   var slotType {.used, inject.}: typeof(fnSig)
-  # var slot: AgentProc
 
   when compiles(signalType = slotType):
     discard # don't need compile check when compiles
@@ -123,6 +149,6 @@ template connectTo*(
     echo "CC:: signalType: ", $typeof(SignalTypes.`signal`(typeof(a)))
     echo "CC:: fnType: ", $typeof(fnSig)
     echo "CC:: fnInst: ", $typeof(fnInst)
-    echo "CC:: fnSlot: ", $typeof(fnSlot)
+    # echo "CC:: fnSlot: ", $typeof(fnSlot)
 
   ClosureAgent[typeof(signalType)]()
