@@ -3,6 +3,8 @@ import sigils/slots
 import sigils/core
 import sigils/closures
 
+import std/sugar
+
 type
   Counter* = ref object of Agent
     value: int
@@ -71,3 +73,4 @@ suite "agent closure slots":
       #         base = a
     
     echo "cc: Type: ", $typeof(cc)
+    echo "cc2: Type: ", $typeof(cc2)
