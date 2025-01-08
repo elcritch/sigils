@@ -61,36 +61,24 @@ macro closureTyp(blk: typed) =
   echo ">>>\n"
 
 macro closureSlotImpl(fnSig, fnInst: typed) =
-  echo ""
-  echo "CI:: fnSig:tp: ", repr getTypeImpl(fnSig)
-  echo "CI:: fnSig: ", repr fnSig
-  echo "CI:: fnInst:tp: ", repr(fnInst.getTypeImpl())
-  echo "CI:: fnInst: ", repr(fnInst)
-  echo ""
-
   var
-    signalTyp = nnkTupleConstr.newTree()
     blk = fnInst.getTypeImpl().copyNimTree()
     params = blk.params
-    sigParams = blk.params.copyNimTree()
-  sigParams.del(0, 1)
-
-  # blk.addPragma(ident "closure")
-  for i in 1 ..< params.len:
-    signalTyp.add params[i][1]
-  
-  echo "CC:: signalTyp from blk: ", repr signalTyp
-  echo "CC:: signalTyp from blk: ", repr signalTyp
+    sigParams = block:
+      var sp = blk.params.copyNimTree()
+      sp.del(0, 1)
+      sp
   let
     self = ident"self"
     fnInst = ident("fnInst")
     fnSlot = ident("fnSlot")
     paramsIdent = ident("args")
-    paramSetups = mkParamsVars(paramsIdent, genSym(ident="fnApply"), sigParams)
     c1 = ident"c1"
     c2 = ident"c2"
     e = ident"rawEnv"
+    paramSetups = mkParamsVars(paramsIdent, genSym(ident="fnApply"), sigParams)
 
+  # setup call without env pointer
   var
     fnSigCall1 = quote do:
       proc () {.nimcall.}
@@ -100,14 +88,12 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
     let i = newLit(idx)
     fnCall1.add quote do:
       `paramsIdent`[`i`]
-  echo "FN SIGCALL1: ", fnSigCall1.repr
-  echo "FN SIGCALL1: ", fnSigCall1.treeRepr
-  echo "FN CALL1: ", fnCall1.repr
-  echo "FN CALL1: ", fnCall1.treeRepr
 
+  # setup call with env pointer
   var
     fnSigCall2 = fnSigCall1.copyNimTree()
     fnCall2 = fnCall1.copyNimTree()
+
   fnSigCall2.params.add(newIdentDefs(e, ident("pointer")))
   fnCall2[0] = c2
   fnCall2.add(e)
@@ -123,12 +109,12 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
 
   result = quote do:
     let `fnSlot`: AgentProc = proc(context: Agent, params: SigilParams) {.nimcall.} =
-      let `self` = ClosureAgent[`signalTyp`](context)
+      let `self` = ClosureAgent[`fnSig`](context)
       if `self` == nil:
         raise newException(ConversionError, "bad cast")
       if context == nil:
         raise newException(ValueError, "bad value")
-      var `paramsIdent`: `signalTyp`
+      var `paramsIdent`: `fnSig`
       rpcUnpack(`paramsIdent`, params)
       let rawProc: pointer = `self`.rawProc
       let `e`: pointer = `self`.rawEnv
