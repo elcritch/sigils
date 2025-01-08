@@ -57,7 +57,9 @@ macro closureTyp(blk: typed) =
     var `fnSig`: `signalTyp`
     var `fnInst`: `fnTyp` = `blk`
 
-    var `fnSlot`: AgentProc
+    var `fnSlot`: AgentProc =
+      proc(context: Agent, params: SigilParams) {.nimcall.} =
+        discard
 
 template connectTo*(
     a: Agent,
@@ -80,5 +82,6 @@ template connectTo*(
     echo "CC:: signalType: ", $typeof(SignalTypes.`signal`(typeof(a)))
     echo "CC:: fnType: ", $typeof(fnSig)
     echo "CC:: fnInst: ", $typeof(fnInst)
+    echo "CC:: fnSlot: ", $typeof(fnSlot)
 
   ClosureAgent[typeof(signalType)]()
