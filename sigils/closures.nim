@@ -52,7 +52,7 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
     paramsIdent = ident("args")
     c1 = ident"c1"
     c2 = ident"c2"
-    e = ident"rawEnv"
+    env = ident"rawEnv"
 
   # setup call without env pointer
   var
@@ -70,9 +70,9 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
     fnSigCall2 = fnSigCall1.copyNimTree()
     fnCall2 = fnCall1.copyNimTree()
 
-  fnSigCall2.params.add(newIdentDefs(e, ident("pointer")))
+  fnSigCall2.params.add(newIdentDefs(env, ident("pointer")))
   fnCall2[0] = c2
-  fnCall2.add(e)
+  fnCall2.add(env)
 
   result = quote do:
     let `fnSlot`: AgentProc = proc(context: Agent, params: SigilParams) {.nimcall.} =
@@ -84,8 +84,8 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
       var `paramsIdent`: `fnSig`
       rpcUnpack(`paramsIdent`, params)
       let rawProc: pointer = self.rawProc
-      let `e`: pointer = self.rawEnv
-      if `e`.isNil():
+      let `env`: pointer = self.rawEnv
+      if `env`.isNil():
         let `c1` = cast[`fnSigCall1`](rawProc)
         `fnCall1`
       else:
