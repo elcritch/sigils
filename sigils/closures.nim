@@ -51,13 +51,22 @@ macro closureTyp(blk: typed) =
   echo "CC:: signalTyp from blk: ", repr signalTyp
   echo "CC:: signalTyp from blk: ", repr signalTyp
   let
-    objId = ident"obj"
+    self = ident"self"
     fnSig = ident("fnSig")
     fnInst = ident("fnInst")
     fnTyp = getTypeImpl(blk)
     fnSlot = ident("fnSlot")
     paramsIdent = ident("args")
     paramSetups = mkParamsVars(paramsIdent, genSym(ident="fnApply"), sigParams)
+
+  var fnCall1 = getTypeImpl(blk).copyNimTree()
+  fnCall1.addPragma(ident "nimcall")
+  var fnCall2 = fnCall1.copyNimTree()
+  fnCall2.params.add(newIdentDefs(ident("e"), ident("pointer")))
+  echo "FN CALL1: ", fnCall1.repr
+  echo "FN CALL1: ", fnCall1.lispRepr
+  echo "FN CALL2: ", fnCall2.repr
+  echo "FN CALL2: ", fnCall2.lispRepr
 
   let mcall = nnkCall.newTree(fnInst)
   for param in params[1 ..^ 1]:
@@ -69,8 +78,8 @@ macro closureTyp(blk: typed) =
 
     var `fnSlot`: AgentProc =
       proc(context: Agent, params: SigilParams) {.nimcall.} =
-        let `objId` = ClosureAgent[`signalTyp`](context)
-        if `objId` == nil:
+        let `self` = ClosureAgent[`signalTyp`](context)
+        if `self` == nil:
           raise newException(ConversionError, "bad cast")
         if context == nil:
           raise newException(ValueError, "bad value")
@@ -78,7 +87,18 @@ macro closureTyp(blk: typed) =
           var `paramsIdent`: `signalTyp`
           rpcUnpack(`paramsIdent`, params)
         `paramSetups`
-        `mcall`
+        let rawProc: pointer = `self`.rawProc
+        if `self`.rawEnv.isNil():
+          discard
+          let c2 = cast[`fnCall1`](rawProc)
+          # c2(value)
+          discard
+        else:
+          let c3 = cast[`fnCall2`](rawProc)
+          # c3(value, `self`.rawEnv)
+          # `mcall`
+          discard
+
   echo "CALL:\n", repr(result)
 
 template connectTo*(
