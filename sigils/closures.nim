@@ -89,7 +89,7 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
     paramSetups = mkParamsVars(paramsIdent, genSym(ident="fnApply"), sigParams)
     c1 = ident"c1"
     c2 = ident"c2"
-    e = ident"e"
+    e = ident"rawEnv"
 
   var
     fnSigCall1 = quote do:
@@ -131,16 +131,13 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
       var `paramsIdent`: `signalTyp`
       rpcUnpack(`paramsIdent`, params)
       let rawProc: pointer = `self`.rawProc
+      let `e`: pointer = `self`.rawEnv
       if `self`.rawEnv.isNil():
         let `c1` = cast[`fnSigCall1`](rawProc)
         `fnCall1`
-      #   `c1`()
-      #   discard
-      # else:
-      #   let `c2` = cast[`fnSigCall2`](rawProc)
-      #   # c3(value, `self`.rawEnv)
-      #   # `mcall`
-      #   discard
+      else:
+        let `c2` = cast[`fnSigCall2`](rawProc)
+        `fnCall2`
   echo "\nCALL:\n", repr(result)
   echo ""
 
