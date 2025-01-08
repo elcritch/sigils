@@ -11,25 +11,14 @@ type
     rawEnv: pointer
     rawProc: pointer
 
-proc callClosure[T](self: ClosureAgent[T], value: int) {.slot.} =
-  echo "calling closure"
-  if self.rawEnv.isNil():
-    let c2 = cast[T](self.rawProc)
-    c2(value)
-  else:
-    let c3 = cast[proc (a: int, env: pointer) {.nimcall.}](self.rawProc)
-    c3(value, self.rawEnv)
-
 macro closureTyp(blk: typed) =
   ## figure out the signal type from the lambda and the function sig
   var
     signalTyp = nnkTupleConstr.newTree()
     blk = blk.copyNimTree()
     params = blk.params
-
   for i in 1 ..< params.len:
     signalTyp.add params[i][1]
-  
   let
     fnSig = ident("fnSig")
     fnInst = ident("fnInst")
@@ -38,9 +27,6 @@ macro closureTyp(blk: typed) =
   result = quote do:
     var `fnSig`: `signalTyp`
     var `fnInst`: `fnTyp` = `blk`
-
-  echo "<<<CALL:\n", repr(result)
-  echo ">>>\n"
 
 macro closureSlotImpl(fnSig, fnInst: typed) =
   ## figure out the slot implementation for the lambda type
@@ -92,22 +78,6 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
         let `c2` = cast[`fnSigCall2`](rawProc)
         `fnCall2`
 
-  # for param in params[1 ..^ 1]:
-  #   result[^1][3].add param
-    
-  echo "<<<CALL:\n", repr(result)
-  echo ">>>"
-
-template closureSlot*[T, V](
-    fnSig: typedesc[T],
-    fnInst: V,
-): auto =
-
-  static:
-    echo "closureSlot: fnInst: tp: ", $typeof(fnInst)
-  closureSlotImpl(fnSig, fnInst)
-
-
 template connectTo*(
     a: Agent,
     signal: typed,
@@ -124,13 +94,7 @@ template connectTo*(
   else:
     signalType = slotType # let the compiler show the type mismatches
 
-  static:
-    echo "CC:: signalType: ", $typeof(SignalTypes.`signal`(typeof(a)))
-    echo "CC:: fnType: ", $typeof(fnSig)
-    echo "CC:: fnInst: ", $typeof(fnInst)
-    # echo "CC:: fnSlot: ", $typeof(fnSlot)
-
-  closureSlot(typeof(fnSig), fnInst)
+  closureSlotImpl(typeof(fnSig), fnInst)
 
   let
     e = fnInst.rawEnv()
