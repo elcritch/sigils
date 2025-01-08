@@ -24,8 +24,8 @@ proc callClosure[T](self: ClosureAgent[T], value: int) {.slot.} =
     c3(value, self.rawEnv)
 
 
-proc withClosure*[T: proc {.closure.}](fn: T): ClosureAgent[T] =
+proc newClosureAgent*[T: proc {.closure.}](fn: T): ClosureAgent[T] =
   let
     e = fn.rawEnv()
     p = fn.rawProc()
-    cc = ClosureAgent[(int)](rawEnv: e, rawProc: p)
+  result = ClosureAgent[T](rawEnv: e, rawProc: p)

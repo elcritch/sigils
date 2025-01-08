@@ -63,14 +63,14 @@ suite "agent closure slots":
     var
       base = 100
     let
-      cc = withClosure(
+      cc = newClosureAgent(
             proc (a: int) {.closure.} =
               base = a
           )
-      cc2 = withClosure() do (a: int) {.closure.}:
+      cc2 = newClosureAgent() do (a: int) {.closure.}:
               base = a
       # cc2 = closure(a: int):
-      #         base = a
+      #         base = aw
     
     echo "cc: Type: ", $typeof(cc)
     echo "cc2: Type: ", $typeof(cc2)
