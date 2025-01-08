@@ -93,10 +93,6 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
   fnCall2[0] = c2
   fnCall2.add(e)
 
-  var construct = nnkTupleConstr.newTree()
-  for param in params[1 ..^ 1]:
-    construct.add param[0]
-  echo "CONST: ", treeRepr(construct)
 
   result = quote do:
     let `fnSlot`: AgentProc = proc(context: Agent, params: SigilParams) {.nimcall.} =
@@ -116,18 +112,9 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
         let `c2` = cast[`fnSigCall2`](rawProc)
         `fnCall2`
 
-    proc rpcMethod(
-        self: ClosureAgent[typeof(signalType)]
-    ): (Agent, SigilRequestTy[ClosureAgent[typeof(signalType)]]) =
-      let args = `construct`
-      let name: SigilName = toSigilName(`signalName`)
-      let req = initSigilRequest[ClosureAgent[typeof(signalType)], typeof(args)](
-        procName = name, args = args, origin = self.getId()
-      )
-      result = (self, req)
 
-  for param in params[1 ..^ 1]:
-    result[^1][3].add param
+  # for param in params[1 ..^ 1]:
+  #   result[^1][3].add param
     
   echo "<<<CALL:\n", repr(result)
   echo ">>>"
@@ -141,6 +128,28 @@ template closureSlot*[T, V](
     echo "closureSlot: fnInst: tp: ", $typeof(fnInst)
   
   closureSlotImpl(fnSig, fnInst)
+
+macro closureObjConstr(fnInst: typed) =
+  var
+    blk = fnInst.getTypeImpl().copyNimTree()
+    params = blk.params
+  var construct = nnkTupleConstr.newTree()
+  for param in params[1 ..^ 1]:
+    construct.add param[0]
+  echo "CONST: ", treeRepr(construct)
+  return construct
+
+proc closureSlot*[S, P](
+    self: ClosureAgent[S]
+): (Agent, SigilRequestTy[ClosureAgent[S]]) =
+  let args = closureObjConstr(T)
+  var args: S
+  var name: SigilName
+  # let name: SigilName = toSigilName(`signalName`)
+  let req = initSigilRequest[ClosureAgent[typeof(signalType)], typeof(args)](
+    procName = name, args = args, origin = self.getId()
+  )
+  result = (self, req)
 
 template connectTo*(
     a: Agent,
@@ -165,5 +174,6 @@ template connectTo*(
     # echo "CC:: fnSlot: ", $typeof(fnSlot)
 
   closureSlot(typeof(fnSig), fnInst)
+
 
   ClosureAgent[typeof(signalType)]()
