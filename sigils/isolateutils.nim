@@ -5,15 +5,6 @@ import threading/smartptrs
 import weakrefs
 export isolation
 
-# template checkThreadSafety(field: object, parent: typed): static bool =
-#   true
-# template checkThreadSafety[T](field: Isolated[T], parent: typed): static bool =
-#   true
-# template checkThreadSafety(field: ref, parent: typed): static bool =
-#   false
-# template checkThreadSafety[T](field: T, parent: typed): static bool =
-#   true
-
 proc checkThreadSafety[T, V](field: T, parent: V) =
   when T is ref:
     if not checkThreadSafety(v, sig):
