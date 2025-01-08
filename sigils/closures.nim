@@ -64,10 +64,6 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
   var
     blk = fnInst.getTypeImpl().copyNimTree()
     params = blk.params
-    sigParams = block:
-      var sp = blk.params.copyNimTree()
-      sp.del(0, 1)
-      sp
   let
     self = ident"self"
     fnInst = ident("fnInst")
@@ -76,7 +72,6 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
     c1 = ident"c1"
     c2 = ident"c2"
     e = ident"rawEnv"
-    paramSetups = mkParamsVars(paramsIdent, genSym(ident="fnApply"), sigParams)
 
   # setup call without env pointer
   var
@@ -98,6 +93,10 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
   fnCall2[0] = c2
   fnCall2.add(e)
 
+  var construct = nnkTupleConstr.newTree()
+  for param in params[1 ..^ 1]:
+    construct.add param[0]
+
   result = quote do:
     let `fnSlot`: AgentProc = proc(context: Agent, params: SigilParams) {.nimcall.} =
       let `self` = ClosureAgent[`fnSig`](context)
@@ -115,6 +114,18 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
       else:
         let `c2` = cast[`fnSigCall2`](rawProc)
         `fnCall2`
+
+    proc rpcMethod(
+        self: ClosureAgent[typeof(signalType)]
+    ): (Agent, SigilRequestTy[ClosureAgent[typeof(signalType)]]) =
+      # let args = `construct`
+      let name: SigilName = toSigilName(`signalName`)
+      # let req = initSigilRequest[`firstType`, typeof(args)](
+        # procName = name, args = args, origin = `objId`.getId()
+      # )
+      # result = (`objId`, req)
+
+    
   echo "<<<CALL:\n", repr(result)
   echo ">>>"
 
