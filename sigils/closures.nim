@@ -88,16 +88,15 @@ macro closureTyp(blk: typed) =
           rpcUnpack(`paramsIdent`, params)
         `paramSetups`
         let rawProc: pointer = `self`.rawProc
-        if `self`.rawEnv.isNil():
-          discard
-          let c2 = cast[`fnCall1`](rawProc)
-          # c2(value)
-          discard
-        else:
-          let c3 = cast[`fnCall2`](rawProc)
-          # c3(value, `self`.rawEnv)
-          # `mcall`
-          discard
+        # if `self`.rawEnv.isNil():
+        #   let c2 = cast[`fnCall1`](rawProc)
+        #   # c2(value)
+        #   discard
+        # else:
+        let c3 = cast[`fnCall2`](rawProc)
+        # c3(value, `self`.rawEnv)
+        # `mcall`
+        discard
 
   echo "CALL:\n", repr(result)
 
