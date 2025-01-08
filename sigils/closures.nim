@@ -48,7 +48,6 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
     blk = fnInst.getTypeImpl().copyNimTree()
     params = blk.params
   let
-    self = ident"self"
     fnSlot = ident("fnSlot")
     paramsIdent = ident("args")
     c1 = ident"c1"
@@ -77,18 +76,15 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
 
   result = quote do:
     let `fnSlot`: AgentProc = proc(context: Agent, params: SigilParams) {.nimcall.} =
-      let `self` = ClosureAgent[`fnSig`](context)
-      if `self` == nil:
+      let self = ClosureAgent[`fnSig`](context)
+      if self == nil:
         raise newException(ConversionError, "bad cast")
       if context == nil:
         raise newException(ValueError, "bad value")
       var `paramsIdent`: `fnSig`
       rpcUnpack(`paramsIdent`, params)
-      let rawProc: pointer = `self`.rawProc
-      let `e`: pointer = `self`.rawEnv
-      echo "closureAgent: ", `self`.isNil
-      echo "closureAgent: e: ", `e`.repr
-      echo "closureAgent: rawProc: ", rawProc.repr
+      let rawProc: pointer = self.rawProc
+      let `e`: pointer = self.rawEnv
       if `e`.isNil():
         let `c1` = cast[`fnSigCall1`](rawProc)
         `fnCall1`
