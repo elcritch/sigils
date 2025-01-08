@@ -93,8 +93,8 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
     proc () {.nimcall.}
   echo "FN CALL:EX: ", fnCallEx.repr
   echo "FN CALL:EX: ", fnCallEx.treeRepr
-  var fnCall1 = getTypeImpl(blk).copyNimTree()
-  fnCall1.addPragma(ident "nimcall")
+  var fnCall1 = fnCallEx.copyNimTree()
+  fnCall2.params.add(newIdentDefs(ident("a")))
   var fnCall2 = fnCall1.copyNimTree()
   fnCall2.params.add(newIdentDefs(ident("e"), ident("pointer")))
   echo "FN CALL1: ", fnCall1.repr
