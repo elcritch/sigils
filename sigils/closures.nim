@@ -133,6 +133,7 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
       let rawProc: pointer = `self`.rawProc
       if `self`.rawEnv.isNil():
         let `c1` = cast[`fnSigCall1`](rawProc)
+        `fnCall1`
       #   `c1`()
       #   discard
       # else:
