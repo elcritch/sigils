@@ -58,4 +58,10 @@ suite "agent closure slots":
 
   test "callback creation":
 
-    discard
+    var
+      base = 100
+    let
+      cc = withClosure(
+            proc (a: int) {.closure.} =
+              base = a
+          )

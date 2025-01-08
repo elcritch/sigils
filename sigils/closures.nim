@@ -20,3 +20,10 @@ proc callClosure[T](self: ClosureAgent[T], value: int) {.slot.} =
   else:
     let c3 = cast[proc (a: int, env: pointer) {.nimcall.}](self.rawProc)
     c3(value, self.rawEnv)
+
+
+proc withClosure*[T](fn: T) =
+  let
+    e = fn.rawEnv()
+    p = fn.rawProc()
+    cc = ClosureAgent[(int)](rawEnv: e, rawProc: p)
