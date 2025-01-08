@@ -64,7 +64,8 @@ suite "agent closure slots":
       base = 100
 
     let
-      cc3 = connectTo(a, valueChanged) do (val: int):
+      clsAgent =
+        connectTo(a, valueChanged) do (val: int):
           base = val
     
     check not compiles(
@@ -72,6 +73,7 @@ suite "agent closure slots":
           base = val
     )
 
-    echo "cc3: Type: ", $typeof(cc3)
+    echo "cc3: Type: ", $typeof(clsAgent)
     emit a.valueChanged(42)
     check base == 42
+    check clsAgent.typeof() is ClosureAgent[(int,)]

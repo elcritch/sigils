@@ -78,6 +78,31 @@ test "signal / slot types":
   doAssert SignalTypes.setValue(Counter[uint]) is (uint, )
 ```
 
+## Closures
+
+```nim
+type
+  Counter* = ref object of Agent
+
+test "callback creation":
+  var
+    a = Counter()
+    base = 100
+
+  let
+    clsAgent =
+      connectTo(a, valueChanged) do (val: int):
+        base = val
+  
+  emit a.valueChanged(42)
+  check base == 42 # callback modifies base
+                   # beware capturing a stack var like this 
+                   # is a bad idea! The var may not exist
+                   # when connect is called
+  check clsAgent.typeof() is ClosureAgent[(int,)]
+```
+
+
 ## Advanced
 
 ### Void Slots
