@@ -78,6 +78,37 @@ test "signal / slot types":
   doAssert SignalTypes.setValue(Counter[uint]) is (uint, )
 ```
 
+## Threads
+
+Sigils 0.9+ can now do threaded signals! 
+
+```nim
+test "agent connect then moveToThread and run":
+  var
+    a = SomeAction.new()
+
+  block:
+    echo "sigil object thread connect change"
+    var
+      b = Counter.new()
+      c = SomeAction.new()
+    echo "thread runner!", " (th: ", getThreadId(), ")"
+    let thread = newSigilThread()
+    thread.start()
+    startLocalThread()
+
+    connect(a, valueChanged, b, setValue)
+    connect(b, updated, c, SomeAction.completed())
+
+    let bp: AgentProxy[Counter] = b.moveToThread(thread)
+    echo "obj bp: ", bp.getId()
+
+    emit a.valueChanged(314)
+    let ct = getCurrentSigilThread()
+    ct[].poll() # we need to either `poll` or do `runForever` similar to async
+    check c.value == 314
+```
+
 ## Closures
 
 ```nim
