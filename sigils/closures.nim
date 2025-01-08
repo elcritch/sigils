@@ -89,14 +89,18 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
     c1 = ident"c1"
     c2 = ident"c2"
 
+  let fnCallEx = quote do:
+    proc () {.nimcall.}
+  echo "FN CALL:EX: ", fnCallEx.repr
+  echo "FN CALL:EX: ", fnCallEx.treeRepr
   var fnCall1 = getTypeImpl(blk).copyNimTree()
   fnCall1.addPragma(ident "nimcall")
   var fnCall2 = fnCall1.copyNimTree()
   fnCall2.params.add(newIdentDefs(ident("e"), ident("pointer")))
   echo "FN CALL1: ", fnCall1.repr
-  echo "FN CALL1: ", fnCall1.lispRepr
+  echo "FN CALL1: ", fnCall1.treeRepr
   echo "FN CALL2: ", fnCall2.repr
-  echo "FN CALL2: ", fnCall2.lispRepr
+  # echo "FN CALL2: ", fnCall2.lispRepr
   echo "FN paramSetups: ", paramSetups.treeRepr
 
   let mcall = nnkCall.newTree(fnInst)
@@ -114,8 +118,8 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
       var `paramsIdent`: `signalTyp`
       rpcUnpack(`paramsIdent`, params)
       let rawProc: pointer = `self`.rawProc
-      if `self`.rawEnv.isNil():
-        let `c1` = cast[`fnCall1`](rawProc)
+      # if `self`.rawEnv.isNil():
+      #   let `c1` = cast[`fnCall1`](rawProc)
       #   `c1`()
       #   discard
       # else:
