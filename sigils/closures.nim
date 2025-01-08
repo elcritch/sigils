@@ -98,15 +98,6 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
   fnCall2[0] = c2
   fnCall2.add(e)
 
-  echo "FN SIGCALL2: ", fnSigCall2.repr
-  # echo "FN CALL2: ", fnSigCall2.lispRepr
-  echo "FN paramSetups: ", paramSetups.treeRepr
-
-  let mcall = nnkCall.newTree(fnInst)
-  for param in params[1 ..^ 1]:
-    mcall.add param[0]
-  echo "FN MCALL: ", mcall.repr
-
   result = quote do:
     let `fnSlot`: AgentProc = proc(context: Agent, params: SigilParams) {.nimcall.} =
       let `self` = ClosureAgent[`fnSig`](context)
@@ -124,8 +115,8 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
       else:
         let `c2` = cast[`fnSigCall2`](rawProc)
         `fnCall2`
-  echo "\nCALL:\n", repr(result)
-  echo ""
+  echo "<<<CALL:\n", repr(result)
+  echo ">>>"
 
 template closureSlot*[T, V](
     fnSig: typedesc[T],
