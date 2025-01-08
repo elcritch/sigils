@@ -34,8 +34,8 @@ proc newClosureAgent*[T: proc {.closure.}](fn: T): ClosureAgent[T] =
 
 macro closureTyp(blk: typed) =
   echo "CC:: blk:tp: ", repr getTypeImpl(blk)
-  echo "CC:: blk: ", lispRepr(blk)
-  echo "CC:: blk:params: ", lispRepr(blk.params)
+  echo "CC:: blk: ", treeRepr(blk)
+  echo "CC:: blk:params: ", treeRepr(blk.params)
 
   var
     signalTyp = nnkTupleConstr.newTree()
@@ -57,7 +57,8 @@ macro closureTyp(blk: typed) =
     var `fnSig`: `signalTyp`
     var `fnInst`: `fnTyp` = `blk`
 
-  echo "CALL:\n", repr(result)
+  echo "<<<CALL:\n", repr(result)
+  echo ">>>"
 
 macro closureSlotImpl(fnSig, fnInst: typed) =
   echo ""
@@ -93,14 +94,16 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
     proc () {.nimcall.}
   echo "FN CALL:EX: ", fnCallEx.repr
   echo "FN CALL:EX: ", fnCallEx.treeRepr
-  var fnCall1 = fnCallEx.copyNimTree()
-  fnCall2.params.add(newIdentDefs(ident("a")))
-  var fnCall2 = fnCall1.copyNimTree()
-  fnCall2.params.add(newIdentDefs(ident("e"), ident("pointer")))
-  echo "FN CALL1: ", fnCall1.repr
-  echo "FN CALL1: ", fnCall1.treeRepr
-  echo "FN CALL2: ", fnCall2.repr
-  # echo "FN CALL2: ", fnCall2.lispRepr
+  var fnSigCall1 = fnCallEx.copyNimTree()
+  for idx, param in params[1 ..^ 1]:
+    fnSigCall1.params.add(newIdentDefs(ident("a" & $idx), param[1]))
+
+  var fnSigCall2 = fnSigCall1.copyNimTree()
+  fnSigCall2.params.add(newIdentDefs(ident("e"), ident("pointer")))
+  echo "FN CALL1: ", fnSigCall1.repr
+  echo "FN CALL1: ", fnSigCall1.treeRepr
+  echo "FN CALL2: ", fnSigCall2.repr
+  # echo "FN CALL2: ", fnSigCall2.lispRepr
   echo "FN paramSetups: ", paramSetups.treeRepr
 
   let mcall = nnkCall.newTree(fnInst)
@@ -118,12 +121,12 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
       var `paramsIdent`: `signalTyp`
       rpcUnpack(`paramsIdent`, params)
       let rawProc: pointer = `self`.rawProc
-      # if `self`.rawEnv.isNil():
-      #   let `c1` = cast[`fnCall1`](rawProc)
+      if `self`.rawEnv.isNil():
+        let `c1` = cast[`fnSigCall1`](rawProc)
       #   `c1`()
       #   discard
       # else:
-      #   let `c2` = cast[`fnCall2`](rawProc)
+      #   let `c2` = cast[`fnSigCall2`](rawProc)
       #   # c3(value, `self`.rawEnv)
       #   # `mcall`
       #   discard
