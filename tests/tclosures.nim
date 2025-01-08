@@ -60,20 +60,20 @@ suite "agent closure slots":
   test "callback creation":
 
     var
-      a = Counter.new()
-      base = 100
+      a = Counter()
+      b = Counter(value: 100)
 
     let
       clsAgent =
         connectTo(a, valueChanged) do (val: int):
-          base = val
+          b.value = val
     
     check not compiles(
       connectTo(a, valueChanged) do (val: float):
-          base = val
+          b.value = val
     )
 
     echo "cc3: Type: ", $typeof(clsAgent)
     emit a.valueChanged(42)
-    check base == 42
+    check b.value == 42
     check clsAgent.typeof() is ClosureAgent[(int,)]

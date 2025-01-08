@@ -87,18 +87,17 @@ type
 test "callback creation":
   var
     a = Counter()
-    base = 100
+    b = Counter(value: 100)
 
   let
     clsAgent =
       connectTo(a, valueChanged) do (val: int):
-        base = val
+        b.value = val
   
   emit a.valueChanged(42)
   check base == 42 # callback modifies base
-                   # beware capturing a stack var like this 
-                   # is a bad idea! The var may not exist
-                   # when connect is called
+                   # beware capturing values like this
+                   # it causes headaches, but can be handy
   check clsAgent.typeof() is ClosureAgent[(int,)]
 ```
 
