@@ -82,9 +82,7 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
   echo "CC:: signalTyp from blk: ", repr signalTyp
   let
     self = ident"self"
-    fnSig = ident("fnSig")
     fnInst = ident("fnInst")
-    fnTyp = getTypeImpl(blk)
     fnSlot = ident("fnSlot")
     paramsIdent = ident("args")
     paramSetups = mkParamsVars(paramsIdent, genSym(ident="fnApply"), sigParams)
@@ -115,10 +113,9 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
         raise newException(ValueError, "bad value")
       var `paramsIdent`: `signalTyp`
       rpcUnpack(`paramsIdent`, params)
-      # `paramSetups`
-      # let rawProc: pointer = `self`.rawProc
-      # if `self`.rawEnv.isNil():
-      #   let `c1` = cast[`fnCall1`](rawProc)
+      let rawProc: pointer = `self`.rawProc
+      if `self`.rawEnv.isNil():
+        let `c1` = cast[`fnCall1`](rawProc)
       #   `c1`()
       #   discard
       # else:
@@ -126,7 +123,8 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
       #   # c3(value, `self`.rawEnv)
       #   # `mcall`
       #   discard
-  echo "CALL:\n", repr(result)
+  echo "\nCALL:\n", repr(result)
+  echo ""
 
 template closureSlot*[T, V](
     fnSig: typedesc[T],
