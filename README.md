@@ -78,7 +78,64 @@ test "signal / slot types":
   doAssert SignalTypes.setValue(Counter[uint]) is (uint, )
 ```
 
+## Threads
+
+Sigils 0.9+ can now do threaded signals! 
+
+```nim
+test "agent connect then moveToThread and run":
+  var
+    a = SomeAction.new()
+
+  block:
+    echo "sigil object thread connect change"
+    var
+      b = Counter.new()
+      c = SomeAction.new()
+    echo "thread runner!", " (th: ", getThreadId(), ")"
+    let thread = newSigilThread()
+    thread.start()
+    startLocalThread()
+
+    connect(a, valueChanged, b, setValue)
+    connect(b, updated, c, SomeAction.completed())
+
+    let bp: AgentProxy[Counter] = b.moveToThread(thread)
+    echo "obj bp: ", bp.getId()
+
+    emit a.valueChanged(314)
+    let ct = getCurrentSigilThread()
+    ct[].poll() # we need to either `poll` or do `runForever` similar to async
+    check c.value == 314
+```
+
+## Closures
+
+```nim
+type
+  Counter* = ref object of Agent
+
+test "callback creation":
+  var
+    a = Counter()
+    b = Counter(value: 100)
+
+  let
+    clsAgent =
+      connectTo(a, valueChanged) do (val: int):
+        b.value = val
+  
+  emit a.valueChanged(42)
+  check b.value == 42 # callback modifies base
+                      # beware capturing values like this
+                      # it causes headaches, but can be handy
+  check clsAgent.typeof() is ClosureAgent[(int,)]
+```
+
+
 ## Advanced
+
+Signal names aren't `string` types for performance considerations. Instead they're arrays with a maximum name size of 48 bytes currently. This can be changed if needed.
 
 ### Void Slots
 
@@ -102,4 +159,4 @@ Calling `connect` _does not_ create a new reference of either the target or sour
 
 However, `Agent` objects are still memory safe to use. They have a destructor which removes an `Agent` from any of it's "listeners" connections to ensure freed agents aren't signaled after they're freed. Nifty!
 
-Note however, that means you need to ensure your `Agent`'s aren't destroyed before you're done with them.
+Note however, that means you need to ensure your `Agent`'s aren't destroyed before you're done with them. This applies to threaded signals using `AgentProxy[T]` as well.
