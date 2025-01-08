@@ -157,4 +157,4 @@ Calling `connect` _does not_ create a new reference of either the target or sour
 
 However, `Agent` objects are still memory safe to use. They have a destructor which removes an `Agent` from any of it's "listeners" connections to ensure freed agents aren't signaled after they're freed. Nifty!
 
-Note however, that means you need to ensure your `Agent`'s aren't destroyed before you're done with them.
+Note however, that means you need to ensure your `Agent`'s aren't destroyed before you're done with them. This applies to threaded signals using `AgentProxy[T]` as well.
