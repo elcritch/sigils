@@ -269,9 +269,10 @@ proc printConnections*(agent: Agent; ) =
     if agent.isNil:
       brightPrint fgBlue, "connections for Agent: ", "nil"
       return
-    if agent[].freedByThread != 0:
-      brightPrint fgBlue, "connections for Agent: ", $agent.unsafeWeakRef(), " freedByThread: ", $agent[].freedByThread
-      return
+    when defined(sigilsDebug):
+      if agent[].freedByThread != 0:
+        brightPrint fgBlue, "connections for Agent: ", $agent.unsafeWeakRef(), " freedByThread: ", $agent[].freedByThread
+        return
     brightPrint fgBlue, "connections for Agent: ", $agent.unsafeWeakRef()
     brightPrint fgMagenta, "\t subscribers:", ""
     for sig, subs in agent.subcriptionsTable.pairs():

@@ -2,11 +2,15 @@
 import signals
 import slots
 import agents
+import std/macros
 
 export signals, slots, agents
 
 type
   ClosureAgent*[T] = ref object of Agent
+
+macro callWithEnv(fn, args, env: typed): NimNode =
+  discard
 
 proc callClosure[T](self: ClosureAgent[T], value: int) {.slot.} =
   echo "calling closure"
