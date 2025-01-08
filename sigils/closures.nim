@@ -93,7 +93,6 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
   fnCall2[0] = c2
   fnCall2.add(e)
 
-
   result = quote do:
     let `fnSlot`: AgentProc = proc(context: Agent, params: SigilParams) {.nimcall.} =
       let `self` = ClosureAgent[`fnSig`](context)
@@ -112,7 +111,6 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
         let `c2` = cast[`fnSigCall2`](rawProc)
         `fnCall2`
 
-
   # for param in params[1 ..^ 1]:
   #   result[^1][3].add param
     
@@ -129,27 +127,6 @@ template closureSlot*[T, V](
   
   closureSlotImpl(fnSig, fnInst)
 
-macro closureObjConstr(fnInst: typed) =
-  var
-    blk = fnInst.getTypeImpl().copyNimTree()
-    params = blk.params
-  var construct = nnkTupleConstr.newTree()
-  for param in params[1 ..^ 1]:
-    construct.add param[0]
-  echo "CONST: ", treeRepr(construct)
-  return construct
-
-proc closureSlot*[S, P](
-    self: ClosureAgent[S]
-): (Agent, SigilRequestTy[ClosureAgent[S]]) =
-  let args = closureObjConstr(T)
-  var args: S
-  var name: SigilName
-  # let name: SigilName = toSigilName(`signalName`)
-  let req = initSigilRequest[ClosureAgent[typeof(signalType)], typeof(args)](
-    procName = name, args = args, origin = self.getId()
-  )
-  result = (self, req)
 
 template connectTo*(
     a: Agent,
@@ -175,5 +152,7 @@ template connectTo*(
 
   closureSlot(typeof(fnSig), fnInst)
 
+  let agent = ClosureAgent[typeof(signalType)]()
+  # echo "fnSlot: type: ", typeof(fnSlot)
 
-  ClosureAgent[typeof(signalType)]()
+  agent
