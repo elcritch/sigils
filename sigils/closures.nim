@@ -96,6 +96,7 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
   var construct = nnkTupleConstr.newTree()
   for param in params[1 ..^ 1]:
     construct.add param[0]
+  echo "CONST: ", treeRepr(construct)
 
   result = quote do:
     let `fnSlot`: AgentProc = proc(context: Agent, params: SigilParams) {.nimcall.} =
@@ -125,6 +126,8 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
       )
       result = (self, req)
 
+  for param in params[1 ..^ 1]:
+    result[^1][3].add param
     
   echo "<<<CALL:\n", repr(result)
   echo ">>>"
