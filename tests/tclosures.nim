@@ -67,5 +67,7 @@ suite "agent closure slots":
           )
       cc2 = withClosure() do (a: int) {.closure.}:
               base = a
+      # cc2 = closure(a: int):
+      #         base = a
     
     echo "cc: Type: ", $typeof(cc)
