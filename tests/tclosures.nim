@@ -61,7 +61,9 @@ suite "agent closure slots":
   test "callback creation":
 
     var
+      a {.used.} = Counter.new()
       base = 100
+
     let
       cc = newClosureAgent(
             proc (a: int) {.closure.} =
@@ -72,5 +74,9 @@ suite "agent closure slots":
       # cc2 = closure(a: int):
       #         base = aw
 
+      cc3 = connectTo(a, valueChanged) do (a: int):
+          base = a
+
     echo "cc: Type: ", $typeof(cc)
     echo "cc2: Type: ", $typeof(cc2)
+    echo "cc3: Type: ", $typeof(cc3)
