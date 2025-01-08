@@ -71,6 +71,6 @@ suite "agent closure slots":
               base = a
       # cc2 = closure(a: int):
       #         base = aw
-    
+
     echo "cc: Type: ", $typeof(cc)
     echo "cc2: Type: ", $typeof(cc2)
