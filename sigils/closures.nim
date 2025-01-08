@@ -32,6 +32,31 @@ proc newClosureAgent*[T: proc {.closure.}](fn: T): ClosureAgent[T] =
     p = fn.rawProc()
   result = ClosureAgent[T](rawEnv: e, rawProc: p)
 
+macro closureTyp(blk: typed) =
+  echo "CC:: blk:tp: ", repr getTypeImpl(blk)
+  echo "CC:: blk: ", lispRepr(blk)
+  echo "CC:: blk:params: ", lispRepr(blk.params)
+
+  var
+    signalTyp = nnkTupleConstr.newTree()
+    blk = blk.copyNimTree()
+    params = blk.params
+  
+  # blk.addPragma(ident "closure")
+  for i in 1 ..< params.len:
+    signalTyp.add params[i][1]
+  
+  echo "CC:: signalTyp from blk: ", repr signalTyp
+  echo "CC:: signalTyp from blk: ", repr signalTyp
+  let
+    fnSig = ident("fnSig")
+    fnInst = ident("fnInst")
+    fnTyp = getTypeImpl(blk)
+  result = quote do:
+    var `fnSig`: `signalTyp`
+    var `fnInst`: `fnTyp` = `blk`
+
+
 template connectTo*(
     a: Agent,
     signal: typed,
@@ -39,7 +64,11 @@ template connectTo*(
 ): auto =
   var signalType {.used, inject.}: typeof(SignalTypes.`signal`(typeof(a)))
 
+  closureTyp(blk)
+
   static:
-    echo "CALL:: signalType: ", $typeof(SignalTypes.`signal`(typeof(a)))
+    echo "CC:: signalType: ", $typeof(SignalTypes.`signal`(typeof(a)))
+    echo "CC:: fnType: ", $typeof(fnSig)
+    echo "CC:: fnInst: ", $typeof(fnInst)
 
   ClosureAgent[typeof(signalType)]()
