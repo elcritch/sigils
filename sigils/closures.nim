@@ -59,17 +59,20 @@ macro closureTyp(blk: typed) =
 
   echo "CALL:\n", repr(result)
 
-macro closureSlotImpl(blk: typed) =
-  echo "CC:: blk:tp: ", repr getTypeImpl(blk)
-  echo "CC:: blk: ", lispRepr(blk)
-  echo "CC:: blk:params: ", lispRepr(blk.params)
+macro closureSlotImpl(fnSig, fnInst: typed) =
+  echo ""
+  echo "CI:: fnSig:tp: ", repr getTypeImpl(fnSig)
+  echo "CI:: fnSig: ", repr fnSig
+  echo "CI:: fnInst:tp: ", repr(fnInst.getTypeImpl())
+  echo "CI:: fnInst: ", repr(fnInst)
+  echo ""
 
   var
     signalTyp = nnkTupleConstr.newTree()
-    blk = blk.copyNimTree()
+    blk = fnInst.getTypeImpl().copyNimTree()
     params = blk.params
     sigParams = blk.params.copyNimTree()
-  # sigParams.del(0, 1)
+  sigParams.del(0, 1)
 
   # blk.addPragma(ident "closure")
   for i in 1 ..< params.len:
@@ -104,9 +107,6 @@ macro closureSlotImpl(blk: typed) =
   echo "FN MCALL: ", mcall.repr
 
   result = quote do:
-    var `fnSig`: `signalTyp`
-    var `fnInst`: `fnTyp` = `blk`
-
     let `fnSlot`: AgentProc = proc(context: Agent, params: SigilParams) {.nimcall.} =
       let `self` = ClosureAgent[`signalTyp`](context)
       if `self` == nil:
@@ -128,11 +128,15 @@ macro closureSlotImpl(blk: typed) =
       #   discard
   echo "CALL:\n", repr(result)
 
-template closureSlot*[T](
+template closureSlot*[T, V](
     fnSig: typedesc[T],
+    fnInst: V,
 ): auto =
 
-  discard
+  static:
+    echo "closureSlot: fnInst: tp: ", $typeof(fnInst)
+  
+  closureSlotImpl(fnSig, fnInst)
 
 template connectTo*(
     a: Agent,
@@ -156,6 +160,6 @@ template connectTo*(
     echo "CC:: fnInst: ", $typeof(fnInst)
     # echo "CC:: fnSlot: ", $typeof(fnSlot)
 
-  closureSlot(typeof(fnSig))
+  closureSlot(typeof(fnSig), fnInst)
 
   ClosureAgent[typeof(signalType)]()
