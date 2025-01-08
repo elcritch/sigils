@@ -59,7 +59,7 @@ macro closureTyp(blk: typed) =
 
   echo "CALL:\n", repr(result)
 
-macro closureSlot(blk: typed) =
+macro closureSlotImpl(blk: typed) =
   echo "CC:: blk:tp: ", repr getTypeImpl(blk)
   echo "CC:: blk: ", lispRepr(blk)
   echo "CC:: blk:params: ", lispRepr(blk.params)
@@ -126,8 +126,13 @@ macro closureSlot(blk: typed) =
       #   # c3(value, `self`.rawEnv)
       #   # `mcall`
       #   discard
-
   echo "CALL:\n", repr(result)
+
+template closureSlot*[T](
+    fnSig: typedesc[T],
+): auto =
+
+  discard
 
 template connectTo*(
     a: Agent,
@@ -150,5 +155,7 @@ template connectTo*(
     echo "CC:: fnType: ", $typeof(fnSig)
     echo "CC:: fnInst: ", $typeof(fnInst)
     # echo "CC:: fnSlot: ", $typeof(fnSlot)
+
+  closureSlot(typeof(fnSig))
 
   ClosureAgent[typeof(signalType)]()
