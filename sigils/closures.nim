@@ -8,6 +8,8 @@ export signals, slots, agents
 
 type
   ClosureAgent*[T] = ref object of Agent
+    rawEnv: pointer
+    rawProc: pointer
 
 macro callWithEnv(fn, args, env: typed): NimNode =
   discard
@@ -22,7 +24,7 @@ proc callClosure[T](self: ClosureAgent[T], value: int) {.slot.} =
     c3(value, self.rawEnv)
 
 
-proc withClosure*[T](fn: T) =
+proc withClosure*[T](fn: T): ClosureAgent[T] =
   let
     e = fn.rawEnv()
     p = fn.rawProc()

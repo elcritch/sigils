@@ -65,3 +65,5 @@ suite "agent closure slots":
             proc (a: int) {.closure.} =
               base = a
           )
+    
+    echo "cc: Type: ", $typeof(cc)
