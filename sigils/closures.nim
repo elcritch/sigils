@@ -118,12 +118,12 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
     proc rpcMethod(
         self: ClosureAgent[typeof(signalType)]
     ): (Agent, SigilRequestTy[ClosureAgent[typeof(signalType)]]) =
-      # let args = `construct`
+      let args = `construct`
       let name: SigilName = toSigilName(`signalName`)
-      # let req = initSigilRequest[`firstType`, typeof(args)](
-        # procName = name, args = args, origin = `objId`.getId()
-      # )
-      # result = (`objId`, req)
+      let req = initSigilRequest[ClosureAgent[typeof(signalType)], typeof(args)](
+        procName = name, args = args, origin = self.getId()
+      )
+      result = (self, req)
 
     
   echo "<<<CALL:\n", repr(result)
