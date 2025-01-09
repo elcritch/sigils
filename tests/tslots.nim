@@ -2,6 +2,8 @@ import sigils/signals
 import sigils/slots
 import sigils/core
 
+import std/monotimes
+
 type
   Counter* = ref object of Agent
     value: int
@@ -35,6 +37,14 @@ proc someAction*(self: Counter) {.slot.} =
 
 proc value*(self: Counter): int =
   self.value
+
+proc doTick*(fig: Counter,
+             tickCount: int,
+             now: MonoTime) {.signal.}
+
+proc someTick*(self: Counter, tick: int, now: MonoTime) {.slot.} =
+  echo "tick: ", tick, " now: ", now
+  self.avg = now.ticks
 
 when isMainModule:
   import unittest
@@ -132,3 +142,11 @@ when isMainModule:
 
       check a.value == 42
       check c.avg == -1
+
+    test "test multiarg":
+      connect(a, doTick, c, someTick)
+
+      let ts = getMonoTime()
+      emit a.doTick(123, ts)
+
+      check c.avg == ts.ticks
