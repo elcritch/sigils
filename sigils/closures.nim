@@ -1,4 +1,3 @@
-
 import signals
 import slots
 import agents
@@ -6,10 +5,9 @@ import std/macros
 
 export signals, slots, agents
 
-type
-  ClosureAgent*[T] = ref object of Agent
-    rawEnv: pointer
-    rawProc: pointer
+type ClosureAgent*[T] = ref object of Agent
+  rawEnv: pointer
+  rawProc: pointer
 
 macro closureTyp(blk: typed) =
   ## figure out the signal type from the lambda and the function sig
@@ -24,7 +22,7 @@ macro closureTyp(blk: typed) =
     fnInst = ident("fnInst")
     fnTyp = getTypeImpl(blk)
 
-  result = quote do:
+  result = quote:
     var `fnSig`: `signalTyp`
     var `fnInst`: `fnTyp` = `blk`
 
@@ -42,8 +40,8 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
 
   # setup call without env pointer
   var
-    fnSigCall1 = quote do:
-      proc () {.nimcall.}
+    fnSigCall1 = quote:
+      proc() {.nimcall.}
     fnCall1 = nnkCall.newTree(c1)
   for idx, param in params[1 ..^ 1]:
     fnSigCall1.params.add(newIdentDefs(ident("a" & $idx), param[1]))
@@ -60,7 +58,7 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
   fnCall2[0] = c2
   fnCall2.add(env)
 
-  result = quote do:
+  result = quote:
     let `fnSlot`: AgentProc = proc(context: Agent, params: SigilParams) {.nimcall.} =
       let self = ClosureAgent[`fnSig`](context)
       if self == nil:
@@ -78,11 +76,7 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
         let `c2` = cast[`fnSigCall2`](rawProc)
         `fnCall2`
 
-template connectTo*(
-    a: Agent,
-    signal: typed,
-    blk: typed
-): ClosureAgent =
+template connectTo*(a: Agent, signal: typed, blk: typed): ClosureAgent =
   ## creates an anonymous agent and slot that calls the given closure
   ## when the `signal` event is emitted. 
 

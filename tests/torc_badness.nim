@@ -19,21 +19,25 @@ type
     freedByThread*: int
 
   Agent* = ref object of AgentObj
-  # Agent* {.acyclic.} = ref object of AgentObj ## this also avoids the issue
+    # Agent* {.acyclic.} = ref object of AgentObj ## this also avoids the issue
 
 # proc `=wasMoved`(agent: var AgentObj) =
 #   echo "agent was moved"
 #   agent.moved = true
 
 proc `=destroy`*(agentObj: AgentObj) =
-  let xid: WeakRef[Agent] = WeakRef[Agent](pt: cast[Agent](addr agentObj)) ##\
+  let xid: WeakRef[Agent] = WeakRef[Agent](pt: cast[Agent](addr agentObj))
+    ##\
     ## This is pretty hacky, but we need to get the address of the original
     ## Agent (ref object) since it's used to unsubscribe from other agents in the actual code,
     ## Luckily the agent address is the same as `addr agent` of the agent object here.
   echo "Destroying agent: ",
-          " pt: ", cast[pointer](xid.pt).repr,
-          " freed: ", agentObj.freedByThread,
-          " lstCnt: ", xid[].subcriptionsTable.len()
+    " pt: ",
+    cast[pointer](xid.pt).repr,
+    " freed: ",
+    agentObj.freedByThread,
+    " lstCnt: ",
+    xid[].subcriptionsTable.len()
   if agentObj.freedByThread != 0:
     raise newException(Defect, "already freed!")
 
@@ -54,14 +58,12 @@ proc `=destroy`*(agentObj: AgentObj) =
   `=destroy`(xid[].subcriptionsTable)
   echo "finished destroy: agent: ", " pt: 0x", cast[pointer](xid.pt).repr
 
-type
-  Counter* = ref object of Agent
-    value: int
+type Counter* = ref object of Agent
+  value: int
 
 suite "threaded agent slots":
   test "sigil object thread runner":
-
     block:
       var b = Counter.new()
-    
+
     GC_fullCollect()

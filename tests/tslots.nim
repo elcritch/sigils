@@ -38,9 +38,7 @@ proc someAction*(self: Counter) {.slot.} =
 proc value*(self: Counter): int =
   self.value
 
-proc doTick*(fig: Counter,
-             tickCount: int,
-             now: MonoTime) {.signal.}
+proc doTick*(fig: Counter, tickCount: int, now: MonoTime) {.signal.}
 
 proc someTick*(self: Counter, tick: int, now: MonoTime) {.slot.} =
   echo "tick: ", tick, " now: ", now

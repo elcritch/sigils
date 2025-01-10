@@ -65,20 +65,27 @@ proc repr*(obj: SigilThread): string =
   else:
     let dname = ""
 
-  result = fmt"SigilThread(id: {$obj.id}, {dname}signaled: {$obj.signaled.len} agent: {$obj.agent.unsafeWeakRef} )"
+  result =
+    fmt"SigilThread(id: {$obj.id}, {dname}signaled: {$obj.signaled.len} agent: {$obj.agent.unsafeWeakRef} )"
 
 proc newSigilChan*(): SigilChan =
   result = newChan[ThreadSignal](1_000)
 
-method send*(thread: SigilThread, msg: sink ThreadSignal, blocking: BlockingKinds = Blocking) {.base, gcsafe.} =
+method send*(
+    thread: SigilThread, msg: sink ThreadSignal, blocking: BlockingKinds = Blocking
+) {.base, gcsafe.} =
   echo "send raw!"
   raise newException(AssertionDefect, "this should never be called!")
 
-method recv*(thread: SigilThread, msg: var ThreadSignal, blocking: BlockingKinds): bool {.base, gcsafe.} =
+method recv*(
+    thread: SigilThread, msg: var ThreadSignal, blocking: BlockingKinds
+): bool {.base, gcsafe.} =
   echo "recv raw!"
   raise newException(AssertionDefect, "this should never be called!")
 
-method send*(thread: SigilThreadImpl, msg: sink ThreadSignal, blocking: BlockingKinds) {.gcsafe.} =
+method send*(
+    thread: SigilThreadImpl, msg: sink ThreadSignal, blocking: BlockingKinds
+) {.gcsafe.} =
   var msg = isolateRuntime(msg)
   case blocking
   of Blocking:
@@ -88,7 +95,9 @@ method send*(thread: SigilThreadImpl, msg: sink ThreadSignal, blocking: Blocking
     if not sent:
       raise newException(Defect, "could not send!")
 
-method recv*(thread: SigilThreadImpl, msg: var ThreadSignal, blocking: BlockingKinds): bool {.gcsafe.} =
+method recv*(
+    thread: SigilThreadImpl, msg: var ThreadSignal, blocking: BlockingKinds
+): bool {.gcsafe.} =
   case blocking
   of Blocking:
     msg = thread.inputs.recv()
@@ -131,9 +140,10 @@ proc gcCollectReferences(thread: var SigilThread) =
 
 proc exec*(thread: var SigilThread, sig: ThreadSignal) =
   debugPrint "\nthread got request: ", $sig.kind
-  case sig.kind:
+  case sig.kind
   of Move:
-    debugPrint "\t threadExec:move: ", $sig.item.unsafeWeakRef(), " refcount: ", $sig.item.unsafeGcCount()
+    debugPrint "\t threadExec:move: ",
+      $sig.item.unsafeWeakRef(), " refcount: ", $sig.item.unsafeGcCount()
     var item = sig.item
     thread.references[item.unsafeWeakRef()] = move item
   of Deref:
@@ -159,7 +169,8 @@ proc exec*(thread: var SigilThread, sig: ThreadSignal) =
         # discard c_raise(11.cint)
       assert sig.tgt[].freedByThread == 0
     let res = sig.tgt[].callMethod(sig.req, sig.slot)
-    debugPrint "\t threadExec:tgt: ", $sig.tgt[].getSigilId(), " rc: ", $sig.tgt[].unsafeGcCount()
+    debugPrint "\t threadExec:tgt: ",
+      $sig.tgt[].getSigilId(), " rc: ", $sig.tgt[].unsafeGcCount()
   of Trigger:
     debugPrint "Triggering"
     var signaled: HashSet[WeakRef[AgentRemote]]

@@ -12,6 +12,7 @@ type WeakRef*[T] {.acyclic.} = object
 
 proc `=destroy`*[T](obj: WeakRef[T]) =
   discard
+
 proc `=copy`*[T](dst: var WeakRef[T], src: WeakRef[T]) =
   dst.pt = src.pt
 
@@ -25,9 +26,7 @@ proc `[]`*[T](r: WeakRef[T]): lent T {.inline.} =
     r.pt
 
 template `{}`*[T](r: WeakRef[T]): auto =
-  cast[
-    ptr typeof(T()[]) 
-  ](r.pt)
+  cast[ptr typeof(T()[])](r.pt)
 
 template isNil*[T](r: WeakRef[T]): bool =
   r.pt == nil
@@ -49,13 +48,13 @@ proc unsafeWeakRef*[T](obj: ptr T): WeakRef[T] =
 proc unsafeWeakRef*[T](obj: WeakRef[T]): WeakRef[T] =
   result = obj
 
-proc verifyUniqueSkip*(tp: typedesc[WeakRef]) = discard
+proc verifyUniqueSkip*(tp: typedesc[WeakRef]) =
+  discard
 
 proc toPtr*[T](obj: WeakRef[T]): pointer =
   result = cast[pointer](obj.pt)
 
-proc toKind*[T, U](obj: WeakRef[T],
-                   tp: typedesc[U]): WeakRef[U] =
+proc toKind*[T, U](obj: WeakRef[T], tp: typedesc[U]): WeakRef[U] =
   cast[WeakRef[U]](obj)
 
 proc hash*[T](obj: WeakRef[T]): Hash =

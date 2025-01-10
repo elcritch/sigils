@@ -21,12 +21,13 @@ type
 
   InnerA = object
     id: int
+
   InnerC = object
     id: int
 
 var globalLastInnerADestroyed: Atomic[int]
 globalLastInnerADestroyed.store(0)
-proc `=destroy`*(obj: InnerA) = 
+proc `=destroy`*(obj: InnerA) =
   if obj.id != 0:
     echo "destroyed InnerA!"
   globalLastInnerADestroyed.store obj.id
@@ -34,7 +35,7 @@ proc `=destroy`*(obj: InnerA) =
 var globalLastInnerCDestroyed: Atomic[int]
 globalLastInnerCDestroyed.store(0)
 
-proc `=destroy`*(obj: InnerC) = 
+proc `=destroy`*(obj: InnerC) =
   if obj.id != 0:
     echo "destroyed InnerC!"
   globalLastInnerCDestroyed.store obj.id
@@ -57,26 +58,29 @@ var globalCounter: Atomic[int]
 globalCounter.store(0)
 
 proc setValueGlobal*(self: Counter, value: int) {.slot.} =
-  echo "setValueGlobal! ", value, " id: ", self.getSigilId().int, " (th: ", getThreadId(), ")"
+  echo "setValueGlobal! ",
+    value, " id: ", self.getSigilId().int, " (th: ", getThreadId(), ")"
   if self.value != value:
     self.value = value
   globalCounter.store(value)
 
 var globalLastTicker: Atomic[int]
 proc ticker*(self: Counter) {.slot.} =
-  for i in 3..3:
+  for i in 3 .. 3:
     echo "tick! i:", i, " ", self.unsafeWeakRef(), " (th: ", getThreadId(), ")"
     globalLastTicker.store i
     # printConnections(self)
     emit self.updated(i)
 
 proc completed*(self: SomeAction, final: int) {.slot.} =
-  echo "Action done! final: ", final, " id: ", $self.unsafeWeakRef(), " (th: ", getThreadId(), ")"
+  echo "Action done! final: ",
+    final, " id: ", $self.unsafeWeakRef(), " (th: ", getThreadId(), ")"
   self.value = final
 
 proc completedSum*(self: SomeAction, final: int) {.slot.} =
   when defined(debug):
-    echo "Action done! final: ", final, " id: ", $self.unsafeWeakRef(), " (th: ", getThreadId(), ")"
+    echo "Action done! final: ",
+      final, " id: ", $self.unsafeWeakRef(), " (th: ", getThreadId(), ")"
   self.value = self.value + final
 
 proc value*(self: Counter): int =
@@ -95,13 +99,11 @@ suite "threaded agent slots":
 
   when true:
     test "simple thread setup":
-
       let ct = newSigilThread()
       check not ct.isNil
 
       var a = SomeAction.new()
       ct[].send(ThreadSignal(kind: Move, item: move a))
-
 
   when true:
     test "simple threading test":
@@ -159,15 +161,13 @@ suite "threaded agent slots":
   when true:
     test "agent connect a->b then moveToThread then destroy proxy":
       # debugPrintQuiet = true
-      var
-        a = SomeAction(debugName: "A")
+      var a = SomeAction(debugName: "A")
       when defined(sigilsDebug):
         a.debugName = "A"
         a.obj.id = 1010
 
       block:
-        var
-          b = Counter()
+        var b = Counter()
         when defined(sigilsDebug):
           b.debugName = "B"
           b.obj.id = 2020
@@ -190,7 +190,9 @@ suite "threaded agent slots":
         printConnections(bp.proxyTwin[])
         printConnections(bp.remote[])
         let
-          subLocalProxy = Subscription(tgt: bp.unsafeWeakRef().asAgent(), slot: setValueGlobal(Counter))
+          subLocalProxy = Subscription(
+            tgt: bp.unsafeWeakRef().asAgent(), slot: setValueGlobal(Counter)
+          )
           remoteProxy = bp.proxyTwin
         check a.subcriptionsTable["valueChanged".toSigilName].contains(subLocalProxy)
         check bp.listening.contains(a.unsafeWeakRef().asAgent())
@@ -212,8 +214,9 @@ suite "threaded agent slots":
       emit a.valueChanged(111)
       check globalCounter.load() == 568
 
-      for i in 1..10:
-        if globalLastInnerCDestroyed.load == 2020: break
+      for i in 1 .. 10:
+        if globalLastInnerCDestroyed.load == 2020:
+          break
         os.sleep(1)
       check globalLastInnerCDestroyed.load == 2020
 
@@ -222,15 +225,13 @@ suite "threaded agent slots":
       debugPrintQuiet = false
 
       let ct = getCurrentSigilThread()
-      var
-        a = SomeAction(debugName: "A")
+      var a = SomeAction(debugName: "A")
       when defined(sigilsDebug):
         a.debugName = "A"
         a.obj.id = 1010
 
       block:
-        var
-          b = Counter()
+        var b = Counter()
         when defined(sigilsDebug):
           b.debugName = "B"
           b.obj.id = 2020
@@ -259,7 +260,9 @@ suite "threaded agent slots":
         # printConnections(thread[])
 
         let
-          subLocalProxy = Subscription(tgt: bp.unsafeWeakRef().asAgent(), slot: setValueGlobal(Counter))
+          subLocalProxy = Subscription(
+            tgt: bp.unsafeWeakRef().asAgent(), slot: setValueGlobal(Counter)
+          )
           remoteProxy = bp.proxyTwin
         check a.subcriptionsTable.len() == 0
         check a.listening.len() == 1
@@ -273,7 +276,7 @@ suite "threaded agent slots":
 
         thread.start()
 
-        for i in 1..3:
+        for i in 1 .. 3:
           if globalLastTicker.load != 3:
             os.sleep(1)
         check globalLastTicker.load == 3
@@ -282,13 +285,12 @@ suite "threaded agent slots":
         echo "polled: ", polled
         check a.value == 3
         echo "inner done"
-      
+
       echo "outer done"
 
   when true:
     test "agent connect then moveToThread and run":
-      var
-        a = SomeAction.new()
+      var a = SomeAction.new()
 
       block:
         echo "sigil object thread connect change"
@@ -318,17 +320,14 @@ suite "threaded agent slots":
   # when true:
   when true:
     test "agent move to thread then connect and run":
-
-      var
-        a = SomeAction.new()
+      var a = SomeAction.new()
 
       let thread = newSigilThread()
       thread.start()
       startLocalThread()
 
       block:
-        var
-          b = Counter.new()
+        var b = Counter.new()
         echo "thread runner!", " (th: ", getThreadId(), ")"
         echo "obj a: ", $a.getSigilId()
         echo "obj b: ", $b.getSigilId()
@@ -347,7 +346,7 @@ suite "threaded agent slots":
         ct[].poll()
         check a.value == 314
         GC_fullCollect()
-      
+
       # check a.subcriptionsTable.len() == 0
       # check a.listening.len() == 0
       if a.subcriptionsTable.len() > 0:
@@ -367,12 +366,10 @@ suite "threaded agent slots":
         startLocalThread()
         let ct = getCurrentSigilThread()
 
-        var
-          a = SomeAction.new()
-        
+        var a = SomeAction.new()
+
         block:
-          var
-            b = Counter.new()
+          var b = Counter.new()
 
           echo "B: ", b.getSigilId()
           # echo "obj bp: ", bp.unsafeWeakRef
@@ -402,12 +399,10 @@ suite "threaded agent slots":
   when true:
     test "sigil object thread runner multiple emit and listens":
       block:
-        var
-          a = SomeAction.new()
-        
+        var a = SomeAction.new()
+
         block:
-          var
-            b = Counter.new()
+          var b = Counter.new()
 
           # echo "thread runner!", " (main thread:", getThreadId(), ")"
           # echo "obj a: ", a.unsafeWeakRef
@@ -429,7 +424,7 @@ suite "threaded agent slots":
           # os.sleep(10)
           let ct = getCurrentSigilThread()
           var cnt = 0
-          for i in 1..20:
+          for i in 1 .. 20:
             cnt.inc(ct[].pollAll())
             if cnt >= 3:
               break
@@ -438,7 +433,6 @@ suite "threaded agent slots":
           check a.value == 756809 + 628
         GC_fullCollect()
       GC_fullCollect()
-
 
   when true:
     test "sigil object thread runner (loop)":
@@ -483,7 +477,7 @@ suite "threaded agent slots":
               emit a.valueChanged(271)
 
               var cnt = 0
-              for i in 1..20:
+              for i in 1 .. 20:
                 cnt.inc(ct[].pollAll())
                 if cnt >= 3:
                   break

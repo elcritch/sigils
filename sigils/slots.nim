@@ -28,7 +28,7 @@ proc mkParamsVars*(paramsIdent, paramsType, params: NimNode): NimNode =
   var cnt = 0
   for paramid, paramType in paramsIter(params):
     let idx = newIntLitNode(cnt)
-    let vars = quote do:
+    let vars = quote:
       var `paramid`: `paramType` = `paramsIdent`[`idx`]
     varList.add vars
     cnt.inc()

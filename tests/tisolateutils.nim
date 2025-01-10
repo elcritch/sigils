@@ -32,7 +32,8 @@ proc setValue*(self: Counter, value: int) {.slot.} =
   emit self.updated(self.value)
 
 proc completed*(self: SomeAction, final: int) {.slot.} =
-  echo "Action done! final: ", final, " id: ", self.getSigilId(), " (th:", getThreadId(), ")"
+  echo "Action done! final: ",
+    final, " id: ", self.getSigilId(), " (th:", getThreadId(), ")"
   self.value = final
 
 proc value*(self: Counter): int =
@@ -42,7 +43,6 @@ suite "isolate utils":
   teardown:
     GC_fullCollect()
 
-
   test "isolateRuntime":
     type
       TestObj = object
@@ -50,12 +50,10 @@ suite "isolate utils":
       TestInner = object
         value: TestRef
 
-    var
-      a = SomeAction(value: 10)
-    
+    var a = SomeAction(value: 10)
+
     echo "A: ", a.unsafeGcCount()
-    var
-      isoA = isolateRuntime(move a)
+    var isoA = isolateRuntime(move a)
     check a.isNil
     check isoA.extract().value == 10
 
@@ -81,9 +79,8 @@ suite "isolate utils":
         e2 = e
         isoE = isolateRuntime(e)
       check isoE.extract() == e
-    
-    var
-      f = TestInner()
+
+    var f = TestInner()
     var isoF = isolateRuntime(f)
     check isoF.extract() == f
 
@@ -98,7 +95,7 @@ type
     # thr: Thread[int]
     # ch: Chan[int]
 
-proc `=copy`*(a: var NonCopy; b: NonCopy) {.error.}
+proc `=copy`*(a: var NonCopy, b: NonCopy) {.error.}
 
 method test*(obj: Foo) {.base.} =
   echo "foo: ", obj.repr
@@ -163,7 +160,7 @@ suite "isolate utils":
 
     proc testValue(bar: var BarImpl): int =
       bar.value
-    
+
     check bp[].testValue() == 101
 
   test "isolateRuntime sharedPointer":

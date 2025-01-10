@@ -132,7 +132,6 @@ suite "agent weak refs":
     check y.unsafeGcCount() == 1
 
   test "weak refs":
-
     var x = Counter.new()
     echo "X::count: ", x.unsafeGcCount()
     check x.unsafeGcCount() == 1
@@ -175,7 +174,6 @@ method test(obj: FooBar) =
 
 suite "check object methods":
   test "methods":
-
     let f = Foo(value: 1)
     let fb = FooBar(value: 2)
     f.test()

@@ -40,22 +40,23 @@ plock.initLock()
 
 proc debugPrintImpl*(msgs: varargs[string, `$`]) {.raises: [].} =
   {.cast(gcsafe).}:
-      try:
-        # withLock plock:
-        block:
-          let
-            tid = getThreadId()
-            color =
-              if pidx == 0:
-                fgBlue
-              else:
-                pcolors[pidx mod pcolors.len()]
-          var msg = ""
-          for m in msgs: msg &= m
-          stdout.styledWriteLine color, msg, {styleBright}, &" [th: {$tid}]"
-          stdout.flushFile()
-      except IOError:
-        discard
+    try:
+      # withLock plock:
+      block:
+        let
+          tid = getThreadId()
+          color =
+            if pidx == 0:
+              fgBlue
+            else:
+              pcolors[pidx mod pcolors.len()]
+        var msg = ""
+        for m in msgs:
+          msg &= m
+        stdout.styledWriteLine color, msg, {styleBright}, &" [th: {$tid}]"
+        stdout.flushFile()
+    except IOError:
+      discard
 
 template debugPrint*(msgs: varargs[untyped]) =
   when defined(sigilsDebugPrint):
@@ -64,15 +65,23 @@ template debugPrint*(msgs: varargs[untyped]) =
 
 proc brightPrint*(color: ForegroundColor, msg, value: string, msg2 = "", value2 = "") =
   if not debugPrintQuiet:
-    stdout.styledWriteLine color, msg, {styleBright, styleItalic}, value, resetStyle,
-                           color, msg2, {styleBright, styleItalic}, value2
+    stdout.styledWriteLine color,
+      msg,
+      {styleBright, styleItalic},
+      value,
+      resetStyle,
+      color,
+      msg2,
+      {styleBright, styleItalic},
+      value2
+
 proc brightPrint*(msg, value: string, msg2 = "", value2 = "") =
   brightPrint(fgGreen, msg, value, msg2, value2)
 
-
 type
   AgentObj = object of RootObj
-    subcriptionsTable*: Table[SigilName, OrderedSet[Subscription]] ## agents listening to me
+    subcriptionsTable*: Table[SigilName, OrderedSet[Subscription]]
+      ## agents listening to me
     listening*: HashSet[WeakRef[Agent]] ## agents I'm listening to
     when defined(sigilsDebug) or defined(debug):
       freedByThread*: int
@@ -122,9 +131,7 @@ proc `$`*[T: Agent](obj: WeakRef[T]): string =
     result &= obj.toPtr().repr
   result &= ")"
 
-template removeSubscriptionsForImpl*(
-    self: Agent, subscriber: WeakRef[Agent]
-) =
+template removeSubscriptionsForImpl*(self: Agent, subscriber: WeakRef[Agent]) =
   ## Route's an rpc request. 
   var delSigs: seq[SigilName]
   var toDel: seq[Subscription]
@@ -148,9 +155,7 @@ method removeSubscriptionsFor*(
   debugPrint "   removeSubscriptionsFor:agent: ", " self:id: ", $self.unsafeWeakRef()
   removeSubscriptionsForImpl(self, subscriber)
 
-template unregisterSubscriberImpl*(
-    self: Agent, listener: WeakRef[Agent]
-) =
+template unregisterSubscriberImpl*(self: Agent, listener: WeakRef[Agent]) =
   debugPrint "\tunregisterSubscriber: ", $listener, " from self: ", self.unsafeWeakRef()
   # debugPrint "\tlisterners:subscribed ", subscriber.tgt[].subscribed
   assert listener in self.listening
@@ -169,8 +174,7 @@ template unsubscribeFrom*(self: WeakRef[Agent], listening: HashSet[WeakRef[Agent
     agent[].removeSubscriptionsFor(self)
 
 template removeSubscriptions*(
-    agent: WeakRef[Agent],
-    subcriptionsTable: Table[SigilName, OrderedSet[Subscription]],
+    agent: WeakRef[Agent], subcriptionsTable: Table[SigilName, OrderedSet[Subscription]]
 ) =
   ## remove myself from agents listening to me
   for signal, subscriptions in subcriptionsTable.pairs():
@@ -182,10 +186,10 @@ proc `=destroy`*(agentObj: AgentObj) {.forbids: [DestructorUnsafe].} =
   let agent: WeakRef[Agent] = unsafeWeakRef(cast[Agent](addr(agentObj)))
 
   debugPrint &"destroy: agent: ",
-          &" pt: {$agent}",
-          &" freedByThread: {agentObj.freedByThread}",
-          &" subs: {agent[].subcriptionsTable.len()}",
-          &" subTo: {agent[].listening.len()}"
+    &" pt: {$agent}",
+    &" freedByThread: {agentObj.freedByThread}",
+    &" subs: {agent[].subcriptionsTable.len()}",
+    &" subTo: {agent[].listening.len()}"
   # debugPrint "destroy agent: ", getStackTrace().replace("\n", "\n\t")
   when defined(debug) or defined(sigilsDebug):
     assert agentObj.freedByThread == 0
@@ -209,9 +213,7 @@ proc hash*(a: Agent): Hash =
 method hasConnections*(self: Agent): bool {.base, gcsafe, raises: [].} =
   self.subcriptionsTable.len() != 0 or self.listening.len() != 0
 
-proc getSubscriptions*(
-    obj: Agent, sig: SigilName
-): OrderedSet[Subscription] =
+proc getSubscriptions*(obj: Agent, sig: SigilName): OrderedSet[Subscription] =
   # echo "FIND:subcriptionsTable: ", obj.subcriptionsTable
   if obj.subcriptionsTable.hasKey(sig):
     result = obj.subcriptionsTable[sig]
@@ -230,10 +232,7 @@ proc asAgent*[T: Agent](obj: T): Agent =
   result = obj
 
 proc addSubscription*(
-    obj: Agent,
-    sig: SigilName,
-    tgt: Agent | WeakRef[Agent],
-    slot: AgentProc
+    obj: Agent, sig: SigilName, tgt: Agent | WeakRef[Agent], slot: AgentProc
 ): void =
   # echo "add agent listener: ", sig, " obj: ", obj.debugId, " tgt: ", tgt.debugId
   # if obj.subcriptionsTable.hasKey(sig):
@@ -260,14 +259,18 @@ template addSubscription*(
 
 var printConnectionsSlotNames* = initTable[pointer, string]()
 
-proc printConnections*(agent: Agent; ) =
+proc printConnections*(agent: Agent) =
   withLock plock:
     if agent.isNil:
       brightPrint fgBlue, "connections for Agent: ", "nil"
       return
     when defined(sigilsDebug):
       if agent[].freedByThread != 0:
-        brightPrint fgBlue, "connections for Agent: ", $agent.unsafeWeakRef(), " freedByThread: ", $agent[].freedByThread
+        brightPrint fgBlue,
+          "connections for Agent: ",
+          $agent.unsafeWeakRef(),
+          " freedByThread: ",
+          $agent[].freedByThread
         return
     brightPrint fgBlue, "connections for Agent: ", $agent.unsafeWeakRef()
     brightPrint fgMagenta, "\t subscribers:", ""
@@ -279,4 +282,3 @@ proc printConnections*(agent: Agent; ) =
     brightPrint fgMagenta, "\t listening:", ""
     for listening in agent.listening:
       brightPrint fgRed, "\t\t listen: ", $listening
-    

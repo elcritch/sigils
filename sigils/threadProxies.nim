@@ -13,7 +13,6 @@ import threadBase
 from system/ansi_c import c_raise
 
 type
-
   AgentProxyShared* = ref object of AgentRemote
     remote*: WeakRef[Agent]
     proxyTwin*: WeakRef[AgentProxyShared]
@@ -58,6 +57,7 @@ proc getRemote*[T](proxy: AgentProxy[T]): WeakRef[T] =
 
 proc remoteSlot*(context: Agent, params: SigilParams) {.nimcall.} =
   raise newException(AssertionDefect, "this should never be called!")
+
 proc localSlot*(context: Agent, params: SigilParams) {.nimcall.} =
   raise newException(AssertionDefect, "this should never be called!")
 
@@ -65,7 +65,12 @@ method callMethod*(
     proxy: AgentProxyShared, req: SigilRequest, slot: AgentProc
 ): SigilResponse {.gcsafe, effectsOf: slot.} =
   ## Route's an rpc request. 
-  debugPrint "callMethod: proxy: ", $proxy.unsafeWeakRef().asAgent(), " refcount: ", proxy.unsafeGcCount(), " slot: ", repr(slot)
+  debugPrint "callMethod: proxy: ",
+    $proxy.unsafeWeakRef().asAgent(),
+    " refcount: ",
+    proxy.unsafeGcCount(),
+    " slot: ",
+    repr(slot)
   if slot == remoteSlot:
     var req = req.deepCopy()
     debugPrint "\t proxy:callMethod:remoteSlot: ", "req: ", $req
@@ -75,12 +80,10 @@ method callMethod*(
       pt = proxy.proxyTwin
 
     var msg = isolateRuntime ThreadSignal(
-      kind: Call,
-      slot: localSlot,
-      req: move req,
-      tgt: pt.toKind(Agent)
+      kind: Call, slot: localSlot, req: move req, tgt: pt.toKind(Agent)
     )
-    debugPrint "\t proxy:callMethod:remoteSlot: ", "msg: ", $msg, " proxyTwin: ", $proxy.proxyTwin
+    debugPrint "\t proxy:callMethod:remoteSlot: ",
+      "msg: ", $msg, " proxyTwin: ", $proxy.proxyTwin
     when defined(sigilsDebug) or defined(debug):
       assert proxy.freedByThread == 0
     when defined(sigilNonBlockingThreads):
@@ -97,8 +100,11 @@ method callMethod*(
     callSlots(proxy, req)
   else:
     var req = req.deepCopy()
-    debugPrint "\t callMethod:agentProxy:InitCall:Outbound: ", req.procName, " proxy:remote:obj: ", proxy.remote.getSigilId()
-    var msg = isolateRuntime ThreadSignal(kind: Call, slot: slot, req: move req, tgt: proxy.remote)
+    debugPrint "\t callMethod:agentProxy:InitCall:Outbound: ",
+      req.procName, " proxy:remote:obj: ", proxy.remote.getSigilId()
+    var msg = isolateRuntime ThreadSignal(
+      kind: Call, slot: slot, req: move req, tgt: proxy.remote
+    )
     when defined(sigilNonBlockingThreads):
       discard
     else:
@@ -142,8 +148,7 @@ proc findSubscribedToSignals(
       result[signal] = move toAdd
 
 proc moveToThread*[T: Agent, R: SigilThread](
-    agentTy: var T,
-    thread: ptr R
+    agentTy: var T, thread: ptr R
 ): AgentProxy[T] =
   ## move agent to another thread
   debugPrint "moveToThread: ", $agentTy.unsafeWeakRef()
@@ -151,29 +156,27 @@ proc moveToThread*[T: Agent, R: SigilThread](
     raise newException(
       AccessViolationDefect,
       "agent must be unique and not shared to be passed to another thread! " &
-      "GC ref is: " & $agentTy.unsafeGcCount(),
+        "GC ref is: " & $agentTy.unsafeGcCount(),
     )
   var
     ct = getCurrentSigilThread()
     agent = agentTy.unsafeWeakRef.asAgent()
 
     localProxy = AgentProxy[T](
-        remote: agent,
-        remoteThread: thread.toSigilThread(),
-        inbox: newChan[ThreadSignal](1_000),
+      remote: agent,
+      remoteThread: thread.toSigilThread(),
+      inbox: newChan[ThreadSignal](1_000),
     )
     remoteProxy = AgentProxy[T](
-        remote: agent,
-        remoteThread: ct,
-        inbox: newChan[ThreadSignal](1_000),
+      remote: agent, remoteThread: ct, inbox: newChan[ThreadSignal](1_000)
     )
   localProxy.lock.initLock()
   remoteProxy.lock.initLock()
   localProxy.proxyTwin = remoteProxy.unsafeWeakRef().toKind(AgentProxyShared)
   remoteProxy.proxyTwin = localProxy.unsafeWeakRef().toKind(AgentProxyShared)
   when defined(sigilsDebug):
-    localProxy.debugName = "localProxy::" & agentTy.debugName 
-    remoteProxy.debugName = "remoteProxy::" & agentTy.debugName 
+    localProxy.debugName = "localProxy::" & agentTy.debugName
+    remoteProxy.debugName = "remoteProxy::" & agentTy.debugName
 
   # handle things subscribed to `agent`, ie the inverse
   var
@@ -206,7 +209,6 @@ proc moveToThread*[T: Agent, R: SigilThread](
   thread[].send(ThreadSignal(kind: Move, item: move remoteProxy))
 
   return localProxy
-
 
 template connect*[T, S](
     a: Agent,

@@ -23,20 +23,18 @@ proc setValue*(self: Counter, value: int) {.slot.} =
 import unittest
 
 suite "agent closure slots":
-
   test "callback manual creation":
-    type
-      ClosureRunner[T] = ref object of Agent
-        rawEnv: pointer
-        rawProc: pointer
-        
+    type ClosureRunner[T] = ref object of Agent
+      rawEnv: pointer
+      rawProc: pointer
+
     proc callClosure[T](self: ClosureRunner[T], value: int) {.slot.} =
       echo "calling closure"
       if self.rawEnv.isNil():
         let c2 = cast[T](self.rawProc)
         c2(value)
       else:
-        let c3 = cast[proc (a: int, env: pointer) {.nimcall.}](self.rawProc)
+        let c3 = cast[proc(a: int, env: pointer) {.nimcall.}](self.rawProc)
         c3(value, self.rawEnv)
 
     var
@@ -44,13 +42,12 @@ suite "agent closure slots":
       base = 100
 
     let
-      c1: proc (a: int) =
-        proc (a: int) = 
-          base = a
+      c1: proc(a: int) = proc(a: int) =
+        base = a
       e = c1.rawEnv()
       p = c1.rawProc()
-      cc = ClosureRunner[proc (a: int)](rawEnv: e, rawProc: p)
-    connect(a, valueChanged, cc, ClosureRunner[proc (a: int) {.nimcall.}].callClosure)
+      cc = ClosureRunner[proc(a: int)](rawEnv: e, rawProc: p)
+    connect(a, valueChanged, cc, ClosureRunner[proc(a: int) {.nimcall.}].callClosure)
 
     a.setValue(42)
 
@@ -58,19 +55,16 @@ suite "agent closure slots":
     check base == 42
 
   test "callback creation":
-
     var
       a = Counter()
       b = Counter(value: 100)
 
-    let
-      clsAgent =
-        connectTo(a, valueChanged) do (val: int):
-          b.value = val
-    
+    let clsAgent = connectTo(a, valueChanged) do(val: int):
+      b.value = val
+
     check not compiles(
-      connectTo(a, valueChanged) do (val: float):
-          b.value = val
+      connectTo(a, valueChanged) do(val: float):
+        b.value = val
     )
 
     echo "cc3: Type: ", $typeof(clsAgent)
