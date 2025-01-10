@@ -97,7 +97,7 @@ method callMethod*(
     callSlots(proxy, req)
   else:
     var req = req.deepCopy()
-    debugPrint "\t callMethod:agentProxy:InitCall:Outbound: ", req.procName, " proxy:remote:obj: ", proxy.remote.getId()
+    debugPrint "\t callMethod:agentProxy:InitCall:Outbound: ", req.procName, " proxy:remote:obj: ", proxy.remote.getSigilId()
     var msg = isolateRuntime ThreadSignal(kind: Call, slot: slot, req: move req, tgt: proxy.remote)
     when defined(sigilNonBlockingThreads):
       discard
@@ -197,7 +197,7 @@ proc moveToThread*[T: Agent, R: SigilThread](
   var hasSubs = false
   for signal, subscriberPairs in oldSubscribers.mpairs():
     for sub in subscriberPairs:
-      # echo "signal: ", signal, " subscriber: ", tgt.getId
+      # echo "signal: ", signal, " subscriber: ", tgt.getSigilId
       localProxy.addSubscription(signal, sub.tgt[], sub.slot)
       hasSubs = true
   agent[].addSubscription(AnySigilName, remoteProxy, remoteSlot)

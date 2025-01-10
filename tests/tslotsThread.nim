@@ -43,12 +43,12 @@ proc valueChanged*(tp: SomeAction, val: int) {.signal.}
 proc updated*(tp: Counter, final: int) {.signal.}
 
 proc setValue*(self: Counter, value: int) {.slot.} =
-  # echo "setValue! ", value, " id: ", self.getId().int, " (th: ", getThreadId(), ")"
+  # echo "setValue! ", value, " id: ", self.getSigilId().int, " (th: ", getThreadId(), ")"
   # echo "setValue! self:refcount: ", self.unsafeGcCount() 
   if self.value != value:
     self.value = value
-  # echo "setValue:subcriptionsTable: ", self.subcriptionsTable.pairs().toSeq.mapIt(it[1].mapIt(cast[pointer](it.tgt.getId()).repr))
-  # echo "setValue:listening: ", $self.listening.toSeq.mapIt(cast[pointer](it.getId()).repr)
+  # echo "setValue:subcriptionsTable: ", self.subcriptionsTable.pairs().toSeq.mapIt(it[1].mapIt(cast[pointer](it.tgt.getSigilId()).repr))
+  # echo "setValue:listening: ", $self.listening.toSeq.mapIt(cast[pointer](it.getSigilId()).repr)
   if value == 756809:
     os.sleep(1)
   emit self.updated(self.value)
@@ -57,7 +57,7 @@ var globalCounter: Atomic[int]
 globalCounter.store(0)
 
 proc setValueGlobal*(self: Counter, value: int) {.slot.} =
-  echo "setValueGlobal! ", value, " id: ", self.getId().int, " (th: ", getThreadId(), ")"
+  echo "setValueGlobal! ", value, " id: ", self.getSigilId().int, " (th: ", getThreadId(), ")"
   if self.value != value:
     self.value = value
   globalCounter.store(value)
@@ -296,9 +296,9 @@ suite "threaded agent slots":
           b = Counter.new()
           c = SomeAction.new()
         echo "thread runner!", " (th: ", getThreadId(), ")"
-        echo "obj a: ", a.getId
-        echo "obj b: ", b.getId
-        echo "obj c: ", c.getId
+        echo "obj a: ", a.getSigilId
+        echo "obj b: ", b.getSigilId
+        echo "obj c: ", c.getSigilId
         let thread = newSigilThread()
         thread.start()
         startLocalThread()
@@ -307,7 +307,7 @@ suite "threaded agent slots":
         connect(b, updated, c, SomeAction.completed())
 
         let bp: AgentProxy[Counter] = b.moveToThread(thread)
-        echo "obj bp: ", bp.getId()
+        echo "obj bp: ", bp.getSigilId()
 
         emit a.valueChanged(314)
         let ct = getCurrentSigilThread()
@@ -330,11 +330,11 @@ suite "threaded agent slots":
         var
           b = Counter.new()
         echo "thread runner!", " (th: ", getThreadId(), ")"
-        echo "obj a: ", $a.getId()
-        echo "obj b: ", $b.getId()
+        echo "obj a: ", $a.getSigilId()
+        echo "obj b: ", $b.getSigilId()
 
         let bp: AgentProxy[Counter] = b.moveToThread(thread)
-        echo "obj bp: ", $bp.getId()
+        echo "obj bp: ", $bp.getSigilId()
         # echo "obj bp.remote: ", bp.remote[].unsafeWeakRef
 
         connect(a, valueChanged, bp, setValue)
@@ -374,14 +374,14 @@ suite "threaded agent slots":
           var
             b = Counter.new()
 
-          echo "B: ", b.getId()
+          echo "B: ", b.getSigilId()
           # echo "obj bp: ", bp.unsafeWeakRef
           # echo "obj bp.remote: ", bp.remote[].unsafeWeakRef
           connect(a, valueChanged, b, setValue)
           connect(b, updated, a, SomeAction.completed())
 
           let bp: AgentProxy[Counter] = b.moveToThread(thread)
-          echo "BP: ", bp.getId()
+          echo "BP: ", bp.getSigilId()
 
           emit a.valueChanged(89)
           emit a.valueChanged(756809)
@@ -471,10 +471,10 @@ suite "threaded agent slots":
                   echo "Loop: ", i, ".", j, " (th: ", getThreadId(), ")"
               a.value = 0
               var b = Counter.new()
-              # echo "B: ", b.getId()
+              # echo "B: ", b.getSigilId()
 
               let bp: AgentProxy[Counter] = b.moveToThread(thread)
-              # echo "BP: ", bp.getId()
+              # echo "BP: ", bp.getSigilId()
 
               connect(a, valueChanged, bp, setValue)
               connect(bp, updated, a, SomeAction.completedSum())

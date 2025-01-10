@@ -145,21 +145,21 @@ proc exec*(thread: var SigilThread, sig: ThreadSignal) =
       thread.signaled.excl(cast[WeakRef[AgentRemote]](sig.deref))
     thread.gcCollectReferences()
   of Call:
-    debugPrint "\t threadExec:call: ", $sig.tgt[].getId()
+    debugPrint "\t threadExec:call: ", $sig.tgt[].getSigilId()
     # for item in thread.references.items():
-    #   debugPrint "\t threadExec:refcheck: ", $item.getId(), " rc: ", $item.unsafeGcCount()
+    #   debugPrint "\t threadExec:refcheck: ", $item.getSigilId(), " rc: ", $item.unsafeGcCount()
     when defined(sigilsDebug) or defined(debug):
       if sig.tgt[].freedByThread != 0:
         echo "exec:call:sig.tgt[].freedByThread:thread: ", $sig.tgt[].freedByThread
         echo "exec:call:sig.req: ", sig.req.repr
         echo "exec:call:thr: ", $getThreadId()
-        echo "exec:call: ", $sig.tgt[].getId()
+        echo "exec:call: ", $sig.tgt[].getSigilId()
         echo "exec:call:isUnique: ", sig.tgt[].isUniqueRef
         # echo "exec:call:has: ", sig.tgt[] in getCurrentSigilThread()[].references
         # discard c_raise(11.cint)
       assert sig.tgt[].freedByThread == 0
     let res = sig.tgt[].callMethod(sig.req, sig.slot)
-    debugPrint "\t threadExec:tgt: ", $sig.tgt[].getId(), " rc: ", $sig.tgt[].unsafeGcCount()
+    debugPrint "\t threadExec:tgt: ", $sig.tgt[].getSigilId(), " rc: ", $sig.tgt[].unsafeGcCount()
   of Trigger:
     debugPrint "Triggering"
     var signaled: HashSet[WeakRef[AgentRemote]]

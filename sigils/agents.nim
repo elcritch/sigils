@@ -94,15 +94,15 @@ type
   SignalTypes* = distinct object
 
 when defined(nimscript):
-  proc getId*(a: Agent): SigilId =
+  proc getSigilId*(a: Agent): SigilId =
     a.debugId
 
   var lastUId {.compileTime.}: int = 1
 else:
-  proc getId*[T: Agent](a: WeakRef[T]): SigilId =
+  proc getSigilId*[T: Agent](a: WeakRef[T]): SigilId =
     cast[SigilId](a.toPtr())
 
-  proc getId*(a: Agent): SigilId =
+  proc getSigilId*(a: Agent): SigilId =
     cast[SigilId](cast[pointer](a))
 
 proc `$`*[T: Agent](obj: WeakRef[T]): string =
@@ -208,7 +208,7 @@ template toAgentObj*[T: Agent](agent: T): AgentObj =
   Agent(agent)[]
 
 proc hash*(a: Agent): Hash =
-  hash(a.getId())
+  hash(a.getSigilId())
 
 method hasConnections*(self: Agent): bool {.base, gcsafe, raises: [].} =
   self.subcriptionsTable.len() != 0 or self.listening.len() != 0

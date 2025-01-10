@@ -257,7 +257,7 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
         var args = `construct`
         let name: SigilName = toSigilName(`signalName`)
         let req = initSigilRequest[`firstType`, typeof(args)](
-          procName = name, args = ensureMove args, origin = `objId`.getId()
+          procName = name, args = ensureMove args, origin = `objId`.getSigilId()
         )
         result = (`objId`, req)
 
@@ -271,7 +271,7 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
         var args = `construct`
         let name: SigilName = toSigilName(`signalName`)
         let req = initSigilRequest[`firstType`, typeof(args)](
-          procName = name, args = ensureMove args, origin = `objId`.getId()
+          procName = name, args = ensureMove args, origin = `objId`.getSigilId()
         )
         result = (`objId`.asAgent(), req)
 

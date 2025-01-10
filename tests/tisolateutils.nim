@@ -23,16 +23,16 @@ proc valueChanged*(tp: SomeAction, val: int) {.signal.}
 proc updated*(tp: Counter, final: int) {.signal.}
 
 proc setValue*(self: Counter, value: int) {.slot.} =
-  echo "setValue! ", value, " id: ", self.getId, " (th:", getThreadId(), ")"
+  echo "setValue! ", value, " id: ", self.getSigilId, " (th:", getThreadId(), ")"
   if self.value != value:
     self.value = value
   echo "setValue:subcriptionsTable: ",
-    self.subcriptionsTable.pairs().toSeq.mapIt(it[1].mapIt(it.tgt.getId))
-  echo "setValue:listening: ", self.listening.toSeq.mapIt(it.getId)
+    self.subcriptionsTable.pairs().toSeq.mapIt(it[1].mapIt(it.tgt.getSigilId))
+  echo "setValue:listening: ", self.listening.toSeq.mapIt(it.getSigilId)
   emit self.updated(self.value)
 
 proc completed*(self: SomeAction, final: int) {.slot.} =
-  echo "Action done! final: ", final, " id: ", self.getId(), " (th:", getThreadId(), ")"
+  echo "Action done! final: ", final, " id: ", self.getSigilId(), " (th:", getThreadId(), ")"
   self.value = final
 
 proc value*(self: Counter): int =

@@ -101,7 +101,7 @@ test "agent connect then moveToThread and run":
     connect(b, updated, c, SomeAction.completed())
 
     let bp: AgentProxy[Counter] = b.moveToThread(thread)
-    echo "obj bp: ", bp.getId()
+    echo "obj bp: ", bp.getSigilId()
 
     emit a.valueChanged(314)
     let ct = getCurrentSigilThread()
