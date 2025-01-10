@@ -179,11 +179,7 @@ template removeSubscriptions*(
       subscription.tgt[].unregisterSubscriber(agent)
 
 proc `=destroy`*(agentObj: AgentObj) {.forbids: [DestructorUnsafe].} =
-  when defined(sigilsWeakRefPointer):
-    let agent: WeakRef[Agent] = WeakRef[Agent](pt: cast[pointer](addr agentObj))
-  else:
-    let pt: WeakRef[pointer] = WeakRef[pointer](pt: cast[pointer](addr agentObj))
-    let agent: WeakRef[Agent] = cast[WeakRef[Agent]](pt)
+  let agent: WeakRef[Agent] = unsafeWeakRef(cast[Agent](addr(agentObj)))
 
   debugPrint &"destroy: agent: ",
           &" pt: {$agent}",

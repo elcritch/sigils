@@ -39,6 +39,13 @@ proc unsafeWeakRef*[T: ref](obj: T): WeakRef[T] =
     let pt: WeakRef[pointer] = WeakRef[pointer](pt: cast[pointer](obj))
     result = cast[WeakRef[T]](pt)
 
+proc unsafeWeakRef*[T](obj: ptr T): WeakRef[T] =
+  when defined(sigilsWeakRefPointer):
+    result = WeakRef[T](pt: cast[pointer](obj))
+  else:
+    let pt: WeakRef[pointer] = WeakRef[pointer](pt: cast[pointer](obj))
+    result = cast[WeakRef[T]](pt)
+
 proc unsafeWeakRef*[T](obj: WeakRef[T]): WeakRef[T] =
   result = obj
 
@@ -47,8 +54,9 @@ proc verifyUniqueSkip*(tp: typedesc[WeakRef]) = discard
 proc toPtr*[T](obj: WeakRef[T]): pointer =
   result = cast[pointer](obj.pt)
 
-proc toKind*[T, U](obj: WeakRef[T], tp: typedesc[U]): WeakRef[U] =
-  unsafeWeakRef(U(obj[]))
+proc toKind*[T, U](obj: WeakRef[T],
+                   tp: typedesc[U]): WeakRef[U] =
+  cast[WeakRef[U]](obj)
 
 proc hash*[T](obj: WeakRef[T]): Hash =
   result = hash cast[pointer](obj.pt)
