@@ -153,8 +153,8 @@ suite "threaded agent slots":
         let bp: AgentProxy[Counter] = b.moveToThread(thread)
         check b.isNil
 
-        connect(a, valueChanged, bp, setValue)
-        connect(a, valueChanged, bp, Counter.setValue())
+        threads.connect(a, valueChanged, bp, setValue)
+        threads.connect(a, valueChanged, bp, Counter.setValue())
         check not compiles(connect(a, valueChanged, bp, someAction))
       GC_fullCollect()
 
@@ -336,8 +336,8 @@ suite "threaded agent slots":
         echo "obj bp: ", $bp.getSigilId()
         # echo "obj bp.remote: ", bp.remote[].unsafeWeakRef
 
-        connect(a, valueChanged, bp, setValue)
-        connect(bp, updated, a, SomeAction.completed())
+        threads.connect(a, valueChanged, bp, setValue)
+        threads.connect(bp, updated, a, SomeAction.completed())
 
         emit a.valueChanged(314)
         # thread.thread.joinThread(500)
@@ -414,8 +414,8 @@ suite "threaded agent slots":
           let bp: AgentProxy[Counter] = b.moveToThread(thread)
           # echo "obj bp: ", bp.unsafeWeakRef
           # echo "obj bp.remote: ", bp.remote[].unsafeWeakRef
-          connect(a, valueChanged, bp, setValue)
-          connect(bp, updated, a, SomeAction.completedSum())
+          threads.connect(a, valueChanged, bp, setValue)
+          threads.connect(bp, updated, a, SomeAction.completedSum())
 
           emit a.valueChanged(756809)
           emit a.valueChanged(628)
@@ -470,8 +470,8 @@ suite "threaded agent slots":
               let bp: AgentProxy[Counter] = b.moveToThread(thread)
               # echo "BP: ", bp.getSigilId()
 
-              connect(a, valueChanged, bp, setValue)
-              connect(bp, updated, a, SomeAction.completedSum())
+              threads.connect(a, valueChanged, bp, setValue)
+              threads.connect(bp, updated, a, SomeAction.completedSum())
 
               emit a.valueChanged(314)
               emit a.valueChanged(271)
@@ -517,7 +517,7 @@ suite "threaded agent slots":
 
               ct[].pollAll()
 
-              connect(a, valueChanged, bp, setValue)
+              threads.connect(a, valueChanged, bp, setValue)
 
               emit a.valueChanged(314)
 
