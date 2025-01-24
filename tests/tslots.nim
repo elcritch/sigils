@@ -158,6 +158,7 @@ when isMainModule:
       emit a.valueChanged(137)
       check a.value == 0
       check b.value == 137
+      check c.listening.len() == 0
 
       let ts = getMonoTime()
       emit a.doTick(123, ts)
@@ -173,6 +174,7 @@ when isMainModule:
       emit a.valueChanged(137)
       check a.value == 0
       check b.value == 137
+      check c.listening.len() == 0
 
       let ts = getMonoTime()
       emit a.doTick(123, ts)

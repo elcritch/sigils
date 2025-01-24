@@ -268,7 +268,7 @@ proc delSubscription*(
         subs[].excl(sub)
     else:
       subs[].excl(Subscription(tgt: tgt.unsafeWeakRef().asAgent(), slot: slot))
-      tgt.listening.excl(obj.unsafeWeakRef().asAgent())
+    tgt.listening.excl(obj.unsafeWeakRef().asAgent())
 
 template delSubscription*(
     obj: Agent, sig: IndexableChars, tgt: Agent | WeakRef[Agent], slot: AgentProc
