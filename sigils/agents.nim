@@ -177,10 +177,14 @@ template removeSubscriptions*(
     agent: WeakRef[Agent], subcriptionsTable: Table[SigilName, OrderedSet[Subscription]]
 ) =
   ## remove myself from agents listening to me
+  var tgts: HashSet[WeakRef[Agent]]
   for signal, subscriptions in subcriptionsTable.pairs():
     # echo "freeing signal: ", signal, " subcriptionsTable: ", subscriberPairs
     for subscription in subscriptions:
-      subscription.tgt[].unregisterSubscriber(agent)
+      tgts.incl(subscription.tgt)
+
+  for tgt in tgts:
+    tgt[].unregisterSubscriber(agent)
 
 proc `=destroy`*(agentObj: AgentObj) {.forbids: [DestructorUnsafe].} =
   let agent: WeakRef[Agent] = unsafeWeakRef(cast[Agent](addr(agentObj)))
@@ -195,8 +199,8 @@ proc `=destroy`*(agentObj: AgentObj) {.forbids: [DestructorUnsafe].} =
     assert agentObj.freedByThread == 0
     agent{}.freedByThread = getThreadId()
 
-  agent.unsubscribeFrom(agentObj.listening)
   agent.removeSubscriptions(agentObj.subcriptionsTable)
+  agent.unsubscribeFrom(agentObj.listening)
 
   `=destroy`(agent[].subcriptionsTable)
   `=destroy`(agent[].listening)
