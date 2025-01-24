@@ -14,9 +14,6 @@ proc changed[T](r: Reactive[T], val: T) {.signal.}
 proc setValue[T](r: Reactive[T], val: T) {.slot.} =
   r.value = val
 
-template `{}`[T](r: Reactive[T]): T =
-  r.value
-
 template `<-`[T](r: Reactive[T], val: T) =
   emit r.changed(val)
 
@@ -26,16 +23,22 @@ template reactive[T](x: T): Reactive[T] =
     r.connect(changed, r, setValue)
     r
 
-template computed[T](args: varargs[Reactive[T]], blk: typed): Reactive[T] =
+template computed[T](blk: untyped): Reactive[T] =
   block:
-    let r = Reactive[T]()
+    let res = Reactive[T]()
     proc comp(res: Reactive[T]): T {.slot.} =
       res.value = block:
-          `blk`
-    for arg in args:
-      # echo "ARG: ", arg.repr
-      arg.connect(changed, r, comp, acceptVoidSlot = true)
-    r
+        template `@`(r: Reactive): auto {.inject.} =
+          echo "DO"
+          r.value
+        `blk`
+    let _ = block:
+      template `@`(r: Reactive): auto {.inject.} =
+        echo "SETUP"
+        r.connect(changed, res, comp, acceptVoidSlot = true)
+        r.value
+      blk
+    res
 
 suite "reactive examples":
   test "reactive":
@@ -58,8 +61,8 @@ suite "reactive examples":
 
     let
       x = reactive(5)
-      y = computed(x):
-        2 * x{}
+      y = computed[int]():
+        2 * @x
 
     x <- 2
     echo "X: ", x.value
