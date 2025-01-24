@@ -205,9 +205,9 @@ when isMainModule:
       check c.avg == 0
 
     test "test multi connect destroyed":
-      # connect(a, doTick, c, someTick)
+      connect(a, doTick, c, someTick)
       connect(c, doTick, a, someTickOther)
-      # connect(a, doTick, c, someTickOther)
+      connect(a, doTick, c, someTickOther)
       connect(a, valueChanged, c, setValue)
       connect(c, valueChanged, a, setValue)
 
