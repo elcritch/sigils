@@ -42,14 +42,14 @@ template computed[T](blk: untyped): Sigil[T] =
     res
 
 suite "reactive examples":
-  test "reactive":
+  test "core reactive setup example - no sugar":
     let
       x = Sigil[int](value: 5)
       y = Sigil[int]()
     
-    proc computed[T](self: Sigil[T], val: T) {.slot.} =
+    proc compute[T](self: Sigil[T], val: T) {.slot.} =
       self.value = val * 2
-    x.connect(changed, y, computed)
+    x.connect(changed, y, compute)
     emit x.changed(2)
     check y.value == 4
 
