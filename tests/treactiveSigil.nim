@@ -17,3 +17,22 @@ suite "reactive examples":
     x <- 2
     check y.val == 4
     # x <- 2
+
+  test "reactive wrapper trace executions and side effects":
+
+    var cnt = Sigil[int](val: 0)
+
+    let
+      x = reactive(5)
+      z = computed[int]():
+        cnt.val.inc()
+        8 * x{}
+
+    check cnt.val == 1 # cnt is called from the `read` (`trace`) setup step
+    echo "X: ", x.val,  " => Z: ", z.val, " (", cnt.val, ")"
+    x <- 2
+    echo "X: ", x.val,  " => Z: ", z.val, " (", cnt.val, ")"
+    check z.val == 16
+    x <- 2
+    echo "X: ", x.val,  " => Z: ", z.val, " (", cnt.val, ")"
+    check cnt.val == 2

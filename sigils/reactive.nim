@@ -25,7 +25,7 @@ proc `<-`*[T](s: Sigil[T], val: T) =
     emit s.changed(val)
 
 template reactive*[T](x: T): Sigil[T] =
-  block:
+  block connectReactives:
     let r = Sigil[T](val: x)
     r.connect(changed, r, setValue)
     r
@@ -34,14 +34,12 @@ template computed*[T](blk: untyped): Sigil[T] =
   block:
     let res = Sigil[T]()
     func comp(res: Sigil[T]): T {.slot.} =
-      res.val = block:
+      res.val = block setupCallbacks:
         template `{}`(r: Sigil): auto {.inject.} =
-          echo "DO"
           r.val
         `blk`
-    let _ = block:
+    let _ = block setupSignals:
       template `{}`(r: Sigil): auto {.inject.} =
-        echo "SETUP"
         r.connect(changed, res, comp, acceptVoidSlot = true)
         r.val
       blk
