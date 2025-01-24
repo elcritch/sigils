@@ -131,7 +131,7 @@ proc `$`*[T: Agent](obj: WeakRef[T]): string =
     result &= obj.toPtr().repr
   result &= ")"
 
-template removeSubscriptionsForImpl*(self: Agent, subscriber: WeakRef[Agent]) =
+template removeSubscriptionsForImpl*(self: Agent, subscriber: WeakRef[Agent], slot: AgentProc) =
   ## Route's an rpc request. 
   var delSigs: seq[SigilName]
   var toDel: seq[Subscription]
@@ -150,10 +150,10 @@ template removeSubscriptionsForImpl*(self: Agent, subscriber: WeakRef[Agent]) =
     self.subcriptionsTable.del(sig)
 
 method removeSubscriptionsFor*(
-    self: Agent, subscriber: WeakRef[Agent]
+    self: Agent, subscriber: WeakRef[Agent], slot: AgentProc
 ) {.base, gcsafe, raises: [].} =
   debugPrint "   removeSubscriptionsFor:agent: ", " self:id: ", $self.unsafeWeakRef()
-  removeSubscriptionsForImpl(self, subscriber)
+  removeSubscriptionsForImpl(self, subscriber, slot)
 
 template unregisterSubscriberImpl*(self: Agent, listener: WeakRef[Agent]) =
   debugPrint "\tunregisterSubscriber: ", $listener, " from self: ", self.unsafeWeakRef()
@@ -171,7 +171,7 @@ template unsubscribeFrom*(self: WeakRef[Agent], listening: HashSet[WeakRef[Agent
   ## unsubscribe myself from agents I'm subscribed (listening) to
   debugPrint "   unsubscribeFrom:cnt: ", $listening.len(), " self: {$self}"
   for agent in listening:
-    agent[].removeSubscriptionsFor(self)
+    agent[].removeSubscriptionsFor(self, nil)
 
 template removeSubscriptions*(
     agent: WeakRef[Agent], subcriptionsTable: Table[SigilName, OrderedSet[Subscription]]
@@ -261,14 +261,9 @@ proc delSubscription*(
     obj: Agent, sig: SigilName, tgt: Agent | WeakRef[Agent], slot: AgentProc
 ): void =
 
-  obj.subcriptionsTable.withValue(sig, subs):
-    if slot == nil:
-      let dels = (subs[]).items().toSeq().filterIt(it.tgt == tgt.Agent.unsafeWeakRef())
-      for sub in dels:
-        subs[].excl(sub)
-    else:
-      subs[].excl(Subscription(tgt: tgt.unsafeWeakRef().asAgent(), slot: slot))
-    tgt.listening.excl(obj.unsafeWeakRef().asAgent())
+  let tgt = tgt.unsafeWeakRef().toKind(Agent)
+  obj.removeSubscriptionsFor(tgt, slot)
+  tgt[].unregisterSubscriber(obj.unsafeWeakRef())
 
 template delSubscription*(
     obj: Agent, sig: IndexableChars, tgt: Agent | WeakRef[Agent], slot: AgentProc
