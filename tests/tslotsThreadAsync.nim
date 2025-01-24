@@ -61,8 +61,8 @@ suite "threaded agent slots":
     # os.sleep(100)
 
     let bp: AgentProxy[Counter] = b.moveToThread(thread)
-    connect(a, valueChanged, bp, setValue)
-    connect(bp, updated, a, SomeAction.completed())
+    threads.connect(a, valueChanged, bp, setValue)
+    threads.connect(bp, updated, a, SomeAction.completed())
 
     # echo "bp.outbound: ", bp.outbound[].AsyncSigilChan.repr
     emit a.valueChanged(314)
