@@ -214,3 +214,10 @@ when isMainModule:
       # printConnections(a)
       # printConnections(c)
 
+    test "test multi connect disconnect without connecting":
+      disconnect(a, doTick, c, someTick)
+      disconnect(a, doTick, d, someTick)
+
+      # printConnections(a)
+      # printConnections(c)
+
