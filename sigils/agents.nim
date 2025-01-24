@@ -286,7 +286,6 @@ proc delSubscription*(
   for sig in delSigs:
     self.subcriptionsTable.del(sig)
   
-  echo "DELSUBS: ", "subsFound: ", subsFound, " subsDeleted: ", subsDeleted
   if subsFound == subsDeleted:
     tgt[].listening.excl(self.unsafeWeakRef())
 
