@@ -1,0 +1,3 @@
+- `v0.10.1` - fix Agent destruction with circular subscriptions
+- `v0.10.0` - fix disconnect errors
+- `v0.9.7` - add `disconnect` for slots (only for non-threaded agents currently)
