@@ -131,7 +131,7 @@ proc `$`*[T: Agent](obj: WeakRef[T]): string =
     result &= obj.toPtr().repr
   result &= ")"
 
-template removeSubscriptionsForImpl*(self: Agent, subscriber: WeakRef[Agent], slot: AgentProc) =
+template removeSubscriptionsForImpl*(self: Agent, subscriber: WeakRef[Agent]) =
   ## Route's an rpc request. 
   var delSigs: seq[SigilName]
   var toDel: seq[Subscription]
@@ -139,7 +139,7 @@ template removeSubscriptionsForImpl*(self: Agent, subscriber: WeakRef[Agent], sl
     debugPrint "   removeSubscriptionsFor subs sig: ", $signal
     toDel.setLen(0)
     for subscription in subscriptions:
-      if subscription.tgt == subscriber and (slot == nil or slot == subscription.slot):
+      if subscription.tgt == subscriber:
         toDel.add(subscription)
         # debugPrint "agentRemoved: ", "tgt: ", xid.toPtr.repr, " id: ", agent.debugId, " obj: ", obj[].debugId, " name: ", signal
     for subscription in toDel:
@@ -153,7 +153,7 @@ method removeSubscriptionsFor*(
     self: Agent, subscriber: WeakRef[Agent], slot: AgentProc
 ) {.base, gcsafe, raises: [].} =
   debugPrint "   removeSubscriptionsFor:agent: ", " self:id: ", $self.unsafeWeakRef()
-  removeSubscriptionsForImpl(self, subscriber, slot)
+  removeSubscriptionsForImpl(self, subscriber)
 
 template unregisterSubscriberImpl*(self: Agent, listener: WeakRef[Agent]) =
   debugPrint "\tunregisterSubscriber: ", $listener, " from self: ", self.unsafeWeakRef()
