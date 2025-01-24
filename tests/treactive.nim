@@ -15,7 +15,8 @@ proc setValue[T](r: Reactive[T], val: T) {.slot.} =
   r.value = val
 
 template `<-`[T](r: Reactive[T], val: T) =
-  emit r.changed(val)
+  if r.value != val:
+    emit r.changed(val)
 
 template reactive[T](x: T): Reactive[T] =
   block:
@@ -59,6 +60,29 @@ suite "reactive examples":
       y = computed[int]():
         2 * x{}
 
+    check x.value == 5
+    check y.value == 0
     x <- 2
-    echo "X: ", x.value, " => Y: ", y.value
     check y.value == 4
+    x <- 2
+
+  test "reactive wrapper trace executions":
+
+    var cnt = Reactive[int](value: 0)
+
+    let
+      x = reactive(5)
+      z = computed[int]():
+        cnt.value.inc()
+        8 * x{}
+
+    check cnt.value == 1 # cnt is called from the `read` (`trace`) setup step
+    echo "X: ", x.value,  " => Z: ", z.value, " (", cnt.value, ")"
+    x <- 2
+    echo "X: ", x.value,  " => Z: ", z.value, " (", cnt.value, ")"
+    check z.value == 16
+    x <- 2
+    echo "X: ", x.value,  " => Z: ", z.value, " (", cnt.value, ")"
+    check cnt.value == 2
+
+
