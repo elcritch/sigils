@@ -43,6 +43,8 @@ proc doTick*(fig: Counter, tickCount: int, now: MonoTime) {.signal.}
 proc someTick*(self: Counter, tick: int, now: MonoTime) {.slot.} =
   echo "tick: ", tick, " now: ", now
   self.avg = now.ticks
+proc someTickOther*(self: Counter, tick: int, now: MonoTime) {.slot.} =
+  echo "tick: ", tick, " now: ", now
 
 when isMainModule:
   import unittest
@@ -151,14 +153,21 @@ when isMainModule:
 
     test "test disconnect":
       connect(a, doTick, c, someTick)
+      connect(a, doTick, c, someTickOther)
       connect(a, valueChanged, b, setValue)
+
+      check c.listening.len() == 1
+      check a.subcriptionsTable.len() == 2
+      check a.subcriptionsTable["doTick".toSigilName].len() == 2
 
       disconnect(a, doTick, c, someTick)
 
       emit a.valueChanged(137)
       check a.value == 0
+      check a.subcriptionsTable.len() == 2
+      check a.subcriptionsTable["doTick".toSigilName].len() == 1
       check b.value == 137
-      check c.listening.len() == 0
+      check c.listening.len() == 1
 
       let ts = getMonoTime()
       emit a.doTick(123, ts)
@@ -167,12 +176,17 @@ when isMainModule:
 
     test "test disconnect all for sig":
       connect(a, doTick, c, someTick)
+      connect(a, doTick, c, someTickOther)
       connect(a, valueChanged, b, setValue)
 
       disconnect(a, doTick, c)
 
+      printConnections(a)
+      printConnections(c)
       emit a.valueChanged(137)
       check a.value == 0
+      check a.subcriptionsTable.len() == 1
+      # check a.subcriptionsTable["doTick".toSigilName].len() == 0
       check b.value == 137
       check c.listening.len() == 0
 

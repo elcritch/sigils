@@ -258,12 +258,37 @@ template addSubscription*(
 var printConnectionsSlotNames* = initTable[pointer, string]()
 
 proc delSubscription*(
-    obj: Agent, sig: SigilName, tgt: Agent | WeakRef[Agent], slot: AgentProc
+    self: Agent, sig: SigilName, tgt: Agent | WeakRef[Agent], slot: AgentProc
 ): void =
 
   let tgt = tgt.unsafeWeakRef().toKind(Agent)
-  obj.removeSubscriptionsFor(tgt, slot)
-  tgt[].unregisterSubscriber(obj.unsafeWeakRef())
+
+  var
+    delSigs: seq[SigilName]
+    toDel: seq[Subscription]
+    subsFound: int
+    subsDeleted: int
+
+  for signal, subscriptions in self.subcriptionsTable.mpairs():
+    debugPrint "   removeSubscriptionsFor subs sig: ", $signal
+    toDel.setLen(0)
+    var tgtMatched = 0
+    for subscription in subscriptions:
+      if subscription.tgt == tgt:
+        subsFound.inc()
+        if signal == sig and (slot == nil or subscription.slot == slot):
+          subsDeleted.inc()
+          toDel.add(subscription)
+    for subscription in toDel:
+      subscriptions.excl(subscription)
+    if subscriptions.len() == 0:
+      delSigs.add(signal)
+  for sig in delSigs:
+    self.subcriptionsTable.del(sig)
+  
+  echo "DELSUBS: ", "subsFound: ", subsFound, " subsDeleted: ", subsDeleted
+  if subsFound == subsDeleted:
+    tgt[].listening.excl(self.unsafeWeakRef())
 
 template delSubscription*(
     obj: Agent, sig: IndexableChars, tgt: Agent | WeakRef[Agent], slot: AgentProc
