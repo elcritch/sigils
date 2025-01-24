@@ -139,7 +139,7 @@ template removeSubscriptionsForImpl*(self: Agent, subscriber: WeakRef[Agent], sl
     debugPrint "   removeSubscriptionsFor subs sig: ", $signal
     toDel.setLen(0)
     for subscription in subscriptions:
-      if subscription.tgt == subscriber:
+      if subscription.tgt == subscriber and (slot == nil or slot == subscription.slot):
         toDel.add(subscription)
         # debugPrint "agentRemoved: ", "tgt: ", xid.toPtr.repr, " id: ", agent.debugId, " obj: ", obj[].debugId, " name: ", signal
     for subscription in toDel:

@@ -116,13 +116,13 @@ method callMethod*(
       proxy.remoteThread[].send(ThreadSignal(kind: Trigger))
 
 method removeSubscriptionsFor*(
-    self: AgentProxyShared, subscriber: WeakRef[Agent]
+    self: AgentProxyShared, subscriber: WeakRef[Agent], slot: AgentProc
 ) {.gcsafe, raises: [].} =
   debugPrint "   removeSubscriptionsFor:proxy: self:id: ", $self.unsafeWeakRef()
   withLock self.lock:
     # block:
     debugPrint "   removeSubscriptionsFor:proxy:ready: self:id: ", $self.unsafeWeakRef()
-    removeSubscriptionsForImpl(self, subscriber)
+    removeSubscriptionsForImpl(self, subscriber, slot)
 
 method unregisterSubscriber*(
     self: AgentProxyShared, listener: WeakRef[Agent]
