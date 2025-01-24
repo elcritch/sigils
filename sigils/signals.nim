@@ -117,3 +117,25 @@ template connect*(
   let agentSlot = `slot`(typeof(b))
   checkSignalTypes(a, signal, b, agentSlot, acceptVoidSlot)
   a.addSubscription(signalName(signal), b, agentSlot)
+
+template disconnect*[T](
+    a: Agent,
+    signal: typed,
+    b: Agent,
+    slot: Signal[T],
+    acceptVoidSlot: static bool = false,
+): void =
+  ## disconnect
+  # checkSignalTypes(a, signal, b, slot, acceptVoidSlot)
+  a.delSubscription(signalName(signal), b, slot)
+
+template disconnect*(
+    a: Agent,
+    signal: typed,
+    b: Agent,
+    slot: untyped,
+): void =
+  ## disconnect
+  let agentSlot = `slot`(typeof(b))
+  # checkSignalTypes(a, signal, b, agentSlot, acceptVoidSlot)
+  a.delSubscription(signalName(signal), b, agentSlot)

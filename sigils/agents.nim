@@ -259,6 +259,32 @@ template addSubscription*(
 
 var printConnectionsSlotNames* = initTable[pointer, string]()
 
+proc delSubscription*(
+    obj: Agent, sig: SigilName, tgt: Agent | WeakRef[Agent], slot: AgentProc
+): void =
+  # echo "add agent listener: ", sig, " obj: ", obj.debugId, " tgt: ", tgt.debugId
+  # if obj.subcriptionsTable.hasKey(sig):
+  #   echo "listener:count: ", obj.subcriptionsTable[sig].len()
+  assert slot != nil
+
+  # obj.subcriptionsTable.withValue(sig, subs):
+  #   # if (tgt.unsafeWeakRef(), slot,) notin agents[]:
+  #   #   echo "addAgentsubscribers: ", "tgt: 0x", tgt.unsafeWeakRef().toPtr().pointer.repr, " id: ", tgt.debugId, " obj: ", obj.debugId, " name: ", sig
+  #   subs[].incl(Subscription(tgt: tgt.unsafeWeakRef().asAgent(), slot: slot))
+  # do:
+  #   # echo "addAgentsubscribers: ", "tgt: 0x", tgt.unsafeWeakRef().toPtr().pointer.repr, " id: ", tgt.debugId, " obj: ", obj.debugId, " name: ", sig
+  #   var subs = initOrderedSet[Subscription]()
+  #   subs.incl(Subscription(tgt: tgt.unsafeWeakRef().asAgent(), slot: slot))
+  #   obj.subcriptionsTable[sig] = ensureMove subs
+
+  # tgt.listening.incl(obj.unsafeWeakRef().asAgent())
+  # # echo "subcriptionsTable: ", obj.subcriptionsTable.len, " SUBSC: ", tgt.subscribed.len
+
+template delSubscription*(
+    obj: Agent, sig: IndexableChars, tgt: Agent | WeakRef[Agent], slot: AgentProc
+): void =
+  delSubscription(obj, sig.toSigilName(), tgt, slot)
+
 proc printConnections*(agent: Agent) =
   withLock plock:
     if agent.isNil:
