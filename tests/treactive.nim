@@ -6,35 +6,35 @@ import unittest
 import std/sequtils
 
 type
-  Reactive*[T] = ref object of Agent
+  Sigil*[T] = ref object of Agent
     value: T
 
-proc changed[T](r: Reactive[T], val: T) {.signal.}
+proc changed[T](r: Sigil[T], val: T) {.signal.}
 
-proc setValue[T](r: Reactive[T], val: T) {.slot.} =
+proc setValue[T](r: Sigil[T], val: T) {.slot.} =
   r.value = val
 
-template `<-`[T](r: Reactive[T], val: T) =
+template `<-`[T](r: Sigil[T], val: T) =
   if r.value != val:
     emit r.changed(val)
 
-template reactive[T](x: T): Reactive[T] =
+template reactive[T](x: T): Sigil[T] =
   block:
-    let r = Reactive[T](value: x)
+    let r = Sigil[T](value: x)
     r.connect(changed, r, setValue)
     r
 
-template computed[T](blk: untyped): Reactive[T] =
+template computed[T](blk: untyped): Sigil[T] =
   block:
-    let res = Reactive[T]()
-    func comp(res: Reactive[T]): T {.slot.} =
+    let res = Sigil[T]()
+    func comp(res: Sigil[T]): T {.slot.} =
       res.value = block:
-        template `{}`(r: Reactive): auto {.inject.} =
+        template `{}`(r: Sigil): auto {.inject.} =
           echo "DO"
           r.value
         `blk`
     let _ = block:
-      template `{}`(r: Reactive): auto {.inject.} =
+      template `{}`(r: Sigil): auto {.inject.} =
         echo "SETUP"
         r.connect(changed, res, comp, acceptVoidSlot = true)
         r.value
@@ -44,10 +44,10 @@ template computed[T](blk: untyped): Reactive[T] =
 suite "reactive examples":
   test "reactive":
     let
-      x = Reactive[int](value: 5)
-      y = Reactive[int]()
+      x = Sigil[int](value: 5)
+      y = Sigil[int]()
     
-    proc computed[T](self: Reactive[T], val: T) {.slot.} =
+    proc computed[T](self: Sigil[T], val: T) {.slot.} =
       self.value = val * 2
     x.connect(changed, y, computed)
     emit x.changed(2)
@@ -68,7 +68,7 @@ suite "reactive examples":
 
   test "reactive wrapper trace executions":
 
-    var cnt = Reactive[int](value: 0)
+    var cnt = Sigil[int](value: 0)
 
     let
       x = reactive(5)
