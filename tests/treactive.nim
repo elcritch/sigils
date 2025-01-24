@@ -26,7 +26,7 @@ template reactive[T](x: T): Reactive[T] =
 template computed[T](blk: untyped): Reactive[T] =
   block:
     let res = Reactive[T]()
-    proc comp(res: Reactive[T]): T {.slot.} =
+    func comp(res: Reactive[T]): T {.slot.} =
       res.value = block:
         template `{}`(r: Reactive): auto {.inject.} =
           echo "DO"
@@ -52,11 +52,6 @@ suite "reactive examples":
     emit x.changed(2)
     check y.value == 4
 
-    # const x = signal(5)
-    # const double = computed(() => x()*2)
-    # x.set(2)
-    # // double is now 4
-
   test "reactive wrapper":
 
     let
@@ -65,7 +60,5 @@ suite "reactive examples":
         2 * x{}
 
     x <- 2
-    echo "X: ", x.value
-    echo "Y: ", y.value
+    echo "X: ", x.value, " => Y: ", y.value
     check y.value == 4
-
