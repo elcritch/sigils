@@ -1,4 +1,4 @@
-version = "0.9.8"
+version = "0.9.9"
 author = "Jaremy Creechley"
 description = "A slot and signals implementation for the Nim programming language"
 license = "MIT"
