@@ -163,6 +163,8 @@ when isMainModule:
       disconnect(a, doTick, c, someTick)
 
       emit a.valueChanged(137)
+      printConnections(a)
+      printConnections(c)
       check a.value == 0
       check a.subcriptionsTable.len() == 2
       check a.subcriptionsTable["doTick".toSigilName].len() == 1

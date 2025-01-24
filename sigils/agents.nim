@@ -83,7 +83,7 @@ type
     subcriptionsTable*: Table[SigilName, OrderedSet[Subscription]]
       ## agents listening to me
     listening*: HashSet[WeakRef[Agent]] ## agents I'm listening to
-    when defined(sigilsDebug) or defined(debug):
+    when defined(sigilsDebug) or defined(debug) or defined(sigilsDebugPrint):
       freedByThread*: int
     when defined(sigilsDebug):
       debugName*: string
