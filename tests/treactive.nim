@@ -28,12 +28,12 @@ template computed[T](blk: untyped): Reactive[T] =
     let res = Reactive[T]()
     proc comp(res: Reactive[T]): T {.slot.} =
       res.value = block:
-        template `@`(r: Reactive): auto {.inject.} =
+        template `{}`(r: Reactive): auto {.inject.} =
           echo "DO"
           r.value
         `blk`
     let _ = block:
-      template `@`(r: Reactive): auto {.inject.} =
+      template `{}`(r: Reactive): auto {.inject.} =
         echo "SETUP"
         r.connect(changed, res, comp, acceptVoidSlot = true)
         r.value
@@ -62,7 +62,7 @@ suite "reactive examples":
     let
       x = reactive(5)
       y = computed[int]():
-        2 * @x
+        2 * x{}
 
     x <- 2
     echo "X: ", x.value
