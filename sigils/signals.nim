@@ -139,3 +139,11 @@ template disconnect*(
   let agentSlot = `slot`(typeof(b))
   # checkSignalTypes(a, signal, b, agentSlot, acceptVoidSlot)
   a.delSubscription(signalName(signal), b, agentSlot)
+
+template disconnect*(
+    a: Agent,
+    signal: typed,
+    b: Agent,
+): void =
+  ## disconnect
+  a.delSubscription(signalName(signal), b, nil)

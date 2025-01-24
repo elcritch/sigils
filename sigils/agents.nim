@@ -1,4 +1,4 @@
-import std/[options, tables, sets, macros, hashes]
+import std/[options, tables, sequtils, sets, macros, hashes]
 import std/times
 import std/isolation
 import std/[locks, options]
@@ -260,11 +260,15 @@ var printConnectionsSlotNames* = initTable[pointer, string]()
 proc delSubscription*(
     obj: Agent, sig: SigilName, tgt: Agent | WeakRef[Agent], slot: AgentProc
 ): void =
-  assert slot != nil
 
   obj.subcriptionsTable.withValue(sig, subs):
-    subs[].excl(Subscription(tgt: tgt.unsafeWeakRef().asAgent(), slot: slot))
-    tgt.listening.excl(obj.unsafeWeakRef().asAgent())
+    if slot == nil:
+      let dels = (subs[]).items().toSeq().filterIt(it.tgt == tgt.Agent.unsafeWeakRef())
+      for sub in dels:
+        subs[].excl(sub)
+    else:
+      subs[].excl(Subscription(tgt: tgt.unsafeWeakRef().asAgent(), slot: slot))
+      tgt.listening.excl(obj.unsafeWeakRef().asAgent())
 
 template delSubscription*(
     obj: Agent, sig: IndexableChars, tgt: Agent | WeakRef[Agent], slot: AgentProc

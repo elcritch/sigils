@@ -163,3 +163,18 @@ when isMainModule:
       emit a.doTick(123, ts)
 
       check c.avg == 0
+
+    test "test disconnect all for sig":
+      connect(a, doTick, c, someTick)
+      connect(a, valueChanged, b, setValue)
+
+      disconnect(a, doTick, c)
+
+      emit a.valueChanged(137)
+      check a.value == 0
+      check b.value == 137
+
+      let ts = getMonoTime()
+      emit a.doTick(123, ts)
+
+      check c.avg == 0
