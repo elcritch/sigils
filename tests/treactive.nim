@@ -9,13 +9,33 @@ type
   Reactive*[T] = ref object of Agent
     value: T
 
-proc changed[T](tp: Reactive[T], val: T) {.signal.}
+proc changed[T](r: Reactive[T], val: T) {.signal.}
+
+proc setValue[T](r: Reactive[T], val: T) {.slot.} =
+  r.value = val
 
 template `{}`[T](r: Reactive[T]): T =
   r.value
 
 template `<-`[T](r: Reactive[T], val: T) =
   emit r.changed(val)
+
+template reactive[T](x: T): Reactive[T] =
+  block:
+    let r = Reactive[T](value: x)
+    r.connect(changed, r, setValue)
+    r
+
+template computed[T](args: varargs[Reactive[T]], blk: typed): Reactive[T] =
+  block:
+    let r = Reactive[T]()
+    proc comp(res: Reactive[T]): T {.slot.} =
+      res.value = block:
+          `blk`
+    for arg in args:
+      # echo "ARG: ", arg.repr
+      arg.connect(changed, r, comp, acceptVoidSlot = true)
+    r
 
 suite "reactive examples":
   test "reactive":
@@ -36,25 +56,10 @@ suite "reactive examples":
 
   test "reactive wrapper":
 
-    template reactive[T](x: T): Reactive[T] =
-      Reactive[T](value: x)
-    template computed[T](args: varargs[Reactive[T]], blk: typed): Reactive[T] =
-      block:
-        let r = Reactive[T]()
-        proc comp(res: Reactive[T]): T {.slot.} =
-          res.value = block:
-              `blk`
-        for arg in args:
-          echo "ARG: ", arg.repr
-          arg.connect(changed, r, comp, acceptVoidSlot = true)
-        r
- 
     let
       x = reactive(5)
-      y = computed[int](x):
+      y = computed(x):
         2 * x{}
-
-    printConnections(x)
 
     x <- 2
     echo "X: ", x.value
