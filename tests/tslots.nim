@@ -149,9 +149,15 @@ when isMainModule:
 
       check c.avg == ts.ticks
 
-    test "test remove":
+    test "test disconnect":
       connect(a, doTick, c, someTick)
+      connect(a, valueChanged, b, setValue)
+
       disconnect(a, doTick, c, someTick)
+
+      emit a.valueChanged(137)
+      check a.value == 0
+      check b.value == 137
 
       let ts = getMonoTime()
       emit a.doTick(123, ts)
