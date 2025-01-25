@@ -8,7 +8,7 @@ suite "reactive examples":
   test "reactive wrapper":
 
     let
-      x = reactive(5)
+      x = newSigil(5)
       y = computed[int]():
         2 * x{}
 
@@ -23,7 +23,7 @@ suite "reactive examples":
     var cnt = Sigil[int](val: 0)
 
     let
-      x = reactive(5)
+      x = newSigil(5)
       z = computed[int]():
         cnt.val.inc()
         8 * x{}

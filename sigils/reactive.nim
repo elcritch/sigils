@@ -24,7 +24,7 @@ proc `<-`*[T](s: Sigil[T], val: T) =
   if s.val != val:
     emit s.changed(val)
 
-template reactive*[T](x: T): Sigil[T] =
+template newSigil*[T](x: T): Sigil[T] =
   block connectReactives:
     let r = Sigil[T](val: x)
     r.connect(changed, r, setValue)
