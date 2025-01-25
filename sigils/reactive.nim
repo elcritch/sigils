@@ -12,6 +12,7 @@ type
     ## This builds on the core signals and slots but provides a
     ## higher level API for working with propagating values.
     val*: T
+    fn: proc ()
 
 proc changed*[T](r: Sigil[T]) {.signal.}
   ## core reactive signal type
@@ -25,6 +26,13 @@ proc `<-`*[T](s: Sigil[T], val: T) =
     s.val = val
     emit s.changed()
 
+template `{}`*[T](s: Sigil[T]): auto {.inject.} =
+  when compiles(internalSigil is Sigil):
+    echo "CONNECT"
+    s.connect(changed, internalSigil, internalComputeSigil, acceptVoidSlot = true)
+  echo "EXEC"
+  s.val
+
 template newSigil*[T](x: T): Sigil[T] =
   block connectReactives:
     let sigil = Sigil[T](val: x)
@@ -33,14 +41,10 @@ template newSigil*[T](x: T): Sigil[T] =
 template computed*[T](blk: untyped): Sigil[T] =
   block:
     let res = Sigil[T]()
-    func comp(res: Sigil[T]): T {.slot.} =
+    func internalComputeSigil(): T {.slot.} =
       res.val = block setupCallbacks:
-        template `{}`(r: Sigil): auto {.inject.} =
-          r.val
+        let internalSigil {.inject.} = res
         `blk`
-    res.val = block setupSignals:
-      template `{}`(r: Sigil): auto {.inject.} =
-        r.connect(changed, res, comp, acceptVoidSlot = true)
-        r.val
-      blk
+    res.fn = internalComputeSigil
+    res.apply()
     res

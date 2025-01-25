@@ -5,6 +5,9 @@ import agents
 export agents
 
 proc firstArgument(params: NimNode): (NimNode, NimNode) =
+  echo "firstArgument: ", params.treeRepr
+  if params.len() == 1:
+    error("Slots must take an Agent as the first argument.", params)
   if params != nil and params.len > 0 and params[1] != nil and
       params[1].kind == nnkIdentDefs:
     result = (ident params[1][0].strVal, params[1][1])
