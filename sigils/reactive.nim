@@ -27,19 +27,19 @@ proc recompute*(sigil: SigilBase) {.slot.} =
 
 proc `<-`*[T](s: Sigil[T], val: T) =
   if s.val != val:
-    echo "<-: ", s.unsafeWeakRef
+    echo "\n<-: ", s.unsafeWeakRef
     s.val = val
     emit s.changed()
 
 var sigilsTrackSetup {.compileTime.} = false
 
-template `{}`*[T](s: Sigil[T]): auto {.inject.} =
+template `{}`*[T](sigil: Sigil[T]): auto {.inject.} =
   when compiles(internalSigil is Sigil):
-    # echo "CONNECT:source: ", s.unsafeWeakRef()
-    # echo "CONNECT:target: ", internalSigil.unsafeWeakRef()
-    s.connect(changed, internalSigil, recompute)
-  echo "EXEC: "
-  s.val
+    echo "connect:source: ", sigil.unsafeWeakRef(), " => target: ", internalSigil.unsafeWeakRef()
+    sigil.connect(changed, internalSigil, recompute)
+  when defined(sigilsDebug):
+    echo "EXEC: ", sigil.debugName, " -> ", sigil.val
+  sigil.val
 
 template newSigil*[T](x: T): Sigil[T] =
   block connectReactives:
@@ -49,14 +49,13 @@ template newSigil*[T](x: T): Sigil[T] =
 template computed*[T](blk: untyped): Sigil[T] =
   block:
     let res = Sigil[T]()
-    when defined(sigilsDebug):
-      res.debugName = "tmp"
-    echo "COMPUTE:INTERNALCOMPUTESIGIL: ", res.unsafeWeakRef
+    echo "\n\nCOMPUTE:INTERNALCOMPUTESIGIL: ", res.unsafeWeakRef
     res.fn = proc(arg: SigilBase) {.closure.} =
       let internalSigil {.inject.} = Sigil[T](arg)
       echo "internalComputeSigil: ", internalSigil.unsafeWeakRef
       let val = block:
         `blk`
       internalSigil.val = val
+      echo "internalComputeSigil:val: ", internalSigil.debugName, " :: ", internalSigil.val
     res.recompute()
     res

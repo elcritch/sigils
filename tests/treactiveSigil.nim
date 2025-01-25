@@ -55,6 +55,8 @@ suite "reactive examples":
       y.debugName = "Y"
 
     let z = computed[int]():
+      when defined(sigilsDebug):
+        internalSigil.debugName = "Z"
       if y{}:
         x{} * 2
       else:
@@ -69,7 +71,7 @@ suite "reactive examples":
 
     y <- true
     check y.val == true
-    check z.val == 5 # this starts failing
+    check z.val == 10 # this starts failing
 
     # x <- 2
     # check x.val == 2
