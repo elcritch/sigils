@@ -12,6 +12,10 @@ suite "reactive examples":
       y = computed[int]():
         2 * x{}
 
+    when defined(sigilsDebug):
+      x.debugName = "X"
+      y.debugName = "Y"
+
     check x.val == 5
     check y.val == 10
     x <- 2
@@ -28,6 +32,10 @@ suite "reactive examples":
       z = computed[int]():
         cnt.val.inc()
         8 * x{}
+
+    when defined(sigilsDebug):
+      x.debugName = "X"
+      z.debugName = "Z"
 
     check cnt.val == 1 # cnt is called from the `read` (`trace`) setup step
     echo "X: ", x.val,  " => Z: ", z.val, " (", cnt.val, ")"
