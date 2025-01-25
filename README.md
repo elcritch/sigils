@@ -52,16 +52,16 @@ doAssert b.value == 137
 doAssert c.value == 137
 ```
 
-## Generic Examples
+## Alternative Connect for Slots
 
-It's also possible to use generics! Note that all connects are type checked by Nim.
+Sometimes the Nim compiler can't determine the which slot you want to use just by the types passed into the `connect` template. Othertimes you may want to specify a parent type's slot. 
+
+The `{.slot.}` pragma generates some helper procs for these scenarios to allow you to ensure the specific slot passed to `connect`. These helpers procs take the type of their agent (the target) as the first argument. It looks like this:
 
 ```nim
+let b = Counter[uint]()
 connect(a, valueChanged,
         b, Counter[uint].setValue)
-
-doAssert a.value == 0
-doAssert b.value == 0
 
 a.setValue(42) # we can directly call `setValue` which will then call emit
 
@@ -69,7 +69,7 @@ doAssert a.value == 42
 doAssert b.value == 42
 ```
 
-We can get / check signal types like this:
+The `{.signal.}` pragma generates these provide several helper procs to make it easy to get the type of the signal argument. The `SignalTypes` types is used as the first argument to differentiate from normal invocation of signals. Here are some examples: 
 
 ```nim
 test "signal / slot types":
