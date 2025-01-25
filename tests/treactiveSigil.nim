@@ -73,10 +73,10 @@ suite "reactive examples":
     check y.val == true
     check z.val == 10 # this starts failing
 
-    # x <- 2
-    # check x.val == 2
-    # check z.val == 4
+    x <- 2
+    check x.val == 2
+    check z.val == 4
 
-    # y <- false
-    # check y.val == false
-    # check z.val == 0
+    y <- false
+    check y.val == false
+    check z.val == 0
