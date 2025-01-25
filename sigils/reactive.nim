@@ -5,22 +5,25 @@ import sigils/core
 export signals, slots, core
 
 type
-  Sigil*[T] = ref object of Agent
+  SigilBase* = ref object of Agent
+    fn: proc (arg: SigilBase) {.closure.}
+
+  Sigil*[T] = ref object of SigilBase
     ## Core *reactive* data type for doing reactive style programming
     ## akin to RXJS, React useState, Svelte, etc.
     ## 
     ## This builds on the core signals and slots but provides a
     ## higher level API for working with propagating values.
     val*: T
-    fn: proc (arg: Sigil[T]): T {.closure.}
 
 proc changed*[T](r: Sigil[T]) {.signal.}
   ## core reactive signal type
 
-proc recompute*[T](sigil: Sigil[T]) {.slot.} =
+proc recompute*(sigil: SigilBase) {.slot.} =
   ## default slot action for `changed`
   if sigil.fn != nil:
-    sigil.val = sigil.fn(sigil)
+    # sigil.val = sigil.fn(sigil)
+    sigil.fn(sigil)
 
 proc `<-`*[T](s: Sigil[T], val: T) =
   if s.val != val:
@@ -49,9 +52,11 @@ template computed*[T](blk: untyped): Sigil[T] =
     when defined(sigilsDebug):
       res.debugName = "tmp"
     echo "COMPUTE:INTERNALCOMPUTESIGIL: ", res.unsafeWeakRef
-    res.fn = proc(arg: Sigil[T]): T {.closure.} =
-      let internalSigil {.inject.} = arg
+    res.fn = proc(arg: SigilBase) {.closure.} =
+      let internalSigil {.inject.} = Sigil[T](arg)
       echo "internalComputeSigil: ", internalSigil.unsafeWeakRef
-      `blk`
+      let val = block:
+        `blk`
+      internalSigil.val = val
     res.recompute()
     res
