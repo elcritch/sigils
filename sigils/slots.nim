@@ -5,6 +5,8 @@ import agents
 export agents
 
 proc firstArgument(params: NimNode): (NimNode, NimNode) =
+  if params.len() == 1:
+    error("Slots must take an Agent as the first argument.", params)
   if params != nil and params.len > 0 and params[1] != nil and
       params[1].kind == nnkIdentDefs:
     result = (ident params[1][0].strVal, params[1][1])
@@ -82,7 +84,6 @@ proc makeGenerics*(node: NimNode, gens: seq[string], isIdentDefs = false) =
     return
   else:
     for i, ch in node:
-      # echo "MAKE GEN: CH: ", ch.treeRepr
       if ch.kind == nnkBracketExpr:
         var allIdents = true
         for n in ch:
@@ -96,8 +97,6 @@ proc makeGenerics*(node: NimNode, gens: seq[string], isIdentDefs = false) =
             idType[1][0]
           else:
             idType[1]
-        # echo "MAKE GEN: ", ch.treeRepr
-        # echo "MAKE GEN:idType: ", idType.treeRepr
         node[i] = nnkCall.newTree(bindSym("[]", brOpen), ident idType[0].repr, genParam)
       ch.makeGenerics(gens)
 
@@ -185,9 +184,6 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
 
   # Create the proc's that hold the users code 
   if not isSignal:
-    # result.add quote do:
-    #   `paramTypes`
-
     let rmCall = nnkCall.newTree(rpcMethodGen)
     for param in parameters:
       rmCall.add param[0]
@@ -215,7 +211,6 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
     let mcall = nnkCall.newTree(rpcMethod)
     mcall.add(objId)
     for param in parameters[1 ..^ 1]:
-      # echo "PARAMS: ", param.treeRepr
       mcall.add param[0]
 
     let agentSlotImpl = quote:

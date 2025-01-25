@@ -53,11 +53,11 @@ when isMainModule:
   suite "agent slots":
     setup:
       var
-        a {.used.} = Counter.new()
-        b {.used.} = Counter.new()
-        c {.used.} = Counter.new()
-        d {.used.} = Counter.new()
-        o {.used.} = Originator.new()
+        a {.used.} = Counter()
+        b {.used.} = Counter()
+        c {.used.} = Counter()
+        d {.used.} = Counter()
+        o {.used.} = Originator()
       
       when defined(sigilsDebug):
         a.debugName = "A"

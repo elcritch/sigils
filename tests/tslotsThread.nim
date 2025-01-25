@@ -92,9 +92,9 @@ suite "threaded agent slots":
       remoteSlot.pointer: "remoteSlot",
       localSlot.pointer: "localSlot",
       SomeAction.completed().pointer: "completed",
-      ticker.pointer: "ticker",
+      Counter.ticker().pointer: "ticker",
       Counter.setValue().pointer: "setValue",
-      setValueGlobal.pointer: "setValueGlobal",
+      Counter.setValueGlobal().pointer: "setValueGlobal",
     }.toTable()
 
   when true:
@@ -243,7 +243,7 @@ suite "threaded agent slots":
         when defined(sigilsDebug):
           thread[].debugName = "thread"
 
-        connect(b, updated, a, SomeAction.completed())
+        connect(b, updated, a, completed)
         printConnections(a)
         printConnections(b)
         # printConnections(thread[])

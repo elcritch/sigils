@@ -25,9 +25,6 @@ proc `[]`*[T](r: WeakRef[T]): lent T {.inline.} =
   else:
     r.pt
 
-template `{}`*[T](r: WeakRef[T]): auto =
-  cast[ptr typeof(T()[])](r.pt)
-
 template isNil*[T](r: WeakRef[T]): bool =
   r.pt == nil
 
