@@ -7,6 +7,11 @@ import stack_strings
 import protocol
 import weakrefs
 
+when (NimMajor, NimMinor, NimPatch) < (2, 2, 0):
+  {.passc:"-fpermissive".}
+  {.passl:"-fpermissive".}
+
+
 when defined(nimscript):
   import std/json
   import ../runtime/jsonutils_lite
