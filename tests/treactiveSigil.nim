@@ -55,8 +55,6 @@ suite "reactive examples":
       y.debugName = "Y"
 
     let z = computed[int]():
-      when defined(sigilsDebug):
-        internalSigil.debugName = "Z"
       if y{}:
         x{} * 2
       else:
