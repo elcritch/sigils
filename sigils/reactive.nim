@@ -35,9 +35,9 @@ var sigilsTrackSetup {.compileTime.} = false
 
 template `{}`*[T](s: Sigil[T]): auto {.inject.} =
   when compiles(internalSigil is Sigil):
-    echo "CONNECT:source: ", s.unsafeWeakRef()
-    echo "CONNECT:target: ", internalSigil.unsafeWeakRef()
-    s.connect(changed, internalSigil, Sigil[T].recompute)
+    # echo "CONNECT:source: ", s.unsafeWeakRef()
+    # echo "CONNECT:target: ", internalSigil.unsafeWeakRef()
+    s.connect(changed, internalSigil, recompute)
   echo "EXEC: "
   s.val
 
