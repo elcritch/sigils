@@ -13,7 +13,7 @@ suite "reactive examples":
         2 * x{}
 
     check x.val == 5
-    check y.val == 0
+    check y.val == 10
     x <- 2
     check x.val == 2
     check y.val == 4
@@ -37,3 +37,4 @@ suite "reactive examples":
     x <- 2
     echo "X: ", x.val,  " => Z: ", z.val, " (", cnt.val, ")"
     check cnt.val == 2
+

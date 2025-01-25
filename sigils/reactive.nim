@@ -38,7 +38,7 @@ template computed*[T](blk: untyped): Sigil[T] =
         template `{}`(r: Sigil): auto {.inject.} =
           r.val
         `blk`
-    let _ = block setupSignals:
+    res.val = block setupSignals:
       template `{}`(r: Sigil): auto {.inject.} =
         r.connect(changed, res, comp, acceptVoidSlot = true)
         r.val
