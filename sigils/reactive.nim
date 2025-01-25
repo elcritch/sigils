@@ -32,8 +32,8 @@ var sigilsTrackSetup {.compileTime.} = false
 
 template `{}`*[T](s: Sigil[T]): auto {.inject.} =
   when compiles(internalSigil is Sigil):
-    echo "CONNECT:s: ", s.unsafeWeakRef()
-    echo "CONNECT:sigil: ", internalSigil.unsafeWeakRef()
+    echo "CONNECT:source: ", s.unsafeWeakRef()
+    echo "CONNECT:target: ", internalSigil.unsafeWeakRef()
     s.connect(changed, internalSigil, Sigil[T].recompute)
   echo "EXEC: "
   s.val
@@ -46,6 +46,8 @@ template newSigil*[T](x: T): Sigil[T] =
 template computed*[T](blk: untyped): Sigil[T] =
   block:
     let res = Sigil[T]()
+    when defined(sigilsDebug):
+      res.debugName = "tmp"
     echo "COMPUTE:INTERNALCOMPUTESIGIL: ", res.unsafeWeakRef
     res.fn = proc(arg: Sigil[T]): T {.closure.} =
       let internalSigil {.inject.} = arg

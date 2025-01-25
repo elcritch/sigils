@@ -49,12 +49,20 @@ suite "reactive examples":
   test "reactive wrapper multiple signals":
     let x = newSigil(5)
     let y = newSigil(false)
+
+    when defined(sigilsDebug):
+      x.debugName = "X"
+      y.debugName = "Y"
+
     let z = computed[int]():
       if y{}:
         x{} * 2
       else:
         0
     
+    when defined(sigilsDebug):
+      z.debugName = "Z"
+
     check x.val == 5
     check y.val == false
     check z.val == 0
