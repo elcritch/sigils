@@ -243,7 +243,7 @@ suite "threaded agent slots":
         when defined(sigilsDebug):
           thread[].debugName = "thread"
 
-        connect(b, updated, a, SomeAction.completed())
+        connect(b, updated, a, completed)
         printConnections(a)
         printConnections(b)
         # printConnections(thread[])

@@ -34,14 +34,14 @@ proc setValue*[T](self: Counter[T], value: T) {.slot.} =
     emit self.valueChanged(value)
 
 var
-  a = Counter[uint].new()
-  b = Counter[uint].new()
-  c = Counter[uint].new()
+  a = Counter[uint]()
+  b = Counter[uint]()
+  c = Counter[uint]()
 
 connect(a, valueChanged,
-        b, Counter[uint].setValue())
+        b, setValue)
 connect(a, valueChanged,
-        c, Counter[uint].setValue())
+        c, setValue)
 
 doAssert b.value == 0
 doAssert c.value == 0

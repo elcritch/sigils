@@ -1,8 +1,11 @@
 import sigils
 
-type Counter*[T] = ref object of Agent
-  value: T
-  avg: int
+type
+  Counter*[T] = ref object of Agent
+    value: T
+    avg: int
+  Other*[T] = ref object of Agent
+    value: T
 
 proc valueChanged*[T](tp: Counter[T], val: T) {.signal.}
 
@@ -15,6 +18,9 @@ proc setValue*[T](self: Counter[T], value: T) {.slot.} =
   if self.value != value:
     self.value = value
   emit self.valueChanged(value)
+
+proc setValue*[T](self: Other[T], value: T) {.slot.} =
+  discard
 
 proc value*(self: Counter): int =
   self.value
@@ -53,12 +59,12 @@ when isMainModule:
 
     test "signal connect in generic proc":
       proc setup[T]() =
-        connect(a, valueChanged, b, Counter[uint].setValue)
+        connect(a, valueChanged, b, setValue)
         setup[uint]()
 
     test "signal connect":
       # TODO: how to do this?
-      connect(a, valueChanged, b, Counter[uint].setValue)
+      connect(a, valueChanged, b, setValue)
       connect(a, valueChanged, c, Counter[uint].setValue)
       # connect(a, valueChanged, c, Counter[float].setValue())
 
@@ -74,7 +80,7 @@ when isMainModule:
       check c.value == 42
 
     test "connect type errors":
-      check not compiles(connect(a, avgChanged, c, Counter[uint].setValue))
+      check not compiles(connect(a, avgChanged, c, setValue))
 
       # connect(a, avgChanged,
       #         c, Counter[uint].setValue)
