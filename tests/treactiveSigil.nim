@@ -78,3 +78,40 @@ suite "reactive examples":
     y <- false
     check y.val == false
     check z.val == 0
+
+  test "reactive wrapper double inference":
+    let x = newSigil(5)
+    let y = newSigil(false)
+
+    let z = computed[int]():
+      if y{}:
+        x{} * 2
+      else:
+        0
+
+    let a = computed[string]():
+      let myZ = z{}
+      if y{}:
+        fmt"The number is {myZ}"
+      else:
+        "There is no number"
+    
+    check x.val == 5
+    check y.val == false
+    check z.val == 0
+    check a.val == "There is no number"
+    
+    y <- true
+    check y.val == true
+    check z.val == 10
+    check a.val == "The number is 10"
+    
+    x <- 2
+    check x.val == 2
+    check z.val == 4
+    check a.val == "The number is 4" # This fails. a does not get updated, because it does not **directly** rely on x. It does so indirectly by relying on z which relies on x
+    
+    y <- false
+    check y.val == false
+    check z.val == 0
+    check a.val == "There is no number"
