@@ -46,3 +46,27 @@ suite "reactive examples":
     echo "X: ", x.val,  " => Z: ", z.val, " (", cnt.val, ")"
     check cnt.val == 2
 
+  test "reactive wrapper multiple signals":
+    let x = newSigil(5)
+    let y = newSigil(false)
+    let z = computed[int]():
+      if y{}:
+        x{} * 2
+      else:
+        0
+    
+    check x.val == 5
+    check y.val == false
+    check z.val == 0
+    
+    y <- true
+    check y.val == true
+    check z.val == 5 # this starts failing
+    
+    x <- 2
+    check x.val == 2
+    check z.val == 4
+    
+    y <- false
+    check y.val == false
+    check z.val == 0
