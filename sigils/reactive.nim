@@ -35,7 +35,7 @@ var isRunningInternally {.compileTime.} = false
 
 template `{}`*[T](sigil: Sigil[T]): auto {.inject.} =
   when isRunningInternally:
-    sigil.connect(changed, internalSigil, recompute)
+    sigil.connect(changed, it, recompute)
   sigil.val
 
 template newSigil*[T](x: T): Sigil[T] =
@@ -50,10 +50,10 @@ template computed*[T](blk: untyped): Sigil[T] =
     let res = Sigil[T]()
     # echo "\n\nCOMPUTE:INTERNALCOMPUTESIGIL: ", res.unsafeWeakRef
     res.fn = proc(arg: SigilBase) {.closure.} =
-      let internalSigil {.inject.} = Sigil[T](arg)
+      let it {.inject.} = Sigil[T](arg)
       let val = block:
         `blk`
-      internalSigil.val = val
+      it.val = val
     res.recompute()
     static:
       isRunningInternally = false
