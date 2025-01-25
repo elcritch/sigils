@@ -46,6 +46,7 @@ template computed*[T](blk: untyped): Sigil[T] =
     let res = Sigil[T]()
     proc internalComputeSigil(): T {.closure.} =
       let internalSigil {.inject.} = res
+      echo "internalComputeSigil: ", internalSigil.unsafeWeakRef
       `blk`
     res.fn = internalComputeSigil
     res.recompute()
