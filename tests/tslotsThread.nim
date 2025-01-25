@@ -92,9 +92,9 @@ suite "threaded agent slots":
       remoteSlot.pointer: "remoteSlot",
       localSlot.pointer: "localSlot",
       SomeAction.completed().pointer: "completed",
-      ticker.pointer: "ticker",
+      Counter.ticker().pointer: "ticker",
       Counter.setValue().pointer: "setValue",
-      setValueGlobal.pointer: "setValueGlobal",
+      Counter.setValueGlobal().pointer: "setValueGlobal",
     }.toTable()
 
   when true:
