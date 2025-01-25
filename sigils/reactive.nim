@@ -13,22 +13,23 @@ type
     ## higher level API for working with propagating values.
     val*: T
 
-proc changed*[T](r: Sigil[T], val: T) {.signal.}
+proc changed*[T](r: Sigil[T]) {.signal.}
   ## core reactive signal type
 
-proc setValue*[T](r: Sigil[T], val: T) {.slot.} =
+proc recompute*[T](r: Sigil[T]) {.slot.} =
   ## default slot action for `changed`
-  r.val = val
+  # r.val = val
+  discard # TODO
 
 proc `<-`*[T](s: Sigil[T], val: T) =
   if s.val != val:
-    emit s.changed(val)
+    s.val = val
+    emit s.changed()
 
 template newSigil*[T](x: T): Sigil[T] =
   block connectReactives:
-    let r = Sigil[T](val: x)
-    r.connect(changed, r, setValue)
-    r
+    let sigil = Sigil[T](val: x)
+    sigil
 
 template computed*[T](blk: untyped): Sigil[T] =
   block:
