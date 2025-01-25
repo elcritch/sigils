@@ -19,7 +19,8 @@ proc changed*[T](r: Sigil[T]) {.signal.}
 
 proc recompute*[T](sigil: Sigil[T]) {.slot.} =
   ## default slot action for `changed`
-  sigil.fn()
+  if sigil.fn != nil:
+    sigil.fn()
 
 proc `<-`*[T](s: Sigil[T], val: T) =
   if s.val != val:
@@ -46,5 +47,5 @@ template computed*[T](blk: untyped): Sigil[T] =
         let internalSigil {.inject.} = res
         `blk`
     res.fn = internalComputeSigil
-    res.apply()
+    res.recompute()
     res
