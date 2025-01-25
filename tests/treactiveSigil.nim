@@ -15,6 +15,7 @@ suite "reactive examples":
     check x.val == 5
     check y.val == 0
     x <- 2
+    check x.val == 2
     check y.val == 4
     # x <- 2
 
