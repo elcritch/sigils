@@ -55,7 +55,7 @@ template computed*[T](blk: untyped): Sigil[T] =
         `blk`
       if internalSigil.val != val:
         internalSigil.val = val
-        emit internalSigil.changed
+        emit internalSigil.changed()
     res.recompute()
     static:
       isRunningInternally = false
