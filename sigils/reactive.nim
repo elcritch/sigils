@@ -18,7 +18,6 @@ proc changed*[T](r: Sigil[T]) {.signal.}
 
 proc recompute*[T](r: Sigil[T]) {.slot.} =
   ## default slot action for `changed`
-  # r.val = val
   discard # TODO
 
 proc `<-`*[T](s: Sigil[T], val: T) =
