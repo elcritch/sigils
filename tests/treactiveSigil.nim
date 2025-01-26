@@ -1,4 +1,5 @@
 import sigils/reactive
+import std/math
 
 import unittest
 import std/sequtils
@@ -115,3 +116,15 @@ suite "reactive examples":
     check y.val == false
     check z.val == 0
     check a.val == "There is no number"
+
+  test "reactive float test":
+    let x = newSigil(3.14'f32)
+    let y = newSigil(2.718'f32)
+
+    let z = computed[float32]():
+      x{} * y{}
+
+    check almostEqual(x.val, 3.14)
+    check almostEqual(y.val, 2.718)
+    check almostEqual(z.val, 8.53452, 5)
+

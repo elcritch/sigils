@@ -1,6 +1,7 @@
 import sigils/signals
 import sigils/slots
 import sigils/core
+import std/math
 
 export signals, slots, core
 
@@ -15,21 +16,31 @@ type
     ## This builds on the core signals and slots but provides a
     ## higher level API for working with propagating values.
     val*: T
+    when T is float or T is float32:
+      defaultPrecision* = 5
+    elif T is float64:
+      defaultPrecision* = 10
 
 proc changed*[T](r: Sigil[T]) {.signal.}
   ## core reactive signal type
 
+proc setValue*[T](s: Sigil[T], val: T) =
+  when T is SomeFloat:
+    if almostEqual(s.val, val, s.defaultPrecision):
+      s.val = val
+      emit s.changed()
+  else:
+    if s.val != val:
+      s.val = val
+      emit s.changed()
+
 proc recompute*(sigil: SigilBase) {.slot.} =
   ## default slot action for `changed`
   if sigil.fn != nil:
-    # sigil.val = sigil.fn(sigil)
     sigil.fn(sigil)
 
 proc `<-`*[T](s: Sigil[T], val: T) =
-  if s.val != val:
-    # echo "\n<-: ", s.unsafeWeakRef
-    s.val = val
-    emit s.changed()
+  s.setValue(val)
 
 template `{}`*[T](sigil: Sigil[T]): auto {.inject.} =
   when compiles(internalSigil):
@@ -49,8 +60,6 @@ template computed*[T](blk: untyped): Sigil[T] =
       let internalSigil {.inject.} = Sigil[T](arg)
       let val = block:
         `blk`
-      if internalSigil.val != val:
-        internalSigil.val = val
-        emit internalSigil.changed()
+      internalSigil.setValue(val)
     res.recompute()
     res
