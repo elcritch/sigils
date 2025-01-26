@@ -17,16 +17,20 @@ type
     ## higher level API for working with propagating values.
     val*: T
     when T is float or T is float32:
-      defaultPrecision* = 5
+      defaultEps* = 1.0e-5
     elif T is float64:
-      defaultPrecision* = 10
+      defaultEps* = 1.0e-10
 
 proc changed*[T](r: Sigil[T]) {.signal.}
   ## core reactive signal type
 
+proc near*[T](a, b: T, eps: T): bool =
+  let diff = abs(a-b)
+  result = diff <= eps
+
 proc setValue*[T](s: Sigil[T], val: T) =
   when T is SomeFloat:
-    if not almostEqual(s.val, val, s.defaultPrecision):
+    if not near(s.val, val, s.defaultEps):
       s.val = val
       emit s.changed()
   else:

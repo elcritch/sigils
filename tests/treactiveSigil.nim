@@ -4,6 +4,13 @@ import std/math
 import unittest
 import std/sequtils
 
+template isNear*[T](a, b: T, eps = 1.0e-5): bool =
+  let same = near(a, b, eps)
+  if not same:
+    checkpoint("a and b not almost equal: a: " & $a & " b: " & $b & " delta: " & $(a-b))
+  same
+  
+
 suite "reactive examples":
 
   test "reactive wrapper":
@@ -124,18 +131,28 @@ suite "reactive examples":
     let z = computed[float32]():
       x{} * y{}
 
-    template near(a, b: typed, digits = 5): bool =
-      let r = almostEqual(a, b)
-      if not r:
-        checkpoint("a and b not almost equal: a: " & $a & " b: " & $b & " delta: " & $(a-b))
-      r
-
-    check near(x.val, 3.14)
-    check near(y.val, 2.718)
-    check near(z.val, 8.53452, 3)
+    check isNear(x.val, 3.14)
+    check isNear(y.val, 2.718)
+    check isNear(z.val, 8.53452, 3)
 
     x <- 1.0
-    check near(x.val, 1.0)
-    check near(y.val, 2.718)
-    check near(z.val, 2.718, 3)
+    check isNear(x.val, 1.0)
+    check isNear(y.val, 2.718)
+    check isNear(z.val, 2.718, 3)
 
+  test "reactive float test":
+    let x = newSigil(3.14'f64)
+    let y = newSigil(2.718'f32)
+
+    let z = computed[float]():
+      x{} * y{}
+
+    echo "X: ", x.val, " Z: ", z.val
+    check isNear(x.val, 3.14)
+    check isNear(y.val, 2.718)
+    check isNear(z.val, 8.53451979637.float, 4)
+
+    x <- 1.0
+    check isNear(x.val, 1.0)
+    check isNear(y.val, 2.718)
+    check isNear(z.val, 2.718)
