@@ -1,3 +1,4 @@
+- `v0.11.2` - change Sigil floats to use `near`
 - `v0.11.1` - change Sigil impl to use internalSigil when using `{}`
 - `v0.11.0` - added `Sigil[T]` reactive data type built ontop signals
 - `v0.10.1` - fix Agent destruction with circular subscriptions

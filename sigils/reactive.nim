@@ -29,6 +29,7 @@ proc near*[T](a, b: T, eps: T): bool =
   result = diff <= eps
 
 proc setValue*[T](s: Sigil[T], val: T) =
+  mixin near
   when T is SomeFloat:
     if not near(s.val, val, s.defaultEps):
       s.val = val
