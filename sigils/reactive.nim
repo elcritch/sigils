@@ -26,7 +26,7 @@ proc changed*[T](r: Sigil[T]) {.signal.}
 
 proc setValue*[T](s: Sigil[T], val: T) =
   when T is SomeFloat:
-    if almostEqual(s.val, val, s.defaultPrecision):
+    if not almostEqual(s.val, val, s.defaultPrecision):
       s.val = val
       emit s.changed()
   else:

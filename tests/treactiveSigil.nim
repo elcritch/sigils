@@ -124,7 +124,18 @@ suite "reactive examples":
     let z = computed[float32]():
       x{} * y{}
 
-    check almostEqual(x.val, 3.14)
-    check almostEqual(y.val, 2.718)
-    check almostEqual(z.val, 8.53452, 5)
+    template near(a, b: typed, digits = 5): bool =
+      let r = almostEqual(a, b)
+      if not r:
+        checkpoint("a and b not almost equal: a: " & $a & " b: " & $b & " delta: " & $(a-b))
+      r
+
+    check near(x.val, 3.14)
+    check near(y.val, 2.718)
+    check near(z.val, 8.53452, 3)
+
+    x <- 1.0
+    check near(x.val, 1.0)
+    check near(y.val, 2.718)
+    check near(z.val, 2.718, 3)
 
