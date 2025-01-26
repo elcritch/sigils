@@ -31,10 +31,8 @@ proc `<-`*[T](s: Sigil[T], val: T) =
     s.val = val
     emit s.changed()
 
-var isRunningInternally {.compileTime.} = false
-
 template `{}`*[T](sigil: Sigil[T]): auto {.inject.} =
-  when isRunningInternally:
+  when compiles(internalSigil):
     sigil.connect(changed, internalSigil, recompute)
   sigil.val
 
@@ -45,8 +43,6 @@ template newSigil*[T](x: T): Sigil[T] =
 
 template computed*[T](blk: untyped): Sigil[T] =
   block:
-    static:
-      isRunningInternally = true
     let res = Sigil[T]()
     # echo "\n\nCOMPUTE:INTERNALCOMPUTESIGIL: ", res.unsafeWeakRef
     res.fn = proc(arg: SigilBase) {.closure.} =
@@ -57,6 +53,4 @@ template computed*[T](blk: untyped): Sigil[T] =
         internalSigil.val = val
         emit internalSigil.changed()
     res.recompute()
-    static:
-      isRunningInternally = false
     res
