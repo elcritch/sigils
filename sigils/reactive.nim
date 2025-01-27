@@ -1,12 +1,17 @@
 import sigils/signals
 import sigils/slots
 import sigils/core
-import std/math
+import std/[math, sets]
 
 export signals, slots, core
 
 type
+  SigilAttributes* = enum
+    Dirty
+    Lazy
+
   SigilBase* = ref object of Agent
+    attrs: set[SigilAttributes]
     fn: proc (arg: SigilBase) {.closure.}
 
   Sigil*[T] = ref object of SigilBase
@@ -20,8 +25,6 @@ type
       defaultEps* = 1.0e-5
     elif T is float64:
       defaultEps* = 1.0e-10
-
-  SigilComputed*[T] = ref object of Sigil[T]
 
 proc `val=`*[T](s: Sigil[T], val: T) = {.error: "cannot set value directly, use `<-`".}
 proc `val`*[T](s: Sigil[T]): T = s.val
@@ -46,7 +49,10 @@ proc setValue*[T](s: Sigil[T], val: T) =
 
 proc recompute*(sigil: SigilBase) {.slot.} =
   ## default slot action for `changed`
-  if sigil.fn != nil:
+  assert sigil.fn != nil
+  if Lazy in sigil.attrs:
+    sigil.attrs.incl Dirty
+  else:
     sigil.fn(sigil)
 
 proc `<-`*[T](s: Sigil[T], val: T) =
@@ -62,12 +68,12 @@ template newSigil*[T](value: T): Sigil[T] =
     let sigil = Sigil[T](val: value)
     sigil
 
-template computed*[T](blk: untyped): SigilComputed[T] =
+template computed*[T](blk: untyped): Sigil[T] =
   block:
-    let res = SigilComputed[T]()
+    let res = Sigil[T]()
     # echo "\n\nCOMPUTE:INTERNALCOMPUTESIGIL: ", res.unsafeWeakRef
     res.fn = proc(arg: SigilBase) {.closure.} =
-      let internalSigil {.inject.} = SigilComputed[T](arg)
+      let internalSigil {.inject.} = Sigil[T](arg)
       let val = block:
         `blk`
       internalSigil.setValue(val)
