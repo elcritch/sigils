@@ -177,7 +177,6 @@ suite "reactive examples":
       z.debugName = "Z"
 
     check cnt[] == 0 # cnt is called from the `read` (`trace`) setup step
-    # echo "X: ", x{},  " => Z: ", z{}, " (", cnt[], ")"
     check cnt[] == 0
     x <- 2
     echo "X: ", x{},  " => Z: ", z{}, " (", cnt[], ")"
@@ -189,13 +188,13 @@ suite "reactive examples":
     check z{} == 16
     echo "X: ", x{},  " => Z: ", z{}, " (", cnt[], ")"
     check cnt[] == 1
-    # shouldn't trigger changes
+    ## shouldn't trigger changes
     x <- 2
     check cnt[] == 1
     check z{} == 16
     check cnt[] == 1
 
-    # shouldn't trigger changes
+    ## shouldt trigger changes after read
     x <- 3
     check cnt[] == 1
     check z{} == 24
