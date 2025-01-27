@@ -70,10 +70,11 @@ template newSigil*[T](value: T): Sigil[T] =
     let sigil = Sigil[T](val: value)
     sigil
 
-template computed*[T](lazy: bool, blk: untyped): Sigil[T] =
+template computedImpl*[T](lazy, blk: untyped): Sigil[T] =
   block:
     let res = Sigil[T]()
-    # echo "\n\nCOMPUTE:INTERNALCOMPUTESIGIL: ", res.unsafeWeakRef
+    if lazy:
+      res.attrs.incl Lazy
     res.fn = proc(arg: SigilBase) {.closure.} =
       let internalSigil {.inject.} = Sigil[T](arg)
       let val = block:
@@ -83,4 +84,4 @@ template computed*[T](lazy: bool, blk: untyped): Sigil[T] =
     res
 
 template computed*[T](blk: untyped): Sigil[T] =
-  computed[T](false, blk)
+  computedImpl[T](false, blk)

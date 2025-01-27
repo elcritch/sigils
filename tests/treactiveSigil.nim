@@ -18,6 +18,7 @@ suite "reactive examples":
     let
       x = newSigil(5)
       y = computed[int]():
+        echo "val: ", x{}
         2 * x{}
 
     when defined(sigilsDebug):
@@ -26,11 +27,11 @@ suite "reactive examples":
 
     check x.val == 5
     check y.val == 10
+    echo "setting 2"
     x <- 2
     check x.val == 2
     check y.val == 4
     # x <- 2
-
     check not compiles(y.val = 4)
 
   test "reactive wrapper trace executions and side effects":
