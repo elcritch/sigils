@@ -31,9 +31,11 @@ suite "reactive examples":
     check y.val == 4
     # x <- 2
 
+    check not compiles(y.val = 4)
+
   test "reactive wrapper trace executions and side effects":
 
-    var cnt = Sigil[int](val: 0)
+    var cnt = newSigil(value=0)
 
     let
       x = newSigil(5)

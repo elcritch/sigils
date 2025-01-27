@@ -15,11 +15,16 @@ type
     ## 
     ## This builds on the core signals and slots but provides a
     ## higher level API for working with propagating values.
-    val*: T
+    val: T
     when T is float or T is float32:
       defaultEps* = 1.0e-5
     elif T is float64:
       defaultEps* = 1.0e-10
+
+  SigilComputed*[T] = ref object of Sigil[T]
+
+proc `val=`*[T](s: Sigil[T], val: T) = {.error: "cannot set value directly, use `<-`".}
+proc `val`*[T](s: Sigil[T]): T = s.val
 
 proc changed*[T](r: Sigil[T]) {.signal.}
   ## core reactive signal type
@@ -52,17 +57,17 @@ template `{}`*[T](sigil: Sigil[T]): auto {.inject.} =
     sigil.connect(changed, internalSigil, recompute)
   sigil.val
 
-template newSigil*[T](x: T): Sigil[T] =
+template newSigil*[T](value: T): Sigil[T] =
   block connectReactives:
-    let sigil = Sigil[T](val: x)
+    let sigil = Sigil[T](val: value)
     sigil
 
-template computed*[T](blk: untyped): Sigil[T] =
+template computed*[T](blk: untyped): SigilComputed[T] =
   block:
-    let res = Sigil[T]()
+    let res = SigilComputed[T]()
     # echo "\n\nCOMPUTE:INTERNALCOMPUTESIGIL: ", res.unsafeWeakRef
     res.fn = proc(arg: SigilBase) {.closure.} =
-      let internalSigil {.inject.} = Sigil[T](arg)
+      let internalSigil {.inject.} = SigilComputed[T](arg)
       let val = block:
         `blk`
       internalSigil.setValue(val)
