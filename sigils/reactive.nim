@@ -26,8 +26,8 @@ type
     elif T is float64:
       defaultEps* = 1.0e-10
 
-proc `val=`*[T](s: Sigil[T], val: T) = {.error: "cannot set value directly, use `<-`".}
-proc `val`*[T](s: Sigil[T]): T = s.val
+# proc `val=`*[T](s: Sigil[T], val: T) = {.error: "cannot set value directly, use `<-`".}
+# proc `val`*[T](s: Sigil[T]): T = s.val
 
 proc changed*[T](r: Sigil[T]) {.signal.}
   ## core reactive signal type
@@ -51,6 +51,7 @@ proc recompute*(sigil: SigilBase) {.slot.} =
   ## default slot action for `changed`
   assert sigil.fn != nil
   if Lazy in sigil.attrs:
+    echo "set dirty"
     sigil.attrs.incl Dirty
   else:
     sigil.fn(sigil)
@@ -62,7 +63,9 @@ template `{}`*[T](sigil: Sigil[T]): auto {.inject.} =
   when compiles(internalSigil):
     sigil.connect(changed, internalSigil, recompute)
   if Dirty in sigil.attrs:
+    echo "run dirty"
     sigil.fn(sigil)
+    sigil.attrs.excl(Dirty)
   sigil.val
 
 template newSigil*[T](value: T): Sigil[T] =
@@ -74,6 +77,7 @@ template computedImpl*[T](lazy, blk: untyped): Sigil[T] =
   block:
     let res = Sigil[T]()
     if lazy:
+      echo "set lazy"
       res.attrs.incl Lazy
     res.fn = proc(arg: SigilBase) {.closure.} =
       let internalSigil {.inject.} = Sigil[T](arg)
@@ -85,3 +89,6 @@ template computedImpl*[T](lazy, blk: untyped): Sigil[T] =
 
 template computed*[T](blk: untyped): Sigil[T] =
   computedImpl[T](false, blk)
+
+template computedLazy*[T](blk: untyped): Sigil[T] =
+  computedImpl[T](true, blk)
