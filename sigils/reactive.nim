@@ -51,7 +51,6 @@ proc recompute*(sigil: SigilBase) {.slot.} =
   ## default slot action for `changed`
   assert sigil.fn != nil
   if Lazy in sigil.attrs:
-    echo "set dirty"
     sigil.attrs.incl Dirty
   else:
     sigil.fn(sigil)
@@ -63,7 +62,6 @@ template `{}`*[T](sigil: Sigil[T]): auto {.inject.} =
   when compiles(internalSigil):
     sigil.connect(changed, internalSigil, recompute)
   if Dirty in sigil.attrs:
-    echo "run dirty"
     sigil.fn(sigil)
     sigil.attrs.excl(Dirty)
   sigil.val
@@ -77,7 +75,6 @@ template computedImpl*[T](lazy, blk: untyped): Sigil[T] =
   block:
     let res = Sigil[T]()
     if lazy:
-      echo "set lazy"
       res.attrs.incl Lazy
     res.fn = proc(arg: SigilBase) {.closure.} =
       let internalSigil {.inject.} = Sigil[T](arg)
