@@ -61,6 +61,8 @@ proc `<-`*[T](s: Sigil[T], val: T) =
 template `{}`*[T](sigil: Sigil[T]): auto {.inject.} =
   when compiles(internalSigil):
     sigil.connect(changed, internalSigil, recompute)
+  if Dirty in sigil.attrs:
+    sigil.fn(sigil)
   sigil.val
 
 template newSigil*[T](value: T): Sigil[T] =
@@ -68,7 +70,7 @@ template newSigil*[T](value: T): Sigil[T] =
     let sigil = Sigil[T](val: value)
     sigil
 
-template computed*[T](blk: untyped): Sigil[T] =
+template computed*[T](lazy: bool, blk: untyped): Sigil[T] =
   block:
     let res = Sigil[T]()
     # echo "\n\nCOMPUTE:INTERNALCOMPUTESIGIL: ", res.unsafeWeakRef
@@ -79,3 +81,6 @@ template computed*[T](blk: untyped): Sigil[T] =
       internalSigil.setValue(val)
     res.recompute()
     res
+
+template computed*[T](blk: untyped): Sigil[T] =
+  computed[T](false, blk)

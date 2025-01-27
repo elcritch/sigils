@@ -35,26 +35,27 @@ suite "reactive examples":
 
   test "reactive wrapper trace executions and side effects":
 
-    var cnt = newSigil(value=0)
+    var cnt: ref int
+    cnt.new()
 
     let
       x = newSigil(5)
       z = computed[int]():
-        cnt.val.inc()
+        cnt[].inc()
         8 * x{}
 
     when defined(sigilsDebug):
       x.debugName = "X"
       z.debugName = "Z"
 
-    check cnt.val == 1 # cnt is called from the `read` (`trace`) setup step
-    echo "X: ", x.val,  " => Z: ", z.val, " (", cnt.val, ")"
+    check cnt[] == 1 # cnt is called from the `read` (`trace`) setup step
+    echo "X: ", x.val,  " => Z: ", z.val, " (", cnt[], ")"
     x <- 2
-    echo "X: ", x.val,  " => Z: ", z.val, " (", cnt.val, ")"
+    echo "X: ", x.val,  " => Z: ", z.val, " (", cnt[], ")"
     check z.val == 16
     x <- 2
-    echo "X: ", x.val,  " => Z: ", z.val, " (", cnt.val, ")"
-    check cnt.val == 2
+    echo "X: ", x.val,  " => Z: ", z.val, " (", cnt[], ")"
+    check cnt[] == 2
 
   test "reactive wrapper multiple signals":
     let x = newSigil(5)
@@ -158,3 +159,27 @@ suite "reactive examples":
     check isNear(x.val, 1.0)
     check isNear(y.val, 2.718)
     check isNear(z.val, 2.718)
+
+  test "reactive wrapper and lazy compute":
+
+    var cnt: ref int
+    cnt.new()
+
+    let
+      x = newSigil(5)
+      z = computed[int]():
+        cnt[].inc()
+        8 * x{}
+
+    when defined(sigilsDebug):
+      x.debugName = "X"
+      z.debugName = "Z"
+
+    check cnt[] == 1 # cnt is called from the `read` (`trace`) setup step
+    echo "X: ", x.val,  " => Z: ", z.val, " (", cnt[], ")"
+    x <- 2
+    echo "X: ", x.val,  " => Z: ", z.val, " (", cnt[], ")"
+    check z.val == 16
+    x <- 2
+    echo "X: ", x.val,  " => Z: ", z.val, " (", cnt[], ")"
+    check cnt[] == 2
