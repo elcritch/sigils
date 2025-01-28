@@ -486,9 +486,7 @@ suite "#computedLazy sigil":
       obj.doDraw()
 
     proc draw(agent: SomeAgent) {.slot.} =
-      # let internalSigil = agent
       let value = b{}
-      echo "draw got value:", value
       agent.value = value
     
     proc doDraw(obj: SomeAgent) =
