@@ -58,9 +58,13 @@ proc recompute*(sigil: SigilBase) {.slot.} =
 proc `<-`*[T](s: Sigil[T], val: T) =
   s.setValue(val)
 
+template getInternalSigilIdent*(): untyped =
+  internalSigil
+
 template `{}`*[T](sigil: Sigil[T]): auto {.inject.} =
-  when compiles(internalSigil):
-    sigil.connect(changed, internalSigil, recompute)
+  mixin getInternalSigilIdent
+  when compiles(getInternalSigilIdent()):
+    sigil.connect(changed, getInternalSigilIdent(), recompute)
   if Dirty in sigil.attrs:
     sigil.fn(sigil)
     sigil.attrs.excl(Dirty)

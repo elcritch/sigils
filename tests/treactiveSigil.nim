@@ -464,10 +464,15 @@ suite "#computedLazy sigil":
     type SomeAgent = ref object of Agent
       value: int
 
+    template getInternalSigilIdent(): untyped =
+      ## provide this to override the default `internalSigil`
+      ## identify, for using local naming schema
+      agent
+
     let 
       a = newSigil(2)
       b = computedLazy[int]: 2 * a{}
-      agent = SomeAgent()
+      foo = SomeAgent()
 
     check a{} == 2
     check b{} == 4
@@ -480,16 +485,19 @@ suite "#computedLazy sigil":
     proc recompute(obj: SomeAgent) {.slot.} =
       obj.doDraw()
 
-    proc draw(obj: SomeAgent) {.slot.} =
-      let internalSigil = agent
+    proc draw(agent: SomeAgent) {.slot.} =
+      # let internalSigil = agent
       let value = b{}
       echo "draw got value:", value
-      obj.value = value
+      agent.value = value
     
     proc doDraw(obj: SomeAgent) =
       obj.draw()
 
-    agent.draw()
-    check agent.value == 4
+    foo.draw()
+
+    check b{} == 4
+    check foo.value == 4
     b <- 5
-    check agent.value == 5
+    check b{} == 5
+    check foo.value == 5
