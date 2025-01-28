@@ -10,16 +10,70 @@ template isNear*[T](a, b: T, eps = 1.0e-5): bool =
     checkpoint("a and b not almost equal: a: " & $a & " b: " & $b & " delta: " & $(a-b))
   same
   
+  
+suite "#sigil":
+  test """
+    Given a sigil of value 5
+    When the sigil is invoked
+    Then it should return the value 5
+  """:
+    let x = newSigil(5)
+    check x{} == 5
+  
+  test """
+    Given a sigil
+    When an attempt is made to assign to the sigil's value directly
+    Then it should not compile
+  """:
+    let x = newSigil(5)
+      
+    check not compiles(x{} = 4)
+    check not compiles(x{} <- 4)
+    
+  test """
+    Given a sigil of value 5
+    When an attempt is made to assign to the sigil using arrow syntax to 4
+    Then it should change the value to 4 
+  """:
+    let x = newSigil(5)
+  
+    x <- 4
 
-suite "reactive examples":
+    check x{} == 4
 
-  test "reactive wrapper":
+suite "#computed sigil":
+  test """
+    Given a computed sigil
+    When an attempt is made to assign to the sigil
+    Then it should not compile
+  """:
+    let 
+      x = newSigil(5)
+      y = computed[int](x{} * 2)
+      
+    check not compiles(y{} = 4)
+    check not compiles(y{} <- 4)
 
+  test """
+    Given a sigil of value 5 and a computed that is double the sigil
+    When the computed sigil is invoked
+    Then it should return the value 10
+  """:
+    let 
+      x = newSigil(5)
+      y = computed[int](2*x{})
+
+    check y{} == 10
+    
+  test """
+    Given a sigil of value 5 and a computed that is double the sigil
+    When the sigils value is changed to 2 and the computed sigil is invoked
+    Then it should return the value 4
+  """:
+    # Given
     let
       x = newSigil(5)
-      y = computed[int]():
-        echo "val: ", x{}
-        2 * x{}
+      y = computed[int](2 * x{})
 
     when defined(sigilsDebug):
       x.debugName = "X"
@@ -27,38 +81,144 @@ suite "reactive examples":
 
     check x{} == 5
     check y{} == 10
-    echo "setting 2"
+
     x <- 2
+
     check x{} == 2
     check y{} == 4
-    # x <- 2
-    check not compiles(y{} = 4)
-
-  test "reactive wrapper trace executions and side effects":
-
-    var cnt: ref int
-    cnt.new()
-
+    
+  test """
+    Given a sigil of and a computed that is double the sigil
+    When the sigils value is changed
+    Then it should do an additional compute
+  """:
+    # Given
     let
+      count = new(int)
       x = newSigil(5)
-      z = computed[int]():
-        cnt[].inc()
-        8 * x{}
+      y = computed[int]:
+        count[] += 1
+        2 * x{}
 
     when defined(sigilsDebug):
       x.debugName = "X"
-      z.debugName = "Z"
+      y.debugName = "Y"
 
-    check cnt[] == 1 # cnt is called from the `read` (`trace`) setup step
-    echo "X: ", x{},  " => Z: ", z{}, " (", cnt[], ")"
+    check count[] == 1
     x <- 2
-    echo "X: ", x{},  " => Z: ", z{}, " (", cnt[], ")"
-    check z{} == 16
-    x <- 2
-    echo "X: ", x{},  " => Z: ", z{}, " (", cnt[], ")"
-    check cnt[] == 2
+    check count[] == 2
 
-  test "reactive wrapper multiple signals":
+    test """
+      Given a sigil of value 5
+      When there is a computed sigil that is not being invoked
+      Then it should still perform the computation immediately
+    """:
+      let
+        count: ref int = new(int)
+        x = newSigil(5)
+        y = computed[int]:
+          count[] += 1
+          2 * x{}
+
+      when defined(sigilsDebug):
+        x.debugName = "X"
+        y.debugName = "Y"
+
+      check count[] == 1
+      
+    test """
+      Given a sigil of value 5 and a computed that is double the sigil
+      When the computed sigil is invoked multiple times
+      Then it should perform the compute only once
+    """:
+      let
+        count: ref int = new(int)
+        x = newSigil(5)
+        y = computed[int]:
+          count[] += 1
+          2 * x{}
+
+      when defined(sigilsDebug):
+        x.debugName = "X"
+        y.debugName = "Y"
+
+      check count[] == 1
+      discard y{}
+      discard y{}
+      check count[] == 1
+    
+  test """
+    Given a computed sigil that is the sum of 2 sigils
+    When either sigil is changed
+    Then the computed sigil should be recomputed for every change
+  """:
+    let
+      count = new(int)
+      x = newSigil(1)
+      y = newSigil(2)
+      z = computed[int]():
+        count[] += 1
+        x{} + y{}
+    
+    check count[] == 1
+    check z{} == 3
+  
+    x <- 2
+    check count[] == 2
+    check z{} == 4
+    
+    y <- 3
+    x <- 3
+    check count[] == 4
+    check z{} == 6
+    
+  test """
+    Given a computed sigil that is double a computed sigil that is double a sigil
+    When the sigil value changes to 4
+    Then the computed sigil should be recomputed once to 16
+  """:
+    let 
+      count = new(int)
+      a = newSigil(1)
+      b = computed[int](2 * a{})
+      c = computed[int]:
+        count[] += 1
+        2 * b{}
+      
+    check count[] == 1
+    check c{} == 4
+    
+    a <- 4
+    
+    check count[] == 2
+    check c{} == 16
+  
+  test """
+    Given a computed sigil A that depends on a computed sigil B and both of them depend directly on the same sigil C
+    When the sigil value of C changes
+    Then the computed sigil A should be recomputed twice, once from the change of sigil C, once from the change of the computed sigil B .
+  """:
+    let 
+      count = new(int)
+      a = newSigil(1)
+      b = computed[int](2 * a{})
+      c = computed[int]:
+        count[] += 1
+        a{} + b{}
+      
+    check count[] == 1
+    check c{} == 3
+    
+    a <- 4
+    
+    check count[] == 3
+    check c{} == 12
+  
+  test """
+    Given a computed sigil that is double an int-sigil but is always 0 if a boolean sigil is false
+    When the sigils update
+    Then the computed sigil should recompute accordingly
+  """:
     let x = newSigil(5)
     let y = newSigil(false)
 
@@ -81,54 +241,21 @@ suite "reactive examples":
 
     y <- true
     check y{} == true
-    check z{} == 10 # this starts failing
-
-    x <- 2
-    check x{} == 2
-    check z{} == 4
-
-    y <- false
-    check y{} == false
-    check z{} == 0
-
-  test "reactive wrapper double inference":
-    let x = newSigil(5)
-    let y = newSigil(false)
-
-    let z = computed[int]():
-      if y{}:
-        x{} * 2
-      else:
-        0
-
-    let a = computed[string]():
-      let myZ = z{}
-      if y{}:
-        fmt"The number is {myZ}"
-      else:
-        "There is no number"
-    
-    check x{} == 5
-    check y{} == false
-    check z{} == 0
-    check a{} == "There is no number"
-    
-    y <- true
-    check y{} == true
     check z{} == 10
-    check a{} == "The number is 10"
-    
+
     x <- 2
     check x{} == 2
     check z{} == 4
-    check a{} == "The number is 4" # This fails. a does not get updated, because it does not **directly** rely on x. It does so indirectly by relying on z which relies on x
-    
+
     y <- false
     check y{} == false
     check z{} == 0
-    check a{} == "There is no number"
 
-  test "reactive float test":
+  test """
+    Given a computed sigil of type float32 multiplying 2 float32 sigils
+    When the float sigils are changed
+    Then the computed sigil should update
+  """:
     let x = newSigil(3.14'f32)
     let y = newSigil(2.718'f32)
 
@@ -144,7 +271,11 @@ suite "reactive examples":
     check isNear(y{}, 2.718)
     check isNear(z{}, 2.718, 3)
 
-  test "reactive float test":
+  test """
+    Given a computed sigil of type float multiplying a float32 and a float64 sigil
+    When the float sigils are changed
+    Then the computed sigil should update
+  """:
     let x = newSigil(3.14'f64)
     let y = newSigil(2.718'f32)
 
@@ -161,41 +292,166 @@ suite "reactive examples":
     check isNear(y{}, 2.718)
     check isNear(z{}, 2.718)
 
-  test "reactive wrapper and lazy compute":
+suite "#computedLazy sigil":
+  test """
+    Given a computedLazy sigil
+    When an attempt is made to assign to the sigil
+    Then it should not compile
+  """:
+    let 
+      x = newSigil(5)
+      y = computedLazy[int](x{} * 2)
+      
+    check not compiles(y{} = 4)
+    check not compiles(y{} <- 4)
 
-    var cnt: ref int
-    cnt.new()
+  test """
+    Given a sigil of value 5 and a computedLazy that is double the sigil
+    When the computedLazy sigil is invoked
+    Then it should return the value 10
+  """:
+    let 
+      x = newSigil(5)
+      y = computedLazy[int](2*x{})
 
+    check y{} == 10
+    
+  test """
+    Given a sigil of value 5 and a computedLazy that is double the sigil
+    When the sigils value is changed to 2 and the computedLazy sigil is invoked
+    Then it should return the value 4
+  """:
+    # Given
     let
       x = newSigil(5)
-      z = computedLazy[int]():
-        cnt[].inc()
-        8 * x{}
+      y = computedLazy[int](2 * x{})
 
     when defined(sigilsDebug):
       x.debugName = "X"
-      z.debugName = "Z"
+      y.debugName = "Y"
 
-    check cnt[] == 0 # cnt is called from the `read` (`trace`) setup step
-    check cnt[] == 0
-    x <- 2
-    echo "X: ", x{},  " => Z: ", z{}, " (", cnt[], ")"
-    check z{} == 16
-    check cnt[] == 1
-    x <- 2
-    echo "X: ", x{},  " => Z: ", z{}, " (", cnt[], ")"
-    check cnt[] == 1
-    check z{} == 16
-    echo "X: ", x{},  " => Z: ", z{}, " (", cnt[], ")"
-    check cnt[] == 1
-    ## shouldn't trigger changes
-    x <- 2
-    check cnt[] == 1
-    check z{} == 16
-    check cnt[] == 1
+    check x{} == 5
+    check y{} == 10
 
-    ## shouldt trigger changes after read
+    x <- 2
+
+    check x{} == 2
+    check y{} == 4
+    
+  test """
+    Given a sigil and a computedLazy that is double the sigil
+    When the sigils value is changed
+    Then it should only do a compute after the computedLazy sigil was invoked
+  """:
+    # Given
+    let
+      count = new(int)
+      x = newSigil(5)
+      y = computedLazy[int]:
+        count[] += 1
+        2 * x{}
+
+    when defined(sigilsDebug):
+      x.debugName = "X"
+      y.debugName = "Y"
+
+    check count[] == 0
+    x <- 2
+    check count[] == 0
+    check y{} == 4
+    check count[] == 1
+
+    test """
+      Given a sigil of value 5
+      When there is a computedLazy sigil that is not being invoked
+      Then it should not perform the computation
+    """:
+      let
+        count: ref int = new(int)
+        x = newSigil(5)
+        y = computedLazy[int]:
+          count[] += 1
+          2 * x{}
+
+      when defined(sigilsDebug):
+        x.debugName = "X"
+        y.debugName = "Y"
+
+      check count[] == 0
+      
+    test """
+      Given a sigil of value 5 and a computedLazy that is double the sigil
+      When the computedLazy sigil is invoked multiple times
+      Then it should perform the compute only once after the first invocation
+    """:
+      let
+        count: ref int = new(int)
+        x = newSigil(5)
+        y = computedLazy[int]:
+          count[] += 1
+          2 * x{}
+
+      when defined(sigilsDebug):
+        x.debugName = "X"
+        y.debugName = "Y"
+
+      check count[] == 0
+      discard y{}
+      check count[] == 1
+      discard y{}
+      check count[] == 1
+    
+  test """
+    Given a computedLazy sigil that is the sum of 2 sigils
+    When either sigil is changed
+    Then the computedLazy sigil only be recomputed each time after an invocation, not after a sigil change
+  """:
+    let
+      count = new(int)
+      x = newSigil(1)
+      y = newSigil(2)
+      z = computedLazy[int]():
+        count[] += 1
+        x{} + y{}
+    
+    check count[] == 0
+    check z{} == 3
+    check count[] == 1
+  
+    x <- 2
+    check count[] == 1
+    check z{} == 4
+    check count[] == 2
+    
+    y <- 3
     x <- 3
-    check cnt[] == 1
-    check z{} == 24
-    check cnt[] == 2
+    check count[] == 2
+    check z{} == 6
+    check count[] == 3
+    
+  test """
+    Given a computedLazy sigil A that is double a computedLazy sigil B that is double a sigil C of value 1
+    When sigil A is invoked
+    Then it should return 4 and also compute computedLazy sigil B, but only once
+  """:
+    let 
+      countA = new(int)
+      countB = new(int)
+      c = newSigil(1)
+      b = computedLazy[int]:
+        countB[] += 1
+        2 * c{}
+      a = computedLazy[int]:
+        countA[] += 1
+        2 * b{}
+      
+    check countA[] == 0
+    check countB[] == 0
+    
+    check a{} == 4
+    
+    check countA[] == 1
+    check countB[] == 1
+    
+    check b{} == 2
+    check countB[] == 1
