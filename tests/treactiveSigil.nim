@@ -455,3 +455,41 @@ suite "#computedLazy sigil":
     
     check b{} == 2
     check countB[] == 1
+
+  test """
+    Test bridging Sigils to regular Sigil Agents. e.g. for comptability
+    with Figuro where we wanna override hook in with {} when we 
+    use Sigils
+  """:
+    type SomeAgent = ref object of Agent
+      value: int
+
+    let 
+      a = newSigil(2)
+      b = computedLazy[int]: 2 * a{}
+      agent = SomeAgent()
+
+    check a{} == 2
+    check b{} == 4
+    
+    ## Bit annoying, to have to use a regular proc
+    ## since the slot pragma and forward proc decl's
+    ## don't seem to mix
+    ## In Figuro `recompute` would just call `refresh`
+    proc doDraw(obj: SomeAgent)
+    proc recompute(obj: SomeAgent) {.slot.} =
+      obj.doDraw()
+
+    proc draw(obj: SomeAgent) {.slot.} =
+      let internalSigil = agent
+      let value = b{}
+      echo "draw got value:", value
+      obj.value = value
+    
+    proc doDraw(obj: SomeAgent) =
+      obj.draw()
+
+    agent.draw()
+    check agent.value == 4
+    b <- 5
+    check agent.value == 5
