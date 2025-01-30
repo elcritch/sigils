@@ -577,15 +577,19 @@ suite "#effects":
   test """
     Given a sigil effect
   """:
+    var internalSigilEffectRegistry = SigilEffectRegistry()
+
     let 
       count = new(int)
       x = newSigil(5)
-      eff = effect:
-        count[].inc()
-        echo "X is now: ", x{} * 2
+
+    effect:
+      count[].inc()
+      echo "X is now: ", x{} * 2
  
     check count[] ==  1
-    check eff.isDirty()
+    let effs = internalSigilEffectRegistry.registered()
+    check effs.len() == 1
 
     # a = signal(0)
     # effect(() => ... stuff that uses this.a() ...)

@@ -1,7 +1,7 @@
 import sigils/signals
 import sigils/slots
 import sigils/core
-import std/[math, sets]
+import std/[math, sets, sequtils]
 
 export signals, slots, core
 
@@ -26,8 +26,8 @@ type
     elif T is float64:
       defaultEps* = 1.0e-10
 
-# proc `val=`*[T](s: Sigil[T], val: T) = {.error: "cannot set value directly, use `<-`".}
-# proc `val`*[T](s: Sigil[T]): T = s.val
+  SigilEffectRegistry* = ref object of Agent
+    effects: HashSet[SigilBase]
 
 proc `$`*(s: SigilBase): string =
   result = "Sigil" 
@@ -48,9 +48,6 @@ proc isLazy*(s: SigilBase): bool =
   s.attrs.contains(Lazy)
 
 proc changed*(s: SigilBase) {.signal.}
-  ## core reactive signal type
-
-proc trigger*(s: SigilBase) {.signal.}
   ## core reactive signal type
 
 proc near*[T](a, b: T, eps: T): bool =
@@ -135,14 +132,33 @@ template `<==`*[T](tp: typedesc[T], blk: untyped): Sigil[T] =
   computedImpl[T](true, blk)
 
 
-template getInternalSigilIdent*(): untyped =
-  internalSigil
-template effect*(blk: untyped): SigilBase =
+proc register*(agent: Agent, s: SigilBase) {.signal.}
+  ## core signal for registering new effects
+
+proc triggerEffects*(agent: Agent) {.signal.}
+  ## core signal for trigger effects
+
+proc onRegister*(reg: SigilEffectRegistry, s: SigilBase) {.slot.} =
+  reg.effects.incl(s)
+
+proc defaultSigilEffectRegistry*(): SigilEffectRegistry =
+  result = SigilEffectRegistry()
+  connect(result, register, result, onRegister)
+
+proc registered*(r: SigilEffectRegistry): seq[SigilBase] =
+  r.effects.toSeq
+
+template getSigilEffectsRegistry*(): untyped =
+  ## identifier that is messaged with a new effect
+  ## when it's created
+  internalSigilEffectRegistry
+
+template effect*(blk: untyped) =
   block:
     let res = SigilBase()
     res.attrs.incl Lazy
     res.fn = proc(arg: SigilBase) {.closure.} =
       let internalSigil {.inject.} = SigilBase(arg)
       `blk`
-    res.recompute()
-    res
+    emit getSigilEffectsRegistry().register(res)
+    discard
