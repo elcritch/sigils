@@ -58,6 +58,7 @@ proc near*[T](a, b: T, eps: T): bool =
   result = diff <= eps
 
 proc setValue*[T](s: Sigil[T], val: T) {.slot.} =
+  ## slot to update sigil values, synonym of `<-`
   mixin near
   when T is SomeFloat:
     if not near(s.val, val, s.defaultEps):
@@ -69,7 +70,8 @@ proc setValue*[T](s: Sigil[T], val: T) {.slot.} =
       emit s.changed()
 
 proc recompute*(sigil: SigilBase) {.slot.} =
-  ## default slot action for `changed`
+  ## default slot for updating sigils
+  ## when `change` is emitted
   assert sigil.fn != nil
   if Lazy in sigil.attrs:
     sigil.attrs.incl Dirty
