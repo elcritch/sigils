@@ -66,6 +66,14 @@ suite "#computed sigil":
     check y{} == 10
     
   test """
+  """:
+    let 
+      x = newSigil(5)
+      y = int <== 2*x{}
+
+    check y{} == 10
+    
+  test """
     Given a sigil of value 5 and a computed that is double the sigil
     When the sigils value is changed to 2 and the computed sigil is invoked
     Then it should return the value 4
@@ -292,39 +300,39 @@ suite "#computed sigil":
     check isNear(y{}, 2.718)
     check isNear(z{}, 2.718)
 
-suite "#computedLazy sigil":
+suite "#computed sigil":
   test """
-    Given a computedLazy sigil
+    Given a computed sigil
     When an attempt is made to assign to the sigil
     Then it should not compile
   """:
     let 
       x = newSigil(5)
-      y = computedLazy[int](x{} * 2)
+      y = computed[int](x{} * 2)
       
     check not compiles(y{} = 4)
     check not compiles(y{} <- 4)
 
   test """
-    Given a sigil of value 5 and a computedLazy that is double the sigil
-    When the computedLazy sigil is invoked
+    Given a sigil of value 5 and a computed that is double the sigil
+    When the computed sigil is invoked
     Then it should return the value 10
   """:
     let 
       x = newSigil(5)
-      y = computedLazy[int](2*x{})
+      y = computed[int](2*x{})
 
     check y{} == 10
     
   test """
-    Given a sigil of value 5 and a computedLazy that is double the sigil
-    When the sigils value is changed to 2 and the computedLazy sigil is invoked
+    Given a sigil of value 5 and a computed that is double the sigil
+    When the sigils value is changed to 2 and the computed sigil is invoked
     Then it should return the value 4
   """:
     # Given
     let
       x = newSigil(5)
-      y = computedLazy[int](2 * x{})
+      y = computed[int](2 * x{})
 
     when defined(sigilsDebug):
       x.debugName = "X"
@@ -339,15 +347,15 @@ suite "#computedLazy sigil":
     check y{} == 4
     
   test """
-    Given a sigil and a computedLazy that is double the sigil
+    Given a sigil and a computed that is double the sigil
     When the sigils value is changed
-    Then it should only do a compute after the computedLazy sigil was invoked
+    Then it should only do a compute after the computed sigil was invoked
   """:
     # Given
     let
       count = new(int)
       x = newSigil(5)
-      y = computedLazy[int]:
+      y = computed[int]:
         count[] += 1
         2 * x{}
 
@@ -363,13 +371,13 @@ suite "#computedLazy sigil":
 
     test """
       Given a sigil of value 5
-      When there is a computedLazy sigil that is not being invoked
+      When there is a computed sigil that is not being invoked
       Then it should not perform the computation
     """:
       let
         count: ref int = new(int)
         x = newSigil(5)
-        y = computedLazy[int]:
+        y = computed[int]:
           count[] += 1
           2 * x{}
 
@@ -380,14 +388,14 @@ suite "#computedLazy sigil":
       check count[] == 0
       
     test """
-      Given a sigil of value 5 and a computedLazy that is double the sigil
-      When the computedLazy sigil is invoked multiple times
+      Given a sigil of value 5 and a computed that is double the sigil
+      When the computed sigil is invoked multiple times
       Then it should perform the compute only once after the first invocation
     """:
       let
         count: ref int = new(int)
         x = newSigil(5)
-        y = computedLazy[int]:
+        y = computed[int]:
           count[] += 1
           2 * x{}
 
@@ -402,15 +410,15 @@ suite "#computedLazy sigil":
       check count[] == 1
     
   test """
-    Given a computedLazy sigil that is the sum of 2 sigils
+    Given a computed sigil that is the sum of 2 sigils
     When either sigil is changed
-    Then the computedLazy sigil only be recomputed each time after an invocation, not after a sigil change
+    Then the computed sigil only be recomputed each time after an invocation, not after a sigil change
   """:
     let
       count = new(int)
       x = newSigil(1)
       y = newSigil(2)
-      z = computedLazy[int]():
+      z = computed[int]():
         count[] += 1
         x{} + y{}
     
@@ -430,18 +438,18 @@ suite "#computedLazy sigil":
     check count[] == 3
     
   test """
-    Given a computedLazy sigil A that is double a computedLazy sigil B that is double a sigil C of value 1
+    Given a computed sigil A that is double a computed sigil B that is double a sigil C of value 1
     When sigil A is invoked
-    Then it should return 4 and also compute computedLazy sigil B, but only once
+    Then it should return 4 and also compute computed sigil B, but only once
   """:
     let 
       countA = new(int)
       countB = new(int)
       c = newSigil(1)
-      b = computedLazy[int]:
+      b = computed[int]:
         countB[] += 1
         2 * c{}
-      a = computedLazy[int]:
+      a = computed[int]:
         countA[] += 1
         2 * b{}
       
@@ -471,7 +479,7 @@ suite "#computedLazy sigil":
 
     let 
       a = newSigil(2)
-      b = computedLazy[int]: 2 * a{}
+      b = computed[int]: 2 * a{}
       foo = SomeAgent()
 
     check a{} == 2

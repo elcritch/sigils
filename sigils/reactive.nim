@@ -88,8 +88,12 @@ template computedImpl*[T](lazy, blk: untyped): Sigil[T] =
     res.recompute()
     res
 
-template computed*[T](blk: untyped): Sigil[T] =
+template computedNow*[T](blk: untyped): Sigil[T] =
   computedImpl[T](false, blk)
 
-template computedLazy*[T](blk: untyped): Sigil[T] =
+template computed*[T](blk: untyped): Sigil[T] =
+  computedImpl[T](true, blk)
+
+template `<==`*[T](tp: typedesc[T], blk: untyped): Sigil[T] =
+  ## TODO: keep something like this?
   computedImpl[T](true, blk)
