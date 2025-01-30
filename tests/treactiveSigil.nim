@@ -572,16 +572,3 @@ suite "#bridge sigils and agents":
     b <- 5
     check b{} == 5
     check foo.value == 5
-
-suite "#effect sigil":
-  test """
-    Given a computed sigil
-    When an attempt is made to assign to the sigil
-    Then it should not compile
-  """:
-    let 
-      x = newSigil(5)
-      eff = effect(echo "VAL: ", x{} * 2)
-      
-    # a = signal(0)
-    # effect(() => ... stuff that uses this.a() ...)
