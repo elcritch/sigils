@@ -138,19 +138,6 @@ proc registerEffect*(agent: Agent, s: SigilBase) {.signal.}
 proc triggerEffects*(agent: Agent) {.signal.}
   ## core signal for trigger effects
 
-proc onRegister*(reg: SigilEffectRegistry, s: SigilBase) {.slot.} =
-  reg.effects.incl(s)
-
-proc onTriggerEffects*(reg: SigilEffectRegistry) {.slot.} =
-  for eff in reg.effects:
-    if Lazy in eff.attrs:
-      eff.recompute()
-
-proc initSigilEffectRegistry*(): SigilEffectRegistry =
-  result = SigilEffectRegistry(effects: initHashSet[SigilBase]())
-  connect(result, registerEffect, result, onRegister)
-  connect(result, triggerEffects, result, onTriggerEffects)
-
 iterator registered*(r: SigilEffectRegistry): SigilBase =
   for eff in r.effects:
     yield eff
@@ -158,6 +145,19 @@ iterator dirty*(r: SigilEffectRegistry): SigilBase =
   for eff in r.effects:
     if Lazy in eff.attrs:
       yield eff
+
+proc onRegister*(reg: SigilEffectRegistry, s: SigilBase) {.slot.} =
+  reg.effects.incl(s)
+
+proc onTriggerEffects*(reg: SigilEffectRegistry) {.slot.} =
+  for eff in reg.dirty:
+    eff.recompute()
+
+proc initSigilEffectRegistry*(): SigilEffectRegistry =
+  result = SigilEffectRegistry(effects: initHashSet[SigilBase]())
+  connect(result, registerEffect, result, onRegister)
+  connect(result, triggerEffects, result, onTriggerEffects)
+
 
 template getSigilEffectsRegistry*(): untyped =
   ## identifier that is messaged with a new effect
@@ -167,7 +167,6 @@ template getSigilEffectsRegistry*(): untyped =
 template effect*(blk: untyped) =
   let res = SigilBase()
   res.attrs.incl Lazy
-  res.attrs.incl Dirty
   res.fn = proc(arg: SigilBase) {.closure.} =
     let internalSigil {.inject.} = SigilBase(arg)
     `blk`
