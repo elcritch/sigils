@@ -42,10 +42,10 @@ proc `$`*[T](s: Sigil[T]): string =
   result &= $(s.val)
   result &= ")"
 
-proc isDirty*[T](r: Sigil[T]): bool =
-  r.attrs.contains(Dirty)
-proc isLazy*[T](r: Sigil[T]): bool =
-  r.attrs.contains(Lazy)
+proc isDirty*(s: SigilBase): bool =
+  s.attrs.contains(Dirty)
+proc isLazy*(s: SigilBase): bool =
+  s.attrs.contains(Lazy)
 
 proc changed*(s: SigilBase) {.signal.}
   ## core reactive signal type
@@ -116,3 +116,13 @@ template computed*[T](blk: untyped): Sigil[T] =
 template `<==`*[T](tp: typedesc[T], blk: untyped): Sigil[T] =
   ## TODO: keep something like this?
   computedImpl[T](true, blk)
+
+template effect*(blk: untyped): SigilBase =
+  block:
+    let res = SigilBase()
+    res.attrs.incl Lazy
+    res.fn = proc(arg: SigilBase) {.closure.} =
+      let internalSigil {.inject.} = SigilBase(arg)
+      `blk`
+    res.recompute()
+    res

@@ -572,3 +572,20 @@ suite "#bridge sigils and agents":
     b <- 5
     check b{} == 5
     check foo.value == 5
+
+suite "#effects":
+  test """
+    Given a sigil effect
+  """:
+    let 
+      count = new(int)
+      x = newSigil(5)
+      eff = effect:
+        count[].inc()
+        echo "X is now: ", x{} * 2
+ 
+    check count[] ==  1
+    check eff.isDirty()
+
+    # a = signal(0)
+    # effect(() => ... stuff that uses this.a() ...)
