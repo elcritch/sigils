@@ -141,9 +141,15 @@ proc triggerEffects*(agent: Agent) {.signal.}
 proc onRegister*(reg: SigilEffectRegistry, s: SigilBase) {.slot.} =
   reg.effects.incl(s)
 
+proc onTriggerEffects*(reg: SigilEffectRegistry) {.slot.} =
+  for eff in reg.effects:
+    if Lazy in eff.attrs:
+      eff.recompute()
+
 proc initSigilEffectRegistry*(): SigilEffectRegistry =
   result = SigilEffectRegistry(effects: initHashSet[SigilBase]())
   connect(result, registerEffect, result, onRegister)
+  connect(result, triggerEffects, result, onTriggerEffects)
 
 proc registered*(r: SigilEffectRegistry): seq[SigilBase] =
   r.effects.toSeq
@@ -156,6 +162,7 @@ template getSigilEffectsRegistry*(): untyped =
 template effect*(blk: untyped) =
   let res = SigilBase()
   res.attrs.incl Lazy
+  res.attrs.incl Dirty
   res.fn = proc(arg: SigilBase) {.closure.} =
     let internalSigil {.inject.} = SigilBase(arg)
     `blk`

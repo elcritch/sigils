@@ -590,6 +590,9 @@ suite "#effects":
     # check count[] ==  1
     let effs = internalSigilEffectRegistry.registered()
     check effs.len() == 1
+    check effs[0].isDirty()
+
+    emit internalSigilEffectRegistry.triggerEffects()
 
     # a = signal(0)
     # effect(() => ... stuff that uses this.a() ...)
