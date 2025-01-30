@@ -96,7 +96,7 @@ suite "#computed sigil":
     check y{} == 4
     
   test """
-    Given a sigil of and a computed that is double the sigil
+    Given a sigil of and a computedNow that is double the sigil
     When the sigils value is changed
     Then it should do an additional compute
   """:
@@ -104,7 +104,7 @@ suite "#computed sigil":
     let
       count = new(int)
       x = newSigil(5)
-      y = computed[int]:
+      y = computedNow[int]:
         count[] += 1
         2 * x{}
 
@@ -118,13 +118,13 @@ suite "#computed sigil":
 
     test """
       Given a sigil of value 5
-      When there is a computed sigil that is not being invoked
+      When there is a computedNow sigil that is not being invoked
       Then it should still perform the computation immediately
     """:
       let
         count: ref int = new(int)
         x = newSigil(5)
-        y = computed[int]:
+        y = computedNow[int]:
           count[] += 1
           2 * x{}
 
@@ -150,13 +150,40 @@ suite "#computed sigil":
         x.debugName = "X"
         y.debugName = "Y"
 
-      check count[] == 1
+      check count[] == 0
       discard y{}
       discard y{}
       check count[] == 1
-    
+ 
   test """
     Given a computed sigil that is the sum of 2 sigils
+    When either sigil is changed
+    Then the computed sigil should be recomputed when the
+    sigil is read
+  """:
+    let
+      count = new(int)
+      x = newSigil(1)
+      y = newSigil(2)
+      z = computed[int]():
+        count[] += 1
+        x{} + y{}
+    
+    check count[] == 0 # hasn't been read yet
+    check z{} == 3
+    check count[] == 1 # hasn't been read yet
+  
+    x <- 2
+    check count[] == 1
+    check z{} == 4
+    
+    y <- 3
+    x <- 3
+    check z{} == 6
+    check count[] == 3
+    
+  test """
+    Given a computedNow sigil that is the sum of 2 sigils
     When either sigil is changed
     Then the computed sigil should be recomputed for every change
   """:
@@ -164,7 +191,7 @@ suite "#computed sigil":
       count = new(int)
       x = newSigil(1)
       y = newSigil(2)
-      z = computed[int]():
+      z = computedNow[int]():
         count[] += 1
         x{} + y{}
     
@@ -192,10 +219,33 @@ suite "#computed sigil":
       c = computed[int]:
         count[] += 1
         2 * b{}
-      
+
+    check count[] == 0
+
+    check c{} == 4
+    check count[] == 1
+
+    a <- 4
+    
+    check c{} == 16
+    check count[] == 2
+  
+  test """
+    Given a computedNow sigil that is double a computed sigil that is double a sigil
+    When the sigil value changes to 4
+    Then the computed sigil should be recomputed once to 16
+  """:
+    let 
+      count = new(int)
+      a = newSigil(1)
+      b = computedNow[int](2 * a{})
+      c = computedNow[int]:
+        count[] += 1
+        2 * b{}
+
     check count[] == 1
     check c{} == 4
-    
+
     a <- 4
     
     check count[] == 2
@@ -214,13 +264,14 @@ suite "#computed sigil":
         count[] += 1
         a{} + b{}
       
-    check count[] == 1
+    check count[] == 0
     check c{} == 3
+    check count[] == 1
     
     a <- 4
     
-    check count[] == 3
     check c{} == 12
+    check count[] == 2
   
   test """
     Given a computed sigil that is double an int-sigil but is always 0 if a boolean sigil is false
