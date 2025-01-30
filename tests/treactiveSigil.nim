@@ -578,6 +578,7 @@ suite "#effects":
     Given a sigil effect
   """:
     var internalSigilEffectRegistry = initSigilEffectRegistry()
+    let effRegistry = internalSigilEffectRegistry
 
     let 
       count = new(int)
@@ -588,16 +589,16 @@ suite "#effects":
       echo "X is now: ", x{} * 2
  
     # check count[] ==  1
-    let effs = internalSigilEffectRegistry.registered().toSeq()
+    let effs = effRegistry.registered().toSeq()
     check effs.len() == 1
     # check effs[0].isDirty()
     # check internalSigilEffectRegistry.dirty().toSeq().len() == 1
 
-    emit internalSigilEffectRegistry.triggerEffects()
-    let effs2 = internalSigilEffectRegistry.registered().toSeq()
+    emit effRegistry.triggerEffects()
+    let effs2 = effRegistry.registered().toSeq()
     echo "effs: ", effs2
     check effs2.len() == 1
-    check internalSigilEffectRegistry.dirty().toSeq().len() == 0
+    check effRegistry.dirty().toSeq().len() == 0
 
     # a = signal(0)
     # effect(() => ... stuff that uses this.a() ...)
