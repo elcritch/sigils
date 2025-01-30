@@ -588,7 +588,7 @@ suite "#effects":
       echo "X is now: ", x{} * 2
  
     # check count[] ==  1
-    let effs = internalSigilEffectRegistry.registered()
+    let effs = internalSigilEffectRegistry.registered().toSeq()
     check effs.len() == 1
     check effs[0].isDirty()
 

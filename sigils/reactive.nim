@@ -151,8 +151,13 @@ proc initSigilEffectRegistry*(): SigilEffectRegistry =
   connect(result, registerEffect, result, onRegister)
   connect(result, triggerEffects, result, onTriggerEffects)
 
-proc registered*(r: SigilEffectRegistry): seq[SigilBase] =
-  r.effects.toSeq
+iterator registered*(r: SigilEffectRegistry): SigilBase =
+  for eff in r.effects:
+    yield eff
+iterator dirty*(r: SigilEffectRegistry): SigilBase =
+  for eff in r.effects:
+    if Lazy in eff.attrs:
+      yield eff
 
 template getSigilEffectsRegistry*(): untyped =
   ## identifier that is messaged with a new effect
