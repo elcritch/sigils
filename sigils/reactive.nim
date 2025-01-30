@@ -47,7 +47,7 @@ proc isDirty*[T](r: Sigil[T]): bool =
 proc isLazy*[T](r: Sigil[T]): bool =
   r.attrs.contains(Lazy)
 
-proc changed*[T](r: Sigil[T]) {.signal.}
+proc changed*(s: SigilBase) {.signal.}
   ## core reactive signal type
 
 proc near*[T](a, b: T, eps: T): bool =
@@ -70,6 +70,7 @@ proc recompute*(sigil: SigilBase) {.slot.} =
   assert sigil.fn != nil
   if Lazy in sigil.attrs:
     sigil.attrs.incl Dirty
+    emit sigil.changed()
   else:
     sigil.fn(sigil)
 
