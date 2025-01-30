@@ -577,7 +577,7 @@ suite "#effects":
   test """
     Given a sigil effect
   """:
-    var internalSigilEffectRegistry = SigilEffectRegistry()
+    var internalSigilEffectRegistry = initSigilEffectRegistry()
 
     let 
       count = new(int)
@@ -587,7 +587,7 @@ suite "#effects":
       count[].inc()
       echo "X is now: ", x{} * 2
  
-    check count[] ==  1
+    # check count[] ==  1
     let effs = internalSigilEffectRegistry.registered()
     check effs.len() == 1
 

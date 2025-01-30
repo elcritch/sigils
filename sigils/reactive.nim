@@ -132,7 +132,7 @@ template `<==`*[T](tp: typedesc[T], blk: untyped): Sigil[T] =
   computedImpl[T](true, blk)
 
 
-proc register*(agent: Agent, s: SigilBase) {.signal.}
+proc registerEffect*(agent: Agent, s: SigilBase) {.signal.}
   ## core signal for registering new effects
 
 proc triggerEffects*(agent: Agent) {.signal.}
@@ -141,9 +141,9 @@ proc triggerEffects*(agent: Agent) {.signal.}
 proc onRegister*(reg: SigilEffectRegistry, s: SigilBase) {.slot.} =
   reg.effects.incl(s)
 
-proc defaultSigilEffectRegistry*(): SigilEffectRegistry =
-  result = SigilEffectRegistry()
-  connect(result, register, result, onRegister)
+proc initSigilEffectRegistry*(): SigilEffectRegistry =
+  result = SigilEffectRegistry(effects: initHashSet[SigilBase]())
+  connect(result, registerEffect, result, onRegister)
 
 proc registered*(r: SigilEffectRegistry): seq[SigilBase] =
   r.effects.toSeq
@@ -154,11 +154,9 @@ template getSigilEffectsRegistry*(): untyped =
   internalSigilEffectRegistry
 
 template effect*(blk: untyped) =
-  block:
-    let res = SigilBase()
-    res.attrs.incl Lazy
-    res.fn = proc(arg: SigilBase) {.closure.} =
-      let internalSigil {.inject.} = SigilBase(arg)
-      `blk`
-    emit getSigilEffectsRegistry().register(res)
-    discard
+  let res = SigilBase()
+  res.attrs.incl Lazy
+  res.fn = proc(arg: SigilBase) {.closure.} =
+    let internalSigil {.inject.} = SigilBase(arg)
+    `blk`
+  emit getSigilEffectsRegistry().registerEffect(res)
