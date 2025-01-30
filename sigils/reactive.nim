@@ -50,6 +50,9 @@ proc isLazy*(s: SigilBase): bool =
 proc changed*(s: SigilBase) {.signal.}
   ## core reactive signal type
 
+proc trigger*(s: SigilBase) {.signal.}
+  ## core reactive signal type
+
 proc near*[T](a, b: T, eps: T): bool =
   let diff = abs(a-b)
   result = diff <= eps
@@ -75,12 +78,23 @@ proc recompute*(sigil: SigilBase) {.slot.} =
     sigil.fn(sigil)
 
 proc `<-`*[T](s: Sigil[T], val: T) =
+  ## update a static (non-computed) sigils value
   s.setValue(val)
 
 template getInternalSigilIdent*(): untyped =
+  ## overridable template to provide the ident
+  ## that `{}` uses to look for the current 
+  ## scoped to operate on – if one exists in
+  ## this scope
+  ## 
+  ## for example `internalSigil` is used as the
+  ## default identifier in `computed` block to
+  ## connect dereferenced sigils to
   internalSigil
 
 template `{}`*[T](sigil: Sigil[T]): auto {.inject.} =
+  ## deferences a typed Sigil to get it's value 
+  ## either from static sigils or computed sigils
   mixin getInternalSigilIdent
   when compiles(getInternalSigilIdent()):
     sigil.connect(changed, getInternalSigilIdent(), recompute)
@@ -89,12 +103,11 @@ template `{}`*[T](sigil: Sigil[T]): auto {.inject.} =
     sigil.attrs.excl(Dirty)
   sigil.val
 
-template newSigil*[T](value: T): Sigil[T] =
-  block connectReactives:
-    let sigil = Sigil[T](val: value)
-    sigil
+proc newSigil*[T](value: T): Sigil[T] =
+  ## create a new sigil
+  result = Sigil[T](val: value)
 
-template computedImpl*[T](lazy, blk: untyped): Sigil[T] =
+template computedImpl[T](lazy, blk: untyped): Sigil[T] =
   block:
     let res = Sigil[T]()
     if lazy:
@@ -108,15 +121,20 @@ template computedImpl*[T](lazy, blk: untyped): Sigil[T] =
     res
 
 template computedNow*[T](blk: untyped): Sigil[T] =
+  ## returns a `computed` sigil that is eagerly evaluated
   computedImpl[T](false, blk)
 
 template computed*[T](blk: untyped): Sigil[T] =
+  ## returns a `computed` sigil that is lazily evaluated
   computedImpl[T](true, blk)
 
 template `<==`*[T](tp: typedesc[T], blk: untyped): Sigil[T] =
   ## TODO: keep something like this?
   computedImpl[T](true, blk)
 
+
+template getInternalSigilIdent*(): untyped =
+  internalSigil
 template effect*(blk: untyped): SigilBase =
   block:
     let res = SigilBase()
