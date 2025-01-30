@@ -213,22 +213,35 @@ suite "#computed sigil":
     Then the computed sigil should be recomputed once to 16
   """:
     let 
-      count = new(int)
+      countB = new(int)
+      countC = new(int)
       a = newSigil(1)
-      b = computed[int](2 * a{})
+      b = computed[int]:
+        countB[] += 1
+        2 * a{}
       c = computed[int]:
-        count[] += 1
+        countC[] += 1
         2 * b{}
 
-    check count[] == 0
+    check countB[] == 0
+    check countC[] == 0
 
     check c{} == 4
-    check count[] == 1
+    check countB[] == 1
+    check countC[] == 1
+
+    echo "A: ", a
+    echo "B: ", b
+    echo "C: ", c
 
     a <- 4
     
+    echo "A': ", a
+    echo "B': ", b
+    echo "C': ", c
+
     check c{} == 16
-    check count[] == 2
+    check countC[] == 2
   
   test """
     Given a computedNow sigil that is double a computed sigil that is double a sigil

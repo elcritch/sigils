@@ -29,6 +29,24 @@ type
 # proc `val=`*[T](s: Sigil[T], val: T) = {.error: "cannot set value directly, use `<-`".}
 # proc `val`*[T](s: Sigil[T]): T = s.val
 
+proc `$`*(s: SigilBase): string =
+  result = "Sigil" 
+  result &= $s.attrs
+
+proc `$`*[T](s: Sigil[T]): string =
+  result &= $(SigilBase(s))
+  result &= "["
+  result &= $(T)
+  result &= "]"
+  result &= "("
+  result &= $(s.val)
+  result &= ")"
+
+proc isDirty*[T](r: Sigil[T]): bool =
+  r.attrs.contains(Dirty)
+proc isLazy*[T](r: Sigil[T]): bool =
+  r.attrs.contains(Lazy)
+
 proc changed*[T](r: Sigil[T]) {.signal.}
   ## core reactive signal type
 
