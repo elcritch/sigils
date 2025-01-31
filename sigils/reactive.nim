@@ -210,17 +210,11 @@ template effect*(blk: untyped) =
   let res = SigilHashed()
   res.fn = proc(arg: SigilBase) {.closure.} =
     let internalSigil {.inject.} = SigilHashed(arg)
-    # echo "\tEFF:CALLBACK: "
     internalSigil.computeChanged()
     if Changed in internalSigil.attrs:
-      # echo "effect dirty!"
       `blk`
       internalSigil.attrs.excl {Dirty, ChangeD}
       internalSigil.vhash = internalSigil.computeHash()
-    # else:
-    #   echo "effect clean!"
-  # echo "new-effect: ", res
   res.attrs.incl {Dirty, Lazy, Changed}
   res.execute()
-  # echo "new-effect:post:exec: ", res
   emit getSigilEffectsRegistry().registerEffect(res)
