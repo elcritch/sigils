@@ -67,7 +67,7 @@ proc setValue*[T](s: Sigil[T], val: T) {.slot.} =
       emit s.changed()
 
 proc execute*(sigil: SigilBase) {.slot.} =
-  echo "execute: ", sigil.unsafeWeakRef()
+  # echo "execute: ", sigil.unsafeWeakRef()
   sigil.fn(sigil)
   sigil.attrs.excl(Dirty)
 
@@ -76,11 +76,11 @@ proc recompute*(sigil: SigilBase) {.slot.} =
   ## when `change` is emitted
   assert sigil.fn != nil
   if Lazy in sigil.attrs:
-    echo "recompute:mark:dirty: ", sigil.unsafeWeakRef()
+    # echo "recompute:mark:dirty: ", sigil.unsafeWeakRef()
     sigil.attrs.incl Dirty
     emit sigil.changed()
   else:
-    echo "recompute:execute: ", sigil.unsafeWeakRef()
+    # echo "recompute:execute: ", sigil.unsafeWeakRef()
     sigil.fn(sigil)
 
 proc `<-`*[T](s: Sigil[T], val: T) =
@@ -154,7 +154,6 @@ iterator dirty*(r: SigilEffectRegistry): SigilBase =
       yield eff
 
 proc onRegister*(reg: SigilEffectRegistry, s: SigilBase) {.slot.} =
-  echo "onRegister"
   reg.effects.incl(s)
 
 proc onTriggerEffects*(reg: SigilEffectRegistry) {.slot.} =
@@ -177,7 +176,7 @@ template effect*(blk: untyped) =
   res.fn = proc(arg: SigilBase) {.closure.} =
     let internalSigil {.inject.} = SigilBase(arg)
     `blk`
-  echo "new-effect: ", res.unsafeWeakRef
+  # echo "new-effect: ", res.unsafeWeakRef
   res.attrs.incl Lazy
   res.execute()
   emit getSigilEffectsRegistry().registerEffect(res)

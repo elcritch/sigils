@@ -621,9 +621,6 @@ suite "#effects":
 
     echo "X: ", x.unsafeWeakRef
     echo "isEven: ", isEven.unsafeWeakRef
-    # echo "isEven: ", isEven
-    # echo "isEven: ", isEven{}
-    # echo "isEven: ", isEven
 
     echo "make effect: "
 
