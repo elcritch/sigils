@@ -1,7 +1,7 @@
 import sigils/signals
 import sigils/slots
 import sigils/core
-import std/[sets]
+import std/[sets, hashes]
 
 export signals, slots, core
 
@@ -14,7 +14,10 @@ type
     attrs: set[SigilAttributes]
     fn: proc (arg: SigilBase) {.closure.}
 
-  Sigil*[T] = ref object of SigilBase
+  SigilHashed* = ref object of SigilBase
+    vhash: Hash
+
+  Sigil*[T] = ref object of SigilHashed
     ## Core *reactive* data type for doing reactive style programming
     ## akin to RXJS, React useState, Svelte, etc.
     ## 
@@ -60,23 +63,28 @@ proc setValue*[T](s: Sigil[T], val: T) {.slot.} =
   when T is SomeFloat:
     if not near(s.val, val, s.defaultEps):
       s.val = val
+      s.vhash = hash(val)
+      s.attrs.excl(Dirty)
       emit s.changed()
   else:
     if s.val != val:
       s.val = val
+      s.attrs.excl(Dirty)
+      s.vhash = hash(val)
       emit s.changed()
 
 proc execute*(sigil: SigilBase) {.slot.} =
-  # echo "execute: ", sigil.unsafeWeakRef()
-  sigil.fn(sigil)
-  sigil.attrs.excl(Dirty)
+  echo "execute: ", sigil.unsafeWeakRef()
+  if sigil.isLazy() and sigil.isDirty():
+    sigil.fn(sigil)
+    sigil.attrs.excl(Dirty)
 
 proc recompute*(sigil: SigilBase) {.slot.} =
   ## default slot for updating sigils
   ## when `change` is emitted
   assert sigil.fn != nil
+  echo "recompute: ", sigil.unsafeWeakRef()
   if Lazy in sigil.attrs:
-    # echo "recompute:mark:dirty: ", sigil.unsafeWeakRef()
     sigil.attrs.incl Dirty
     emit sigil.changed()
   else:
@@ -157,6 +165,7 @@ proc onRegister*(reg: SigilEffectRegistry, s: SigilBase) {.slot.} =
   reg.effects.incl(s)
 
 proc onTriggerEffects*(reg: SigilEffectRegistry) {.slot.} =
+  echo "onTriggerEffects"
   for eff in reg.dirty:
     eff.execute()
 
@@ -175,8 +184,30 @@ template effect*(blk: untyped) =
   let res = SigilBase()
   res.fn = proc(arg: SigilBase) {.closure.} =
     let internalSigil {.inject.} = SigilBase(arg)
-    `blk`
-  # echo "new-effect: ", res.unsafeWeakRef
+    echo "\tEFF:CALLBACK: "
+    if Lazy in internalSigil.attrs:
+      echo "\teff:PRE: "
+      for listen in internalSigil.listening:
+        if listen[] of SigilHashed:
+          echo "\teff:SH:listen: ", listen
+          withRef(listen, item):
+            let sh = SigilHashed(item)
+            echo "\teff:SH: ", sh.unsafeWeakRef()
+            let prev = sh.vhash
+            sh.execute()
+            if prev != sh.vhash:
+              echo "\teffect dep: prev: ", prev, " hash: ", sh.vhash
+              internalSigil.attrs.incl Dirty
+
+    if Dirty in internalSigil.attrs:
+      echo "effect dirty!"
+      `blk`
+      internalSigil.attrs.excl Dirty
+    else:
+      echo "effect clean!"
+  echo "new-effect: ", res
+  res.attrs.incl Dirty
   res.attrs.incl Lazy
   res.execute()
+  echo "new-effect:post:exec: ", res
   emit getSigilEffectsRegistry().registerEffect(res)
