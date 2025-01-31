@@ -9,7 +9,7 @@ type
   SigilAttributes* = enum
     Dirty
     Lazy
-    Changes
+    Changed
 
   SigilBase* = ref object of Agent
     attrs: set[SigilAttributes]
@@ -182,17 +182,16 @@ template getSigilEffectsRegistry*(): untyped =
   internalSigilEffectRegistry
 
 proc computeChanged(sigil: SigilBase) =
+  ## computes changes for effects
+  ## note: Nim ref's default to pointer hashes, not content hashes
   for listened in sigil.listening:
     if listened[] of SigilHashed:
-      echo "\teff:SH:listen: ", listened
       withRef(listened, item):
         let sh = SigilHashed(item)
-        echo "\teff:SH: ", sh.unsafeWeakRef()
         let prev = sh.vhash
         sh.execute()
         if prev != sh.vhash:
-          echo "\teffect dep: prev: ", prev, " hash: ", sh.vhash
-          sigil.attrs.incl Changes
+          sigil.attrs.incl Changed
 
 template effect*(blk: untyped) =
   let res = SigilBase()
@@ -200,16 +199,16 @@ template effect*(blk: untyped) =
     let internalSigil {.inject.} = SigilBase(arg)
     echo "\tEFF:CALLBACK: "
     internalSigil.computeChanged()
-    if Changes in internalSigil.attrs:
+    if Changed in internalSigil.attrs:
       echo "effect dirty!"
       `blk`
-      internalSigil.attrs.excl {Dirty, Changes}
+      internalSigil.attrs.excl {Dirty, ChangeD}
     else:
       echo "effect clean!"
   echo "new-effect: ", res
   res.attrs.incl Dirty
   res.attrs.incl Lazy
-  res.attrs.incl Changes
+  res.attrs.incl Changed
   res.execute()
   echo "new-effect:post:exec: ", res
   emit getSigilEffectsRegistry().registerEffect(res)
