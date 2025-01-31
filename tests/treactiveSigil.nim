@@ -572,3 +572,91 @@ suite "#bridge sigils and agents":
     b <- 5
     check b{} == 5
     check foo.value == 5
+
+suite "#effects":
+  setup:
+    var internalSigilEffectRegistry = initSigilEffectRegistry()
+    let reg = internalSigilEffectRegistry
+  
+  test "basic a sigil effect works":
+    let 
+      count = new(int)
+      x = newSigil(5)
+
+    when defined(sigilsDebug):
+      x.debugName = "X"
+
+    effect:
+      count[].inc()
+      echo "X is now: ", x{}
+ 
+    check count[] ==  1
+    let effs = reg.registered().toSeq()
+    check effs.len() == 1
+
+    emit reg.triggerEffects()
+    check reg.registered().toSeq().len() == 1
+    check reg.dirty().toSeq().len() == 0
+    check count[] ==  1
+    echo "x: ", x
+    echo "eff: ", reg.registered().toSeq()
+
+    echo "setting x <- 3"
+    x <- 3
+    echo "x: ", x
+    echo "eff: ", reg.registered().toSeq()
+    check count[] ==  1
+    check reg.dirty().toSeq().len() == 1
+
+    emit reg.triggerEffects()
+
+    check reg.dirty().toSeq().len() == 0
+    check count[] ==  2
+
+  test "test a chained sigil effect":
+    let 
+      count = new(int)
+      x = newSigil(2)
+      isEven = computed[bool]:
+        x{} mod 2 == 0
+
+    check count[] ==  0
+    check reg.registered().toSeq().len() == 0
+    when defined(sigilsDebug):
+      x.debugName = "X"
+      isEven.debugName = "isEven"
+
+    echo "<<< make:effect: "
+    effect:
+      echo "\tEFF running: "
+      count[].inc()
+      if isEven{}:
+        echo "\tX is even!"
+
+    echo ">>> make effect:done: "
+    check reg.registered().toSeq().len() == 1
+    check count[] ==  1
+    when defined(sigilsDebug):
+      reg.registered().toSeq()[0].debugName = "EFF"
+    printConnections(reg.registered().toSeq()[0])
+
+    echo "eff: ", reg.registered().toSeq()[0]
+    echo "setting x <- 4"
+    x <- 4
+    echo "X: ", x
+    echo "eff: ", reg.registered().toSeq()[0]
+    check count[] ==  1
+    emit reg.triggerEffects()
+
+    check reg.dirty().toSeq().len() == 0
+    check count[] == 1
+
+    echo "setting x <- 3"
+    x <- 3
+    echo "isEven:hash: ", isEven.hash
+    check reg.dirty().toSeq().len() == 1
+    check count[] ==  1
+
+    emit reg.triggerEffects()
+    check reg.dirty().toSeq().len() == 0
+    check count[] ==  2
