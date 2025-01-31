@@ -593,7 +593,7 @@ suite "#effects":
     echo "registered:before: ", reg.registered().toSeq()
     emit reg.triggerEffects()
     echo "registered:triggered: ", reg.registered().toSeq()
-    check 1 == reg.registered().toSeq().len()
+    check reg.registered().toSeq().len() == 1
     check reg.dirty().toSeq().len() == 0
     check count[] ==  1
     echo "eff: ", reg.registered().toSeq()
@@ -612,19 +612,27 @@ suite "#effects":
   test "Given a sigil effect":
     let 
       count = new(int)
-      x = newSigil(5)
+      x = newSigil(2)
+      isEven = computed[bool]:
+        x{} mod 2 == 0
+
+    check count[] ==  0
+    check reg.registered().toSeq().len() == 0
+
+    # echo "isEven: ", isEven
+    # echo "isEven: ", isEven{}
+    # echo "isEven: ", isEven
+
+    echo "make effect: "
 
     effect:
       count[].inc()
-      echo "X is now: ", x{} * 2
+      if isEven{}:
+        echo "X is even: ", x{}
+
+    check reg.registered().toSeq().len() == 1
  
     check count[] ==  1
     let effs = reg.registered().toSeq()
     check effs.len() == 1
 
-    # a = signal(0)
-    # effect(() => ... stuff that uses this.a() ...)
-
-    # const counter = signal(2);
-    # const isEven = computed(() => counter() % 2 === 0);
-    # effect(() => console.log(isEven());

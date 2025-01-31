@@ -174,6 +174,6 @@ template effect*(blk: untyped) =
   res.fn = proc(arg: SigilBase) {.closure.} =
     let internalSigil {.inject.} = SigilBase(arg)
     `blk`
-  res.recompute()
+  res.execute()
   res.attrs.incl Lazy
   emit getSigilEffectsRegistry().registerEffect(res)
