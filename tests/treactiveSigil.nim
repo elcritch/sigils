@@ -619,6 +619,8 @@ suite "#effects":
     check count[] ==  0
     check reg.registered().toSeq().len() == 0
 
+    echo "X: ", x.unsafeWeakRef
+    echo "isEven: ", isEven.unsafeWeakRef
     # echo "isEven: ", isEven
     # echo "isEven: ", isEven{}
     # echo "isEven: ", isEven
@@ -626,10 +628,12 @@ suite "#effects":
     echo "make effect: "
 
     effect:
+      echo "EFF running: "
       count[].inc()
       if isEven{}:
         echo "X is even: ", x{}
 
+    echo "make effect:done: "
     check reg.registered().toSeq().len() == 1
  
     check count[] ==  1
