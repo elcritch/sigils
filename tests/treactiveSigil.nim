@@ -609,7 +609,7 @@ suite "#effects":
     check reg.dirty().toSeq().len() == 0
     check count[] ==  2
 
-  test "Given a sigil effect":
+  test "test a chained sigil effect":
     let 
       count = new(int)
       x = newSigil(2)
@@ -618,11 +618,6 @@ suite "#effects":
 
     check count[] ==  0
     check reg.registered().toSeq().len() == 0
-
-    echo "X: ", x.unsafeWeakRef
-    echo "isEven: ", isEven.unsafeWeakRef
-
-    echo "make effect: "
 
     effect:
       echo "EFF running: "
@@ -634,13 +629,24 @@ suite "#effects":
     check reg.registered().toSeq().len() == 1
     check count[] ==  1
 
+    echo "setting x <- 4"
+    x <- 4
+    echo "X: ", x
+    echo "isEven: ", isEven
+    echo "eff: ", reg.registered().toSeq()[0]
+    # check reg.dirty().toSeq().len() == 1
+    check count[] ==  1
+
+    emit reg.triggerEffects()
+    check reg.dirty().toSeq().len() == 0
+    check count[] ==  2
+
     echo "setting x <- 3"
     x <- 3
     check reg.dirty().toSeq().len() == 1
     check count[] ==  1
 
     emit reg.triggerEffects()
-
     check reg.dirty().toSeq().len() == 0
     check count[] ==  2
 
