@@ -578,36 +578,40 @@ suite "#effects":
     var internalSigilEffectRegistry = initSigilEffectRegistry()
     let reg = internalSigilEffectRegistry
   
-  # test "basic a sigil effect works":
-  #   let 
-  #     count = new(int)
-  #     x = newSigil(5)
-  #   effect:
-  #     count[].inc()
-  #     echo "X is now: ", x{} * 2
+  test "basic a sigil effect works":
+    let 
+      count = new(int)
+      x = newSigil(5)
+
+    when defined(sigilsDebug):
+      x.debugName = "X"
+
+    effect:
+      count[].inc()
+      echo "X is now: ", x{}
  
-  #   check count[] ==  1
-  #   let effs = reg.registered().toSeq()
-  #   check effs.len() == 1
+    check count[] ==  1
+    let effs = reg.registered().toSeq()
+    check effs.len() == 1
 
-  #   echo "registered:before: ", reg.registered().toSeq()
-  #   emit reg.triggerEffects()
-  #   echo "registered:triggered: ", reg.registered().toSeq()
-  #   check reg.registered().toSeq().len() == 1
-  #   check reg.dirty().toSeq().len() == 0
-  #   check count[] ==  1
-  #   echo "eff: ", reg.registered().toSeq()
+    emit reg.triggerEffects()
+    check reg.registered().toSeq().len() == 1
+    check reg.dirty().toSeq().len() == 0
+    check count[] ==  1
+    echo "x: ", x
+    echo "eff: ", reg.registered().toSeq()
 
-  #   echo "setting x <- 3"
-  #   x <- 3
-  #   check reg.dirty().toSeq().len() == 1
-  #   echo "eff: ", reg.registered().toSeq()
-  #   check count[] ==  1
+    echo "setting x <- 3"
+    x <- 3
+    echo "x: ", x
+    echo "eff: ", reg.registered().toSeq()
+    check count[] ==  1
+    check reg.dirty().toSeq().len() == 1
 
-  #   emit reg.triggerEffects()
+    emit reg.triggerEffects()
 
-  #   check reg.dirty().toSeq().len() == 0
-  #   check count[] ==  2
+    check reg.dirty().toSeq().len() == 0
+    check count[] ==  2
 
   test "test a chained sigil effect":
     let 
@@ -627,7 +631,7 @@ suite "#effects":
       echo "\tEFF running: "
       count[].inc()
       if isEven{}:
-        echo "\tX is even: ", x{}
+        echo "\tX is even!"
 
     echo ">>> make effect:done: "
     check reg.registered().toSeq().len() == 1

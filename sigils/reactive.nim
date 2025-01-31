@@ -44,6 +44,8 @@ proc `$`*[T](s: Sigil[T]): string =
   result &= "]"
   result &= "("
   result &= $(s.val)
+  result &= "#"
+  result &= $(s.vhash)
   result &= ")"
 
 proc isDirty*(s: SigilBase): bool =
@@ -120,7 +122,7 @@ template `{}`*[T](sigil: Sigil[T]): auto {.inject.} =
 
 proc newSigil*[T](value: T): Sigil[T] =
   ## create a new sigil
-  result = Sigil[T](val: value)
+  result = Sigil[T](val: value, vhash: hash(value))
 
 template computedImpl[T](lazy, blk: untyped): Sigil[T] =
   block:
@@ -181,22 +183,28 @@ template getSigilEffectsRegistry*(): untyped =
   ## when it's created
   internalSigilEffectRegistry
 
-proc computeChanged(sigil: SigilBase) =
+proc computeChanged(sigil: SigilHashed) =
   ## computes changes for effects
   ## note: Nim ref's default to pointer hashes, not content hashes
+  var vhash: Hash = 0
   for listened in sigil.listening:
     if listened[] of SigilHashed:
       withRef(listened, item):
         let sh = SigilHashed(item)
         let prev = sh.vhash
         sh.execute()
-        if prev != sh.vhash:
-          sigil.attrs.incl Changed
+        echo "\tEFF:changed: ", prev, " <> ", sh.vhash
+        vhash = vhash !& sh.vhash
+        # if prev != sh.vhash:
+        #   sigil.attrs.incl Changed
+  vhash = !$ vhash
+  if vhash != sigil.vhash:
+    sigil.attrs.incl Changed
 
 template effect*(blk: untyped) =
-  let res = SigilBase()
+  let res = SigilHashed()
   res.fn = proc(arg: SigilBase) {.closure.} =
-    let internalSigil {.inject.} = SigilBase(arg)
+    let internalSigil {.inject.} = SigilHashed(arg)
     echo "\tEFF:CALLBACK: "
     internalSigil.computeChanged()
     if Changed in internalSigil.attrs:
