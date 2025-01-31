@@ -77,7 +77,7 @@ proc setValue*[T](s: Sigil[T], val: T) {.slot.} =
       emit s.changed()
 
 proc execute*(sigil: SigilBase) {.slot.} =
-  echo "execute: ", sigil.unsafeWeakRef()
+  # echo "execute: ", sigil.unsafeWeakRef()
   if sigil.isLazy() and sigil.isDirty():
     sigil.fn(sigil)
     sigil.attrs.excl(Dirty)
@@ -86,7 +86,7 @@ proc recompute*(sigil: SigilBase) {.slot.} =
   ## default slot for updating sigils
   ## when `change` is emitted
   assert sigil.fn != nil
-  echo "recompute: ", sigil.unsafeWeakRef()
+  # echo "recompute: ", sigil.unsafeWeakRef()
   if Lazy in sigil.attrs:
     sigil.attrs.incl Dirty
     emit sigil.changed()
@@ -168,7 +168,7 @@ proc onRegister*(reg: SigilEffectRegistry, s: SigilBase) {.slot.} =
   reg.effects.incl(s)
 
 proc onTriggerEffects*(reg: SigilEffectRegistry) {.slot.} =
-  echo "onTriggerEffects"
+  # echo "onTriggerEffects"
   for eff in reg.dirty:
     eff.execute()
 
@@ -191,7 +191,7 @@ proc computeHash(sigil: SigilHashed): Hash =
         let sh = SigilHashed(item)
         let prev = sh.vhash
         sh.execute()
-        echo "\tEFF:changed: ", prev, " <> ", sh.vhash
+        # echo "\tEFF:changed: ", prev, " <> ", sh.vhash
         vhash = vhash !& sh.vhash
         # if prev != sh.vhash:
         #   sigil.attrs.incl Changed
@@ -201,7 +201,7 @@ proc computeChanged(sigil: SigilHashed) =
   ## computes changes for effects
   ## note: Nim ref's default to pointer hashes, not content hashes
   let vhash = computeHash(sigil)
-  echo "\tEFF:computeChanged: ", vhash, " <> ", sigil.vhash
+  # echo "\tEFF:computeChanged: ", vhash, " <> ", sigil.vhash
   if vhash != sigil.vhash:
     sigil.attrs.incl Changed
   sigil.vhash = vhash
@@ -210,19 +210,19 @@ template effect*(blk: untyped) =
   let res = SigilHashed()
   res.fn = proc(arg: SigilBase) {.closure.} =
     let internalSigil {.inject.} = SigilHashed(arg)
-    echo "\tEFF:CALLBACK: "
+    # echo "\tEFF:CALLBACK: "
     internalSigil.computeChanged()
     if Changed in internalSigil.attrs:
-      echo "effect dirty!"
+      # echo "effect dirty!"
       `blk`
       internalSigil.attrs.excl {Dirty, ChangeD}
       internalSigil.vhash = internalSigil.computeHash()
-    else:
-      echo "effect clean!"
-  echo "new-effect: ", res
+    # else:
+    #   echo "effect clean!"
+  # echo "new-effect: ", res
   res.attrs.incl Dirty
   res.attrs.incl Lazy
   res.attrs.incl Changed
   res.execute()
-  echo "new-effect:post:exec: ", res
+  # echo "new-effect:post:exec: ", res
   emit getSigilEffectsRegistry().registerEffect(res)
