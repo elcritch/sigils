@@ -635,8 +635,15 @@ suite "#effects":
 
     echo "make effect:done: "
     check reg.registered().toSeq().len() == 1
- 
     check count[] ==  1
-    let effs = reg.registered().toSeq()
-    check effs.len() == 1
+
+    echo "setting x <- 3"
+    x <- 3
+    check reg.dirty().toSeq().len() == 1
+    check count[] ==  1
+
+    emit reg.triggerEffects()
+
+    check reg.dirty().toSeq().len() == 0
+    check count[] ==  2
 

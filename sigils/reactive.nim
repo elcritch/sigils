@@ -75,11 +75,12 @@ proc recompute*(sigil: SigilBase) {.slot.} =
   ## default slot for updating sigils
   ## when `change` is emitted
   assert sigil.fn != nil
-  echo "recompute: ", sigil.unsafeWeakRef()
   if Lazy in sigil.attrs:
+    echo "recompute:mark:dirty: ", sigil.unsafeWeakRef()
     sigil.attrs.incl Dirty
     emit sigil.changed()
   else:
+    echo "recompute:execute: ", sigil.unsafeWeakRef()
     sigil.fn(sigil)
 
 proc `<-`*[T](s: Sigil[T], val: T) =
