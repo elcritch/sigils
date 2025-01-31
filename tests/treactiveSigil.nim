@@ -640,8 +640,6 @@ suite "#effects":
     echo "setting x <- 4"
     x <- 4
     echo "X: ", x
-    echo "isEven: ", isEven
-    echo "isEven:hash: ", isEven.hash
     echo "eff: ", reg.registered().toSeq()[0]
     check count[] ==  1
     emit reg.triggerEffects()
@@ -658,4 +656,3 @@ suite "#effects":
     emit reg.triggerEffects()
     check reg.dirty().toSeq().len() == 0
     check count[] ==  2
-

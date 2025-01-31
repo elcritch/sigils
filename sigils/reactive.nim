@@ -181,25 +181,25 @@ template getSigilEffectsRegistry*(): untyped =
   ## when it's created
   internalSigilEffectRegistry
 
+proc computeChanged(sigil: SigilBase) =
+  for listened in sigil.listening:
+    if listened[] of SigilHashed:
+      echo "\teff:SH:listen: ", listened
+      withRef(listened, item):
+        let sh = SigilHashed(item)
+        echo "\teff:SH: ", sh.unsafeWeakRef()
+        let prev = sh.vhash
+        sh.execute()
+        if prev != sh.vhash:
+          echo "\teffect dep: prev: ", prev, " hash: ", sh.vhash
+          sigil.attrs.incl Changes
+
 template effect*(blk: untyped) =
   let res = SigilBase()
   res.fn = proc(arg: SigilBase) {.closure.} =
     let internalSigil {.inject.} = SigilBase(arg)
     echo "\tEFF:CALLBACK: "
-    if Lazy in internalSigil.attrs:
-      echo "\teff:PRE: "
-      for listen in internalSigil.listening:
-        if listen[] of SigilHashed:
-          echo "\teff:SH:listen: ", listen
-          withRef(listen, item):
-            let sh = SigilHashed(item)
-            echo "\teff:SH: ", sh.unsafeWeakRef()
-            let prev = sh.vhash
-            sh.execute()
-            if prev != sh.vhash:
-              echo "\teffect dep: prev: ", prev, " hash: ", sh.vhash
-              internalSigil.attrs.incl Changes
-
+    internalSigil.computeChanged()
     if Changes in internalSigil.attrs:
       echo "effect dirty!"
       `blk`
