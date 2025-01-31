@@ -9,6 +9,7 @@ type
   SigilAttributes* = enum
     Dirty
     Lazy
+    Changes
 
   SigilBase* = ref object of Agent
     attrs: set[SigilAttributes]
@@ -197,17 +198,18 @@ template effect*(blk: untyped) =
             sh.execute()
             if prev != sh.vhash:
               echo "\teffect dep: prev: ", prev, " hash: ", sh.vhash
-              internalSigil.attrs.incl Dirty
+              internalSigil.attrs.incl Changes
 
-    if Dirty in internalSigil.attrs:
+    if Changes in internalSigil.attrs:
       echo "effect dirty!"
       `blk`
-      internalSigil.attrs.excl Dirty
+      internalSigil.attrs.excl {Dirty, Changes}
     else:
       echo "effect clean!"
   echo "new-effect: ", res
   res.attrs.incl Dirty
   res.attrs.incl Lazy
+  res.attrs.incl Changes
   res.execute()
   echo "new-effect:post:exec: ", res
   emit getSigilEffectsRegistry().registerEffect(res)

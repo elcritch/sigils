@@ -632,6 +632,8 @@ suite "#effects":
     echo ">>> make effect:done: "
     check reg.registered().toSeq().len() == 1
     check count[] ==  1
+    when defined(sigilsDebug):
+      reg.registered().toSeq()[0].debugName = "EFF"
     printConnections(reg.registered().toSeq()[0])
 
     echo "eff: ", reg.registered().toSeq()[0]
@@ -645,7 +647,7 @@ suite "#effects":
     emit reg.triggerEffects()
 
     check reg.dirty().toSeq().len() == 0
-    check count[] ==  1
+    check count[] == 1
 
     echo "setting x <- 3"
     x <- 3
