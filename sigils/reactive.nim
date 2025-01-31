@@ -183,9 +183,7 @@ template getSigilEffectsRegistry*(): untyped =
   ## when it's created
   internalSigilEffectRegistry
 
-proc computeChanged(sigil: SigilHashed) =
-  ## computes changes for effects
-  ## note: Nim ref's default to pointer hashes, not content hashes
+proc computeHash(sigil: SigilHashed): Hash =
   var vhash: Hash = 0
   for listened in sigil.listening:
     if listened[] of SigilHashed:
@@ -197,9 +195,16 @@ proc computeChanged(sigil: SigilHashed) =
         vhash = vhash !& sh.vhash
         # if prev != sh.vhash:
         #   sigil.attrs.incl Changed
-  vhash = !$ vhash
+  return !$ vhash
+
+proc computeChanged(sigil: SigilHashed) =
+  ## computes changes for effects
+  ## note: Nim ref's default to pointer hashes, not content hashes
+  let vhash = computeHash(sigil)
+  echo "\tEFF:computeChanged: ", vhash, " <> ", sigil.vhash
   if vhash != sigil.vhash:
     sigil.attrs.incl Changed
+  sigil.vhash = vhash
 
 template effect*(blk: untyped) =
   let res = SigilHashed()
@@ -211,6 +216,7 @@ template effect*(blk: untyped) =
       echo "effect dirty!"
       `blk`
       internalSigil.attrs.excl {Dirty, ChangeD}
+      internalSigil.vhash = internalSigil.computeHash()
     else:
       echo "effect clean!"
   echo "new-effect: ", res
