@@ -1,7 +1,7 @@
 import sigils/signals
 import sigils/slots
 import sigils/core
-import std/[math, sets, sequtils]
+import std/[sets]
 
 export signals, slots, core
 
@@ -65,6 +65,10 @@ proc setValue*[T](s: Sigil[T], val: T) {.slot.} =
     if s.val != val:
       s.val = val
       emit s.changed()
+
+proc execute*(sigil: SigilBase) {.slot.} =
+  sigil.fn(sigil)
+  sigil.attrs.excl(Dirty)
 
 proc recompute*(sigil: SigilBase) {.slot.} =
   ## default slot for updating sigils
@@ -141,9 +145,10 @@ proc triggerEffects*(agent: Agent) {.signal.}
 iterator registered*(r: SigilEffectRegistry): SigilBase =
   for eff in r.effects:
     yield eff
+
 iterator dirty*(r: SigilEffectRegistry): SigilBase =
   for eff in r.effects:
-    if Lazy in eff.attrs:
+    if Dirty in eff.attrs:
       yield eff
 
 proc onRegister*(reg: SigilEffectRegistry, s: SigilBase) {.slot.} =
@@ -151,7 +156,7 @@ proc onRegister*(reg: SigilEffectRegistry, s: SigilBase) {.slot.} =
 
 proc onTriggerEffects*(reg: SigilEffectRegistry) {.slot.} =
   for eff in reg.dirty:
-    eff.recompute()
+    eff.execute()
 
 proc initSigilEffectRegistry*(): SigilEffectRegistry =
   result = SigilEffectRegistry(effects: initHashSet[SigilBase]())
@@ -166,8 +171,9 @@ template getSigilEffectsRegistry*(): untyped =
 
 template effect*(blk: untyped) =
   let res = SigilBase()
-  res.attrs.incl Lazy
   res.fn = proc(arg: SigilBase) {.closure.} =
     let internalSigil {.inject.} = SigilBase(arg)
     `blk`
+  res.recompute()
+  res.attrs.incl Lazy
   emit getSigilEffectsRegistry().registerEffect(res)
