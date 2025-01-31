@@ -220,9 +220,7 @@ template effect*(blk: untyped) =
     # else:
     #   echo "effect clean!"
   # echo "new-effect: ", res
-  res.attrs.incl Dirty
-  res.attrs.incl Lazy
-  res.attrs.incl Changed
+  res.attrs.incl {Dirty, Lazy, Changed}
   res.execute()
   # echo "new-effect:post:exec: ", res
   emit getSigilEffectsRegistry().registerEffect(res)
