@@ -73,8 +73,8 @@ proc setValue*[T](s: Sigil[T], val: T) {.slot.} =
       s.attrs.excl(Dirty)
       emit s.change({Changed})
 
-proc execute*(sigil: SigilBase) {.slot.} =
-  # echo "execute: ", sigil.unsafeWeakRef()
+proc compute*(sigil: SigilBase) {.slot.} =
+  # echo "compute: ", sigil.unsafeWeakRef()
   if sigil.isLazy() and sigil.isDirty():
     sigil.fn(sigil)
     sigil.attrs.excl(Dirty)
@@ -86,9 +86,10 @@ proc recompute*(sigil: SigilBase, attrs: set[SigilAttributes]) {.slot.} =
   echo "recompute: ", sigil.unsafeWeakRef(), " got: ", attrs
   if Lazy in sigil.attrs:
     sigil.attrs.incl Dirty
+    sigil.attrs.incl({Changed} * attrs)
     emit sigil.change({Dirty})
   else:
-    # echo "recompute:execute: ", sigil.unsafeWeakRef()
+    # echo "recompute:compute: ", sigil.unsafeWeakRef()
     sigil.fn(sigil)
 
 proc `<-`*[T](s: Sigil[T], val: T) =
@@ -167,7 +168,7 @@ proc onRegister*(reg: SigilEffectRegistry, s: SigilEffect) {.slot.} =
 proc onTriggerEffects*(reg: SigilEffectRegistry) {.slot.} =
   # echo "onTriggerEffects"
   for eff in reg.dirty:
-    eff.execute()
+    eff.compute()
 
 proc initSigilEffectRegistry*(): SigilEffectRegistry =
   result = SigilEffectRegistry(effects: initHashSet[SigilEffect]())
@@ -182,10 +183,12 @@ template getSigilEffectsRegistry*(): untyped =
 
 proc computeDeps(sigil: SigilEffect) =
   for listened in sigil.listening:
+    echo "EFF:deps: ", listened
     if listened[] of SigilBase:
       withRef(listened, item):
         let sh = SigilBase(item)
-        sh.execute()
+        echo "EFF:deps:item: ", sh
+        sh.compute()
 
 proc computeChanged(sigil: SigilEffect) =
   ## computes changes for effects
@@ -204,11 +207,12 @@ template effect*(blk: untyped) =
   res.fn = proc(arg: SigilBase) {.closure.} =
     let internalSigil {.inject.} = SigilEffect(arg)
     # internalSigil.computeChanged()
-    echo "effect:recompute: ", internalSigil.unsafeWeakRef()
+    echo "\nEFFECT:recompute: ", internalSigil.unsafeWeakRef()
+    internalSigil.computeDeps()
     if Changed in internalSigil.attrs:
       `blk`
       internalSigil.attrs.excl {Dirty, ChangeD}
       # internalSigil.vhash = internalSigil.computeHash()
   res.attrs.incl {Dirty, Lazy, Changed}
-  res.execute()
+  res.compute()
   emit getSigilEffectsRegistry().registerEffect(res)
