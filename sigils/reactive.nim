@@ -190,16 +190,6 @@ proc computeDeps(sigil: SigilEffect) =
         echo "EFF:deps:item: ", sh
         sh.compute()
 
-proc computeChanged(sigil: SigilEffect) =
-  ## computes changes for effects
-  ## note: Nim ref's default to pointer hashes, not content hashes
-  # let vhash = computeHash(sigil)
-  # echo "\tEFF:computeChanged: ", vhash, " <> ", sigil.vhash
-  # if vhash != sigil.vhash:
-  #   sigil.attrs.incl Changed
-  # sigil.vhash = vhash
-  discard
-
 template effect*(blk: untyped) =
   let res = SigilEffect()
   when defined(sigilsDebug):
