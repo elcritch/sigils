@@ -5,7 +5,7 @@ import unittest
 import std/sequtils
 
 template isNear*[T](a, b: T, eps = 1.0e-5): bool =
-  let same = near(a, b, eps)
+  let same = near(a, b)
   if not same:
     checkpoint("a and b not almost equal: a: " & $a & " b: " & $b & " delta: " & $(a-b))
   same
@@ -555,7 +555,7 @@ suite "#bridge sigils and agents":
     ## don't seem to mix
     ## In Figuro `recompute` would just call `refresh`
     proc doDraw(obj: SomeAgent)
-    proc recompute(obj: SomeAgent) {.slot.} =
+    proc recompute(obj: SomeAgent, attrs: set[SigilAttributes]) {.slot.} =
       obj.doDraw()
 
     proc draw(agent: SomeAgent) {.slot.} =
@@ -605,13 +605,13 @@ suite "#effects":
     x <- 3
     echo "x: ", x
     echo "eff: ", reg.registered().toSeq()
-    check count[] ==  1
+    check count[] == 1
     check reg.dirty().toSeq().len() == 1
 
     emit reg.triggerEffects()
 
     check reg.dirty().toSeq().len() == 0
-    check count[] ==  2
+    check count[] == 2
 
   test "test a chained sigil effect":
     let 
@@ -620,22 +620,20 @@ suite "#effects":
       isEven = computed[bool]:
         x{} mod 2 == 0
 
-    check count[] ==  0
+    check count[] == 0
     check reg.registered().toSeq().len() == 0
     when defined(sigilsDebug):
       x.debugName = "X"
       isEven.debugName = "isEven"
 
-    echo "<<< make:effect: "
     effect:
       echo "\tEFF running: "
       count[].inc()
       if isEven{}:
         echo "\tX is even!"
 
-    echo ">>> make effect:done: "
     check reg.registered().toSeq().len() == 1
-    check count[] ==  1
+    check count[] == 1
     when defined(sigilsDebug):
       reg.registered().toSeq()[0].debugName = "EFF"
     printConnections(reg.registered().toSeq()[0])
@@ -645,7 +643,7 @@ suite "#effects":
     x <- 4
     echo "X: ", x
     echo "eff: ", reg.registered().toSeq()[0]
-    check count[] ==  1
+    check count[] == 1
     emit reg.triggerEffects()
 
     check reg.dirty().toSeq().len() == 0
@@ -653,10 +651,9 @@ suite "#effects":
 
     echo "setting x <- 3"
     x <- 3
-    echo "isEven:hash: ", isEven.hash
     check reg.dirty().toSeq().len() == 1
-    check count[] ==  1
+    check count[] == 1
 
     emit reg.triggerEffects()
     check reg.dirty().toSeq().len() == 0
-    check count[] ==  2
+    check count[] == 2

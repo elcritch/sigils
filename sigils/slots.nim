@@ -4,6 +4,8 @@ import agents
 
 export agents
 
+const SigilDebugSlots {.strdefine: "sigils.DebugSlots".}: string = ""
+
 proc firstArgument(params: NimNode): (NimNode, NimNode) =
   if params.len() == 1:
     error("Slots must take an Agent as the first argument.", params)
@@ -288,8 +290,11 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
 
   # echo "slot: "
   # echo result.lispRepr
-  # echo "slot:repr:"
-  # echo result.repr
+
+  when SigilDebugSlots != "":
+    if procNameStr in SigilDebugSlots:
+      echo "slot:repr: isSignal: ", isSignal
+      echo result.repr
 
 template slot*(p: untyped): untyped =
   rpcImpl(p, nil, nil)
