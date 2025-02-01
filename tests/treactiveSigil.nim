@@ -5,7 +5,7 @@ import unittest
 import std/sequtils
 
 template isNear*[T](a, b: T, eps = 1.0e-5): bool =
-  let same = near(a, b, eps)
+  let same = near(a, b)
   if not same:
     checkpoint("a and b not almost equal: a: " & $a & " b: " & $b & " delta: " & $(a-b))
   same

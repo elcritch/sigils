@@ -25,10 +25,6 @@ type
     ## This builds on the core signals and slots but provides a
     ## higher level API for working with propagating values.
     val: T
-    when T is float or T is float32:
-      defaultEps* = 1.0e-5
-    elif T is float64:
-      defaultEps* = 1.0e-10
 
   SigilEffectRegistry* = ref object of Agent
     effects: HashSet[SigilBase]
@@ -56,15 +52,20 @@ proc isLazy*(s: SigilBase): bool =
 proc changed*(s: SigilBase) {.signal.}
   ## core reactive signal type
 
-proc near*[T](a, b: T, eps: T): bool =
+
+proc near*[T](a, b: T): bool =
   let diff = abs(a-b)
+  when T is float or T is float32:
+    let eps = 1.0e-5
+  elif T is float64:
+    let eps = 1.0e-10
   result = diff <= eps
 
 proc setValue*[T](s: Sigil[T], val: T) {.slot.} =
   ## slot to update sigil values, synonym of `<-`
   mixin near
   when T is SomeFloat:
-    if not near(s.val, val, s.defaultEps):
+    if not near(s.val, val):
       s.val = val
       s.vhash = hash(val)
       s.attrs.excl(Dirty)
