@@ -555,7 +555,7 @@ suite "#bridge sigils and agents":
     ## don't seem to mix
     ## In Figuro `recompute` would just call `refresh`
     proc doDraw(obj: SomeAgent)
-    proc recompute(obj: SomeAgent) {.slot.} =
+    proc recompute(obj: SomeAgent, attrs: set[SigilAttributes]) {.slot.} =
       obj.doDraw()
 
     proc draw(agent: SomeAgent) {.slot.} =
