@@ -626,14 +626,12 @@ suite "#effects":
       x.debugName = "X"
       isEven.debugName = "isEven"
 
-    echo "<<< make:effect: "
     effect:
       echo "\tEFF running: "
       count[].inc()
       if isEven{}:
         echo "\tX is even!"
 
-    echo ">>> make effect:done: "
     check reg.registered().toSeq().len() == 1
     check count[] ==  1
     when defined(sigilsDebug):
@@ -653,7 +651,6 @@ suite "#effects":
 
     echo "setting x <- 3"
     x <- 3
-    echo "isEven:hash: ", isEven.hash
     check reg.dirty().toSeq().len() == 1
     check count[] ==  1
 
