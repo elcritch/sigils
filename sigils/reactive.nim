@@ -191,7 +191,7 @@ proc computeDeps(sigil: SigilEffect) =
         sh.compute()
 
 template effect*(blk: untyped) =
-  ## Creates a new fSigilEfect that is lazily 
+  ## Creates a new fSigilEfect that is lazily
   ## evaluated whenever `triggerEffects` is sent to
   ## the SigilEffectRegistry in scope.
   ## 
