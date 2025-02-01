@@ -16,7 +16,6 @@ type
     fn: proc (arg: SigilBase) {.closure.}
 
   SigilEffect* = ref object of SigilBase
-    change: HashSet[SigilBase]
 
   Sigil*[T] = ref object of SigilBase
     ## Core *reactive* data type for doing reactive style programming
