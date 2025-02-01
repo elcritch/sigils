@@ -182,15 +182,23 @@ template getSigilEffectsRegistry*(): untyped =
   internalSigilEffectRegistry
 
 proc computeDeps(sigil: SigilEffect) =
+  ## compute any Sigils we're listening to
+  ## in order to trigger any chagnes
   for listened in sigil.listening:
-    echo "EFF:deps: ", listened
     if listened[] of SigilBase:
       withRef(listened, item):
         let sh = SigilBase(item)
-        echo "EFF:deps:item: ", sh
         sh.compute()
 
 template effect*(blk: untyped) =
+  ## Creates a new fSigilEfect that is lazily 
+  ## evaluated whenever `triggerEffects` is sent to
+  ## the SigilEffectRegistry in scope.
+  ## 
+  ## The SigilEffectRegistry is gotten by
+  ## `getSigilEffectsRegistry()` and can be overriden
+  ## to provide a custom registry.
+  ## 
   let res = SigilEffect()
   when defined(sigilsDebug):
     res.debugName = "EFF"
