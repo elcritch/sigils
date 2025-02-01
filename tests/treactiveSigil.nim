@@ -633,7 +633,7 @@ suite "#effects":
         echo "\tX is even!"
 
     check reg.registered().toSeq().len() == 1
-    check count[] ==  1
+    check count[] == 1
     when defined(sigilsDebug):
       reg.registered().toSeq()[0].debugName = "EFF"
     printConnections(reg.registered().toSeq()[0])
@@ -643,7 +643,7 @@ suite "#effects":
     x <- 4
     echo "X: ", x
     echo "eff: ", reg.registered().toSeq()[0]
-    check count[] ==  1
+    check count[] == 1
     emit reg.triggerEffects()
 
     check reg.dirty().toSeq().len() == 0

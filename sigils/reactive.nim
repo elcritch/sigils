@@ -180,19 +180,12 @@ template getSigilEffectsRegistry*(): untyped =
   ## when it's created
   internalSigilEffectRegistry
 
-# proc computeHash(sigil: SigilHashed): Hash =
-#   var vhash: Hash = 0
-#   for listened in sigil.listening:
-#     if listened[] of SigilHashed:
-#       withRef(listened, item):
-#         let sh = SigilHashed(item)
-#         let prev = sh.vhash
-#         sh.execute()
-#         # echo "\tEFF:change: ", prev, " <> ", sh.vhash
-#         vhash = vhash !& sh.vhash
-#         # if prev != sh.vhash:
-#         #   sigil.attrs.incl Changed
-#   return !$ vhash
+proc computeDeps(sigil: SigilEffect) =
+  for listened in sigil.listening:
+    if listened[] of SigilBase:
+      withRef(listened, item):
+        let sh = SigilBase(item)
+        sh.execute()
 
 proc computeChanged(sigil: SigilEffect) =
   ## computes changes for effects
@@ -206,9 +199,12 @@ proc computeChanged(sigil: SigilEffect) =
 
 template effect*(blk: untyped) =
   let res = SigilEffect()
+  when defined(sigilsDebug):
+    res.debugName = "EFF"
   res.fn = proc(arg: SigilBase) {.closure.} =
     let internalSigil {.inject.} = SigilEffect(arg)
     # internalSigil.computeChanged()
+    echo "effect:recompute: ", internalSigil.unsafeWeakRef()
     if Changed in internalSigil.attrs:
       `blk`
       internalSigil.attrs.excl {Dirty, ChangeD}
