@@ -605,13 +605,13 @@ suite "#effects":
     x <- 3
     echo "x: ", x
     echo "eff: ", reg.registered().toSeq()
-    check count[] ==  1
+    check count[] == 1
     check reg.dirty().toSeq().len() == 1
 
     emit reg.triggerEffects()
 
     check reg.dirty().toSeq().len() == 0
-    check count[] ==  2
+    check count[] == 2
 
   test "test a chained sigil effect":
     let 
@@ -620,7 +620,7 @@ suite "#effects":
       isEven = computed[bool]:
         x{} mod 2 == 0
 
-    check count[] ==  0
+    check count[] == 0
     check reg.registered().toSeq().len() == 0
     when defined(sigilsDebug):
       x.debugName = "X"
@@ -652,8 +652,8 @@ suite "#effects":
     echo "setting x <- 3"
     x <- 3
     check reg.dirty().toSeq().len() == 1
-    check count[] ==  1
+    check count[] == 1
 
     emit reg.triggerEffects()
     check reg.dirty().toSeq().len() == 0
-    check count[] ==  2
+    check count[] == 2
