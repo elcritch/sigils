@@ -119,6 +119,11 @@ template bindSigilEvents*(sigilIdent, blk: untyped): auto =
   `blk`
   static: discard enableSigilBinding.pop()
 
+template unBindSigilEvents*(blk: untyped): auto =
+  static: enableSigilBinding.add false
+  `blk`
+  static: discard enableSigilBinding.pop()
+
 template `{}`*[T](sigil: Sigil[T]): auto {.inject.} =
   ## deferences a typed Sigil to get it's value 
   ## either from static sigils or computed sigils
