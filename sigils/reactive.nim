@@ -94,7 +94,7 @@ proc `<-`*[T](s: Sigil[T], val: T) =
 
 import macros
 
-var enableSigilBinding* {.compileTime.} = false
+var enableSigilBinding* {.compileTime.}: seq[bool] = @[false]
 
 template getInternalSigilIdent*(): untyped =
   ## overridable template to provide the ident
@@ -108,22 +108,22 @@ template getInternalSigilIdent*(): untyped =
   internalSigil
 
 template bindSigilEvents*(blk: untyped): auto =
-  static: enableSigilBinding = true
+  static: enableSigilBinding.add true
   `blk`
-  static: enableSigilBinding = false
+  static: discard enableSigilBinding.pop()
 
 template bindSigilEvents*(sigilIdent, blk: untyped): auto =
   template getInternalSigilIdent(): untyped =
     sigilIdent
-  static: enableSigilBinding = true
+  static: enableSigilBinding.add true
   `blk`
-  static: enableSigilBinding = false
+  static: discard enableSigilBinding.pop()
 
 template `{}`*[T](sigil: Sigil[T]): auto {.inject.} =
   ## deferences a typed Sigil to get it's value 
   ## either from static sigils or computed sigils
   mixin getInternalSigilIdent
-  when enableSigilBinding:
+  when enableSigilBinding[^1]:
     sigil.connect(change, getInternalSigilIdent(), recompute)
   if Dirty in sigil.attrs:
     sigil.fn(sigil)
@@ -140,10 +140,8 @@ template computedImpl[T](lazy, blk: untyped): Sigil[T] =
     res.fn = proc(arg: SigilBase) {.closure.} =
       bindSigilEvents:
         let internalSigil {.inject.} = Sigil[T](arg)
-        static: enableSigilBinding = true
         let val = block:
           `blk`
-        static: enableSigilBinding = false
         internalSigil.setValue(val)
     if lazy: res.attrs.incl Lazy
     res.recompute({})
