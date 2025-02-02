@@ -537,11 +537,6 @@ suite "#bridge sigils and agents":
     type SomeAgent = ref object of Agent
       value: int
 
-    template getInternalSigilIdent(): untyped =
-      ## provide this to override the default `internalSigil`
-      ## identify, for using local naming schema
-      agent
-
     let 
       a = newSigil(2)
       b = computed[int]: 2 * a{}
@@ -559,9 +554,10 @@ suite "#bridge sigils and agents":
       obj.doDraw()
 
     proc draw(agent: SomeAgent) {.slot.} =
-      let value = b{}
-      agent.value = value
-    
+      bindSigilEvents(agent):
+        let value = b{}
+        agent.value = value
+
     proc doDraw(obj: SomeAgent) =
       obj.draw()
 

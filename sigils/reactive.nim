@@ -92,6 +92,10 @@ proc `<-`*[T](s: Sigil[T], val: T) =
   ## update a static (non-computed) sigils value
   s.setValue(val)
 
+import macros
+
+var enableSigilBinding* {.compileTime.} = false
+
 template getInternalSigilIdent*(): untyped =
   ## overridable template to provide the ident
   ## that `{}` uses to look for the current 
@@ -103,11 +107,23 @@ template getInternalSigilIdent*(): untyped =
   ## connect dereferenced sigils to
   internalSigil
 
+template bindSigilEvents*(blk: untyped): auto =
+  static: enableSigilBinding = true
+  `blk`
+  static: enableSigilBinding = false
+
+template bindSigilEvents*(sigilIdent, blk: untyped): auto =
+  template getInternalSigilIdent(): untyped =
+    sigilIdent
+  static: enableSigilBinding = true
+  `blk`
+  static: enableSigilBinding = false
+
 template `{}`*[T](sigil: Sigil[T]): auto {.inject.} =
   ## deferences a typed Sigil to get it's value 
   ## either from static sigils or computed sigils
   mixin getInternalSigilIdent
-  when compiles(getInternalSigilIdent()):
+  when enableSigilBinding:
     sigil.connect(change, getInternalSigilIdent(), recompute)
   if Dirty in sigil.attrs:
     sigil.fn(sigil)
@@ -122,10 +138,13 @@ template computedImpl[T](lazy, blk: untyped): Sigil[T] =
   block:
     let res = Sigil[T]()
     res.fn = proc(arg: SigilBase) {.closure.} =
-      let internalSigil {.inject.} = Sigil[T](arg)
-      let val = block:
-        `blk`
-      internalSigil.setValue(val)
+      bindSigilEvents:
+        let internalSigil {.inject.} = Sigil[T](arg)
+        static: enableSigilBinding = true
+        let val = block:
+          `blk`
+        static: enableSigilBinding = false
+        internalSigil.setValue(val)
     if lazy: res.attrs.incl Lazy
     res.recompute({})
     res
@@ -199,11 +218,12 @@ template effect*(blk: untyped) =
     res.debugName = "EFF"
   res.fn = proc(arg: SigilBase) {.closure.} =
     let internalSigil {.inject.} = SigilEffect(arg)
-    internalSigil.computeDeps()
-    if Changed in internalSigil.attrs:
-      `blk`
-      internalSigil.attrs.excl {Dirty, ChangeD}
-      # internalSigil.vhash = internalSigil.computeHash()
+    bindSigilEvents:
+      internalSigil.computeDeps()
+      if Changed in internalSigil.attrs:
+        `blk`
+        internalSigil.attrs.excl {Dirty, ChangeD}
+        # internalSigil.vhash = internalSigil.computeHash()
   res.attrs.incl {Dirty, Lazy, Changed}
   res.compute()
   emit getSigilEffectsRegistry().registerEffect(res)
