@@ -584,7 +584,7 @@ suite "#effects":
 
     effect:
       count[].inc()
-      # echo "X is now: ", x{}
+      echo "X is now: ", x{}
  
     check count[] ==  1
     let effs = reg.registered().toSeq()
