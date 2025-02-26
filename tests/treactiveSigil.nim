@@ -594,13 +594,13 @@ suite "#effects":
     check reg.registered().toSeq().len() == 1
     check reg.dirty().toSeq().len() == 0
     check count[] ==  1
-    echo "x: ", x
-    echo "eff: ", reg.registered().toSeq()
+    # echo "x: ", x
+    # echo "eff: ", reg.registered().toSeq()
 
-    echo "setting x <- 3"
+    # echo "setting x <- 3"
     x <- 3
-    echo "x: ", x
-    echo "eff: ", reg.registered().toSeq()
+    # echo "x: ", x
+    # echo "eff: ", reg.registered().toSeq()
     check count[] == 1
     check reg.dirty().toSeq().len() == 1
 
@@ -623,7 +623,7 @@ suite "#effects":
       isEven.debugName = "isEven"
 
     effect:
-      echo "\tEFF running: "
+      # echo "\tEFF running: "
       count[].inc()
       if isEven{}:
         echo "\tX is even!"
@@ -634,18 +634,18 @@ suite "#effects":
       reg.registered().toSeq()[0].debugName = "EFF"
     printConnections(reg.registered().toSeq()[0])
 
-    echo "eff: ", reg.registered().toSeq()[0]
-    echo "setting x <- 4"
+    # echo "eff: ", reg.registered().toSeq()[0]
+    # echo "setting x <- 4"
     x <- 4
-    echo "X: ", x
-    echo "eff: ", reg.registered().toSeq()[0]
+    # echo "X: ", x
+    # echo "eff: ", reg.registered().toSeq()[0]
     check count[] == 1
     emit reg.triggerEffects()
 
     check reg.dirty().toSeq().len() == 0
     check count[] == 1
 
-    echo "setting x <- 3"
+    # echo "setting x <- 3"
     x <- 3
     check reg.dirty().toSeq().len() == 1
     check count[] == 1

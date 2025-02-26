@@ -35,6 +35,10 @@ proc someAction*(self: Counter) {.slot.} =
   echo "action"
   self.avg = -1
 
+proc someOtherAction*(self: Counter) {.slot.} =
+  echo "action"
+  self.avg = -1
+
 proc value*(self: Counter): int =
   self.value
 
@@ -144,6 +148,14 @@ when isMainModule:
 
     test "empty signal conversion":
       connect(a, valueChanged, c, someAction, acceptVoidSlot = true)
+
+      check connected(a, valueChanged)
+      check not connected(a, someChange)
+      check not connected(a, valueChanged, b)
+      check connected(a, valueChanged, c)
+      check connected(a, valueChanged, c, someAction)
+      check not connected(a, valueChanged, b, someAction)
+      check not connected(a, valueChanged, c, someOtherAction)
 
       a.setValue(42)
 
