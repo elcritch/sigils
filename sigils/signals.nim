@@ -118,6 +118,54 @@ template connect*(
   checkSignalTypes(a, signal, b, agentSlot, acceptVoidSlot)
   a.addSubscription(signalName(signal), b, agentSlot)
 
+template connected*(
+    a: Agent,
+    signal: typed,
+): bool =
+  if signalName(signal).toSigilName() in a.subcriptionsTable:
+    echo "CONNECTED: "
+    true
+  else:
+    false
+
+template connected*(
+    a: Agent,
+    signal: typed,
+    b: Agent,
+): bool =
+  let sn = signalName(signal).toSigilName() 
+  if sn in a.subcriptionsTable:
+    let subs = a.subcriptionsTable[sn]
+    let bb = b.unsafeWeakRef().asAgent()
+    var res = false
+    for sub in subs:
+      if sub.tgt == bb:
+        res = true
+        break
+    res
+  else:
+    false
+
+template connected*(
+    a: Agent,
+    signal: typed,
+    b: Agent,
+    slots: untyped,
+): bool =
+  let agentSlot = `slots`(typeof(b))
+  let sn = signalName(signal).toSigilName() 
+  if sn in a.subcriptionsTable:
+    let subs = a.subcriptionsTable[sn]
+    let bb = b.unsafeWeakRef().asAgent()
+    var res = false
+    for sub in subs:
+      if sub.tgt == bb and sub.slot == agentSlot:
+        res = true
+        break
+    res
+  else:
+    false
+
 template disconnect*[T](
     a: Agent,
     signal: typed,
