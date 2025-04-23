@@ -71,7 +71,7 @@ proc runAsyncThread*(targ: ptr AsyncSigilThread) {.thread.} =
     {.cast(gcsafe).}:
       # echo "async thread running "
       var sig: ThreadSignal
-      while thread.running.load(Relaxed) and thread[].recv(sig, NonBlocking):
+      while isRunning(thread[]) and thread[].recv(sig, NonBlocking):
         sthr[].exec(sig)
 
 
