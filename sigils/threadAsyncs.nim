@@ -22,6 +22,7 @@ import std/asyncdispatch
 type AsyncSigilThread* = object of SigilThread
   inputs*: SigilChan
   event*: AsyncEvent
+  drain*: Atomic[bool]
   thr*: Thread[ptr AsyncSigilThread]
 
 proc newSigilAsyncThread*(): ptr AsyncSigilThread =
@@ -31,6 +32,7 @@ proc newSigilAsyncThread*(): ptr AsyncSigilThread =
   result[].signaledLock.initLock()
   result[].inputs = newSigilChan()
   result[].running.store(true, Relaxed)
+  result[].drain.store(true, Relaxed)
   echo "newSigilAsyncThread: ", result[].event.repr
 
 method send*(
@@ -70,11 +72,32 @@ proc runAsyncThread*(targ: ptr AsyncSigilThread) {.thread.} =
       # echo "async thread running "
       var sig: ThreadSignal
       while thread.running.load(Relaxed) and thread[].recv(sig, NonBlocking):
-        echo "async thread got msg: "
         sthr[].exec(sig)
 
+
   thread[].event.addEvent(cb)
-  runForever()
+  while thread.drain.load(Relaxed):
+    poll()
+
+  try:
+    if thread.drain.load(Relaxed):
+      asyncdispatch.drain()
+  except ValueError:
+    discard
 
 proc start*(thread: ptr AsyncSigilThread) =
   createThread(thread[].thr, runAsyncThread, thread)
+
+proc stop*(thread: ptr AsyncSigilThread, immediate: bool = false, drain: bool = false) =
+  thread[].running.store(false, Relaxed)
+  thread[].drain.store(drain, Relaxed)
+  if immediate:
+    thread[].drain.store(true, Relaxed)
+  else:
+    thread[].event.trigger()
+
+proc join*(thread: ptr AsyncSigilThread) =
+  thread[].thr.joinThread()
+
+proc peek*(thread: ptr AsyncSigilThread): int =
+  result = thread[].inputs.peek()
