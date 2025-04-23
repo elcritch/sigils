@@ -207,6 +207,9 @@ proc exec*(thread: var SigilThread, sig: ThreadSignal) =
 
 proc started*(tp: ThreadAgent) {.signal.}
 
+proc isRunning*(thread: var SigilThread): bool =
+  thread.running.load(Relaxed)
+
 proc poll*(thread: var SigilThread) =
   var sig: ThreadSignal
   discard thread.recv(sig, Blocking)
@@ -226,7 +229,7 @@ proc pollAll*(thread: var SigilThread): int {.discardable.} =
 
 proc runForever*[R: SigilThread](thread: var R) =
   emit thread.agent.started()
-  while thread.running.load(Relaxed):
+  while isRunning(thread):
     thread.poll()
 
 proc runThread*(thread: ptr SigilThread) {.thread.} =
