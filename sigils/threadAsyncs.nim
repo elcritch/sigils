@@ -3,6 +3,7 @@ import std/isolation
 import std/locks
 import threading/smartptrs
 import threading/channels
+import threading/atomics
 
 import agents
 import threads
@@ -29,6 +30,7 @@ proc newSigilAsyncThread*(): ptr AsyncSigilThread =
   result[].event = newAsyncEvent()
   result[].signaledLock.initLock()
   result[].inputs = newSigilChan()
+  result[].running.store(true, Relaxed)
   echo "newSigilAsyncThread: ", result[].event.repr
 
 method send*(
@@ -67,7 +69,7 @@ proc runAsyncThread*(targ: ptr AsyncSigilThread) {.thread.} =
     {.cast(gcsafe).}:
       # echo "async thread running "
       var sig: ThreadSignal
-      while thread[].recv(sig, NonBlocking):
+      while thread.running.load(Relaxed) and thread[].recv(sig, NonBlocking):
         echo "async thread got msg: "
         sthr[].exec(sig)
 
