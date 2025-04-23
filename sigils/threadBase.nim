@@ -17,7 +17,7 @@ export isolateutils
 
 type
 
-  MessageQueueFullDefect* = object of Defect
+  MessageQueueFullError* = object of CatchableError
 
   BlockingKinds* {.pure.} = enum
     Blocking
@@ -110,7 +110,7 @@ method send*(
   of NonBlocking:
     let sent = thread.inputs.trySend(msg)
     if not sent:
-      raise newException(MessageQueueFullDefect, "could not send!")
+      raise newException(MessageQueueFullError, "could not send!")
 
 method recv*(
     thread: SigilThreadImpl, msg: var ThreadSignal, blocking: BlockingKinds

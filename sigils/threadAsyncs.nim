@@ -46,7 +46,7 @@ method send*(
   of NonBlocking:
     let sent = thread.inputs.trySend(msg)
     if not sent:
-      raise newException(MessageQueueFullDefect, "could not send!")
+      raise newException(MessageQueueFullError, "could not send!")
   thread.event.trigger()
 
 method recv*(
