@@ -11,15 +11,29 @@ type
 
   Originator* = ref object of Agent
 
+  CounterWithDestroy* = ref object of Agent
+    value: int
+    avg: int
+
+proc `=destroy`*(x: var typeof(CounterWithDestroy()[])) =
+  echo "CounterWithDestroy:destroy: "
+
 proc change*(tp: Originator, val: int) {.signal.}
 
 proc valueChanged*(tp: Counter, val: int) {.signal.}
+proc valueChanged*(tp: CounterWithDestroy, val: int) {.signal.}
 
 proc someChange*(tp: Counter) {.signal.}
 
 proc avgChanged*(tp: Counter, val: float) {.signal.}
 
 proc setValue*(self: Counter, value: int) {.slot.} =
+  echo "setValue! ", value
+  if self.value != value:
+    self.value = value
+    emit self.valueChanged(value)
+
+proc setValue*(self: CounterWithDestroy, value: int) {.slot.} =
   echo "setValue! ", value
   if self.value != value:
     self.value = value
@@ -62,6 +76,7 @@ when isMainModule:
         c {.used.} = Counter()
         d {.used.} = Counter()
         o {.used.} = Originator()
+        awd {.used.} = CounterWithDestroy()
       
       when defined(sigilsDebug):
         a.debugName = "A"
@@ -69,6 +84,7 @@ when isMainModule:
         c.debugName = "C"
         d.debugName = "D"
         o.debugName = "O"
+        awd.debugName = "AWD"
 
     teardown:
       GC_fullCollect()
@@ -232,4 +248,27 @@ when isMainModule:
 
       # printConnections(a)
       # printConnections(c)
+
+    test "test multi connect disconnect with destroyed":
+      echo "done"
+      connect(awd, valueChanged, b, setValue)
+      connect(awd, valueChanged, c, Counter.setValue)
+
+      check a.value == 0
+      check b.value == 0
+      check c.value == 0
+
+      awd.setValue(42)
+      check awd.value == 42
+      check b.value == 42
+      check c.value == 42
+      echo "TEST REFS: ",
+        " aref: ",
+        cast[pointer](awd).repr,
+        " 0x",
+        addr(awd[]).pointer.repr,
+        " agent: 0x",
+        addr(Agent(awd)).pointer.repr
+      check awd.unsafeWeakRef().toPtr == cast[pointer](awd)
+      check awd.unsafeWeakRef().toPtr == addr(awd[]).pointer
 
