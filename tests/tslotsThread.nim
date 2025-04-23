@@ -154,6 +154,7 @@ suite "threaded agent slots":
       threads.connect(a, valueChanged, bp, Counter.setValue())
       check not compiles(connect(a, valueChanged, bp, someAction))
 
+      check thread.peek() == 2
       thread.stop()
       thread.join()
 

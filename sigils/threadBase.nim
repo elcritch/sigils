@@ -247,3 +247,6 @@ proc stop*(thread: ptr SigilThreadImpl, immediate: bool = false) =
 
 proc join*(thread: ptr SigilThreadImpl) =
   thread[].thr.joinThread()
+
+proc peek*(thread: ptr SigilThreadImpl): int =
+  result = thread[].inputs.peek()
