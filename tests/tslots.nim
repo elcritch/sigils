@@ -11,15 +11,30 @@ type
 
   Originator* = ref object of Agent
 
+  CounterWithDestroy* = ref object of Agent
+    value: int
+    avg: int
+
+proc `=destroy`*(x: var typeof(CounterWithDestroy()[])) =
+  echo "CounterWithDestroy:destroy: ", x.debugName
+  destroyAgent(x)
+
 proc change*(tp: Originator, val: int) {.signal.}
 
 proc valueChanged*(tp: Counter, val: int) {.signal.}
+proc valueChanged*(tp: CounterWithDestroy, val: int) {.signal.}
 
 proc someChange*(tp: Counter) {.signal.}
 
 proc avgChanged*(tp: Counter, val: float) {.signal.}
 
 proc setValue*(self: Counter, value: int) {.slot.} =
+  echo "setValue! ", value
+  if self.value != value:
+    self.value = value
+    emit self.valueChanged(value)
+
+proc setValue*(self: CounterWithDestroy, value: int) {.slot.} =
   echo "setValue! ", value
   if self.value != value:
     self.value = value
@@ -233,3 +248,33 @@ when isMainModule:
       # printConnections(a)
       # printConnections(c)
 
+suite "test destroys":
+    test "test multi connect disconnect with destroyed":
+      var
+        b = Counter()
+
+      block:
+        var
+          awd {.used.} = CounterWithDestroy()
+
+        awd.debugName = "AWD"
+        b.debugName = "B"
+        connect(awd, valueChanged, b, setValue)
+
+        check b.value == 0
+
+        awd.setValue(42)
+        check awd.value == 42
+        check b.value == 42
+        echo "TEST REFS: ",
+          " aref: ",
+          cast[pointer](awd).repr,
+          " 0x",
+          addr(awd[]).pointer.repr,
+          " agent: 0x",
+          addr(Agent(awd)).pointer.repr
+        check awd.unsafeWeakRef().toPtr == cast[pointer](awd)
+        check awd.unsafeWeakRef().toPtr == addr(awd[]).pointer
+
+      check b.subcriptionsTable.len() == 0
+      check b.listening.len() == 0

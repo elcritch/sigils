@@ -71,6 +71,9 @@ suite "threaded agent slots":
     ct[].poll()
     check a.value == 1337
 
+    thread.stop()
+    thread.join()
+
   test "sigil object thread bad":
     var
       a = SomeAction()

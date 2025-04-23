@@ -4,6 +4,7 @@ import std/options
 import std/locks
 import threading/smartptrs
 import threading/channels
+import threading/atomics
 
 import isolateutils
 import agents
@@ -15,6 +16,9 @@ export smartptrs, isolation, channels
 export isolateutils
 
 type
+
+  MessageQueueFullError* = object of CatchableError
+
   BlockingKinds* {.pure.} = enum
     Blocking
     NonBlocking
@@ -24,6 +28,7 @@ type
     Move
     Trigger
     Deref
+    Exit
 
   ThreadSignal* = object
     case kind*: ThreadSignalKind
@@ -37,6 +42,8 @@ type
       discard
     of Deref:
       deref*: WeakRef[Agent]
+    of Exit:
+      discard
 
   SigilChan* = Chan[ThreadSignal]
 
@@ -46,7 +53,7 @@ type
   ThreadAgent* = ref object of Agent
 
   SigilThread* = object of RootObj
-    id*: int
+    threadId*: Atomic[int]
 
     signaledLock*: Lock
     signaled*: HashSet[WeakRef[AgentRemote]]
@@ -54,10 +61,14 @@ type
     agent*: ThreadAgent
     when defined(sigilsDebug):
       debugName*: string
+    running*: Atomic[bool]
 
   SigilThreadImpl* = object of SigilThread
     inputs*: SigilChan
     thr*: Thread[ptr SigilThread]
+
+proc getThreadId*(thread: SigilThread): int =
+  addr(thread.threadId)[].load(Relaxed)
 
 proc repr*(obj: SigilThread): string =
   when defined(sigilsDebug):
@@ -66,7 +77,13 @@ proc repr*(obj: SigilThread): string =
     let dname = ""
 
   result =
-    fmt"SigilThread(id: {$obj.id}, {dname}signaled: {$obj.signaled.len} agent: {$obj.agent.unsafeWeakRef} )"
+    fmt"SigilThread(id: {$getThreadId(obj)}, {dname}signaled: {$obj.signaled.len} agent: {$obj.agent.unsafeWeakRef} )"
+
+
+proc `=destroy`*(thread: var SigilThread) =
+  # SigilThread
+  echo "SigilThreadImpl:destroy: ", $getThreadId(thread)
+  thread.running.store(false, Relaxed)
 
 proc newSigilChan*(): SigilChan =
   result = newChan[ThreadSignal](1_000)
@@ -93,7 +110,7 @@ method send*(
   of NonBlocking:
     let sent = thread.inputs.trySend(msg)
     if not sent:
-      raise newException(Defect, "could not send!")
+      raise newException(MessageQueueFullError, "could not send!")
 
 method recv*(
     thread: SigilThreadImpl, msg: var ThreadSignal, blocking: BlockingKinds
@@ -113,7 +130,8 @@ proc newSigilThread*(): ptr SigilThreadImpl =
   result[].agent = ThreadAgent()
   result[].inputs = newSigilChan()
   result[].signaledLock.initLock()
-  result[].id = -1
+  result[].threadId.store(-1, Relaxed)
+  result[].running.store(true, Relaxed)
 
 proc toSigilThread*[R: SigilThread](t: ptr R): ptr SigilThread =
   cast[ptr SigilThread](t)
@@ -121,7 +139,7 @@ proc toSigilThread*[R: SigilThread](t: ptr R): ptr SigilThread =
 proc startLocalThread*() =
   if localSigilThread.isNil:
     var st = newSigilThread()
-    st[].id = getThreadId()
+    st[].threadId.store(getThreadId(), Relaxed)
     localSigilThread = st.toSigilThread()
 
 proc getCurrentSigilThread*(): ptr SigilThread =
@@ -141,6 +159,9 @@ proc gcCollectReferences(thread: var SigilThread) =
 proc exec*(thread: var SigilThread, sig: ThreadSignal) =
   debugPrint "\nthread got request: ", $sig.kind
   case sig.kind
+  of Exit:
+    debugPrint "\t threadExec:exit: ", $getThreadId()
+    thread.running.store(false, Relaxed)
   of Move:
     debugPrint "\t threadExec:move: ",
       $sig.item.unsafeWeakRef(), " refcount: ", $sig.item.unsafeGcCount()
@@ -205,7 +226,7 @@ proc pollAll*(thread: var SigilThread): int {.discardable.} =
 
 proc runForever*[R: SigilThread](thread: var R) =
   emit thread.agent.started()
-  while true:
+  while thread.running.load(Relaxed):
     thread.poll()
 
 proc runThread*(thread: ptr SigilThread) {.thread.} =
@@ -214,9 +235,21 @@ proc runThread*(thread: ptr SigilThread) {.thread.} =
     pidx = pcnt
     assert localSigilThread.isNil()
     localSigilThread = thread.toSigilThread()
-    thread[].id = getThreadId()
+    thread[].threadId.store(getThreadId(), Relaxed)
     debugPrint "Sigil worker thread waiting!"
     thread[].runForever()
 
 proc start*(thread: ptr SigilThreadImpl) =
   createThread(thread[].thr, runThread, thread)
+
+proc stop*(thread: ptr SigilThreadImpl, immediate: bool = false) =
+  if immediate:
+    thread[].running.store(false, Relaxed)
+  else:
+    thread[].send(ThreadSignal(kind: Exit))
+
+proc join*(thread: ptr SigilThreadImpl) =
+  thread[].thr.joinThread()
+
+proc peek*(thread: ptr SigilThreadImpl): int =
+  result = thread[].inputs.peek()

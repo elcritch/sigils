@@ -3,6 +3,7 @@ import std/isolation
 import std/locks
 import threading/smartptrs
 import threading/channels
+import threading/atomics
 
 import agents
 import threads
@@ -21,6 +22,7 @@ import std/asyncdispatch
 type AsyncSigilThread* = object of SigilThread
   inputs*: SigilChan
   event*: AsyncEvent
+  drain*: Atomic[bool]
   thr*: Thread[ptr AsyncSigilThread]
 
 proc newSigilAsyncThread*(): ptr AsyncSigilThread =
@@ -29,6 +31,8 @@ proc newSigilAsyncThread*(): ptr AsyncSigilThread =
   result[].event = newAsyncEvent()
   result[].signaledLock.initLock()
   result[].inputs = newSigilChan()
+  result[].running.store(true, Relaxed)
+  result[].drain.store(true, Relaxed)
   echo "newSigilAsyncThread: ", result[].event.repr
 
 method send*(
@@ -42,7 +46,7 @@ method send*(
   of NonBlocking:
     let sent = thread.inputs.trySend(msg)
     if not sent:
-      raise newException(Defect, "could not send!")
+      raise newException(MessageQueueFullError, "could not send!")
   thread.event.trigger()
 
 method recv*(
@@ -67,12 +71,33 @@ proc runAsyncThread*(targ: ptr AsyncSigilThread) {.thread.} =
     {.cast(gcsafe).}:
       # echo "async thread running "
       var sig: ThreadSignal
-      while thread[].recv(sig, NonBlocking):
-        echo "async thread got msg: "
+      while thread.running.load(Relaxed) and thread[].recv(sig, NonBlocking):
         sthr[].exec(sig)
 
+
   thread[].event.addEvent(cb)
-  runForever()
+  while thread.drain.load(Relaxed):
+    poll()
+
+  try:
+    if thread.drain.load(Relaxed):
+      asyncdispatch.drain()
+  except ValueError:
+    discard
 
 proc start*(thread: ptr AsyncSigilThread) =
   createThread(thread[].thr, runAsyncThread, thread)
+
+proc stop*(thread: ptr AsyncSigilThread, immediate: bool = false, drain: bool = false) =
+  thread[].running.store(false, Relaxed)
+  thread[].drain.store(drain, Relaxed)
+  if immediate:
+    thread[].drain.store(true, Relaxed)
+  else:
+    thread[].event.trigger()
+
+proc join*(thread: ptr AsyncSigilThread) =
+  thread[].thr.joinThread()
+
+proc peek*(thread: ptr AsyncSigilThread): int =
+  result = thread[].inputs.peek()
