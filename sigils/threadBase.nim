@@ -50,7 +50,7 @@ type
   ThreadAgent* = ref object of Agent
 
   SigilThread* = object of RootObj
-    id*: int
+    threadId*: Atomic[int]
 
     signaledLock*: Lock
     signaled*: HashSet[WeakRef[AgentRemote]]
@@ -64,6 +64,9 @@ type
     inputs*: SigilChan
     thr*: Thread[ptr SigilThread]
 
+proc getThreadId*(thread: SigilThread): int =
+  addr(thread.threadId)[].load(Relaxed)
+
 proc repr*(obj: SigilThread): string =
   when defined(sigilsDebug):
     let dname = "name: " & obj.debugName & ", "
@@ -71,7 +74,13 @@ proc repr*(obj: SigilThread): string =
     let dname = ""
 
   result =
-    fmt"SigilThread(id: {$obj.id}, {dname}signaled: {$obj.signaled.len} agent: {$obj.agent.unsafeWeakRef} )"
+    fmt"SigilThread(id: {$getThreadId(obj)}, {dname}signaled: {$obj.signaled.len} agent: {$obj.agent.unsafeWeakRef} )"
+
+
+proc `=destroy`*(thread: var SigilThread) =
+  # SigilThread
+  echo "SigilThreadImpl:destroy: ", $getThreadId(thread)
+  thread.running.store(false, Relaxed)
 
 proc newSigilChan*(): SigilChan =
   result = newChan[ThreadSignal](1_000)
@@ -118,7 +127,7 @@ proc newSigilThread*(): ptr SigilThreadImpl =
   result[].agent = ThreadAgent()
   result[].inputs = newSigilChan()
   result[].signaledLock.initLock()
-  result[].id = -1
+  result[].threadId.store(-1, Relaxed)
   result[].running.store(true, Relaxed)
 
 proc toSigilThread*[R: SigilThread](t: ptr R): ptr SigilThread =
@@ -127,7 +136,7 @@ proc toSigilThread*[R: SigilThread](t: ptr R): ptr SigilThread =
 proc startLocalThread*() =
   if localSigilThread.isNil:
     var st = newSigilThread()
-    st[].id = getThreadId()
+    st[].threadId.store(getThreadId(), Relaxed)
     localSigilThread = st.toSigilThread()
 
 proc getCurrentSigilThread*(): ptr SigilThread =
@@ -223,7 +232,7 @@ proc runThread*(thread: ptr SigilThread) {.thread.} =
     pidx = pcnt
     assert localSigilThread.isNil()
     localSigilThread = thread.toSigilThread()
-    thread[].id = getThreadId()
+    thread[].threadId.store(getThreadId(), Relaxed)
     debugPrint "Sigil worker thread waiting!"
     thread[].runForever()
 

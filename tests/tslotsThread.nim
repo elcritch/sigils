@@ -97,441 +97,431 @@ suite "threaded agent slots":
       Counter.setValueGlobal().pointer: "setValueGlobal",
     }.toTable()
 
-  when true:
-    test "simple thread setup":
-      let ct = newSigilThread()
-      check not ct.isNil
+  test "simple thread setup":
+    let ct = newSigilThread()
+    check not ct.isNil
 
-      var a = SomeAction.new()
-      ct[].send(ThreadSignal(kind: Move, item: move a))
+    var a = SomeAction.new()
+    ct[].send(ThreadSignal(kind: Move, item: move a))
 
-  when true:
-    test "simple threading test":
+  test "simple threading test":
+    var
+      a = SomeAction.new()
+      b = Counter.new()
+      c = Counter.new()
+
+    var agentResults = newChan[(WeakRef[Agent], SigilRequest)]()
+
+    connect(a, valueChanged, b, setValue)
+    connect(a, valueChanged, c, Counter.setValue)
+
+    let wa: WeakRef[SomeAction] = a.unsafeWeakRef()
+    emit wa.valueChanged(137)
+    check typeof(wa.valueChanged(137)) is (WeakRef[Agent], SigilRequest)
+
+    check wa[].value == 0
+    check b.value == 137
+    check c.value == 137
+
+    proc threadTestProc(aref: WeakRef[SomeAction]) {.thread.} =
+      var res = aref.valueChanged(1337)
+      # echo "Thread aref: ", aref
+      # echo "Thread sending: ", res
+      agentResults.send(unsafeIsolate(ensureMove res))
+      # echo "Thread Done"
+
+    var thread: Thread[WeakRef[SomeAction]]
+    createThread(thread, threadTestProc, wa)
+    thread.joinThread()
+    let resp = agentResults.recv()
+    # echo "RESP: ", resp
+    emit resp
+
+    check b.value == 1337
+    check c.value == 1337
+
+  test "threaded connect":
+    block:
       var
         a = SomeAction.new()
         b = Counter.new()
-        c = Counter.new()
+      # echo "thread runner!"
+      let thread = newSigilThread()
+      let bp: AgentProxy[Counter] = b.moveToThread(thread)
+      check b.isNil
 
-      var agentResults = newChan[(WeakRef[Agent], SigilRequest)]()
+      threads.connect(a, valueChanged, bp, setValue)
+      threads.connect(a, valueChanged, bp, Counter.setValue())
+      check not compiles(connect(a, valueChanged, bp, someAction))
 
-      connect(a, valueChanged, b, setValue)
-      connect(a, valueChanged, c, Counter.setValue)
+      thread.stop()
+      thread.join()
 
-      let wa: WeakRef[SomeAction] = a.unsafeWeakRef()
-      emit wa.valueChanged(137)
-      check typeof(wa.valueChanged(137)) is (WeakRef[Agent], SigilRequest)
+    GC_fullCollect()
 
-      check wa[].value == 0
-      check b.value == 137
-      check c.value == 137
+  test "agent connect a->b then moveToThread then destroy proxy":
+    # debugPrintQuiet = true
+    var a = SomeAction(debugName: "A")
+    when defined(sigilsDebug):
+      a.debugName = "A"
+      a.obj.id = 1010
 
-      proc threadTestProc(aref: WeakRef[SomeAction]) {.thread.} =
-        var res = aref.valueChanged(1337)
-        # echo "Thread aref: ", aref
-        # echo "Thread sending: ", res
-        agentResults.send(unsafeIsolate(ensureMove res))
-        # echo "Thread Done"
-
-      var thread: Thread[WeakRef[SomeAction]]
-      createThread(thread, threadTestProc, wa)
-      thread.joinThread()
-      let resp = agentResults.recv()
-      # echo "RESP: ", resp
-      emit resp
-
-      check b.value == 1337
-      check c.value == 1337
-
-  when true:
-    test "threaded connect":
-      block:
-        var
-          a = SomeAction.new()
-          b = Counter.new()
-        # echo "thread runner!"
-        let thread = newSigilThread()
-        let bp: AgentProxy[Counter] = b.moveToThread(thread)
-        check b.isNil
-
-        threads.connect(a, valueChanged, bp, setValue)
-        threads.connect(a, valueChanged, bp, Counter.setValue())
-        check not compiles(connect(a, valueChanged, bp, someAction))
-
-        thread.stop()
-        thread.join()
-
-      GC_fullCollect()
-
-  when true:
-    test "agent connect a->b then moveToThread then destroy proxy":
-      # debugPrintQuiet = true
-      var a = SomeAction(debugName: "A")
+    block:
+      var b = Counter()
       when defined(sigilsDebug):
-        a.debugName = "A"
-        a.obj.id = 1010
+        b.debugName = "B"
+        b.obj.id = 2020
 
-      block:
-        var b = Counter()
-        when defined(sigilsDebug):
-          b.debugName = "B"
-          b.obj.id = 2020
+      brightPrint "thread runner!", &" (th: {getThreadId()})"
+      brightPrint "obj a: ", $a.unsafeWeakRef()
+      brightPrint "obj b: ", $b.unsafeWeakRef()
+      let thread = newSigilThread()
+      thread.start()
 
-        brightPrint "thread runner!", &" (th: {getThreadId()})"
-        brightPrint "obj a: ", $a.unsafeWeakRef()
-        brightPrint "obj b: ", $b.unsafeWeakRef()
-        let thread = newSigilThread()
-        thread.start()
+      connect(a, valueChanged, b, setValueGlobal)
+      printConnections(a)
+      printConnections(b)
 
-        connect(a, valueChanged, b, setValueGlobal)
-        printConnections(a)
-        printConnections(b)
+      echo "\n==== moveToThread"
+      let bp: AgentProxy[Counter] = b.moveToThread(thread)
+      brightPrint "obj bp: ", $bp.unsafeWeakRef()
+      printConnections(a)
+      printConnections(bp)
+      printConnections(bp.proxyTwin[])
+      printConnections(bp.remote[])
+      let
+        subLocalProxy = Subscription(
+          tgt: bp.unsafeWeakRef().asAgent(), slot: setValueGlobal(Counter)
+        )
+        remoteProxy = bp.proxyTwin
+      check a.subcriptionsTable["valueChanged".toSigilName].contains(subLocalProxy)
+      check bp.listening.contains(a.unsafeWeakRef().asAgent())
+      check bp.subcriptionsTable.len() == 0
 
-        echo "\n==== moveToThread"
-        let bp: AgentProxy[Counter] = b.moveToThread(thread)
-        brightPrint "obj bp: ", $bp.unsafeWeakRef()
-        printConnections(a)
-        printConnections(bp)
-        printConnections(bp.proxyTwin[])
-        printConnections(bp.remote[])
-        let
-          subLocalProxy = Subscription(
-            tgt: bp.unsafeWeakRef().asAgent(), slot: setValueGlobal(Counter)
-          )
-          remoteProxy = bp.proxyTwin
-        check a.subcriptionsTable["valueChanged".toSigilName].contains(subLocalProxy)
-        check bp.listening.contains(a.unsafeWeakRef().asAgent())
-        check bp.subcriptionsTable.len() == 0
+      check remoteProxy[].subcriptionsTable.len() == 1
+      check remoteProxy[].listening.len() == 1
+      check bp[].remote[].subcriptionsTable.len() == 1
+      check bp[].remote[].listening.len() == 1
 
-        check remoteProxy[].subcriptionsTable.len() == 1
-        check remoteProxy[].listening.len() == 1
-        check bp[].remote[].subcriptionsTable.len() == 1
-        check bp[].remote[].listening.len() == 1
-
-        emit a.valueChanged(568)
-        os.sleep(1)
-        check globalCounter.load() == 568
-      echo "block done"
-      # printConnections(a)
-
-      # check a is disconnected
-      check not a.hasConnections()
-      emit a.valueChanged(111)
+      emit a.valueChanged(568)
+      os.sleep(1)
       check globalCounter.load() == 568
+    echo "block done"
+    # printConnections(a)
 
-      for i in 1 .. 10:
-        if globalLastInnerCDestroyed.load == 2020:
-          break
-        os.sleep(1)
-      check globalLastInnerCDestroyed.load == 2020
+    # check a is disconnected
+    check not a.hasConnections()
+    emit a.valueChanged(111)
+    check globalCounter.load() == 568
 
-  when true:
-    test "agent connect b->a then moveToThread then destroy proxy":
-      debugPrintQuiet = false
+    for i in 1 .. 10:
+      if globalLastInnerCDestroyed.load == 2020:
+        break
+      os.sleep(1)
+    check globalLastInnerCDestroyed.load == 2020
 
-      let ct = getCurrentSigilThread()
-      var a = SomeAction(debugName: "A")
+  test "agent connect b->a then moveToThread then destroy proxy":
+    debugPrintQuiet = false
+
+    let ct = getCurrentSigilThread()
+    var a = SomeAction(debugName: "A")
+    when defined(sigilsDebug):
+      a.debugName = "A"
+      a.obj.id = 1010
+
+    block:
+      var b = Counter()
       when defined(sigilsDebug):
-        a.debugName = "A"
-        a.obj.id = 1010
+        b.debugName = "B"
+        b.obj.id = 2020
 
-      block:
-        var b = Counter()
-        when defined(sigilsDebug):
-          b.debugName = "B"
-          b.obj.id = 2020
+      brightPrint "thread runner!", &" (th: {getThreadId()})"
+      brightPrint "obj a: ", $a.unsafeWeakRef()
+      brightPrint "obj b: ", $b.unsafeWeakRef()
+      let thread = newSigilThread()
+      when defined(sigilsDebug):
+        thread[].debugName = "thread"
 
-        brightPrint "thread runner!", &" (th: {getThreadId()})"
-        brightPrint "obj a: ", $a.unsafeWeakRef()
-        brightPrint "obj b: ", $b.unsafeWeakRef()
-        let thread = newSigilThread()
-        when defined(sigilsDebug):
-          thread[].debugName = "thread"
+      connect(b, updated, a, completed)
+      printConnections(a)
+      printConnections(b)
+      # printConnections(thread[])
 
-        connect(b, updated, a, completed)
-        printConnections(a)
-        printConnections(b)
-        # printConnections(thread[])
+      echo "\n==== moveToThread"
+      let bp: AgentProxy[Counter] = b.moveToThread(thread)
+      brightPrint "obj bp: ", $bp.unsafeWeakRef()
+      connect(thread[].agent, started, bp.getRemote()[], ticker)
 
-        echo "\n==== moveToThread"
-        let bp: AgentProxy[Counter] = b.moveToThread(thread)
-        brightPrint "obj bp: ", $bp.unsafeWeakRef()
-        connect(thread[].agent, started, bp.getRemote()[], ticker)
+      printConnections(a)
+      printConnections(bp)
+      printConnections(bp.proxyTwin[])
+      printConnections(bp.getRemote()[])
+      # printConnections(thread[])
 
-        printConnections(a)
-        printConnections(bp)
-        printConnections(bp.proxyTwin[])
-        printConnections(bp.getRemote()[])
-        # printConnections(thread[])
+      let
+        subLocalProxy = Subscription(
+          tgt: bp.unsafeWeakRef().asAgent(), slot: setValueGlobal(Counter)
+        )
+        remoteProxy = bp.proxyTwin
+      check a.subcriptionsTable.len() == 0
+      check a.listening.len() == 1
+      check bp.subcriptionsTable.len() == 1
+      check bp.listening.len() == 0
 
-        let
-          subLocalProxy = Subscription(
-            tgt: bp.unsafeWeakRef().asAgent(), slot: setValueGlobal(Counter)
-          )
-          remoteProxy = bp.proxyTwin
-        check a.subcriptionsTable.len() == 0
-        check a.listening.len() == 1
-        check bp.subcriptionsTable.len() == 1
-        check bp.listening.len() == 0
+      check remoteProxy[].subcriptionsTable.len() == 1
+      check remoteProxy[].listening.len() == 1
+      check bp[].remote[].subcriptionsTable.len() == 1
+      check bp[].remote[].listening.len() == 2 # listening to thread
 
-        check remoteProxy[].subcriptionsTable.len() == 1
-        check remoteProxy[].listening.len() == 1
-        check bp[].remote[].subcriptionsTable.len() == 1
-        check bp[].remote[].listening.len() == 2 # listening to thread
+      thread.start()
 
-        thread.start()
+      for i in 1 .. 3:
+        if globalLastTicker.load != 3:
+          os.sleep(1)
+      check globalLastTicker.load == 3
+      ct[].poll()
+      let polled = ct[].pollAll()
+      echo "polled: ", polled
+      check a.value == 3
+      echo "inner done"
 
-        for i in 1 .. 3:
-          if globalLastTicker.load != 3:
-            os.sleep(1)
-        check globalLastTicker.load == 3
-        ct[].poll()
-        let polled = ct[].pollAll()
-        echo "polled: ", polled
-        check a.value == 3
-        echo "inner done"
+    echo "outer done"
 
-      echo "outer done"
+  test "agent connect then moveToThread and run":
+    var a = SomeAction.new()
 
-  when true:
-    test "agent connect then moveToThread and run":
-      var a = SomeAction.new()
-
-      block:
-        echo "sigil object thread connect change"
-        var
-          b = Counter.new()
-          c = SomeAction.new()
-        echo "thread runner!", " (th: ", getThreadId(), ")"
-        echo "obj a: ", a.getSigilId
-        echo "obj b: ", b.getSigilId
-        echo "obj c: ", c.getSigilId
-        let thread = newSigilThread()
-        thread.start()
-        startLocalThread()
-
-        connect(a, valueChanged, b, setValue)
-        connect(b, updated, c, SomeAction.completed())
-
-        let bp: AgentProxy[Counter] = b.moveToThread(thread)
-        echo "obj bp: ", bp.getSigilId()
-
-        emit a.valueChanged(314)
-        let ct = getCurrentSigilThread()
-        ct[].poll()
-        check c.value == 314
-      GC_fullCollect()
-
-  # when true:
-  when true:
-    test "agent move to thread then connect and run":
-      var a = SomeAction.new()
-
+    block:
+      echo "sigil object thread connect change"
+      var
+        b = Counter.new()
+        c = SomeAction.new()
+      echo "thread runner!", " (th: ", getThreadId(), ")"
+      echo "obj a: ", a.getSigilId
+      echo "obj b: ", b.getSigilId
+      echo "obj c: ", c.getSigilId
       let thread = newSigilThread()
       thread.start()
       startLocalThread()
 
-      block:
-        var b = Counter.new()
-        echo "thread runner!", " (th: ", getThreadId(), ")"
-        echo "obj a: ", $a.getSigilId()
-        echo "obj b: ", $b.getSigilId()
+      connect(a, valueChanged, b, setValue)
+      connect(b, updated, c, SomeAction.completed())
 
-        let bp: AgentProxy[Counter] = b.moveToThread(thread)
-        echo "obj bp: ", $bp.getSigilId()
-        # echo "obj bp.remote: ", bp.remote[].unsafeWeakRef
+      let bp: AgentProxy[Counter] = b.moveToThread(thread)
+      echo "obj bp: ", bp.getSigilId()
 
-        threads.connect(a, valueChanged, bp, setValue)
-        threads.connect(bp, updated, a, SomeAction.completed())
+      emit a.valueChanged(314)
+      let ct = getCurrentSigilThread()
+      ct[].poll()
+      check c.value == 314
+    GC_fullCollect()
 
-        emit a.valueChanged(314)
-        # thread.thread.joinThread(500)
-        # os.sleep(500)
-        let ct = getCurrentSigilThread()
-        ct[].poll()
-        check a.value == 314
-        GC_fullCollect()
+  # when true:
+  test "agent move to thread then connect and run":
+    var a = SomeAction.new()
 
-      # check a.subcriptionsTable.len() == 0
-      # check a.listening.len() == 0
-      if a.subcriptionsTable.len() > 0:
-        echo "a.subcriptionsTable: ", a.subcriptionsTable
-      if a.listening.len() > 0:
-        echo "a.listening: ", a.listening
+    let thread = newSigilThread()
+    thread.start()
+    startLocalThread()
+
+    block:
+      var b = Counter.new()
+      echo "thread runner!", " (th: ", getThreadId(), ")"
+      echo "obj a: ", $a.getSigilId()
+      echo "obj b: ", $b.getSigilId()
+
+      let bp: AgentProxy[Counter] = b.moveToThread(thread)
+      echo "obj bp: ", $bp.getSigilId()
+      # echo "obj bp.remote: ", bp.remote[].unsafeWeakRef
+
+      threads.connect(a, valueChanged, bp, setValue)
+      threads.connect(bp, updated, a, SomeAction.completed())
+
+      emit a.valueChanged(314)
+      # thread.thread.joinThread(500)
+      # os.sleep(500)
+      let ct = getCurrentSigilThread()
+      ct[].poll()
+      check a.value == 314
       GC_fullCollect()
 
-  when true:
-    test "sigil object thread runner multiple emits":
+    # check a.subcriptionsTable.len() == 0
+    # check a.listening.len() == 0
+    if a.subcriptionsTable.len() > 0:
+      echo "a.subcriptionsTable: ", a.subcriptionsTable
+    if a.listening.len() > 0:
+      echo "a.listening: ", a.listening
+    GC_fullCollect()
+
+  test "sigil object thread runner multiple emits":
+    block:
+      # echo "thread runner!", " (main thread:", getThreadId(), ")"
+      # echo "obj a: ", a.unsafeWeakRef
+      # echo "obj b: ", b.unsafeWeakRef
+      let thread = newSigilThread()
+      thread.start()
+      startLocalThread()
+      let ct = getCurrentSigilThread()
+
+      var a = SomeAction.new()
+
       block:
+        var b = Counter.new()
+
+        echo "B: ", b.getSigilId()
+        # echo "obj bp: ", bp.unsafeWeakRef
+        # echo "obj bp.remote: ", bp.remote[].unsafeWeakRef
+        connect(a, valueChanged, b, setValue)
+        connect(b, updated, a, SomeAction.completed())
+
+        let bp: AgentProxy[Counter] = b.moveToThread(thread)
+        echo "BP: ", bp.getSigilId()
+
+        emit a.valueChanged(89)
+        emit a.valueChanged(756809)
+
+        ct[].poll()
+        check a.value == 89
+      echo "block done"
+
+      let cnt = ct[].pollAll()
+      check cnt == 0
+      check a.value == 89
+
+      # ct[].poll()
+      # check a.value == 756809
+
+      # ct[].poll()
+      # check a.value == 628
+
+  test "sigil object thread runner multiple emit and listens":
+    block:
+      var a = SomeAction.new()
+
+      block:
+        var b = Counter.new()
+
         # echo "thread runner!", " (main thread:", getThreadId(), ")"
         # echo "obj a: ", a.unsafeWeakRef
         # echo "obj b: ", b.unsafeWeakRef
         let thread = newSigilThread()
         thread.start()
         startLocalThread()
+
+        let bp: AgentProxy[Counter] = b.moveToThread(thread)
+        # echo "obj bp: ", bp.unsafeWeakRef
+        # echo "obj bp.remote: ", bp.remote[].unsafeWeakRef
+        threads.connect(a, valueChanged, bp, setValue)
+        threads.connect(bp, updated, a, SomeAction.completedSum())
+
+        emit a.valueChanged(756809)
+        emit a.valueChanged(628)
+
+        # thread.thread.joinThread(500)
+        # os.sleep(10)
         let ct = getCurrentSigilThread()
-
-        var a = SomeAction.new()
-
-        block:
-          var b = Counter.new()
-
-          echo "B: ", b.getSigilId()
-          # echo "obj bp: ", bp.unsafeWeakRef
-          # echo "obj bp.remote: ", bp.remote[].unsafeWeakRef
-          connect(a, valueChanged, b, setValue)
-          connect(b, updated, a, SomeAction.completed())
-
-          let bp: AgentProxy[Counter] = b.moveToThread(thread)
-          echo "BP: ", bp.getSigilId()
-
-          emit a.valueChanged(89)
-          emit a.valueChanged(756809)
-
-          ct[].poll()
-          check a.value == 89
-        echo "block done"
-
-        let cnt = ct[].pollAll()
-        check cnt == 0
-        check a.value == 89
-
-        # ct[].poll()
-        # check a.value == 756809
-
-        # ct[].poll()
-        # check a.value == 628
-  when true:
-    test "sigil object thread runner multiple emit and listens":
-      block:
-        var a = SomeAction.new()
-
-        block:
-          var b = Counter.new()
-
-          # echo "thread runner!", " (main thread:", getThreadId(), ")"
-          # echo "obj a: ", a.unsafeWeakRef
-          # echo "obj b: ", b.unsafeWeakRef
-          let thread = newSigilThread()
-          thread.start()
-          startLocalThread()
-
-          let bp: AgentProxy[Counter] = b.moveToThread(thread)
-          # echo "obj bp: ", bp.unsafeWeakRef
-          # echo "obj bp.remote: ", bp.remote[].unsafeWeakRef
-          threads.connect(a, valueChanged, bp, setValue)
-          threads.connect(bp, updated, a, SomeAction.completedSum())
-
-          emit a.valueChanged(756809)
-          emit a.valueChanged(628)
-
-          # thread.thread.joinThread(500)
-          # os.sleep(10)
-          let ct = getCurrentSigilThread()
-          var cnt = 0
-          for i in 1 .. 20:
-            cnt.inc(ct[].pollAll())
-            if cnt >= 3:
-              break
-            os.sleep(1)
-          echo "polled: ", cnt
-          check a.value == 756809 + 628
-        GC_fullCollect()
+        var cnt = 0
+        for i in 1 .. 20:
+          cnt.inc(ct[].pollAll())
+          if cnt >= 3:
+            break
+          os.sleep(1)
+        echo "polled: ", cnt
+        check a.value == 756809 + 628
       GC_fullCollect()
+    GC_fullCollect()
 
-  when true:
-    test "sigil object thread runner (loop)":
+  test "sigil object thread runner (loop)":
+    block:
       block:
-        block:
-          startLocalThread()
-          let thread = newSigilThread()
-          thread.start()
-          echo "thread runner!", " (th: ", getThreadId(), ")"
-          let ct = getCurrentSigilThread()
-          let polled = ct[].pollAll()
-          echo "polled: ", polled
-          when defined(extraLoopTests):
-            let m = 10
-            let n = 1_000
-          elif defined(debug):
-            let m = 2
-            let n = 2
-          else:
-            let m = 10
-            let n = 10
+        startLocalThread()
+        let thread = newSigilThread()
+        thread.start()
+        echo "thread runner!", " (th: ", getThreadId(), ")"
+        let ct = getCurrentSigilThread()
+        let polled = ct[].pollAll()
+        echo "polled: ", polled
+        when defined(extraLoopTests):
+          let m = 10
+          let n = 1_000
+        elif defined(debug):
+          let m = 2
+          let n = 2
+        else:
+          let m = 10
+          let n = 10
 
-          for i in 1 .. m:
-            var a = SomeAction.new()
-            for j in 1 .. n:
-              when defined(debug):
+        for i in 1 .. m:
+          var a = SomeAction.new()
+          for j in 1 .. n:
+            when defined(debug):
+              echo "Loop: ", i, ".", j, " (th: ", getThreadId(), ")"
+            else:
+              if j mod 100 == 0:
                 echo "Loop: ", i, ".", j, " (th: ", getThreadId(), ")"
-              else:
-                if j mod 100 == 0:
-                  echo "Loop: ", i, ".", j, " (th: ", getThreadId(), ")"
-              a.value = 0
-              var b = Counter.new()
-              # echo "B: ", b.getSigilId()
+            a.value = 0
+            var b = Counter.new()
+            # echo "B: ", b.getSigilId()
 
-              let bp: AgentProxy[Counter] = b.moveToThread(thread)
-              # echo "BP: ", bp.getSigilId()
+            let bp: AgentProxy[Counter] = b.moveToThread(thread)
+            # echo "BP: ", bp.getSigilId()
 
-              threads.connect(a, valueChanged, bp, setValue)
-              threads.connect(bp, updated, a, SomeAction.completedSum())
+            threads.connect(a, valueChanged, bp, setValue)
+            threads.connect(bp, updated, a, SomeAction.completedSum())
 
-              emit a.valueChanged(314)
-              emit a.valueChanged(271)
+            emit a.valueChanged(314)
+            emit a.valueChanged(271)
 
-              var cnt = 0
-              for i in 1 .. 20:
-                cnt.inc(ct[].pollAll())
-                if cnt >= 3:
-                  break
-                os.sleep(1)
-              ct[].pollAll()
-              check a.value == 314 + 271
-              ct[].pollAll()
-            GC_fullCollect()
-        GC_fullCollect()
+            var cnt = 0
+            for i in 1 .. 20:
+              cnt.inc(ct[].pollAll())
+              if cnt >= 3:
+                break
+              os.sleep(1)
+            ct[].pollAll()
+            check a.value == 314 + 271
+            ct[].pollAll()
+          GC_fullCollect()
       GC_fullCollect()
+    GC_fullCollect()
 
-  when true:
-    test "sigil object one way runner (loop)":
-      let ct = getCurrentSigilThread()
+  test "sigil object one way runner (loop)":
+    let ct = getCurrentSigilThread()
+    block:
       block:
-        block:
-          startLocalThread()
-          let thread = newSigilThread()
-          thread.start()
-          echo "thread runner!", " (th: ", getThreadId(), ")"
-          when defined(debug):
-            let m = 10
-            let n = 100
-          else:
-            let m = 100
-            let n = 1_000
+        startLocalThread()
+        let thread = newSigilThread()
+        thread.start()
+        echo "thread runner!", " (th: ", getThreadId(), ")"
+        when defined(debug):
+          let m = 10
+          let n = 100
+        else:
+          let m = 100
+          let n = 1_000
 
-          for i in 1 .. m:
-            var a = SomeAction.new()
+        for i in 1 .. m:
+          var a = SomeAction.new()
 
-            for j in 1 .. n:
-              if j mod n == 0:
-                echo "Loop: ", i, ".", j, " (th: ", getThreadId(), ")"
-              var b = Counter.new()
+          for j in 1 .. n:
+            if j mod n == 0:
+              echo "Loop: ", i, ".", j, " (th: ", getThreadId(), ")"
+            var b = Counter.new()
 
-              let bp: AgentProxy[Counter] = b.moveToThread(thread)
+            let bp: AgentProxy[Counter] = b.moveToThread(thread)
 
-              ct[].pollAll()
+            ct[].pollAll()
 
-              threads.connect(a, valueChanged, bp, setValue)
+            threads.connect(a, valueChanged, bp, setValue)
 
-              emit a.valueChanged(314)
+            emit a.valueChanged(314)
 
-              # os.sleep(100)
-              # let ct = getCurrentSigilThread()
-              # ct[].poll()
-              # check a.value == 314
-              # ct[].poll()
-              # check a.value == 271
-              ct[].pollAll()
-            GC_fullCollect()
-        GC_fullCollect()
+            # os.sleep(100)
+            # let ct = getCurrentSigilThread()
+            # ct[].poll()
+            # check a.value == 314
+            # ct[].poll()
+            # check a.value == 271
+            ct[].pollAll()
+          GC_fullCollect()
       GC_fullCollect()
+    GC_fullCollect()
