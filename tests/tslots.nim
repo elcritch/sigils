@@ -17,9 +17,7 @@ type
 
 proc `=destroy`*(x: var typeof(CounterWithDestroy()[])) =
   echo "CounterWithDestroy:destroy: ", x.debugName
-  doAssert x.subcriptionsTable.len() == 0
-  doAssert x.listening.len() == 0
-  # `=destroy`(cast[Agent](addr(x)))
+  destroyAgent(x)
 
 proc change*(tp: Originator, val: int) {.signal.}
 
@@ -277,3 +275,6 @@ suite "test destroys":
           addr(Agent(awd)).pointer.repr
         check awd.unsafeWeakRef().toPtr == cast[pointer](awd)
         check awd.unsafeWeakRef().toPtr == addr(awd[]).pointer
+
+      check b.subcriptionsTable.len() == 0
+      check b.listening.len() == 0
