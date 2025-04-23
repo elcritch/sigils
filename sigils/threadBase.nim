@@ -82,7 +82,6 @@ proc repr*(obj: SigilThread): string =
 
 proc `=destroy`*(thread: var SigilThread) =
   # SigilThread
-  echo "SigilThreadImpl:destroy: ", $getThreadId(thread)
   thread.running.store(false, Relaxed)
 
 proc newSigilChan*(): SigilChan =
@@ -91,13 +90,11 @@ proc newSigilChan*(): SigilChan =
 method send*(
     thread: SigilThread, msg: sink ThreadSignal, blocking: BlockingKinds = Blocking
 ) {.base, gcsafe.} =
-  echo "send raw!"
   raise newException(AssertionDefect, "this should never be called!")
 
 method recv*(
     thread: SigilThread, msg: var ThreadSignal, blocking: BlockingKinds
 ): bool {.base, gcsafe.} =
-  echo "recv raw!"
   raise newException(AssertionDefect, "this should never be called!")
 
 method send*(
