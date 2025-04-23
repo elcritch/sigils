@@ -191,7 +191,7 @@ template removeSubscriptions*(
   for tgt in tgts:
     tgt[].unregisterSubscriber(agent)
 
-proc `=destroy`*(agentObj: AgentObj) {.forbids: [DestructorUnsafe].} =
+proc destroyAgent*(agentObj: AgentObj) {.forbids: [DestructorUnsafe].} =
   let agent: WeakRef[Agent] = unsafeWeakRef(cast[Agent](addr(agentObj)))
 
   debugPrint &"destroy: agent: ",
@@ -212,6 +212,9 @@ proc `=destroy`*(agentObj: AgentObj) {.forbids: [DestructorUnsafe].} =
   debugPrint "\tfinished destroy: agent: ", " pt: ", $agent
   when defined(sigilsDebug):
     `=destroy`(agent[].debugName)
+
+proc `=destroy`*(agentObj: AgentObj) {.forbids: [DestructorUnsafe].} =
+  destroyAgent(agentObj)
 
 template toAgentObj*[T: Agent](agent: T): AgentObj =
   Agent(agent)[]

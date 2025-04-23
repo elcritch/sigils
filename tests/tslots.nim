@@ -16,7 +16,10 @@ type
     avg: int
 
 proc `=destroy`*(x: var typeof(CounterWithDestroy()[])) =
-  echo "CounterWithDestroy:destroy: "
+  echo "CounterWithDestroy:destroy: ", x.debugName
+  doAssert x.subcriptionsTable.len() == 0
+  doAssert x.listening.len() == 0
+  # `=destroy`(cast[Agent](addr(x)))
 
 proc change*(tp: Originator, val: int) {.signal.}
 
@@ -76,7 +79,6 @@ when isMainModule:
         c {.used.} = Counter()
         d {.used.} = Counter()
         o {.used.} = Originator()
-        awd {.used.} = CounterWithDestroy()
       
       when defined(sigilsDebug):
         a.debugName = "A"
@@ -84,7 +86,6 @@ when isMainModule:
         c.debugName = "C"
         d.debugName = "D"
         o.debugName = "O"
-        awd.debugName = "AWD"
 
     teardown:
       GC_fullCollect()
@@ -249,26 +250,30 @@ when isMainModule:
       # printConnections(a)
       # printConnections(c)
 
+suite "test destroys":
     test "test multi connect disconnect with destroyed":
-      echo "done"
-      connect(awd, valueChanged, b, setValue)
-      connect(awd, valueChanged, c, Counter.setValue)
+      var
+        b = Counter()
 
-      check a.value == 0
-      check b.value == 0
-      check c.value == 0
+      block:
+        var
+          awd {.used.} = CounterWithDestroy()
 
-      awd.setValue(42)
-      check awd.value == 42
-      check b.value == 42
-      check c.value == 42
-      echo "TEST REFS: ",
-        " aref: ",
-        cast[pointer](awd).repr,
-        " 0x",
-        addr(awd[]).pointer.repr,
-        " agent: 0x",
-        addr(Agent(awd)).pointer.repr
-      check awd.unsafeWeakRef().toPtr == cast[pointer](awd)
-      check awd.unsafeWeakRef().toPtr == addr(awd[]).pointer
+        awd.debugName = "AWD"
+        b.debugName = "B"
+        connect(awd, valueChanged, b, setValue)
 
+        check b.value == 0
+
+        awd.setValue(42)
+        check awd.value == 42
+        check b.value == 42
+        echo "TEST REFS: ",
+          " aref: ",
+          cast[pointer](awd).repr,
+          " 0x",
+          addr(awd[]).pointer.repr,
+          " agent: 0x",
+          addr(Agent(awd)).pointer.repr
+        check awd.unsafeWeakRef().toPtr == cast[pointer](awd)
+        check awd.unsafeWeakRef().toPtr == addr(awd[]).pointer
