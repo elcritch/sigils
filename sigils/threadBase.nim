@@ -4,6 +4,7 @@ import std/options
 import std/locks
 import threading/smartptrs
 import threading/channels
+import threading/atomics
 
 import isolateutils
 import agents
@@ -24,6 +25,7 @@ type
     Move
     Trigger
     Deref
+    Exit
 
   ThreadSignal* = object
     case kind*: ThreadSignalKind
@@ -37,6 +39,8 @@ type
       discard
     of Deref:
       deref*: WeakRef[Agent]
+    of Exit:
+      discard
 
   SigilChan* = Chan[ThreadSignal]
 
@@ -54,6 +58,7 @@ type
     agent*: ThreadAgent
     when defined(sigilsDebug):
       debugName*: string
+    running*: Atomic[bool]
 
   SigilThreadImpl* = object of SigilThread
     inputs*: SigilChan
@@ -114,6 +119,7 @@ proc newSigilThread*(): ptr SigilThreadImpl =
   result[].inputs = newSigilChan()
   result[].signaledLock.initLock()
   result[].id = -1
+  result[].running.store(true, Relaxed)
 
 proc toSigilThread*[R: SigilThread](t: ptr R): ptr SigilThread =
   cast[ptr SigilThread](t)
@@ -141,6 +147,9 @@ proc gcCollectReferences(thread: var SigilThread) =
 proc exec*(thread: var SigilThread, sig: ThreadSignal) =
   debugPrint "\nthread got request: ", $sig.kind
   case sig.kind
+  of Exit:
+    debugPrint "\t threadExec:exit: ", $getThreadId()
+    thread.running.store(false, Relaxed)
   of Move:
     debugPrint "\t threadExec:move: ",
       $sig.item.unsafeWeakRef(), " refcount: ", $sig.item.unsafeGcCount()
@@ -205,7 +214,7 @@ proc pollAll*(thread: var SigilThread): int {.discardable.} =
 
 proc runForever*[R: SigilThread](thread: var R) =
   emit thread.agent.started()
-  while true:
+  while thread.running.load(Relaxed):
     thread.poll()
 
 proc runThread*(thread: ptr SigilThread) {.thread.} =
@@ -220,3 +229,12 @@ proc runThread*(thread: ptr SigilThread) {.thread.} =
 
 proc start*(thread: ptr SigilThreadImpl) =
   createThread(thread[].thr, runThread, thread)
+
+proc stop*(thread: ptr SigilThreadImpl, immediate: bool = false) =
+  if immediate:
+    thread[].running.store(false, Relaxed)
+  else:
+    thread[].send(ThreadSignal(kind: Exit))
+
+proc join*(thread: ptr SigilThreadImpl) =
+  thread[].thr.joinThread()

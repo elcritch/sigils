@@ -156,6 +156,10 @@ suite "threaded agent slots":
         threads.connect(a, valueChanged, bp, setValue)
         threads.connect(a, valueChanged, bp, Counter.setValue())
         check not compiles(connect(a, valueChanged, bp, someAction))
+
+        thread.stop()
+        thread.join()
+
       GC_fullCollect()
 
   when true:
