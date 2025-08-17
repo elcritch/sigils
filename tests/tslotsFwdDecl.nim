@@ -29,3 +29,41 @@ suite "forward-declared slots":
     check a.value == 0
     emit a.valueChanged(7)
     check a.value == 7
+
+import sigils
+
+# framework:
+type
+  Awsm* = ref object of Agent
+
+# application:
+type
+  App = ref object of Awsm
+    foo: int
+
+proc appEvent(self: Awsm) {.signal.}
+
+proc handling2(self: App) {.slot.}
+
+proc handling1(self: App) {.slot.} =
+  self.foo = 1
+  disconnect(self, appEvent, self)
+  connect(self, appEvent, self, handling2)
+
+proc handling2(self: App) {.slot.} =
+  self.foo = 2
+  disconnect(self, appEvent, self)
+  connect(self, appEvent, self, handling1)
+
+when isMainModule:
+  
+  let a = App()
+  connect(a, appEvent, a, handling1)
+  
+  emit a.appEvent()
+  echo "event1: ",a.foo
+  emit a.appEvent()
+  echo "event2: ",a.foo
+  
+  emit a.appEvent()
+  echo "event3: ",a.foo
