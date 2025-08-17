@@ -4,4 +4,4 @@
 - `v0.10.1` - fix Agent destruction with circular subscriptions
 - `v0.10.0` - fix disconnect errors
 - `v0.9.7` - add `disconnect` for slots (only for non-threaded agents currently)
-- `next` - Nim 2.2 compatibility for closures: update `connectTo` to handle `rawEnv`/`rawProc` changes and fix `tclosures` test.
+- `v0.12.0` - support forward-declared slots: allow `{.slot.}` on body-less proc declarations (pre-declare slot types) by skipping wrapper generation for forward decls; adds `tests/tslotsFwdDecl.nim`. Also includes Nim 2.2 closure compatibility note.
