@@ -192,9 +192,9 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
       rmCall.add param[0]
 
     # If the original proc has a body, emit a full definition.
-    # If it's a forward declaration (no body), only emit a matching
-    # declaration so later implementations can link while still
-    # allowing wrappers to be generated here.
+    # If it's a forward declaration (no body), also emit a matching
+    # declaration so wrappers can reference it and later
+    # implementations can define it.
     if body.kind == nnkStmtList:
       let rm = quote:
         proc `rpcMethod`() {.nimcall.} =
@@ -204,50 +204,52 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
         rm[3].add param
       result.add rm
     else:
-      # Forward declaration: do not emit a duplicate proc signature.
-      # The compiler already records the declaration from the pragma site.
-      discard
+      # Forward declaration: emit a prototype so the symbol exists
+      # and wrappers can call it before a later implementation.
+      let fwd = quote:
+        proc `rpcMethod`() {.nimcall.}
 
-    # Only generate wrapper procs when a body is present.
-    # For forward declarations, we skip wrappers to avoid
-    # conflicting with the compiler's forward-declared symbol.
-    if body.kind == nnkStmtList:
-      var rpcType = paramTypeName.copyNimTree()
-      if isGeneric:
-        rpcType = nnkBracketExpr.newTree(paramTypeName)
-        for arg in genericParams:
-          rpcType.add arg
+      for param in parameters:
+        fwd[3].add param
+      result.add fwd
 
-      # Create the rpc wrapper procs
-      let objId = ident "obj"
-      var tupTyp = nnkTupleConstr.newTree()
-      for pt in paramTypes[0][^1]:
-        tupTyp.add pt[1]
-      if tupTyp.len() == 0:
-        tupTyp = nnkTupleTy.newTree()
-      let mcall = nnkCall.newTree(rpcMethod)
-      mcall.add(objId)
-      for param in parameters[1 ..^ 1]:
-        mcall.add param[0]
+    var rpcType = paramTypeName.copyNimTree()
+    if isGeneric:
+      rpcType = nnkBracketExpr.newTree(paramTypeName)
+      for arg in genericParams:
+        rpcType.add arg
 
-      let agentSlotImpl = quote:
-        proc slot(context: Agent, params: SigilParams) {.nimcall.} =
-          if context == nil:
-            raise newException(ValueError, "bad value")
-          let `objId` = `contextType`(context)
-          if `objId` == nil:
-            raise newException(ConversionError, "bad cast")
-          when `tupTyp` isnot tuple[]:
-            var `paramsIdent`: `tupTyp`
-            rpcUnpack(`paramsIdent`, params)
-          `paramSetups`
-          `mcall`
+    # Create the rpc wrapper procs
+    let objId = ident "obj"
+    var tupTyp = nnkTupleConstr.newTree()
+    for pt in paramTypes[0][^1]:
+      tupTyp.add pt[1]
+    if tupTyp.len() == 0:
+      tupTyp = nnkTupleTy.newTree()
+    let mcall = nnkCall.newTree(rpcMethod)
+    mcall.add(objId)
+    for param in parameters[1 ..^ 1]:
+      mcall.add param[0]
 
-      let procTyp = quote:
-        proc() {.nimcall.}
-      procTyp.params = params.copyNimTree()
+    let agentSlotImpl = quote:
+      proc slot(context: Agent, params: SigilParams) {.nimcall.} =
+        if context == nil:
+          raise newException(ValueError, "bad value")
+        let `objId` = `contextType`(context)
+        if `objId` == nil:
+          raise newException(ConversionError, "bad cast")
+        when `tupTyp` isnot tuple[]:
+          var `paramsIdent`: `tupTyp`
+          rpcUnpack(`paramsIdent`, params)
+        `paramSetups`
+        `mcall`
 
-      result.add quote do:
+    let procTyp = quote:
+      proc() {.nimcall.}
+    procTyp.params = params.copyNimTree()
+
+    result.add quote do:
+      when not compiles(`rpcMethod`(`contextType`)):
         proc `rpcMethod`(
             `kd`: typedesc[SignalTypes], `tp`: typedesc[`contextType`]
         ): `signalTyp` =
@@ -257,7 +259,7 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
           `agentSlotImpl`
           slot
 
-      result.updateProcsSig(isPublic, genericParams, procLineInfo)
+    result.updateProcsSig(isPublic, genericParams, procLineInfo)
   elif isSignal:
     var construct = nnkTupleConstr.newTree()
     for param in parameters[1 ..^ 1]:
