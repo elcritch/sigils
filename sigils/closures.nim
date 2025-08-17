@@ -93,8 +93,16 @@ template connectTo*(a: Agent, signal: typed, blk: typed): ClosureAgent =
   closureSlotImpl(typeof(fnSig), fnInst)
 
   let
-    e = fnInst.rawEnv()
-    p = fnInst.rawProc()
+    e =
+      when compiles(rawEnv(fnInst)):
+        fnInst.rawEnv()
+      else:
+        pointer(nil)
+    p =
+      when compiles(rawProc(fnInst)):
+        fnInst.rawProc()
+      else:
+        cast[pointer](fnInst)
   let agent = ClosureAgent[typeof(signalType)](rawEnv: e, rawProc: p)
   a.addSubscription(signalName(signal), agent, fnSlot)
 
