@@ -1,7 +1,7 @@
-- `v0.11.2` - change Sigil floats to use `near`
-- `v0.11.1` - change Sigil impl to use internalSigil when using `{}`
-- `v0.11.0` - added `Sigil[T]` reactive data type built ontop signals
-- `v0.10.1` - fix Agent destruction with circular subscriptions
-- `v0.10.0` - fix disconnect errors
 - `v0.9.7` - add `disconnect` for slots (only for non-threaded agents currently)
+- `v0.10.0` - fix disconnect errors
+- `v0.10.1` - fix Agent destruction with circular subscriptions
+- `v0.11.0` - added `Sigil[T]` reactive data type built ontop signals
+- `v0.11.1` - change Sigil impl to use internalSigil when using `{}`
+- `v0.11.2` - change Sigil floats to use `near`
 - `v0.12.0` - support forward-declared slots: allow `{.slot.}` on body-less proc declarations (pre-declare slot types) by skipping wrapper generation for forward decls; adds `tests/tslotsFwdDecl.nim`. Also includes Nim 2.2 closure compatibility note.
