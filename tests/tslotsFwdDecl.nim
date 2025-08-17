@@ -45,15 +45,17 @@ proc appEvent(self: Awsm) {.signal.}
 
 proc handling2(self: App) {.slot.}
 
+template replace(self: App, event: typed, handler: typed) =
+  disconnect(self, event, self)
+  connect(self, event, self, handler)
+
 proc handling1(self: App) {.slot.} =
   self.foo = 1
-  disconnect(self, appEvent, self)
-  connect(self, appEvent, self, handling2)
+  replace(self, appEvent, handling2)
 
 proc handling2(self: App) {.slot.} =
   self.foo = 2
-  disconnect(self, appEvent, self)
-  connect(self, appEvent, self, handling1)
+  replace(self, appEvent, handling1)
 
 when isMainModule:
   
