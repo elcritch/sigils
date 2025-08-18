@@ -213,12 +213,12 @@ proc hash*(a: Agent): Hash =
 method hasConnections*(self: Agent): bool {.base, gcsafe, raises: [].} =
   self.subcriptions.len() != 0 or self.listening.len() != 0
 
-iterator getSubscriptions*(obj: Agent, sig: SigilName): Subscription =
+iterator getSubscriptions*(obj: Agent, sig: SigilName): var Subscription =
   for item in obj.subcriptions.mitems():
     if item.signal == sig:
       yield item.subscription
 
-iterator getSubscriptions*(obj: WeakRef[Agent], sig: SigilName): Subscription =
+iterator getSubscriptions*(obj: WeakRef[Agent], sig: SigilName): var Subscription =
   for item in obj[].subcriptions.mitems():
     if item.signal == sig:
       yield item.subscription

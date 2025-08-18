@@ -195,7 +195,9 @@ suite "threaded agent slots":
           tgt: bp.unsafeWeakRef().asAgent(), slot: setValueGlobal(Counter)
         )
         remoteProxy = bp.proxyTwin
-      check a.getSubscriptions(sigName"valueChanged").toSeq()[0] == subLocalProxy
+        subs = a.getSubscriptions(sigName"valueChanged").toSeq()
+      doAssert subs.len() >= 1
+      check subs[0] == subLocalProxy
       check bp.listening.contains(a.unsafeWeakRef().asAgent())
       check bp.subcriptions.len() == 0
 

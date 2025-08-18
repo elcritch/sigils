@@ -152,7 +152,7 @@ iterator findSubscribedTo(
 ): tuple[signal: SigilName, subscription: Subscription] =
   for item in other[].subcriptions.mitems():
     if item.subscription.tgt == agent:
-      yield item
+      yield (item.signal, Subscription(tgt: other, slot: item.subscription.slot))
 
 
 proc moveToThread*[T: Agent, R: SigilThread](
@@ -196,7 +196,7 @@ proc moveToThread*[T: Agent, R: SigilThread](
       oldListeningSubs.add(item)
 
   agent.unsubscribeFrom(agent[].listening)
-  agent.removeSubscriptions(oldSubscribers)
+  agent.removeSubscriptions(agent[].subcriptions)
   agent[].listening.clear()
   agent[].subcriptions.setLen(0)
 
