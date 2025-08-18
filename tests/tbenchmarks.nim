@@ -8,6 +8,20 @@ import sigils/signals
 import sigils/slots
 import sigils/reactive
 
+#[
+Original benchmarks results:
+[Suite] benchmarks
+[bench] emit->slot: n=20000, time=106.00 ms, rate=188679. ops/s, time=106989 us
+  [OK] emit->slot throughput (tight loop)
+[bench] slot direct call: n=20000, time=218.00 ms, rate=91743119. ops/s, time=218 us
+  [OK] slot direct call (tight loop)
+[bench] reactive (lazy): n=20000, time=218.00 ms, rate=91743. iters/s
+  [OK] reactive computed (lazy) update+read
+[bench] reactive (eager): n=20000, time=181.00 ms, rate=110497. iters/s
+  [OK] reactive computedNow eager updates
+
+]#
+
 # Simple Agents for benchmarking
 type
   Emitter* = ref object of Agent
