@@ -49,25 +49,25 @@ suite "agent weak refs":
       check y.value == 0
       emit x.valueChanged(137)
 
-      echo "x:subcriptionsTable: ", x.subcriptionsTable
+      echo "x:subcriptions: ", x.subcriptions
       # echo "x:subscribed: ", x.subscribed
-      echo "y:subcriptionsTable: ", y.subcriptionsTable
+      echo "y:subcriptions: ", y.subcriptions
       # echo "y:subscribed: ", y.subscribed
 
-      check y.subcriptionsTable.len() == 0
+      check y.subcriptions.len() == 0
       check y.listening.len() == 1
 
-      check x.subcriptionsTable["valueChanged".toSigilName].len() == 1
+      check x.getSubscriptions(sigName"valueChanged").toSeq().len() == 1
       check x.listening.len() == 0
 
       echo "block done"
 
     echo "finishing outer block "
     # check x.listening.len() == 0
-    echo "x:subcriptionsTable: ", x.subcriptionsTable
+    echo "x:subcriptions: ", x.subcriptions
     # echo "x:subscribed: ", x.subscribed
     # check x.subcriptionsTable["valueChanged"].len() == 0
-    check x.subcriptionsTable.len() == 0
+    check x.subcriptions.len() == 0
     check x.listening.len() == 0
 
     # check a.value == 0
@@ -87,25 +87,25 @@ suite "agent weak refs":
       check y.value == 0
       emit x.valueChanged(137)
 
-      echo "x:subcriptionsTable: ", x.subcriptionsTable
+      echo "x:subcriptions: ", x.subcriptions
       # echo "x:subscribed: ", x.subscribed
-      echo "y:subcriptionsTable: ", y.subcriptionsTable
+      echo "y:subcriptions: ", y.subcriptions
       # echo "y:subscribed: ", y.subscribed
 
-      check y.subcriptionsTable.len() == 0
+      check y.subcriptions.len() == 0
       check y.listening.len() == 1
 
-      check x.subcriptionsTable["valueChanged".toSigilName].len() == 1
+      check x.getSubscriptions(sigName"valueChanged").toSeq().len() == 1
       check x.listening.len() == 0
 
       echo "block done"
 
     echo "finishing outer block "
     # check x.listening.len() == 0
-    echo "y:subcriptionsTable: ", y.subcriptionsTable
+    echo "y:subcriptions: ", y.subcriptions
     # echo "y:subscribed: ", y.listening.mapIt(it)
     # check x.subcriptionsTable["valueChanged"].len() == 0
-    check y.subcriptionsTable.len() == 0
+    check y.subcriptions.len() == 0
     check y.listening.len() == 0
 
     # check a.value == 0
@@ -156,7 +156,7 @@ suite "agent weak refs":
 
     echo "done with y"
     echo "X::count: ", x.unsafeGcCount()
-    check x.subcriptionsTable.len() == 0
+    check x.subcriptions.len() == 0
     check x.listening.len() == 0
     check x.unsafeGcCount() == 1
 

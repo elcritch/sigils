@@ -139,4 +139,7 @@ proc toSigilName*(name: static string): SigilName =
 proc toSigilName*(name: string): SigilName =
   return toStackString(name, sigilsMaxSignalLength)
 
+template sigName*(name: static string): SigilName =
+  toSigilName(name)
+
 const AnySigilName* = toSigilName(":any:")

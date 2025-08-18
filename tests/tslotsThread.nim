@@ -69,7 +69,7 @@ proc ticker*(self: Counter) {.slot.} =
   for i in 3 .. 3:
     echo "tick! i:", i, " ", self.unsafeWeakRef(), " (th: ", getThreadId(), ")"
     globalLastTicker.store i
-    # printConnections(self)
+    printConnections(self)
     emit self.updated(i)
 
 proc completed*(self: SomeAction, final: int) {.slot.} =
@@ -195,13 +195,15 @@ suite "threaded agent slots":
           tgt: bp.unsafeWeakRef().asAgent(), slot: setValueGlobal(Counter)
         )
         remoteProxy = bp.proxyTwin
-      check a.subcriptionsTable["valueChanged".toSigilName].contains(subLocalProxy)
+        subs = a.getSubscriptions(sigName"valueChanged").toSeq()
+      doAssert subs.len() >= 1
+      check subs[0] == subLocalProxy
       check bp.listening.contains(a.unsafeWeakRef().asAgent())
-      check bp.subcriptionsTable.len() == 0
+      check bp.subcriptions.len() == 0
 
-      check remoteProxy[].subcriptionsTable.len() == 1
+      check remoteProxy[].subcriptions.len() == 1
       check remoteProxy[].listening.len() == 1
-      check bp[].remote[].subcriptionsTable.len() == 1
+      check bp[].remote[].subcriptions.len() == 1
       check bp[].remote[].listening.len() == 1
 
       emit a.valueChanged(568)
@@ -257,6 +259,7 @@ suite "threaded agent slots":
       printConnections(bp)
       printConnections(bp.proxyTwin[])
       printConnections(bp.getRemote()[])
+
       # printConnections(thread[])
 
       let
@@ -264,14 +267,14 @@ suite "threaded agent slots":
           tgt: bp.unsafeWeakRef().asAgent(), slot: setValueGlobal(Counter)
         )
         remoteProxy = bp.proxyTwin
-      check a.subcriptionsTable.len() == 0
+      check a.subcriptions.len() == 0
       check a.listening.len() == 1
-      check bp.subcriptionsTable.len() == 1
+      check bp.subcriptions.len() == 1
       check bp.listening.len() == 0
 
-      check remoteProxy[].subcriptionsTable.len() == 1
+      check remoteProxy[].subcriptions.len() == 1
       check remoteProxy[].listening.len() == 1
-      check bp[].remote[].subcriptionsTable.len() == 1
+      check bp[].remote[].subcriptions.len() == 1
       check bp[].remote[].listening.len() == 2 # listening to thread
 
       thread.start()
@@ -347,8 +350,8 @@ suite "threaded agent slots":
 
     # check a.subcriptionsTable.len() == 0
     # check a.listening.len() == 0
-    if a.subcriptionsTable.len() > 0:
-      echo "a.subcriptionsTable: ", a.subcriptionsTable
+    if a.subcriptions.len() > 0:
+      echo "a.subcriptions: ", a.subcriptions
     if a.listening.len() > 0:
       echo "a.listening: ", a.listening
     GC_fullCollect()

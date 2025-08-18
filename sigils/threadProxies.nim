@@ -44,7 +44,7 @@ proc `=destroy`*(obj: var typeof(AgentProxyShared()[])) =
       thr = obj.remoteThread
       proxyTwin = obj.proxyTwin.toKind(Agent)
     if not proxyTwin.isNil:
-      debugPrint "send deref: ", $proxyTwin, " thr: ", thr[].id
+      debugPrint "send deref: ", $proxyTwin, " thr: ", getThreadId()
       thr[].send(ThreadSignal(kind: Deref, deref: proxyTwin))
   except Exception:
     echo "error sending deref message for ", $obj.proxyTwin
@@ -133,19 +133,13 @@ method unregisterSubscriber*(
     debugPrint "   unregisterSubscriber:proxy:ready: self:id: ", $self.unsafeWeakRef()
     unregisterSubscriberImpl(self, listener)
 
-proc findSubscribedToSignals(
-    listening: HashSet[WeakRef[Agent]], agent: WeakRef[Agent]
-): Table[SigilName, OrderedSet[Subscription]] =
-  ## remove myself from agents I'm subscribed to
-  for obj in listening:
-    debugPrint "finding subscribed: ", $obj
-    var toAdd = initOrderedSet[Subscription]()
-    for signal, subscriberPairs in obj[].subcriptionsTable.mpairs():
-      for item in subscriberPairs:
-        if item.tgt == agent:
-          toAdd.incl(Subscription(tgt: obj, slot: item.slot))
-          # echo "agentRemoved: ", "tgt: ", xid.toPtr.repr, " id: ", agent.debugId, " obj: ", obj[].debugId, " name: ", signal
-      result[signal] = move toAdd
+iterator findSubscribedTo(
+    other: WeakRef[Agent], agent: WeakRef[Agent]
+): tuple[signal: SigilName, subscription: Subscription] =
+  for item in other[].subcriptions.mitems():
+    if item.subscription.tgt == agent:
+      yield (item.signal, Subscription(tgt: other, slot: item.subscription.slot))
+
 
 proc moveToThread*[T: Agent, R: SigilThread](
     agentTy: var T, thread: ptr R
@@ -180,29 +174,30 @@ proc moveToThread*[T: Agent, R: SigilThread](
 
   # handle things subscribed to `agent`, ie the inverse
   var
-    oldSubscribers = agent[].subcriptionsTable
-    oldListeningSubs = agent[].listening.findSubscribedToSignals(agent[].unsafeWeakRef)
+    oldSubscribers = agent[].subcriptions
+    oldListeningSubs: seq[tuple[signal: SigilName, subscription: Subscription]]
+
+  for listener in agent[].listening:
+    for item in listener.findSubscribedTo(agent[].unsafeWeakRef()):
+      oldListeningSubs.add(item)
 
   agent.unsubscribeFrom(agent[].listening)
-  agent.removeSubscriptions(agent[].subcriptionsTable)
+  agent.removeSubscriptions(agent[].subcriptions)
   agent[].listening.clear()
-  agent[].subcriptionsTable.clear()
+  agent[].subcriptions.setLen(0)
 
   # update subscriptions agent is listening to use the local proxy to send events
   var listenSubs = false
-  for signal, subscriptions in oldListeningSubs.mpairs():
-    for subscription in subscriptions:
-      subscription.tgt[].addSubscription(signal, localProxy, subscription.slot)
-      listenSubs = true
+  for item in oldListeningSubs:
+    item.subscription.tgt[].addSubscription(item.signal, localProxy, item.subscription.slot)
+    listenSubs = true
   remoteProxy.addSubscription(AnySigilName, agentTy, localSlot)
 
   # update my subcriptionsTable so agent uses the remote proxy to send events back
   var hasSubs = false
-  for signal, subscriberPairs in oldSubscribers.mpairs():
-    for sub in subscriberPairs:
-      # echo "signal: ", signal, " subscriber: ", tgt.getSigilId
-      localProxy.addSubscription(signal, sub.tgt[], sub.slot)
-      hasSubs = true
+  for item in oldSubscribers:
+    localProxy.addSubscription(item.signal, item.subscription.tgt[], item.subscription.slot)
+    hasSubs = true
   agent[].addSubscription(AnySigilName, remoteProxy, remoteSlot)
 
   thread[].send(ThreadSignal(kind: Move, item: move agentTy))

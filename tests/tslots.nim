@@ -191,17 +191,20 @@ when isMainModule:
       connect(a, valueChanged, b, setValue)
 
       check c.listening.len() == 1
-      check a.subcriptionsTable.len() == 2
-      check a.subcriptionsTable["doTick".toSigilName].len() == 2
+      check a.subcriptions.len() == 3
+      check a.getSubscriptions(sigName"doTick").toSeq().len() == 2
 
+      printConnections(a)
+      printConnections(c)
       disconnect(a, doTick, c, someTick)
 
       emit a.valueChanged(137)
+      echo "afert disconnect"
       printConnections(a)
       printConnections(c)
       check a.value == 0
-      check a.subcriptionsTable.len() == 2
-      check a.subcriptionsTable["doTick".toSigilName].len() == 1
+      check a.subcriptions.len() == 2
+      check a.getSubscriptions(sigName"doTick").toSeq().len() == 1
       check b.value == 137
       check c.listening.len() == 1
 
@@ -221,8 +224,8 @@ when isMainModule:
       printConnections(c)
       emit a.valueChanged(137)
       check a.value == 0
-      check a.subcriptionsTable.len() == 1
-      # check a.subcriptionsTable["doTick".toSigilName].len() == 0
+      check a.subcriptions.len() == 1
+      check a.getSubscriptions(sigName"doTick").toSeq().len() == 0 # maybe?
       check b.value == 137
       check c.listening.len() == 0
 
@@ -276,5 +279,5 @@ suite "test destroys":
         check awd.unsafeWeakRef().toPtr == cast[pointer](awd)
         check awd.unsafeWeakRef().toPtr == addr(awd[]).pointer
 
-      check b.subcriptionsTable.len() == 0
+      check b.subcriptions.len() == 0
       check b.listening.len() == 0

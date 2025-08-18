@@ -11,6 +11,10 @@ method callMethod*(
     ctx: Agent, req: SigilRequest, slot: AgentProc
 ): SigilResponse {.base, gcsafe, effectsOf: slot.} =
   ## Route's an rpc request. 
+  debugPrint "callMethod: normal: ",
+    $ctx.unsafeWeakRef().asAgent(),
+    " slot: ",
+    repr(slot)
 
   if slot.isNil:
     let msg = $req.procName & " is not a registered RPC method."
@@ -28,16 +32,9 @@ type AgentSlotError* = object of CatchableError
 
 proc callSlots*(obj: Agent | WeakRef[Agent], req: SigilRequest) {.gcsafe.} =
   {.cast(gcsafe).}:
-    let subscriptions =
-      when typeof(obj) is Agent:
-        obj.getSubscriptions(req.procName)
-      elif typeof(obj) is WeakRef[Agent]:
-        obj[].getSubscriptions(req.procName)
-      else:
-        {.error: "bad type".}
     # echo "call slots:req: ", req.repr
     # echo "call slots:all: ", req.procName, " ", " subscriptions: ", subscriptions
-    for sub in subscriptions.items():
+    for sub in obj.getSubscriptions(req.procName):
       # echo ""
       # echo "call listener:tgt: ", sub.tgt, " ", req.procName
       # echo "call listener:slot: ", repr sub.slot
