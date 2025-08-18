@@ -26,8 +26,6 @@ proc setValue*(self: Counter, value: int) {.slot.} =
   echo "setValue! ", value, " id: ", self.getSigilId, " (th:", getThreadId(), ")"
   if self.value != value:
     self.value = value
-  echo "setValue:subcriptionsTable: ",
-    self.subcriptionsTable.pairs().toSeq.mapIt(it[1].mapIt(it.tgt.getSigilId))
   echo "setValue:listening: ", self.listening.toSeq.mapIt(it.getSigilId)
   emit self.updated(self.value)
 

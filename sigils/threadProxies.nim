@@ -192,7 +192,7 @@ proc moveToThread*[T: Agent, R: SigilThread](
     oldListeningSubs: seq[tuple[signal: SigilName, subscription: Subscription]]
 
   for listener in agent[].listening:
-    for item in listener.findSubscribedTo(agent[].unsafeWeakRef):
+    for item in listener.findSubscribedTo(agent[].unsafeWeakRef()):
       oldListeningSubs.add(item)
 
   agent.unsubscribeFrom(agent[].listening)
