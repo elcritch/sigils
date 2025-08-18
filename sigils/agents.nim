@@ -185,7 +185,7 @@ proc destroyAgent*(agentObj: AgentObj) {.forbids: [DestructorUnsafe].} =
   debugPrint &"destroy: agent: ",
     &" pt: {$agent}",
     &" freedByThread: {agentObj.freedByThread}",
-    &" subs: {agent[].subcriptionsTable.len()}",
+    &" subs: {agent[].subcriptions.len()}",
     &" subTo: {agent[].listening.len()}"
   # debugPrint "destroy agent: ", getStackTrace().replace("\n", "\n\t")
   when defined(debug) or defined(sigilsDebug):
