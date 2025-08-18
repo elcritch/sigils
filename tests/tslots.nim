@@ -191,8 +191,8 @@ when isMainModule:
       connect(a, valueChanged, b, setValue)
 
       check c.listening.len() == 1
-      check a.subcriptionsTable.len() == 2
-      check a.subcriptionsTable["doTick".toSigilName].len() == 2
+      check a.subcriptions.len() == 2
+      check a.subcriptions.getSubscriptions(sigName"doTick").toSeq().len() == 2
 
       disconnect(a, doTick, c, someTick)
 

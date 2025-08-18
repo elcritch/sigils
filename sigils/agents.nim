@@ -214,15 +214,14 @@ method hasConnections*(self: Agent): bool {.base, gcsafe, raises: [].} =
   self.subcriptions.len() != 0 or self.listening.len() != 0
 
 iterator getSubscriptions*(obj: Agent, sig: SigilName): Subscription =
-  # echo "FIND:subcriptionsTable: ", obj.subcriptionsTable
-  for subscription in obj.subcriptions:
-    if subscription.signal == sig:
-      yield subscription.subscription
+  for idx in 0 ..< obj.subcriptions.len():
+    if obj.subcriptions[idx].signal == sig:
+      yield obj.subcriptions[idx].subscription
 
 iterator getSubscriptions*(obj: WeakRef[Agent], sig: SigilName): Subscription =
-  for subscription in obj[].subcriptions:
-    if subscription.signal == sig:
-      yield subscription.subscription
+  for idx in 0 ..< obj[].subcriptions.len():
+    if obj[].subcriptions[idx].signal == sig:
+      yield obj[].subcriptions[idx].subscription
 
 proc asAgent*[T: Agent](obj: WeakRef[T]): WeakRef[Agent] =
   result = WeakRef[Agent](pt: obj.pt)
@@ -236,13 +235,18 @@ proc hasSubscription*(obj: Agent, sig: SigilName): bool =
       return true
 
 proc hasSubscription*(obj: Agent, sig: SigilName, tgt: Agent | WeakRef[Agent]): bool =
+  let tgt = tgt.unsafeWeakRef().toKind(Agent)
   for idx in 0 ..< obj.subcriptions.len():
-    if obj.subcriptions[idx].signal == sig and obj.subcriptions[idx].subscription.tgt == tgt:
+    if obj.subcriptions[idx].signal == sig and
+        obj.subcriptions[idx].subscription.tgt == tgt:
       return true
 
 proc hasSubscription*(obj: Agent, sig: SigilName, tgt: Agent | WeakRef[Agent], slot: AgentProc): bool =
+  let tgt = tgt.unsafeWeakRef().toKind(Agent)
   for idx in 0 ..< obj.subcriptions.len():
-    if obj.subcriptions[idx].signal == sig and obj.subcriptions[idx].subscription.tgt == tgt and obj.subcriptions[idx].subscription.slot == slot:
+    if obj.subcriptions[idx].signal == sig and
+        obj.subcriptions[idx].subscription.tgt == tgt and
+        obj.subcriptions[idx].subscription.slot == slot:
       return true
 
 proc addSubscription*(

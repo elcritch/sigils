@@ -16,8 +16,9 @@ proc getSignalName*(signal: NimNode): NimNode =
     result = newStrLitNode signal.strVal
     # echo "getSignalName:result: ", result.treeRepr
 
-macro signalName*(signal: untyped): string =
-  getSignalName(signal)
+macro signalName*(signal: untyped): SigilName =
+  let sig = getSignalName(`signal`)
+  result = quote do: toSigilName(`sig`)
 
 proc splitNamesImpl(slot: NimNode): Option[(NimNode, NimNode)] =
   # echo "splitNamesImpl: ", slot.treeRepr
@@ -122,7 +123,7 @@ template connected*(
     a: Agent,
     signal: typed,
 ): bool =
-  if signalName(signal).toSigilName() in a.subcriptionsTable:
+  if a.hasSubscription(signalName(signal)):
     echo "CONNECTED: "
     true
   else:
@@ -134,17 +135,22 @@ template connected*(
     b: Agent,
 ): bool =
   let sn = signalName(signal).toSigilName() 
-  if sn in a.subcriptionsTable:
-    let subs = a.subcriptionsTable[sn]
-    let bb = b.unsafeWeakRef().asAgent()
-    var res = false
-    for sub in subs:
-      if sub.tgt == bb:
-        res = true
-        break
-    res
+  if a.hasSubscription(sn, b):
+    true
   else:
     false
+
+  # if sn in a.subcriptionsTable:
+  #   let subs = a.subcriptionsTable[sn]
+  #   let bb = b.unsafeWeakRef().asAgent()
+  #   var res = false
+  #   for sub in subs:
+  #     if sub.tgt == bb:
+  #       res = true
+  #       break
+  #   res
+  # else:
+  #   false
 
 template connected*(
     a: Agent,
@@ -154,17 +160,21 @@ template connected*(
 ): bool =
   let agentSlot = `slots`(typeof(b))
   let sn = signalName(signal).toSigilName() 
-  if sn in a.subcriptionsTable:
-    let subs = a.subcriptionsTable[sn]
-    let bb = b.unsafeWeakRef().asAgent()
-    var res = false
-    for sub in subs:
-      if sub.tgt == bb and sub.slot == agentSlot:
-        res = true
-        break
-    res
+  if a.hasSubscription(sn, b, agentSlot):
+    true
   else:
     false
+  # if sn in a.subcriptionsTable:
+  #   let subs = a.subcriptionsTable[sn]
+  #   let bb = b.unsafeWeakRef().asAgent()
+  #   var res = false
+  #   for sub in subs:
+  #     if sub.tgt == bb and sub.slot == agentSlot:
+  #       res = true
+  #       break
+  #   res
+  # else:
+  #   false
 
 template disconnect*[T](
     a: Agent,
