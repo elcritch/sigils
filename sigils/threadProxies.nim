@@ -44,7 +44,7 @@ proc `=destroy`*(obj: var typeof(AgentProxyShared()[])) =
       thr = obj.remoteThread
       proxyTwin = obj.proxyTwin.toKind(Agent)
     if not proxyTwin.isNil:
-      debugPrint "send deref: ", $proxyTwin, " thr: ", thr[].id
+      debugPrint "send deref: ", $proxyTwin, " thr: ", getThreadId()
       thr[].send(ThreadSignal(kind: Deref, deref: proxyTwin))
   except Exception:
     echo "error sending deref message for ", $obj.proxyTwin
@@ -132,20 +132,6 @@ method unregisterSubscriber*(
     # block:
     debugPrint "   unregisterSubscriber:proxy:ready: self:id: ", $self.unsafeWeakRef()
     unregisterSubscriberImpl(self, listener)
-
-# proc findSubscribedToSignals(
-#     listening: HashSet[WeakRef[Agent]], agent: WeakRef[Agent]
-# ): Table[SigilName, OrderedSet[Subscription]] =
-#   ## remove myself from agents I'm subscribed to
-#   for obj in listening:
-#     debugPrint "finding subscribed: ", $obj
-#     var toAdd = initOrderedSet[Subscription]()
-#     for signal, subscriberPairs in obj[].subcriptionsTable.mpairs():
-#       for item in subscriberPairs:
-#         if item.tgt == agent:
-#           toAdd.incl(Subscription(tgt: obj, slot: item.slot))
-#           # echo "agentRemoved: ", "tgt: ", xid.toPtr.repr, " id: ", agent.debugId, " obj: ", obj[].debugId, " name: ", signal
-#       result[signal] = move toAdd
 
 iterator findSubscribedTo(
     other: WeakRef[Agent], agent: WeakRef[Agent]

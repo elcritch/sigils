@@ -69,7 +69,7 @@ proc ticker*(self: Counter) {.slot.} =
   for i in 3 .. 3:
     echo "tick! i:", i, " ", self.unsafeWeakRef(), " (th: ", getThreadId(), ")"
     globalLastTicker.store i
-    # printConnections(self)
+    printConnections(self)
     emit self.updated(i)
 
 proc completed*(self: SomeAction, final: int) {.slot.} =
@@ -259,6 +259,7 @@ suite "threaded agent slots":
       printConnections(bp)
       printConnections(bp.proxyTwin[])
       printConnections(bp.getRemote()[])
+
       # printConnections(thread[])
 
       let

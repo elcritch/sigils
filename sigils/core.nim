@@ -11,6 +11,10 @@ method callMethod*(
     ctx: Agent, req: SigilRequest, slot: AgentProc
 ): SigilResponse {.base, gcsafe, effectsOf: slot.} =
   ## Route's an rpc request. 
+  debugPrint "callMethod: normal: ",
+    $ctx.unsafeWeakRef().asAgent(),
+    " slot: ",
+    repr(slot)
 
   if slot.isNil:
     let msg = $req.procName & " is not a registered RPC method."

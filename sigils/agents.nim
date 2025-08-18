@@ -215,12 +215,12 @@ method hasConnections*(self: Agent): bool {.base, gcsafe, raises: [].} =
 
 iterator getSubscriptions*(obj: Agent, sig: SigilName): var Subscription =
   for item in obj.subcriptions.mitems():
-    if item.signal == sig:
+    if item.signal == sig or item.signal == AnySigilName:
       yield item.subscription
 
 iterator getSubscriptions*(obj: WeakRef[Agent], sig: SigilName): var Subscription =
   for item in obj[].subcriptions.mitems():
-    if item.signal == sig:
+    if item.signal == sig or item.signal == AnySigilName:
       yield item.subscription
 
 proc asAgent*[T: Agent](obj: WeakRef[T]): WeakRef[Agent] =
