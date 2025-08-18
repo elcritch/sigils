@@ -219,10 +219,10 @@ iterator getSubscriptions*(obj: Agent, sig: SigilName): Subscription =
     if subscription.signal == sig:
       yield subscription.subscription
 
-template getSubscriptions*(
-    obj: Agent, sig: string
-): OrderedSet[(WeakRef[Agent], AgentProc)] =
-  obj.getSubscriptions(sig)
+iterator getSubscriptions*(obj: WeakRef[Agent], sig: SigilName): Subscription =
+  for subscription in obj[].subcriptions:
+    if subscription.signal == sig:
+      yield subscription.subscription
 
 proc asAgent*[T: Agent](obj: WeakRef[T]): WeakRef[Agent] =
   result = WeakRef[Agent](pt: obj.pt)
