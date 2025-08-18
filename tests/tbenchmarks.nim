@@ -33,6 +33,8 @@ proc bump*(tp: Emitter, val: int) {.signal.}
 proc onBump*(self: Counter, val: int) {.slot.} =
   self.value += 1
 
+var durationMicrosEmitSlot: float
+
 suite "benchmarks":
   test "emit->slot throughput (tight loop)":
     let n = block:
@@ -52,6 +54,7 @@ suite "benchmarks":
 
     check b.value == n
 
+    durationMicrosEmitSlot = dt.inMicroseconds.float
     let ms = dt.inMilliseconds.float
     let opsPerSec = (n.float * 1000.0) / max(1.0, ms)
     echo &"[bench] emit->slot: n={n}, time={ms:.2f} ms, rate={opsPerSec:.0f} ops/s, time={dt.inMicroseconds} us"
@@ -72,9 +75,9 @@ suite "benchmarks":
 
     check b.value == n
 
-    let ms = dt.inMicroseconds.float
-    let opsPerSec = (n.float * 1_000_000.0) / max(1.0, ms)
-    echo &"[bench] slot direct call: n={n}, time={ms:.2f} ms, rate={opsPerSec:.0f} ops/s, time={dt.inMicroseconds} us"
+    let us = dt.inMicroseconds.float
+    let opsPerSec = (n.float * 1_000_000.0) / max(1.0, us)
+    echo &"[bench] slot direct call: n={n}, time={us:.2f} us, rate={opsPerSec:.0f} ops/s, ratio={durationMicrosEmitSlot / us:.2f}"
 
   test "reactive computed (lazy) update+read":
     let n = block:
