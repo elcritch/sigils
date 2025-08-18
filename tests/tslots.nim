@@ -191,12 +191,15 @@ when isMainModule:
       connect(a, valueChanged, b, setValue)
 
       check c.listening.len() == 1
-      check a.subcriptions.len() == 2
+      check a.subcriptions.len() == 3
       check a.getSubscriptions(sigName"doTick").toSeq().len() == 2
 
+      printConnections(a)
+      printConnections(c)
       disconnect(a, doTick, c, someTick)
 
       emit a.valueChanged(137)
+      echo "afert disconnect"
       printConnections(a)
       printConnections(c)
       check a.value == 0

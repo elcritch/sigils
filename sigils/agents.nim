@@ -283,7 +283,6 @@ proc delSubscription*(
       if slot == nil or self.subcriptions[idx].subscription.slot == slot:
         subsDeleted.inc()
         self.subcriptions.delete(idx..idx)
-        tgt[].listening.excl(self.unsafeWeakRef())
 
   if subsFound == subsDeleted:
     tgt[].listening.excl(self.unsafeWeakRef())
