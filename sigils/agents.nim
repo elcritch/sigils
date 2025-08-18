@@ -214,14 +214,14 @@ method hasConnections*(self: Agent): bool {.base, gcsafe, raises: [].} =
   self.subcriptions.len() != 0 or self.listening.len() != 0
 
 iterator getSubscriptions*(obj: Agent, sig: SigilName): Subscription =
-  for idx in 0 ..< obj.subcriptions.len():
-    if obj.subcriptions[idx].signal == sig:
-      yield obj.subcriptions[idx].subscription
+  for item in obj.subcriptions.mitems():
+    if item.signal == sig:
+      yield item.subscription
 
 iterator getSubscriptions*(obj: WeakRef[Agent], sig: SigilName): Subscription =
-  for idx in 0 ..< obj[].subcriptions.len():
-    if obj[].subcriptions[idx].signal == sig:
-      yield obj[].subcriptions[idx].subscription
+  for item in obj[].subcriptions.mitems():
+    if item.signal == sig:
+      yield item.subscription
 
 proc asAgent*[T: Agent](obj: WeakRef[T]): WeakRef[Agent] =
   result = WeakRef[Agent](pt: obj.pt)
