@@ -40,7 +40,7 @@ suite "benchmarks":
 
     let ms = dt.inMilliseconds.float
     let opsPerSec = (n.float * 1000.0) / max(1.0, ms)
-    echo &"[bench] emit->slot: n={n}, time={ms:.2f} ms, rate={opsPerSec:.0f} ops/s"
+    echo &"[bench] emit->slot: n={n}, time={ms:.2f} ms, rate={opsPerSec:.0f} ops/s, time={dt.inMicroseconds} us"
 
   test "slot direct call (tight loop)":
     let n = block:
@@ -60,7 +60,7 @@ suite "benchmarks":
 
     let ms = dt.inMicroseconds.float
     let opsPerSec = (n.float * 1_000_000.0) / max(1.0, ms)
-    echo &"[bench] slot direct call: n={n}, time={ms:.2f} ms, rate={opsPerSec:.0f} ops/s"
+    echo &"[bench] slot direct call: n={n}, time={ms:.2f} ms, rate={opsPerSec:.0f} ops/s, time={dt.inMicroseconds} us"
 
   test "reactive computed (lazy) update+read":
     let n = block:
