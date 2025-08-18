@@ -35,12 +35,12 @@ proc onBump*(self: Counter, val: int) {.slot.} =
 
 var durationMicrosEmitSlot: float
 
+const n = block:
+  when defined(slowbench): 1_000_000
+  else: 40_000
+
 suite "benchmarks":
   test "emit->slot throughput (tight loop)":
-    let n = block:
-      when defined(slowbench): 100_000
-      elif defined(quickbench): 5_000
-      else: 20_000
 
     var a = Emitter()
     var b = Counter()
@@ -60,11 +60,6 @@ suite "benchmarks":
     echo &"[bench] emit->slot: n={n}, time={ms:.2f} ms, rate={opsPerSec:.0f} ops/s, time={dt.inMicroseconds} us"
 
   test "slot direct call (tight loop)":
-    let n = block:
-      when defined(slowbench): 100_000
-      elif defined(quickbench): 5_000
-      else: 20_000
-
     var a = Emitter()
     var b = Counter()
 
@@ -80,11 +75,6 @@ suite "benchmarks":
     echo &"[bench] slot direct call: n={n}, time={us:.2f} us, rate={opsPerSec:.0f} ops/s, ratio={durationMicrosEmitSlot / us:.2f}"
 
   test "reactive computed (lazy) update+read":
-    let n = block:
-      when defined(slowbench): 100_000
-      elif defined(quickbench): 5_000
-      else: 20_000
-
     let x = newSigil(0)
     let y = computed[int](x{} * 2)
 
@@ -101,11 +91,6 @@ suite "benchmarks":
     echo &"[bench] reactive (lazy): n={n}, time={ms:.2f} ms, rate={itersPerSec:.0f} iters/s"
 
   test "reactive computedNow eager updates":
-    let n = block:
-      when defined(slowbench): 100_000
-      elif defined(quickbench): 5_000
-      else: 20_000
-
     let x = newSigil(0)
     let y = computedNow[int](x{} * 2)
 
