@@ -59,6 +59,7 @@ type
     signaled*: HashSet[WeakRef[AgentRemote]]
     references*: Table[WeakRef[Agent], Agent]
     agent*: ThreadAgent
+    exceptionHandler*: proc(e: ref Exception) {.gcsafe, nimcall.}
     when defined(sigilsDebug):
       debugName*: string
     running*: Atomic[bool]
@@ -207,6 +208,15 @@ proc started*(tp: ThreadAgent) {.signal.}
 proc isRunning*(thread: var SigilThread): bool =
   thread.running.load(Relaxed)
 
+proc defaultExceptionHandler*(e: ref Exception) =
+  echo "Sigil thread unhandled exception: ", e.msg, " ", e.name
+
+proc setExceptionHandler*(
+    thread: var SigilThread,
+    handler: proc(e: ref Exception) {.gcsafe, nimcall.}
+) =
+  thread.exceptionHandler = handler
+
 proc poll*(thread: var SigilThread) =
   var sig: ThreadSignal
   discard thread.recv(sig, Blocking)
@@ -227,7 +237,17 @@ proc pollAll*(thread: var SigilThread): int {.discardable.} =
 proc runForever*[R: SigilThread](thread: var R) =
   emit thread.agent.started()
   while isRunning(thread):
-    thread.poll()
+    try:
+      thread.poll()
+    except CatchableError as e:
+      if not thread.exceptionHandler.isNil:
+        thread.exceptionHandler(e)
+    except Defect as e:
+      if not thread.exceptionHandler.isNil:
+        thread.exceptionHandler(e)
+    except Exception as e:
+      if not thread.exceptionHandler.isNil:
+        thread.exceptionHandler(e)
 
 proc runThread*(thread: ptr SigilThread) {.thread.} =
   {.cast(gcsafe).}:
@@ -240,6 +260,8 @@ proc runThread*(thread: ptr SigilThread) {.thread.} =
     thread[].runForever()
 
 proc start*(thread: ptr SigilThreadImpl) =
+  if thread[].exceptionHandler.isNil:
+    thread[].exceptionHandler = defaultExceptionHandler
   createThread(thread[].thr, runThread, thread)
 
 proc stop*(thread: ptr SigilThreadImpl, immediate: bool = false) =
