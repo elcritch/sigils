@@ -72,8 +72,17 @@ proc runAsyncThread*(targ: ptr AsyncSigilThread) {.thread.} =
       # echo "async thread running "
       var sig: ThreadSignal
       while isRunning(thread[]) and thread[].recv(sig, NonBlocking):
-        sthr[].exec(sig)
-
+        try:
+          sthr[].exec(sig)
+        except CatchableError as e:
+          if not sthr[].exceptionHandler.isNil:
+            sthr[].exceptionHandler(e)
+        except Exception as e:
+          if not sthr[].exceptionHandler.isNil:
+            sthr[].exceptionHandler(e)
+        except Defect as e:
+          if not sthr[].exceptionHandler.isNil:
+            sthr[].exceptionHandler(e)
 
   thread[].event.addEvent(cb)
   while thread.drain.load(Relaxed):
@@ -86,6 +95,8 @@ proc runAsyncThread*(targ: ptr AsyncSigilThread) {.thread.} =
     discard
 
 proc start*(thread: ptr AsyncSigilThread) =
+  if thread[].exceptionHandler.isNil:
+    thread[].exceptionHandler = defaultExceptionHandler
   createThread(thread[].thr, runAsyncThread, thread)
 
 proc stop*(thread: ptr AsyncSigilThread, immediate: bool = false, drain: bool = false) =
