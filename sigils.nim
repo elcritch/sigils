@@ -7,5 +7,5 @@ import sigils/threads
 
 export weakrefs, agents, signals, slots, threads, core
 
-when not defined(gcArc) and not defined(gcOrc) and not defined(nimdoc):
-  {.error: "Sigils requires --gc:arc or --gc:orc".}
+when not defined(gcArc) and not defined(gcOrc) and not defined(gcAtomicArc) and not defined(nimdoc):
+  {.error: "Sigils requires --gc:arc, --gc:orc, or --gc:atomicArc".}
