@@ -179,10 +179,10 @@ flowchart LR
     Caller[User emits signal on Remote Proxy];
     subgraph RP[Remote Proxy]
       direction TB
-      LP[Remote Proxy Forwards Signal];
+      FWD[Remote Proxy Forwards Signal];
       Enqueue[Enqueue Call into Twin.inbox];
       Mark[Mark Twin as signaled under lock];
-      LP --> Enqueue --> Mark --> Trigger;
+      FWD --> Enqueue --> Mark --> Trigger;
     end
     Trigger[Send Trigger Msg to RT's Inputs Channel];
     Caller --> RP;
