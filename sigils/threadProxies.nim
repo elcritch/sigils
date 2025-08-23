@@ -251,3 +251,40 @@ template connect*[T, S](
   checkSignalTypes(T(), signal, b, slot, acceptVoidSlot)
   let localProxy = Agent(proxyTy)
   localProxy.addSubscription(signalName(signal), b, slot)
+
+import macros
+
+macro callSlot(s: static string, a: typed): untyped =
+  let id = ident(s)
+  result = quote do:
+    `id`(`a`)
+  echo "CALLSLOT:result: ", result.repr
+
+proc fwdSignal[A: Agent; B: Agent; S: static string](self: Agent, params: SigilParams) {.nimcall.} =
+    static:
+      echo "fwdSignal:S: ", S
+      echo "fwdSignal:A: ", typeof(A)
+      echo "fwdSignal:B: ", typeof(B)
+    let agentSlot = callSlot(S, typeof(B))
+    let req = SigilRequest(
+      kind: Request, origin: SigilId(-1), procName: signalName(signal), params: params
+    )
+    var msg = ThreadSignal(kind: Call)
+    msg.slot = agentSlot
+    msg.req = req
+    msg.tgt = self.unsafeWeakRef().asAgent()
+    let ct = getCurrentSigilThread()
+    ct[].send(msg)
+
+template connectQueued*(
+    a: Agent,
+    signal: typed,
+    b: Agent,
+    slot: untyped,
+    acceptVoidSlot: static bool = false,
+): void =
+  let agentSlot = `slot`(typeof(b))
+  checkSignalTypes(a, signal, b, agentSlot, acceptVoidSlot)
+  let ct = getCurrentSigilThread()
+  let fs: AgentProc = fwdSignal[a, b, astToStr(slot)]
+  a.addSubscription(signalName(signal), b, fs)
