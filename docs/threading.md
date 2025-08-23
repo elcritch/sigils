@@ -170,45 +170,57 @@ This schedules `Counter.setValue` on `t` and keeps all cross-thread traffic safe
 
 The following Mermaid flowcharts illustrate the key event flows.
 
-### Move: agent -> thread (with proxies)
+### Move: agent to destination thread (with proxies)
 
 ```mermaid
 flowchart TD
-  ST[Source Thread] --> Check{isUniqueRef(agent)?}
-  Check -- no --> Err[Raise AccessViolationDefect]
-  Check -- yes --> CreateProxies[Create localProxy + remoteProxy]
-  CreateProxies --> Rewire[Rewire subscriptions and listeners]
-  Rewire --> SendMove[Send Move(agent) + Move(remoteProxy) to DT.inputs]
-  SendMove --> DT[Destination Thread]
-  DT --> ExecMove[exec Move: store agent and remoteProxy in references]
-  ExecMove --> Return[Return localProxy to caller on ST]
+  ST[Source Thread];
+  DT[Destination Thread];
+  ST --> Check{isUniqueRef?};
+  Check -- No --> Err[Raise AccessViolationDefect];
+  Check -- Yes --> CreateProxies[Create localProxy and remoteProxy];
+  CreateProxies --> Rewire[Rewire subscriptions and listeners];
+  Rewire --> SendMove[Send Move agent and Move remoteProxy to DT.inputs];
+  SendMove --> DT;
+  DT --> ExecMove[exec Move: add to references];
+  ExecMove --> Return[Return localProxy to caller on ST];
 ```
 
-### Call: local -> remote via AgentProxy
+### Call: local to remote via AgentProxy
 
 ```mermaid
 flowchart TD
-  Caller[Local Agent emits/slot call] --> LP[AgentProxy (local)]
-  LP --> Enqueue[Enqueue Call into proxyTwin.inbox (remote side)]
-  Enqueue --> Mark[Mark proxyTwin in remote.signaled under lock]
-  Mark --> Trigger[Send Trigger to remote.inputs]
-  Trigger --> RT[Remote SigilThread]
-  RT --> Drain[On Trigger: move signaled set, drain each inbox]
-  Drain --> Deliver[For each Call: tgt.callMethod(slot, req) on remote agent]
-  Deliver --> MaybeBack{Remote emits?}
-  MaybeBack -- yes --> WrapBack[Wrap via remoteSlot -> localSlot to other side]
-  WrapBack --> Enqueue2[Enqueue to other side inbox + Trigger]
-  MaybeBack -- no --> Done[Done]
+  Caller[Local agent emits or calls slot];
+  LP[AgentProxy local];
+  Twin[Proxy twin on remote];
+  RT[Remote SigilThread];
+  Caller --> LP;
+  LP --> Enqueue[Enqueue Call into Twin.inbox];
+  Enqueue --> Mark[Mark Twin as signaled under lock];
+  Mark --> Trigger[Send Trigger to RT.inputs];
+  Trigger --> Drain[RT handles Trigger: move signaled set and drain inboxes];
+  Drain --> Deliver[Deliver Call: tgt.callMethod with req];
+  Deliver --> Back{Remote emits a signal?};
+  Back -- Yes --> WrapBack[Wrap via remoteSlot to localSlot for other side];
+  WrapBack --> EnqueueBack[Enqueue to other side inbox and Trigger];
+  Back -- No --> Done[Done];
 ```
 
-### Deref: proxy/agent teardown
+### Deref: proxy and agent teardown
 
 ```mermaid
 flowchart TD
-  Destroy[LocalProxy destructor] --> TwinLock[Lock; clear proxyTwin link]
-  TwinLock --> Unsig[Remove proxyTwin from remote.signaled]
-  Unsig --> SendDeref[Send Deref(deref=proxyTwin.asAgent) to remote.inputs]
-  SendDeref --> RT2[Remote SigilThread]
-  RT2 --> ExecDeref[exec Deref: references.del(deref)]
-  ExecDeref --> GC[gcCollectReferences(): prune unconnected entries]
+  Dtor[LocalProxy destructor];
+  TwinLock[Lock and clear proxyTwin link];
+  Unsig[Remove proxyTwin from remote.signaled];
+  SendDeref[Send Deref to remote.inputs];
+  RT2[Remote SigilThread];
+  ExecDeref[exec Deref: remove from references];
+  GC[gcCollectReferences prune unconnected entries];
+  Dtor --> TwinLock;
+  TwinLock --> Unsig;
+  Unsig --> SendDeref;
+  SendDeref --> RT2;
+  RT2 --> ExecDeref;
+  ExecDeref --> GC;
 ```
