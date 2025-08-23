@@ -278,6 +278,8 @@ template connectQueued*[T](
     slot: Signal[T],
     acceptVoidSlot: static bool = false,
 ): void =
+  ## Queued connection helper: route a signal to a target slot by
+  ## enqueueing a `Call` on a specific `SigilThread`'s inputs channel.
   checkSignalTypes(a, signal, b, slot, acceptVoidSlot)
   let ct = getCurrentSigilThread()
   let fs: AgentProc = fwdSlotTy[a, b, astToStr(slot)]
@@ -309,6 +311,8 @@ template connectQueued*(
     slot: untyped,
     acceptVoidSlot: static bool = false,
 ): void =
+  ## Queued connection helper: route a signal to a target slot by
+  ## enqueueing a `Call` on a specific `SigilThread`'s inputs channel.
   let agentSlot = `slot`(typeof(b))
   checkSignalTypes(a, signal, b, agentSlot, acceptVoidSlot)
   let ct = getCurrentSigilThread()
