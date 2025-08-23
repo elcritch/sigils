@@ -190,17 +190,29 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  Caller[Local agent emits or calls slot];
-  LP[AgentProxy local];
-  Twin[Proxy twin on remote];
-  RT[Remote SigilThread];
-  Caller --> LP;
-  LP --> Enqueue[Enqueue Call into Twin.inbox];
-  Enqueue --> Mark[Mark Twin as signaled under lock];
-  Mark --> Trigger[Send Trigger to RT.inputs];
-  Trigger --> Drain[RT handles Trigger: move signaled set and drain inboxes];
-  Drain --> Deliver[Deliver Call: tgt.callMethod with req];
-  Deliver --> Back{Remote emits a signal?};
+  subgraph ST[Source Thread]
+    Caller[Local agent emits or calls slot];
+    LP[AgentProxy local];
+    Enqueue[Enqueue Call into Twin.inbox];
+    Mark[Mark Twin as signaled under lock];
+    Trigger[Send Trigger to remote inputs];
+    Caller --> LP;
+    LP --> Enqueue;
+    Enqueue --> Mark;
+    Mark --> Trigger;
+  end
+
+  subgraph DT[Destination Thread]
+    Twin[Proxy twin on remote];
+    RT[Remote SigilThread];
+    Drain[On Trigger: move signaled set and drain Twin inbox];
+    Deliver[Deliver Call on remote: tgt.callMethod];
+  end
+
+  Trigger --> RT;
+  RT --> Drain;
+  Drain --> Deliver;
+  Deliver --> Back{Remote emits a signal};
   Back -- Yes --> WrapBack[Wrap via remoteSlot to localSlot for other side];
   WrapBack --> EnqueueBack[Enqueue to other side inbox and Trigger];
   Back -- No --> Done[Done];
