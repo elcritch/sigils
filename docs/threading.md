@@ -173,31 +173,25 @@ The following Mermaid flowcharts illustrate the key event flows.
 ### Call: local to remote via AgentProxy
 
 ```mermaid
-flowchart TD
+flowchart LR
   subgraph ST[Source Thread]
-    direction TB
-    Caller[Local agent emits or calls slot];
-    LP[AgentProxy local];
+    Caller[User emits signal on Remote Proxy];
+    LP[Remote Proxy Forwards Signal];
     Enqueue[Enqueue Call into Twin.inbox];
     Mark[Mark Twin as signaled under lock];
-    Trigger[Send Trigger to remote thread's inputs];
-    Caller --> LP;
-    LP --> Enqueue;
-    Enqueue --> Mark;
-    Mark --> Trigger;
-    Trigger ==> RX;
+    Trigger[Send Trigger Msg to RT's Inputs Channel];
+    Caller --> LP --> Enqueue --> Mark --> Trigger;
   end
 
   subgraph DT[Destination Thread]
-    direction TB
-    Twin[Proxy twin on remote];
     RX[Polling Inputs Channel fa:fa-spinner];
-    Drain[On Trigger: move signaled set and drain Twin inbox];
+    Triggered[Move Messages to LocalProxy];
+    Twin[LocalProxy Handles Call];
     Deliver[Deliver Call on remote: tgt.callMethod];
-    Drain --> Deliver;
+    RX --> Triggered --> Twin --> Deliver;
   end
 
-  RX --Trigger Message--> Drain;
+  ST --Trigger Message--> DT;
 ```
 
   Deliver --> Back{Remote emits a signal};
