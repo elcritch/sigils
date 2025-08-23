@@ -28,7 +28,8 @@ suite "connectQueued to local thread":
     var a = SomeAction()
     var b = Counter()
 
-    connectQueued(a, valueChanged, b, setValueGlobal)
+    block:
+      connectQueued(a, valueChanged, b, setValueGlobal)
 
     emit a.valueChanged(314)
     emit a.valueChanged(139)
