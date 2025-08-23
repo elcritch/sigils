@@ -14,36 +14,30 @@ type
 
 proc valueChanged*(tp: SomeAction, val: int) {.signal.}
 
-var globalCounter: Atomic[int]
-globalCounter.store(0)
+var globalCounter: seq[int]
 
 proc setValueGlobal*(self: Counter, value: int) {.slot.} =
   if self.value != value:
     self.value = value
-  globalCounter.store(value)
+  globalCounter.add(value)
 
-suite "connectQueued to remote thread":
-  test "queued connects a->remote(b) and runs":
+suite "connectQueued to local thread":
+  test "queued connects a->b on local thread":
     startLocalThread()
-    let t = newSigilThread()
-    t.start()
-
     var a = SomeAction()
     var b = Counter()
 
-    let bp: AgentProxy[Counter] = b.moveToThread(t)
-
-    discard threads.connectQueued(a, valueChanged, t, bp.getRemote()[],
-        Counter.setValueGlobal)
+    block:
+      discard threads.connectQueued(a, valueChanged, b, Counter.setValueGlobal)
 
     emit a.valueChanged(314)
+    emit a.valueChanged(139)
+    emit a.valueChanged(278)
 
-    # Wait briefly for the worker thread to process the Call
-    var ok = false
-    for i in 0 .. 20:
-      if globalCounter.load() == 314:
-        ok = true
-        break
-      os.sleep(20)
-    check ok
+    # Drain the local thread scheduler to deliver the queued Call
+    let ct = getCurrentSigilThread()
+
+    let polled = ct[].pollAll()
+    check polled == 3
+    check globalCounter == @[314, 139, 278]
 

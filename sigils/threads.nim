@@ -73,3 +73,25 @@ template connectQueued*(
   ## Overload that accepts an untyped `slot` name (e.g., `Counter.setValue`).
   let agentSlot = `slot`(typeof(b))
   connectQueued(a, signal, thread, b, agentSlot, acceptVoidSlot)
+
+template connectQueued*[T](
+    a: Agent,
+    signal: typed,
+    b: Agent,
+    slot: Signal[T],
+    acceptVoidSlot: static bool = false,
+): QueuedDispatch =
+  ## Overload that queues onto the current (local) thread.
+  let ct = getCurrentSigilThread()
+  connectQueued(a, signal, ct, b, slot, acceptVoidSlot)
+
+template connectQueued*(
+    a: Agent,
+    signal: typed,
+    b: Agent,
+    slot: untyped,
+    acceptVoidSlot: static bool = false,
+): QueuedDispatch =
+  ## Overload that queues onto the current (local) thread with untyped slot.
+  let agentSlot = `slot`(typeof(b))
+  connectQueued(a, signal, b, agentSlot, acceptVoidSlot)
