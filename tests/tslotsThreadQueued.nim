@@ -23,6 +23,7 @@ proc setValueGlobal*(self: Counter, value: int) {.slot.} =
 
 suite "connectQueued to local thread":
   test "queued connects a->b on local thread":
+    globalCounter = @[]
     startLocalThread()
     var a = SomeAction()
     var b = Counter()
@@ -41,6 +42,7 @@ suite "connectQueued to local thread":
     check globalCounter == @[314, 139, 278]
 
   test "queued connects a->b on local thread":
+    globalCounter = @[]
     startLocalThread()
     var a = SomeAction()
     var b = Counter()
