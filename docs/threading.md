@@ -195,7 +195,7 @@ flowchart TD
     LP[AgentProxy local];
     Enqueue[Enqueue Call into Twin.inbox];
     Mark[Mark Twin as signaled under lock];
-    Trigger[Send Trigger to remote inputs];
+    Trigger[Send Trigger to remote thread's inputs];
     Caller --> LP;
     LP --> Enqueue;
     Enqueue --> Mark;
