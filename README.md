@@ -80,7 +80,10 @@ test "signal / slot types":
 
 ## Threads
 
-Sigils 0.9+ can now do threaded signals! 
+Sigils 0.9+ can now do threaded signals!
+
+For a deeper architectural overview and safety notes, see the
+[Threading Architecture](docs/threading.md).
 
 ```nim
 test "agent connect then moveToThread and run":
