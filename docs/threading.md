@@ -170,27 +170,12 @@ This schedules `Counter.setValue` on `t` and keeps all cross-thread traffic safe
 
 The following Mermaid flowcharts illustrate the key event flows.
 
-### Move: agent to destination thread (with proxies)
-
-```mermaid
-flowchart TD
-  ST[Source Thread];
-  DT[Destination Thread];
-  ST --> Check{isUniqueRef?};
-  Check -- No --> Err[Raise AccessViolationDefect];
-  Check -- Yes --> CreateProxies[Create localProxy and remoteProxy];
-  CreateProxies --> Rewire[Rewire subscriptions and listeners];
-  Rewire --> SendMove[Send Move agent and Move remoteProxy to DT.inputs];
-  SendMove --> DT;
-  DT --> ExecMove[exec Move: add to references];
-  ExecMove --> Return[Return localProxy to caller on ST];
-```
-
 ### Call: local to remote via AgentProxy
 
 ```mermaid
 flowchart TD
   subgraph ST[Source Thread]
+    direction TB
     Caller[Local agent emits or calls slot];
     LP[AgentProxy local];
     Enqueue[Enqueue Call into Twin.inbox];
@@ -200,24 +185,25 @@ flowchart TD
     LP --> Enqueue;
     Enqueue --> Mark;
     Mark --> Trigger;
+    Trigger ==> RX;
   end
 
   subgraph DT[Destination Thread]
+    direction TB
     Twin[Proxy twin on remote];
-    RT[inputs channel];
+    RX[Polling Inputs Channel fa:fa-spinner];
     Drain[On Trigger: move signaled set and drain Twin inbox];
     Deliver[Deliver Call on remote: tgt.callMethod];
+    Drain --> Deliver;
   end
 
-  Trigger --> RT;
-  RT --On Trigger--> Drain;
-  Drain --> Deliver;
+  RX --Trigger Message--> Drain;
+```
+
   Deliver --> Back{Remote emits a signal};
   Back -- Yes --> WrapBack[Wrap via remoteSlot to localSlot for other side];
   WrapBack --> EnqueueBack[Enqueue to other side inbox and Trigger];
   Back -- No --> Done[Done];
-```
-
 ### Deref: proxy and agent teardown
 
 ```mermaid
