@@ -175,12 +175,17 @@ The following Mermaid flowcharts illustrate the key event flows.
 ```mermaid
 flowchart LR
   subgraph ST[Source Thread]
+    direction TB
     Caller[User emits signal on Remote Proxy];
-    LP[Remote Proxy Forwards Signal];
-    Enqueue[Enqueue Call into Twin.inbox];
-    Mark[Mark Twin as signaled under lock];
+    subgraph RP[Remote Proxy]
+      direction TB
+      LP[Remote Proxy Forwards Signal];
+      Enqueue[Enqueue Call into Twin.inbox];
+      Mark[Mark Twin as signaled under lock];
+      LP --> Enqueue --> Mark --> Trigger;
+    end
     Trigger[Send Trigger Msg to RT's Inputs Channel];
-    Caller --> LP --> Enqueue --> Mark --> Trigger;
+    Caller --> RP;
   end
 
   subgraph DT[Destination Thread]
