@@ -207,6 +207,8 @@ flowchart LR
     Deliver --> Back;
   end
 
+  ST e0@==>|Queue Message
+            Remote Proxy| RT;
   ST e1@==>|Trigger Message| RT;
   e1@{ animate: true }
 
