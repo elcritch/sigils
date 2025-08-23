@@ -204,13 +204,13 @@ flowchart TD
 
   subgraph DT[Destination Thread]
     Twin[Proxy twin on remote];
-    RT[Remote SigilThread];
+    RT[inputs channel];
     Drain[On Trigger: move signaled set and drain Twin inbox];
     Deliver[Deliver Call on remote: tgt.callMethod];
   end
 
   Trigger --> RT;
-  RT --> Drain;
+  RT --On Trigger--> Drain;
   Drain --> Deliver;
   Deliver --> Back{Remote emits a signal};
   Back -- Yes --> WrapBack[Wrap via remoteSlot to localSlot for other side];
@@ -222,16 +222,22 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  Dtor[LocalProxy destructor];
-  TwinLock[Lock and clear proxyTwin link];
-  Unsig[Remove proxyTwin from remote.signaled];
-  SendDeref[Send Deref to remote.inputs];
-  RT2[Remote SigilThread];
-  ExecDeref[exec Deref: remove from references];
-  GC[gcCollectReferences prune unconnected entries];
-  Dtor --> TwinLock;
-  TwinLock --> Unsig;
-  Unsig --> SendDeref;
+  subgraph ST[Source Thread]
+    Dtor[Local proxy destructor];
+    TwinLock[Lock and clear proxyTwin link];
+    Unsig[Remove proxyTwin from remote.signaled under lock];
+    SendDeref[Send Deref to remote inputs];
+    Dtor --> TwinLock;
+    TwinLock --> Unsig;
+    Unsig --> SendDeref;
+  end
+
+  subgraph DT[Destination Thread]
+    RT2[Remote SigilThread];
+    ExecDeref[On Deref: remove from references and signaled];
+    GC[gcCollectReferences prune unconnected entries];
+  end
+
   SendDeref --> RT2;
   RT2 --> ExecDeref;
   ExecDeref --> GC;
