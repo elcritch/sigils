@@ -252,6 +252,12 @@ template connect*[T, S](
   let localProxy = Agent(proxyTy)
   localProxy.addSubscription(signalName(signal), b, slot)
 
+macro callSlot(s: static string, a: typed): untyped =
+  let id = ident(s)
+  result = quote do:
+    `id`(`a`)
+  echo "CALLSLOT:result: ", result.repr
+
 proc fwdSignal[A: Agent; B: Agent; S: static string](self: Agent, params: SigilParams) {.nimcall.} =
     let agentSlot = callSlot(S, typeof(B))
     let req = SigilRequest(
