@@ -253,10 +253,10 @@ template connect*[T, S](
   localProxy.addSubscription(signalName(signal), b, slot)
 
 macro callSlot(s: static string, a: typed): untyped =
+  ## calls a slot to get the signal type using a static string
   let id = ident(s)
   result = quote do:
     `id`(`a`)
-  echo "CALLSLOT:result: ", result.repr
 
 proc fwdSignal[A: Agent; B: Agent; S: static string](self: Agent, params: SigilParams) {.nimcall.} =
     let agentSlot = callSlot(S, typeof(B))
