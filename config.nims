@@ -1,4 +1,5 @@
 # NimScript configuration and tasks for this repo
+switch("nimcache", ".nimcache")
 
 import std/[os, strformat, strutils]
 
