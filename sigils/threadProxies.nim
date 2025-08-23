@@ -251,3 +251,70 @@ template connect*[T, S](
   checkSignalTypes(T(), signal, b, slot, acceptVoidSlot)
   let localProxy = Agent(proxyTy)
   localProxy.addSubscription(signalName(signal), b, slot)
+
+import macros
+
+macro callCode(s: static string): untyped =
+  ## calls a code to get the signal type using a static string
+  result = parseStmt(s)
+  echo "callCode:result: ", result.repr
+
+proc fwdSlotTy[A: Agent; B: Agent; S: static string](self: Agent, params: SigilParams) {.nimcall.} =
+    let agentSlot = callCode(S)
+    let req = SigilRequest(
+      kind: Request, origin: SigilId(-1), procName: signalName(signal), params: params.deepCopy()
+    )
+    var msg = ThreadSignal(kind: Call)
+    msg.slot = agentSlot
+    msg.req = req
+    msg.tgt = self.unsafeWeakRef().asAgent()
+    let ct = getCurrentSigilThread()
+    ct[].send(msg)
+
+template connectQueued*[T](
+    a: Agent,
+    signal: typed,
+    b: Agent,
+    slot: Signal[T],
+    acceptVoidSlot: static bool = false,
+): void =
+  ## Queued connection helper: route a signal to a target slot by
+  ## enqueueing a `Call` on a specific `SigilThread`'s inputs channel.
+  checkSignalTypes(a, signal, b, slot, acceptVoidSlot)
+  let ct = getCurrentSigilThread()
+  let fs: AgentProc = fwdSlotTy[a, b, astToStr(slot)]
+  a.addSubscription(signalName(signal), b, fs)
+
+macro callSlot(s: static string, a: typed): untyped =
+  ## calls a slot to get the signal type using a static string
+  let id = ident(s)
+  result = quote do:
+    `id`(`a`)
+  echo "callSlot:result: ", result.repr
+
+proc fwdSlot[A: Agent; B: Agent; S: static string](self: Agent, params: SigilParams) {.nimcall.} =
+    let agentSlot = callSlot(S, typeof(B))
+    let req = SigilRequest(
+      kind: Request, origin: SigilId(-1), procName: signalName(signal), params: params.deepCopy()
+    )
+    var msg = ThreadSignal(kind: Call)
+    msg.slot = agentSlot
+    msg.req = req
+    msg.tgt = self.unsafeWeakRef().asAgent()
+    let ct = getCurrentSigilThread()
+    ct[].send(msg)
+
+template connectQueued*(
+    a: Agent,
+    signal: typed,
+    b: Agent,
+    slot: untyped,
+    acceptVoidSlot: static bool = false,
+): void =
+  ## Queued connection helper: route a signal to a target slot by
+  ## enqueueing a `Call` on a specific `SigilThread`'s inputs channel.
+  let agentSlot = `slot`(typeof(b))
+  checkSignalTypes(a, signal, b, agentSlot, acceptVoidSlot)
+  let ct = getCurrentSigilThread()
+  let fs: AgentProc = fwdSlot[a, b, astToStr(slot)]
+  a.addSubscription(signalName(signal), b, fs)
