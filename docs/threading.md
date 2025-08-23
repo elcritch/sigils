@@ -177,32 +177,32 @@ flowchart LR
   subgraph ST[Source Thread]
     direction TB
     Caller[User emits signal on Remote Proxy];
-    subgraph RP[Remote Proxy]
+
+    Caller --emit --> LP;
+
+    subgraph LP[Local AgentProxy]
       direction TB
-      FWD[Remote Proxy Forwards Signal];
-      Enqueue[Enqueue Call into Twin.inbox];
+      FWD[Local Proxy Forwards Signal];
+      Enqueue[Enqueue Call into Twin's Inbox];
       Mark[Mark Twin as signaled under lock];
+      Trigger[Send Trigger Msg to RT's Inputs Channel];
+
       FWD --> Enqueue --> Mark --> Trigger;
     end
-    Trigger[Send Trigger Msg to RT's Inputs Channel];
-    Caller --> RP;
   end
 
-  subgraph DT[Destination Thread]
+  subgraph RT[Remote Thread]
     RX[Polling Inputs Channel fa:fa-spinner];
-    Triggered[Move Messages to LocalProxy];
-    Twin[LocalProxy Handles Call];
-    Deliver[Deliver Call on remote: tgt.callMethod];
+    Triggered[Move Messages to Remote Proxy];
+    Twin[Remote Proxy Handles Call];
+    Deliver[Call Method on Agent];
     RX --> Triggered --> Twin --> Deliver;
   end
 
-  ST --Trigger Message--> DT;
+  ST e1@==>|Trigger Message| RT;
+  e1@{ animate: true }
 ```
 
-  Deliver --> Back{Remote emits a signal};
-  Back -- Yes --> WrapBack[Wrap via remoteSlot to localSlot for other side];
-  WrapBack --> EnqueueBack[Enqueue to other side inbox and Trigger];
-  Back -- No --> Done[Done];
 ### Deref: proxy and agent teardown
 
 ```mermaid
