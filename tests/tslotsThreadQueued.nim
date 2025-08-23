@@ -60,4 +60,3 @@ suite "connectQueued to local thread":
     let polled = ct[].pollAll()
     check polled == 3
     check globalCounter == @[314, 139, 278]
-
