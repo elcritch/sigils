@@ -197,10 +197,19 @@ flowchart LR
     Twin[Remote Proxy Handles Call];
     Deliver[Call Method on Agent];
     RX --> Triggered --> Twin --> Deliver;
+    subgraph RS[Remote Signal]
+      direction TB;
+      Back[Agent emits return signal?];
+      Back -- Yes --> WrapBack[Wrap via remoteSlot to localSlot for other side];
+      WrapBack --> EnqueueBack[Enqueue to other side inbox and Trigger];
+      Back -- No --> Done[Done];
+    end
+    Deliver --> Back;
   end
 
   ST e1@==>|Trigger Message| RT;
   e1@{ animate: true }
+
 ```
 
 ### Deref: proxy and agent teardown
