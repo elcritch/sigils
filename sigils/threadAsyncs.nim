@@ -5,19 +5,19 @@ import threading/smartptrs
 import threading/channels
 import threading/atomics
 
-import agents
-import threads
-import core
-
-export smartptrs, isolation
-export threads
-
 import std/os
 import std/monotimes
 import std/options
 import std/isolation
 import std/uri
 import std/asyncdispatch
+
+import agents
+import threadBase
+import core
+
+export smartptrs, isolation
+export threadBase
 
 type AsyncSigilThread* = object of SigilThread
   inputs*: SigilChan
@@ -98,6 +98,12 @@ proc runAsyncThread*(targ: ptr AsyncSigilThread) {.thread.} =
       asyncdispatch.drain()
   except ValueError:
     discard
+
+proc startLocalThreadDispatch*() =
+  if not hasLocalSigilThread():
+    var st = newSigilAsyncThread()
+    st[].threadId.store(getThreadId(), Relaxed)
+    setLocalSigilThread(st)
 
 proc start*(thread: ptr AsyncSigilThread) =
   if thread[].exceptionHandler.isNil:

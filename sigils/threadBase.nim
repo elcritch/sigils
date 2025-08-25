@@ -134,14 +134,21 @@ proc newSigilThread*(): ptr SigilThreadImpl =
 proc toSigilThread*[R: SigilThread](t: ptr R): ptr SigilThread =
   cast[ptr SigilThread](t)
 
+proc hasLocalSigilThread*(): bool =
+  not localSigilThread.isNil
+
+proc setLocalSigilThread*[R: SigilThread](thread: ptr R) =
+  localSigilThread = thread.toSigilThread()
+
 proc startLocalThread*() =
-  if localSigilThread.isNil:
+  if not hasLocalSigilThread():
     var st = newSigilThread()
     st[].threadId.store(getThreadId(), Relaxed)
-    localSigilThread = st.toSigilThread()
+    setLocalSigilThread(st)
 
 proc getCurrentSigilThread*(): ptr SigilThread =
-  startLocalThread()
+  if not hasLocalSigilThread():
+    startLocalThread()
   assert not localSigilThread.isNil
   return localSigilThread
 
