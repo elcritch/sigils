@@ -68,7 +68,6 @@ proc runAsyncThread*(targ: ptr AsyncSigilThread) {.thread.} =
   echo "async sigil thread waiting!", " (th: ", getThreadId(), ")"
 
   let cb = proc(fd: AsyncFD): bool {.closure, gcsafe.} =
-    {.cast(gcsafe).}:
       # echo "async thread running "
       var sig: ThreadSignal
       while isRunning(thread[]) and thread[].recv(sig, NonBlocking):
