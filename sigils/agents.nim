@@ -287,32 +287,6 @@ proc delSubscription*(
   if subsFound == subsDeleted:
     tgt[].listening.excl(self.unsafeWeakRef())
 
-  #var
-  #  delSigs: seq[SigilName]
-  #  toDel: seq[Subscription]
-  #  subsFound: int
-  #  subsDeleted: int
-
-  # for signal, subscriptions in self.subcriptionsTable.mpairs():
-  #   debugPrint "   removeSubscriptionsFor subs sig: ", $signal
-  #   toDel.setLen(0)
-  #   var tgtMatched = 0
-  #   for subscription in subscriptions:
-  #     if subscription.tgt == tgt:
-  #       subsFound.inc()
-  #       if signal == sig and (slot == nil or subscription.slot == slot):
-  #         subsDeleted.inc()
-  #         toDel.add(subscription)
-  #   for subscription in toDel:
-  #     subscriptions.excl(subscription)
-  #   if subscriptions.len() == 0:
-  #     delSigs.add(signal)
-  # for sig in delSigs:
-  #   self.subcriptionsTable.del(sig)
-  
-  # if subsFound == subsDeleted:
-  #   tgt[].listening.excl(self.unsafeWeakRef())
-
 template delSubscription*(
     obj: Agent, sig: IndexableChars, tgt: Agent | WeakRef[Agent], slot: AgentProc
 ): void =
