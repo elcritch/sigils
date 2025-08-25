@@ -240,13 +240,19 @@ proc runForever*[R: SigilThread](thread: var R) =
     try:
       thread.poll()
     except CatchableError as e:
-      if not thread.exceptionHandler.isNil:
+      if thread.exceptionHandler.isNil:
+        raise e
+      else:
         thread.exceptionHandler(e)
     except Defect as e:
-      if not thread.exceptionHandler.isNil:
+      if thread.exceptionHandler.isNil:
+        raise e
+      else:
         thread.exceptionHandler(e)
     except Exception as e:
-      if not thread.exceptionHandler.isNil:
+      if thread.exceptionHandler.isNil:
+        raise e
+      else:
         thread.exceptionHandler(e)
 
 proc runThread*(thread: ptr SigilThread) {.thread.} =

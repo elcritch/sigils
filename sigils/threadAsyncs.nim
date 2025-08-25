@@ -75,13 +75,19 @@ proc runAsyncThread*(targ: ptr AsyncSigilThread) {.thread.} =
         try:
           sthr[].exec(sig)
         except CatchableError as e:
-          if not sthr[].exceptionHandler.isNil:
+          if sthr[].exceptionHandler.isNil:
+            raise e
+          else:
             sthr[].exceptionHandler(e)
         except Exception as e:
-          if not sthr[].exceptionHandler.isNil:
+          if sthr[].exceptionHandler.isNil:
+            raise e
+          else:
             sthr[].exceptionHandler(e)
         except Defect as e:
-          if not sthr[].exceptionHandler.isNil:
+          if sthr[].exceptionHandler.isNil:
+            raise e
+          else:
             sthr[].exceptionHandler(e)
 
   thread[].event.addEvent(cb)
