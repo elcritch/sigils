@@ -34,6 +34,7 @@ proc newSigilAsyncThread*(): ptr AsyncSigilThread =
   result = cast[ptr AsyncSigilThread](allocShared0(sizeof(AsyncSigilThread)))
   result[] = AsyncSigilThread() # important!
   result[].event = newAsyncEvent()
+  result[].agent = ThreadAgent()
   result[].signaledLock.initLock()
   result[].inputs = newSigilChan()
   result[].running.store(true, Relaxed)

@@ -252,6 +252,7 @@ proc hasSubscription*(obj: Agent, sig: SigilName, tgt: Agent | WeakRef[Agent], s
 proc addSubscription*(
     obj: Agent, sig: SigilName, tgt: Agent | WeakRef[Agent], slot: AgentProc
 ): void =
+  doAssert not obj.isNil(), "agent is nil!"
   assert slot != nil
 
   if not obj.hasSubscription(sig, tgt, slot):
