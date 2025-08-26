@@ -17,7 +17,7 @@ type
     remote*: WeakRef[Agent]
     proxyTwin*: WeakRef[AgentProxyShared]
     lock*: Lock
-    remoteThread*: ptr SigilThread
+    remoteThread*: SigilThreadPtr
 
   AgentProxy*[T] = ref object of AgentProxyShared
 
@@ -238,6 +238,22 @@ template connect*[T](
   assert not localProxy.proxyTwin.isNil
   assert not localProxy.remote.isNil
   localProxy.proxyTwin[].addSubscription(AnySigilName, localProxy.remote[], localSlot)
+
+template connect*[T](
+    thr: SigilThreadPtr,
+    signal: typed,
+    localProxy: AgentProxy[T],
+    slot: typed,
+    acceptVoidSlot: static bool = false,
+): void =
+  ## connects `AgentProxy[T]` to remote signals
+  ## 
+  checkSignalThreadSafety(SignalTypes.`signal`(typeof(thr.agent)))
+  let agentSlot = `slot`(T)
+  checkSignalTypes(thr.agent, signal, T(), agentSlot, acceptVoidSlot)
+  assert not localProxy.proxyTwin.isNil
+  assert not localProxy.remote.isNil
+  thr.agent.addSubscription(signalName(signal), localProxy.getRemote()[], agentSlot)
 
 template connect*[T, S](
     proxyTy: AgentProxy[T],
