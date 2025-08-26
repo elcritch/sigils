@@ -75,6 +75,7 @@ method setTimer*(
     proc cb(fd: AsyncFD): bool {.closure, gcsafe.} =
       echo "timer cb:repeat: duration: ", timer.duration
       if thread.hasCancelTimer(timer):
+        thread.removeTimer(timer)
         return true # stop timer
       else:
         emit timer.timeout()

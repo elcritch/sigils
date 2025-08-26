@@ -120,6 +120,9 @@ proc hasCancelTimer*(thread: SigilThreadPtr, timer: SigilTimer): bool =
 proc cancelTimer*(thread: SigilThreadPtr, timer: SigilTimer) =
   thread.toCancel.incl(timer)
 
+proc removeTimer*(thread: SigilThreadPtr, timer: SigilTimer) =
+  thread.toCancel.excl(timer)
+
 proc gcCollectReferences(thread: SigilThreadPtr) =
   var derefs: seq[WeakRef[Agent]]
   for agent in thread.references.keys():
