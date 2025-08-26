@@ -15,10 +15,12 @@ from system/ansi_c import c_raise
 export smartptrs, isolation, channels
 export isolateutils
 
+const SigilTimerOneShot* = -1
+
 type
   SigilTimer* = ref object of Agent
     duration*: Duration
-    repeat*: int = -1 # -1 for repeat forever, N > 0 for N times
+    repeat*: int = SigilTimerOneShot # -1 for repeat forever, N > 0 for N times
 
   MessageQueueFullError* = object of CatchableError
 
@@ -317,7 +319,16 @@ proc join*(thread: SigilThreadDefaultPtr) =
 proc peek*(thread: SigilThreadDefaultPtr): int =
   result = thread[].inputs.peek()
 
-proc newTimer*(duration: Duration, repeat: int = -1): SigilTimer =
+proc newTimer*(duration: Duration, repeat: int = SigilTimerOneShot): SigilTimer =
   result = SigilTimer()
   result.duration = duration
   result.repeat = repeat
+
+proc isOneShot*(timer: SigilTimer): bool =
+  timer.repeat < 0
+
+proc startTimer*(timer: SigilTimer, ct: SigilThreadPtr = getCurrentSigilThread()) =
+  ct.setTimer(timer)
+
+proc stopTimer*(timer: SigilTimer, ct: SigilThreadPtr = getCurrentSigilThread()) =
+  ct.cancelTimer(timer)

@@ -21,6 +21,10 @@ proc setValueGlobal*(self: Counter, value: int) {.slot.} =
     self.value = value
   globalCounter.add(value)
 
+proc timerRun*(self: Counter) {.slot.} =
+  echo "timerRun: ", self.value
+  self.value.inc()
+
 suite "connectQueued to local thread":
   test "queued connects a->b on local thread":
     globalCounter = @[]
@@ -64,12 +68,14 @@ suite "connectQueued to local thread":
 
   test "timer callback":
     startLocalThreadDispatch()
-    var a = SomeAction()
-    var b = Counter()
+    let ct = getCurrentSigilThread()
+    var timer = SigilTimer(duration: initDuration(milliseconds=100))
+    var a = Counter()
 
-    block:
-      connectQueued(a, valueChanged, b, Counter.setValueGlobal())
+    connect(timer, timeout, a, Counter.timerRun())
 
-    emit a.valueChanged(139)
-    emit a.valueChanged(314)
-    emit a.valueChanged(278)
+    startTimer(timer)
+
+    ct.poll()
+    check a.value == 1
+
