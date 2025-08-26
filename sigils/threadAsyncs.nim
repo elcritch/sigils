@@ -58,7 +58,7 @@ method send*(
 method recv*(
     thread: AsyncSigilThreadPtr, msg: var ThreadSignal, blocking: BlockingKinds
 ): bool {.gcsafe.} =
-  echo "threadRecv: ", thread.toSigilThread()[].getThreadId(), " blocking: ", blocking
+  debugPrint "threadRecv: ", thread.toSigilThread()[].getThreadId(), " blocking: ", blocking
   case blocking
   of Blocking:
     msg = thread.inputs.recv()
@@ -91,16 +91,12 @@ method setTimer*(
         return false
     asyncdispatch.addTimer(timer.duration.inMilliseconds(), oneshot=true, cb)
 
-var counter = 0
 proc setupThread*(thread: ptr AsyncSigilThread) =
   if thread[].isReady:
     return
   thread[].isReady = true
 
-  counter.inc()
-
   let cb = proc(fd: AsyncFD): bool {.closure, gcsafe.} =
-      echo "async thread running ", counter
       var sig: ThreadSignal
       while isRunning(thread) and thread.recv(sig, NonBlocking):
         try:
@@ -120,7 +116,6 @@ proc setupThread*(thread: ptr AsyncSigilThread) =
             raise e
           else:
             thread[].exceptionHandler(e)
-      echo "async thread done ", counter
   thread[].event.addEvent(cb)
 
 method poll*(thread: AsyncSigilThreadPtr, blocking: BlockingKinds = Blocking): bool {.gcsafe, discardable.} =
@@ -143,7 +138,7 @@ proc runAsyncThread*(targ: AsyncSigilThreadPtr) {.thread.} =
   thread.setupThread()
   while thread.isRunning():
     echo "async sigil thread running!", " (th: ", getThreadId(), ")"
-    asyncdispatch.poll()
+    asyncdispatch.drain()
 
   try:
     if thread.drain.load(Relaxed):
