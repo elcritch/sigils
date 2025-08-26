@@ -78,7 +78,7 @@ method poll*(
       thread.exec(sig)
       result = true
 
-proc runForever*(thread: SigilThreadDefaultPtr) =
+method runForever*(thread: SigilThreadDefaultPtr) {.gcsafe.} =
   emit thread.agent.started()
   while isRunning(thread):
     try:

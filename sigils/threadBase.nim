@@ -114,6 +114,11 @@ method poll*(
 ): bool {.base, gcsafe, discardable.} =
   raise newException(AssertionDefect, "this should never be called!")
 
+method runForever*(
+    thread: SigilThreadPtr
+) {.base, gcsafe, discardable.} =
+  raise newException(AssertionDefect, "this should never be called!")
+
 proc gcCollectReferences(thread: SigilThreadPtr) =
   var derefs: seq[WeakRef[Agent]]
   for agent in thread.references.keys():
