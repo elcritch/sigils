@@ -19,11 +19,14 @@ import core
 export smartptrs, isolation
 export threadBase
 
-type AsyncSigilThread* = object of SigilThread
-  inputs*: SigilChan
-  event*: AsyncEvent
-  drain*: Atomic[bool]
-  thr*: Thread[ptr AsyncSigilThread]
+type
+  AsyncSigilThread* = object of SigilThread
+    inputs*: SigilChan
+    event*: AsyncEvent
+    drain*: Atomic[bool]
+    thr*: Thread[ptr AsyncSigilThread]
+  
+  AsyncSigilThreadPtr* = ptr AsyncSigilThread
 
 proc newSigilAsyncThread*(): ptr AsyncSigilThread =
   result = cast[ptr AsyncSigilThread](allocShared0(sizeof(AsyncSigilThread)))
@@ -86,9 +89,9 @@ proc runAsyncThread*(targ: ptr AsyncSigilThread) {.thread.} =
   let cb = proc(fd: AsyncFD): bool {.closure, gcsafe.} =
       # echo "async thread running "
       var sig: ThreadSignal
-      while isRunning(thread[]) and thread[].recv(sig, NonBlocking):
+      while isRunning(thread) and thread.recv(sig, NonBlocking):
         try:
-          sthr[].exec(sig)
+          sthr.exec(sig)
         except CatchableError as e:
           if sthr[].exceptionHandler.isNil:
             raise e

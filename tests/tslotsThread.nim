@@ -102,7 +102,7 @@ suite "threaded agent slots":
     check not ct.isNil
 
     var a = SomeAction.new()
-    ct[].send(ThreadSignal(kind: Move, item: move a))
+    ct.send(ThreadSignal(kind: Move, item: move a))
 
   test "simple threading test":
     var
@@ -283,8 +283,8 @@ suite "threaded agent slots":
         if globalLastTicker.load != 3:
           os.sleep(1)
       check globalLastTicker.load == 3
-      ct[].poll()
-      let polled = ct[].pollAll()
+      ct.poll()
+      let polled = ct.pollAll()
       echo "polled: ", polled
       check a.value == 3
       echo "inner done"
@@ -315,7 +315,7 @@ suite "threaded agent slots":
 
       emit a.valueChanged(314)
       let ct = getCurrentSigilThread()
-      ct[].poll()
+      ct.poll()
       check c.value == 314
     GC_fullCollect()
 
@@ -344,7 +344,7 @@ suite "threaded agent slots":
       # thread.thread.joinThread(500)
       # os.sleep(500)
       let ct = getCurrentSigilThread()
-      ct[].poll()
+      ct.poll()
       check a.value == 314
       GC_fullCollect()
 
@@ -383,11 +383,11 @@ suite "threaded agent slots":
         emit a.valueChanged(89)
         emit a.valueChanged(756809)
 
-        ct[].poll()
+        ct.poll()
         check a.value == 89
       echo "block done"
 
-      let cnt = ct[].pollAll()
+      let cnt = ct.pollAll()
       check cnt == 0
       check a.value == 89
 
@@ -425,7 +425,7 @@ suite "threaded agent slots":
         let ct = getCurrentSigilThread()
         var cnt = 0
         for i in 1 .. 20:
-          cnt.inc(ct[].pollAll())
+          cnt.inc(ct.pollAll())
           if cnt >= 3:
             break
           os.sleep(1)
@@ -442,7 +442,7 @@ suite "threaded agent slots":
         thread.start()
         echo "thread runner!", " (th: ", getThreadId(), ")"
         let ct = getCurrentSigilThread()
-        let polled = ct[].pollAll()
+        let polled = ct.pollAll()
         echo "polled: ", polled
         when defined(extraLoopTests):
           let m = 10
@@ -477,13 +477,13 @@ suite "threaded agent slots":
 
             var cnt = 0
             for i in 1 .. 20:
-              cnt.inc(ct[].pollAll())
+              cnt.inc(ct.pollAll())
               if cnt >= 3:
                 break
               os.sleep(1)
-            ct[].pollAll()
+            ct.pollAll()
             check a.value == 314 + 271
-            ct[].pollAll()
+            ct.pollAll()
           GC_fullCollect()
       GC_fullCollect()
     GC_fullCollect()
@@ -513,7 +513,7 @@ suite "threaded agent slots":
 
             let bp: AgentProxy[Counter] = b.moveToThread(thread)
 
-            ct[].pollAll()
+            ct.pollAll()
 
             threads.connect(a, valueChanged, bp, setValue)
 
@@ -525,7 +525,7 @@ suite "threaded agent slots":
             # check a.value == 314
             # ct[].poll()
             # check a.value == 271
-            ct[].pollAll()
+            ct.pollAll()
           GC_fullCollect()
       GC_fullCollect()
     GC_fullCollect()

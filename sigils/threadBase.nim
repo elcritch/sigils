@@ -71,6 +71,9 @@ type
   SigilThreadDefault* = object of SigilThread
     inputs*: SigilChan
     thr*: Thread[ptr SigilThread]
+  
+  SigilThreadPtr* = ptr SigilThread
+  SigilThreadDefaultPtr* = ptr SigilThreadDefault
 
 proc timeout*(timer: SigilTimer) {.signal.}
 
@@ -95,22 +98,22 @@ proc newSigilChan*(): SigilChan =
   result = newChan[ThreadSignal](1_000)
 
 method send*(
-    thread: SigilThread, msg: sink ThreadSignal, blocking: BlockingKinds = Blocking
+    thread: SigilThreadPtr, msg: sink ThreadSignal, blocking: BlockingKinds = Blocking
 ) {.base, gcsafe.} =
   raise newException(AssertionDefect, "this should never be called!")
 
 method recv*(
-    thread: SigilThread, msg: var ThreadSignal, blocking: BlockingKinds
+    thread: SigilThreadPtr, msg: var ThreadSignal, blocking: BlockingKinds
 ): bool {.base, gcsafe.} =
   raise newException(AssertionDefect, "this should never be called!")
 
 method setTimer*(
-    thread: SigilThread, timer: SigilTimer
+    thread: SigilThreadPtr, timer: SigilTimer
 ) {.base, gcsafe.} =
   raise newException(AssertionDefect, "this should never be called!")
 
 method send*(
-    thread: SigilThreadDefault, msg: sink ThreadSignal, blocking: BlockingKinds
+    thread: SigilThreadDefaultPtr, msg: sink ThreadSignal, blocking: BlockingKinds
 ) {.gcsafe.} =
   var msg = isolateRuntime(msg)
   case blocking
@@ -122,7 +125,7 @@ method send*(
       raise newException(MessageQueueFullError, "could not send!")
 
 method recv*(
-    thread: SigilThreadDefault, msg: var ThreadSignal, blocking: BlockingKinds
+    thread: SigilThreadDefaultPtr, msg: var ThreadSignal, blocking: BlockingKinds
 ): bool {.gcsafe.} =
   case blocking
   of Blocking:
@@ -134,7 +137,7 @@ method recv*(
 var localSigilThread {.threadVar.}: ptr SigilThread
 
 method setTimer*(
-    thread: SigilThreadDefault, timer: SigilTimer
+    thread: SigilThreadDefaultPtr, timer: SigilTimer
 ) {.gcsafe.} =
   raise newException(AssertionDefect, "not implemented for this thread type!")
 
@@ -165,13 +168,13 @@ proc startLocalThread*() =
     st[].threadId.store(getThreadId(), Relaxed)
     setLocalSigilThread(st)
 
-proc getCurrentSigilThread*(): ptr SigilThread =
+proc getCurrentSigilThread*(): SigilThreadPtr =
   if not hasLocalSigilThread():
     startLocalThread()
   assert hasLocalSigilThread()
   return localSigilThread
 
-proc gcCollectReferences(thread: var SigilThread) =
+proc gcCollectReferences(thread: SigilThreadPtr) =
   var derefs: seq[WeakRef[Agent]]
   for agent in thread.references.keys():
     if not agent[].hasConnections():
@@ -180,7 +183,7 @@ proc gcCollectReferences(thread: var SigilThread) =
     debugPrint "\tderef cleanup: ", agent.unsafeWeakRef()
     thread.references.del(agent)
 
-proc exec*(thread: var SigilThread, sig: ThreadSignal) {.gcsafe.} =
+proc exec*(thread: SigilThreadPtr, sig: ThreadSignal) {.gcsafe.} =
   debugPrint "\nthread got request: ", $sig.kind
   case sig.kind
   of Exit:
@@ -233,7 +236,7 @@ proc exec*(thread: var SigilThread, sig: ThreadSignal) {.gcsafe.} =
 
 proc started*(tp: ThreadAgent) {.signal.}
 
-proc isRunning*(thread: var SigilThread): bool =
+proc isRunning*(thread: SigilThreadPtr): bool =
   thread.running.load(Relaxed)
 
 proc defaultExceptionHandler*(e: ref Exception) =
@@ -245,24 +248,24 @@ proc setExceptionHandler*(
 ) =
   thread.exceptionHandler = handler
 
-proc poll*(thread: var SigilThread) =
+proc poll*(thread: SigilThreadPtr) =
   var sig: ThreadSignal
   discard thread.recv(sig, Blocking)
   thread.exec(sig)
 
-proc tryPoll*(thread: var SigilThread) =
+proc tryPoll*(thread: SigilThreadPtr) =
   var sig: ThreadSignal
   if thread.recv(sig, NonBlocking):
     thread.exec(sig)
 
-proc pollAll*(thread: var SigilThread): int {.discardable.} =
+proc pollAll*(thread: SigilThreadPtr): int {.discardable.} =
   var sig: ThreadSignal
   result = 0
   while thread.recv(sig, NonBlocking):
     thread.exec(sig)
     result.inc()
 
-proc runForever*[R: SigilThread](thread: var R) =
+proc runForever*[R: SigilThreadPtr](thread: R) =
   emit thread.agent.started()
   while isRunning(thread):
     try:
@@ -283,7 +286,7 @@ proc runForever*[R: SigilThread](thread: var R) =
       else:
         thread.exceptionHandler(e)
 
-proc runThread*(thread: ptr SigilThread) {.thread.} =
+proc runThread*(thread: SigilThreadPtr) {.thread.} =
   {.cast(gcsafe).}:
     pcnt.inc
     pidx = pcnt
@@ -291,23 +294,23 @@ proc runThread*(thread: ptr SigilThread) {.thread.} =
     localSigilThread = thread.toSigilThread()
     thread[].threadId.store(getThreadId(), Relaxed)
     debugPrint "Sigil worker thread waiting!"
-    thread[].runForever()
+    thread.runForever()
 
-proc start*(thread: ptr SigilThreadDefault) =
+proc start*(thread: SigilThreadDefaultPtr) =
   if thread[].exceptionHandler.isNil:
     thread[].exceptionHandler = defaultExceptionHandler
   createThread(thread[].thr, runThread, thread)
 
-proc stop*(thread: ptr SigilThreadDefault, immediate: bool = false) =
+proc stop*(thread: SigilThreadDefaultPtr, immediate: bool = false) =
   if immediate:
     thread[].running.store(false, Relaxed)
   else:
-    thread[].send(ThreadSignal(kind: Exit))
+    thread.send(ThreadSignal(kind: Exit))
 
-proc join*(thread: ptr SigilThreadDefault) =
+proc join*(thread: SigilThreadDefaultPtr) =
   thread[].thr.joinThread()
 
-proc peek*(thread: ptr SigilThreadDefault): int =
+proc peek*(thread: SigilThreadDefaultPtr): int =
   result = thread[].inputs.peek()
 
 proc newTimer*(duration: Duration, repeat: int = -1): SigilTimer =

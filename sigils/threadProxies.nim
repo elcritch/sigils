@@ -45,7 +45,7 @@ proc `=destroy`*(obj: var typeof(AgentProxyShared()[])) =
       proxyTwin = obj.proxyTwin.toKind(Agent)
     if not proxyTwin.isNil:
       debugPrint "send deref: ", $proxyTwin, " thr: ", getThreadId()
-      thr[].send(ThreadSignal(kind: Deref, deref: proxyTwin))
+      thr.send(ThreadSignal(kind: Deref, deref: proxyTwin))
   except Exception:
     echo "error sending deref message for ", $obj.proxyTwin
 
@@ -94,7 +94,7 @@ method callMethod*(
           withLock proxy.remoteThread[].signaledLock:
             proxy.remoteThread[].signaled.incl(proxy.proxyTwin.toKind(AgentRemote))
           proxy.proxyTwin[].inbox.send(msg)
-      proxy.remoteThread[].send(ThreadSignal(kind: Trigger))
+      proxy.remoteThread.send(ThreadSignal(kind: Trigger))
   elif slot == localSlot:
     debugPrint "\t proxy:callMethod:localSlot: "
     callSlots(proxy, req)
@@ -113,7 +113,7 @@ method callMethod*(
         proxy.proxyTwin[].inbox.send(msg)
         withLock proxy.remoteThread[].signaledLock:
           proxy.remoteThread[].signaled.incl(proxy.proxyTwin.toKind(AgentRemote))
-      proxy.remoteThread[].send(ThreadSignal(kind: Trigger))
+      proxy.remoteThread.send(ThreadSignal(kind: Trigger))
 
 method removeSubscriptionsFor*(
     self: AgentProxyShared, subscriber: WeakRef[Agent]
@@ -200,8 +200,8 @@ proc moveToThread*[T: Agent, R: SigilThread](
     hasSubs = true
   agent[].addSubscription(AnySigilName, remoteProxy, remoteSlot)
 
-  thread[].send(ThreadSignal(kind: Move, item: move agentTy))
-  thread[].send(ThreadSignal(kind: Move, item: move remoteProxy))
+  thread.send(ThreadSignal(kind: Move, item: move agentTy))
+  thread.send(ThreadSignal(kind: Move, item: move remoteProxy))
 
   return localProxy
 
