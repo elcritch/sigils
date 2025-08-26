@@ -126,11 +126,10 @@ method poll*(thread: AsyncSigilThreadPtr, blocking: BlockingKinds = Blocking): b
   case blocking
   of Blocking:
     asyncdispatch.poll()
-    result = true
+    result = false
   of NonBlocking:
-    if asyncdispatch.hasPendingOperations():
-      asyncdispatch.poll()
-      result = true
+    asyncdispatch.poll(1)
+    result = false
 
 proc runAsyncThread*(targ: AsyncSigilThreadPtr) {.thread.} =
   var
