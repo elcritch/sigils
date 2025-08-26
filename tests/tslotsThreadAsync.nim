@@ -96,4 +96,6 @@ suite "threaded agent slots":
 
     check ct of AsyncSigilThreadPtr
 
+    ct.poll()
+    ct.poll(NonBlocking)
     check ct.pollAll() == 0

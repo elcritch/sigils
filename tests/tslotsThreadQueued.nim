@@ -76,6 +76,6 @@ suite "connectQueued to local thread":
 
     startTimer(timer)
 
-    ct.poll()
+    ct.poll(NonBlocking)
     check a.value == 1
 
