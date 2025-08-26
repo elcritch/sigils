@@ -28,7 +28,7 @@ proc timerRun*(self: Counter) {.slot.} =
 suite "connectQueued to local thread":
   test "queued connects a->b on local thread":
     globalCounter = @[]
-    startLocalThreadDispatch()
+    startLocalThreadDefault()
     var a = SomeAction()
     var b = Counter()
 
@@ -48,7 +48,7 @@ suite "connectQueued to local thread":
 
   test "queued connects a->b on local thread":
     globalCounter = @[]
-    startLocalThreadDispatch()
+    startLocalThreadDefault()
     var a = SomeAction()
     var b = Counter()
 
@@ -67,8 +67,10 @@ suite "connectQueued to local thread":
     check globalCounter == @[139, 314, 278]
 
   test "timer callback":
-    startLocalThreadDispatch()
+    setLocalSigilThread(newSigilAsyncThread())
     let ct = getCurrentSigilThread()
+    check ct of AsyncSigilThreadPtr
+
     var timer = SigilTimer(duration: initDuration(milliseconds=100))
     var a = Counter()
 
@@ -77,7 +79,6 @@ suite "connectQueued to local thread":
     startTimer(timer)
 
     ct.poll()
-    os.sleep(10)
+    # os.sleep(10)
 
     check a.value == 1
-

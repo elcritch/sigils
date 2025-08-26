@@ -189,10 +189,10 @@ proc setRunning*(thread: SigilThreadPtr, state: bool, immediate = false) =
   else:
     thread.send(ThreadSignal(kind: Exit))
 
-proc pollAll*(thread: SigilThreadPtr): int {.discardable.} =
+proc pollAll*(thread: SigilThreadPtr, blocking: BlockingKinds = NonBlocking): int {.discardable.} =
   var sig: ThreadSignal
   result = 0
-  while thread.poll(NonBlocking):
+  while thread.poll(blocking):
     result.inc()
 
 proc defaultExceptionHandler*(e: ref Exception) =

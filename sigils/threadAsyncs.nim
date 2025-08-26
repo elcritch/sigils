@@ -126,7 +126,7 @@ method poll*(thread: AsyncSigilThreadPtr, blocking: BlockingKinds = Blocking): b
   case blocking
   of Blocking:
     asyncdispatch.poll()
-    result = false
+    result = true
   of NonBlocking:
     asyncdispatch.poll(1)
     result = false
