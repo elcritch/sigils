@@ -39,7 +39,7 @@ proc newSigilAsyncThread*(): ptr AsyncSigilThread =
   echo "newSigilAsyncThread: ", result[].event.repr
 
 method send*(
-    thread: AsyncSigilThread, msg: sink ThreadSignal, blocking: BlockingKinds
+    thread: AsyncSigilThreadPtr, msg: sink ThreadSignal, blocking: BlockingKinds
 ) {.gcsafe.} =
   debugPrint "threadSend: ", thread.id
   var msg = isolateRuntime(msg)
@@ -53,7 +53,7 @@ method send*(
   thread.event.trigger()
 
 method recv*(
-    thread: AsyncSigilThread, msg: var ThreadSignal, blocking: BlockingKinds
+    thread: AsyncSigilThreadPtr, msg: var ThreadSignal, blocking: BlockingKinds
 ): bool {.gcsafe.} =
   debugPrint "threadRecv: ", thread.id
   case blocking
@@ -65,7 +65,7 @@ method recv*(
   thread.event.trigger()
 
 method setTimer*(
-    thread: AsyncSigilThread, timer: SigilTimer
+    thread: AsyncSigilThreadPtr, timer: SigilTimer
 ) {.gcsafe.} =
   when false:
     if timer.repeat == -1:

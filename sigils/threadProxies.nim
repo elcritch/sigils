@@ -269,7 +269,7 @@ proc fwdSlotTy[A: Agent; B: Agent; S: static string](self: Agent, params: SigilP
     msg.req = req
     msg.tgt = self.unsafeWeakRef().asAgent()
     let ct = getCurrentSigilThread()
-    ct[].send(msg)
+    ct.send(msg)
 
 template connectQueued*[T](
     a: Agent,
@@ -302,7 +302,7 @@ proc fwdSlot[A: Agent; B: Agent; S: static string](self: Agent, params: SigilPar
     msg.req = req
     msg.tgt = self.unsafeWeakRef().asAgent()
     let ct = getCurrentSigilThread()
-    ct[].send(msg)
+    ct.send(msg)
 
 template connectQueued*(
     a: Agent,

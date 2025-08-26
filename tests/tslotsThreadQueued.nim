@@ -38,7 +38,7 @@ suite "connectQueued to local thread":
     # Drain the local thread scheduler to deliver the queued Call
     let ct = getCurrentSigilThread()
 
-    let polled = ct[].pollAll()
+    let polled = ct.pollAll()
     check polled == 3
     check globalCounter == @[314, 139, 278]
 
@@ -58,7 +58,7 @@ suite "connectQueued to local thread":
     # Drain the local thread scheduler to deliver the queued Call
     let ct = getCurrentSigilThread()
 
-    let polled = ct[].pollAll()
+    let polled = ct.pollAll()
     check polled == 3
     check globalCounter == @[139, 314, 278]
 
