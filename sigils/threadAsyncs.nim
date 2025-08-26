@@ -69,11 +69,8 @@ method recv*(
 method setTimer*(
     thread: AsyncSigilThreadPtr, timer: SigilTimer
 ) {.gcsafe.} =
-  echo "setTimer:init: ", timer.duration, " count: ", timer.count
   if timer.isRepeat():
-    echo "setTimer:repeat: duration: ", timer.duration
     proc cb(fd: AsyncFD): bool {.closure, gcsafe.} =
-      echo "timer cb:repeat: duration: ", timer.duration
       if thread.hasCancelTimer(timer):
         thread.removeTimer(timer)
         return true # stop timer
@@ -82,9 +79,7 @@ method setTimer*(
         return false
     asyncdispatch.addTimer(timer.duration.inMilliseconds(), oneshot=false, cb)
   else:
-    echo "setTimer:oneshot: duration: ", timer.duration, " count: ", timer.count
     proc cb(fd: AsyncFD): bool {.closure, gcsafe.} =
-      echo "timer cb:oneshot: duration: ", timer.duration, " count: ", timer.count
       if timer.count == 0 or thread.hasCancelTimer(timer):
         thread.removeTimer(timer)
         return true # stop timer
@@ -96,7 +91,6 @@ method setTimer*(
     asyncdispatch.addTimer(timer.duration.inMilliseconds(), oneshot=true, cb)
 
 proc setupThread*(thread: ptr AsyncSigilThread) =
-  echo "ASYNC setupThread: ", thread[].getThreadId()
   thread[].isReady = true
   let cb = proc(fd: AsyncFD): bool {.closure, gcsafe.} =
       # echo "async thread running "
