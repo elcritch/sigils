@@ -61,3 +61,15 @@ suite "connectQueued to local thread":
     let polled = ct[].pollAll()
     check polled == 3
     check globalCounter == @[139, 314, 278]
+
+  test "timer callback":
+    startLocalThreadDispatch()
+    var a = SomeAction()
+    var b = Counter()
+
+    block:
+      connectQueued(a, valueChanged, b, Counter.setValueGlobal())
+
+    emit a.valueChanged(139)
+    emit a.valueChanged(314)
+    emit a.valueChanged(278)

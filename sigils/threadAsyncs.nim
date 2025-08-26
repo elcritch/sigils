@@ -61,6 +61,22 @@ method recv*(
     result = thread.inputs.tryRecv(msg)
   thread.event.trigger()
 
+method setTimer*(
+    thread: AsyncSigilThread, timer: SigilTimer
+) {.gcsafe.} =
+  when false:
+    if timer.repeat == -1:
+      proc cb(fd: AsyncFD): bool {.closure, gcsafe.} =
+        if thread.timers.contains(timer):
+          emit timer.timeout()
+        return false
+      asyncdispatch.addTimer(timer.duration.inMilliseconds(), true, cb)
+    else:
+      proc cb() {.closure, gcsafe.} =
+        asyncdispatch.addTimer(timer.duration.inMilliseconds(), timer.repeat, cb)
+        emit timer.timeout()
+      asyncdispatch.addTimer(timer.duration.inMilliseconds(), timer.repeat, cb)
+
 proc runAsyncThread*(targ: ptr AsyncSigilThread) {.thread.} =
   var
     thread = targ
