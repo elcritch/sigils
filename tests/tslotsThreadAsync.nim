@@ -31,8 +31,9 @@ proc setValue*(self: Counter, value: int) {.slot.} =
   asyncCheck ticker(self)
 
 proc setValueNonAsync*(self: Counter, value: int) {.slot.} =
-  echo "setValue! ", value, " (th: ", getThreadId(), ")"
+  echo "setValueNonAsync! ", value, " (th: ", getThreadId(), ")"
   self.value = value
+  emit self.updated(1337)
 
 proc completed*(self: SomeAction, final: int) {.slot.} =
   echo "Action done! final: ", final, " (th: ", getThreadId(), ")"
