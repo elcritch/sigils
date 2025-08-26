@@ -93,6 +93,7 @@ method setTimer*(
     asyncdispatch.addTimer(timer.duration.inMilliseconds(), oneshot=true, cb)
 
 proc setupThread*(thread: ptr AsyncSigilThread) =
+  echo "ASYNC setupThread: ", thread[].getThreadId()
   let cb = proc(fd: AsyncFD): bool {.closure, gcsafe.} =
       # echo "async thread running "
       var sig: ThreadSignal
