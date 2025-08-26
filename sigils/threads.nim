@@ -9,11 +9,12 @@ import isolateutils
 import agents
 import core
 import threadBase
-import threadProxies
-import threadAsyncs
+import threadDefault
+# import threadProxies
+# import threadAsyncs
 
 export isolateutils
 export threadBase
-export threadProxies
-export threadAsyncs
-
+export threadDefault
+# export threadProxies
+# export threadAsyncs

@@ -70,12 +70,7 @@ type
     running*: Atomic[bool]
     toCancel*: HashSet[SigilTimer]
 
-  SigilThreadDefault* = object of SigilThread
-    inputs*: SigilChan
-    thr*: Thread[ptr SigilThread]
-  
   SigilThreadPtr* = ptr SigilThread
-  SigilThreadDefaultPtr* = ptr SigilThreadDefault
 
 proc timeout*(timer: SigilTimer) {.signal.}
 
@@ -114,70 +109,11 @@ method setTimer*(
 ) {.base, gcsafe.} =
   raise newException(AssertionDefect, "this should never be called!")
 
-method send*(
-    thread: SigilThreadDefaultPtr, msg: sink ThreadSignal, blocking: BlockingKinds
-) {.gcsafe.} =
-  var msg = isolateRuntime(msg)
-  case blocking
-  of Blocking:
-    thread.inputs.send(msg)
-  of NonBlocking:
-    let sent = thread.inputs.trySend(msg)
-    if not sent:
-      raise newException(MessageQueueFullError, "could not send!")
-
-method recv*(
-    thread: SigilThreadDefaultPtr, msg: var ThreadSignal, blocking: BlockingKinds
-): bool {.gcsafe.} =
-  case blocking
-  of Blocking:
-    msg = thread.inputs.recv()
-    return true
-  of NonBlocking:
-    result = thread.inputs.tryRecv(msg)
-
-var localSigilThread {.threadVar.}: ptr SigilThread
-
-method setTimer*(
-    thread: SigilThreadDefaultPtr, timer: SigilTimer
-) {.gcsafe.} =
-  raise newException(AssertionDefect, "not implemented for this thread type!")
-
-proc newSigilThread*(): ptr SigilThreadDefault =
-  result = cast[ptr SigilThreadDefault](allocShared0(sizeof(SigilThreadDefault)))
-  result[] = SigilThreadDefault() # important!
-  result[].agent = ThreadAgent()
-  result[].inputs = newSigilChan()
-  result[].signaledLock.initLock()
-  result[].threadId.store(-1, Relaxed)
-  result[].running.store(true, Relaxed)
-
-proc toSigilThread*[R: SigilThread](t: ptr R): ptr SigilThread =
-  cast[ptr SigilThread](t)
-
-proc hasLocalSigilThread*(): bool =
-  not localSigilThread.isNil
-
-proc setLocalSigilThread*[R: SigilThread](thread: ptr R) =
-  localSigilThread = thread.toSigilThread()
-
 proc hasCancelTimer*(thread: SigilThreadPtr, timer: SigilTimer): bool =
   timer in thread.toCancel
 
 proc cancelTimer*(thread: SigilThreadPtr, timer: SigilTimer) =
   thread.toCancel.incl(timer)
-
-proc startLocalThread*() =
-  if not hasLocalSigilThread():
-    var st = newSigilThread()
-    st[].threadId.store(getThreadId(), Relaxed)
-    setLocalSigilThread(st)
-
-proc getCurrentSigilThread*(): SigilThreadPtr =
-  if not hasLocalSigilThread():
-    startLocalThread()
-  assert hasLocalSigilThread()
-  return localSigilThread
 
 proc gcCollectReferences(thread: SigilThreadPtr) =
   var derefs: seq[WeakRef[Agent]]
@@ -270,55 +206,38 @@ proc pollAll*(thread: SigilThreadPtr): int {.discardable.} =
     thread.exec(sig)
     result.inc()
 
-proc runForever*[R: SigilThreadPtr](thread: R) =
-  emit thread.agent.started()
-  while isRunning(thread):
-    try:
-      thread.poll()
-    except CatchableError as e:
-      if thread.exceptionHandler.isNil:
-        raise e
-      else:
-        thread.exceptionHandler(e)
-    except Defect as e:
-      if thread.exceptionHandler.isNil:
-        raise e
-      else:
-        thread.exceptionHandler(e)
-    except Exception as e:
-      if thread.exceptionHandler.isNil:
-        raise e
-      else:
-        thread.exceptionHandler(e)
-
-proc runThread*(thread: SigilThreadPtr) {.thread.} =
-  {.cast(gcsafe).}:
-    pcnt.inc
-    pidx = pcnt
-    assert localSigilThread.isNil()
-    localSigilThread = thread.toSigilThread()
-    thread[].threadId.store(getThreadId(), Relaxed)
-    debugPrint "Sigil worker thread waiting!"
-    thread.runForever()
-
-proc start*(thread: SigilThreadDefaultPtr) =
-  if thread[].exceptionHandler.isNil:
-    thread[].exceptionHandler = defaultExceptionHandler
-  createThread(thread[].thr, runThread, thread)
-
-proc stop*(thread: SigilThreadDefaultPtr, immediate: bool = false) =
+proc stop*(thread: SigilThreadPtr, immediate: bool = false) =
   if immediate:
     thread[].running.store(false, Relaxed)
   else:
     thread.send(ThreadSignal(kind: Exit))
 
-proc join*(thread: SigilThreadDefaultPtr) =
-  doAssert not thread.isNil()
-  thread[].thr.joinThread()
+var startSigilThreadProc: proc()
+var localSigilThread {.threadVar.}: ptr SigilThread
 
-proc peek*(thread: SigilThreadDefaultPtr): int =
-  result = thread[].inputs.peek()
+proc toSigilThread*[R: SigilThread](t: ptr R): ptr SigilThread =
+  cast[ptr SigilThread](t)
 
+proc hasLocalSigilThread*(): bool =
+  not localSigilThread.isNil
+
+proc setLocalSigilThread*[R: SigilThread](thread: ptr R) =
+  localSigilThread = thread.toSigilThread()
+
+proc setStartSigilThreadProc*(cb: proc()) =
+  startSigilThreadProc = cb
+
+proc getStartSigilThreadProc*(): proc() =
+  startSigilThreadProc
+
+template getCurrentSigilThread*(): SigilThreadPtr =
+  if not hasLocalSigilThread():
+    doAssert not startSigilThreadProc.isNil, "startSigilThreadProc is not set!"
+    startSigilThreadProc()
+  doAssert hasLocalSigilThread()
+  localSigilThread
+
+## Timer API
 proc newTimer*(duration: Duration, repeat: int = SigilTimerOneShot): SigilTimer =
   result = SigilTimer()
   result.duration = duration

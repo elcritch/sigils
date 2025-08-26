@@ -14,6 +14,7 @@ import std/asyncdispatch
 
 import agents
 import threadBase
+import threadDefault
 import core
 
 export smartptrs, isolation
@@ -115,6 +116,13 @@ proc setupThread*(thread: ptr AsyncSigilThread) =
             thread[].exceptionHandler(e)
   thread[].event.addEvent(cb)
   thread[].isReady = true
+
+proc poll*(thread: AsyncSigilThreadPtr) =
+  if thread[].isReady:
+    asyncdispatch.poll()
+  else:
+    thread.setupThread()
+    asyncdispatch.poll()
 
 proc runAsyncThread*(targ: AsyncSigilThreadPtr) {.thread.} =
   var
