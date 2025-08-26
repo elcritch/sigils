@@ -78,7 +78,8 @@ suite "connectQueued to local thread":
 
     startTimer(timer)
 
-    ct.poll()
-    # os.sleep(10)
+    ct.poll(NonBlocking)
+    check a.value == 0
 
+    ct.poll(Blocking)
     check a.value == 1
