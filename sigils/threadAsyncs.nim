@@ -24,6 +24,7 @@ type
     inputs*: SigilChan
     event*: AsyncEvent
     drain*: Atomic[bool]
+    isReady*: bool
     thr*: Thread[ptr AsyncSigilThread]
   
   AsyncSigilThreadPtr* = ptr AsyncSigilThread
@@ -90,37 +91,39 @@ method setTimer*(
         return false
     asyncdispatch.addTimer(timer.duration.inMilliseconds(), oneshot=true, cb)
 
-proc runAsyncThread*(targ: ptr AsyncSigilThread) {.thread.} =
-  var
-    thread = targ
-    sthr = thread.toSigilThread()
-  echo "async sigil thread waiting!", " (th: ", getThreadId(), ")"
-
+proc setupThread*(thread: ptr AsyncSigilThread) =
   let cb = proc(fd: AsyncFD): bool {.closure, gcsafe.} =
       # echo "async thread running "
       var sig: ThreadSignal
       while isRunning(thread) and thread.recv(sig, NonBlocking):
         try:
-          sthr.exec(sig)
+          thread.exec(sig)
         except CatchableError as e:
-          if sthr[].exceptionHandler.isNil:
+          if thread[].exceptionHandler.isNil:
             raise e
           else:
-            sthr[].exceptionHandler(e)
+            thread[].exceptionHandler(e)
         except Exception as e:
-          if sthr[].exceptionHandler.isNil:
+          if thread[].exceptionHandler.isNil:
             raise e
           else:
-            sthr[].exceptionHandler(e)
+            thread[].exceptionHandler(e)
         except Defect as e:
-          if sthr[].exceptionHandler.isNil:
+          if thread[].exceptionHandler.isNil:
             raise e
           else:
-            sthr[].exceptionHandler(e)
-
+            thread[].exceptionHandler(e)
   thread[].event.addEvent(cb)
+  thread[].isReady = true
+
+proc runAsyncThread*(targ: AsyncSigilThreadPtr) {.thread.} =
+  var
+    thread = targ
+  echo "async sigil thread waiting!", " (th: ", getThreadId(), ")"
+
+  thread.setupThread()
   while thread.drain.load(Relaxed):
-    poll()
+    asyncdispatch.poll()
 
   try:
     if thread.drain.load(Relaxed):
