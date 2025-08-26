@@ -22,8 +22,8 @@ proc setValueGlobal*(self: Counter, value: int) {.slot.} =
   globalCounter.add(value)
 
 proc timerRun*(self: Counter) {.slot.} =
-  echo "timerRun: ", self.value
   self.value.inc()
+  echo "timerRun: ", self.value
 
 suite "connectQueued to local thread":
   test "queued connects a->b on local thread":
