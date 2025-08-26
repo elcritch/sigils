@@ -117,12 +117,16 @@ proc setupThread*(thread: ptr AsyncSigilThread) =
   thread[].event.addEvent(cb)
   thread[].isReady = true
 
-proc poll*(thread: AsyncSigilThreadPtr) =
-  if thread[].isReady:
-    asyncdispatch.poll()
-  else:
+method poll*(thread: AsyncSigilThreadPtr, blocking: BlockingKinds = Blocking) =
+  if not thread[].isReady:
     thread.setupThread()
+  
+  echo "ASYNC poll: ", blocking
+  case blocking
+  of Blocking:
     asyncdispatch.poll()
+  of NonBlocking:
+    asyncdispatch.poll(timeout=1)
 
 proc runAsyncThread*(targ: AsyncSigilThreadPtr) {.thread.} =
   var

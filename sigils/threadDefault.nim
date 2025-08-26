@@ -55,18 +55,19 @@ proc newSigilThread*(): ptr SigilThreadDefault =
   result[].threadId.store(-1, Relaxed)
   result[].running.store(true, Relaxed)
 
-proc startLocalThread*() =
+proc startLocalThreadDefault*() =
   if not hasLocalSigilThread():
     var st = newSigilThread()
     st[].threadId.store(getThreadId(), Relaxed)
     setLocalSigilThread(st)
 
 if getStartSigilThreadProc().isNil:
-  setStartSigilThreadProc(startLocalThread)
+  setStartSigilThreadProc(startLocalThreadDefault)
 
 method poll*(
     thread: SigilThreadDefaultPtr, blocking: BlockingKinds = Blocking
 ) {.gcsafe.} =
+  echo "DEFAULT poll: ", blocking
   var sig: ThreadSignal
   case blocking
   of Blocking:

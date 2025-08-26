@@ -57,7 +57,7 @@ suite "threaded agent slots":
 
     let thread = newSigilAsyncThread()
     thread.start()
-    startLocalThread()
+    startLocalThreadDefault()
     # os.sleep(100)
 
     let bp: AgentProxy[Counter] = b.moveToThread(thread)
@@ -84,7 +84,7 @@ suite "threaded agent slots":
 
     let thread = newSigilAsyncThread()
     thread.start()
-    startLocalThread()
+    startLocalThreadDefault()
 
     let bp: AgentProxy[SomeAction] = b.moveToThread(thread)
     check not compiles(connect(a, sendBad, bp, setValueBad))
