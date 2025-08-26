@@ -68,7 +68,7 @@ suite "threaded agent slots":
     emit a.valueChanged(314)
     check a.value == 0
     let ct = getCurrentSigilThread()
-    ct[].poll()
+    ct.poll()
     check a.value == 1337
 
     thread.stop()
