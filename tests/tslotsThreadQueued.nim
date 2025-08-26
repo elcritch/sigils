@@ -76,10 +76,8 @@ suite "connectQueued to local thread":
 
     startTimer(timer)
 
-    for i in 1 .. 1000:
-      if ct.pollAll() > 0:
-        break
-      os.sleep(1)
+    ct.poll()
+    os.sleep(10)
 
     check a.value == 1
 

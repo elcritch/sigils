@@ -94,6 +94,7 @@ method setTimer*(
 
 proc setupThread*(thread: ptr AsyncSigilThread) =
   echo "ASYNC setupThread: ", thread[].getThreadId()
+  thread[].isReady = true
   let cb = proc(fd: AsyncFD): bool {.closure, gcsafe.} =
       # echo "async thread running "
       var sig: ThreadSignal
@@ -116,7 +117,6 @@ proc setupThread*(thread: ptr AsyncSigilThread) =
           else:
             thread[].exceptionHandler(e)
   thread[].event.addEvent(cb)
-  thread[].isReady = true
 
 method poll*(thread: AsyncSigilThreadPtr, blocking: BlockingKinds = Blocking): bool {.gcsafe, discardable.} =
   if not thread[].isReady:
