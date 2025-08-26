@@ -88,6 +88,7 @@ method setTimer*(
         return true # stop timer
       else:
         emit timer.timeout()
+        timer.repeat.dec()
         asyncdispatch.addTimer(timer.duration.inMilliseconds(), oneshot=true, cb)
         return false
     asyncdispatch.addTimer(timer.duration.inMilliseconds(), oneshot=true, cb)

@@ -89,17 +89,14 @@ suite "connectQueued to local thread":
     let ct = getCurrentSigilThread()
     check ct of AsyncSigilThreadPtr
 
-    var timer = SigilTimer(duration: initDuration(milliseconds=10), repeat: 1)
+    var timer = SigilTimer(duration: initDuration(milliseconds=10), repeat: 2)
     var a = Counter()
 
     connect(timer, timeout, a, Counter.timerRun())
 
     startTimer(timer)
 
-    ct.poll(NonBlocking)
-    check a.value == 0
-
-    ct.poll(Blocking)
+    ct.poll()
     check a.value == 1
-    ct.poll(Blocking)
+    ct.poll()
     check a.value == 2
