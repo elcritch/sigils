@@ -103,3 +103,6 @@ suite "connectQueued to local thread":
     check a.value == 1
     ct.poll()
     check a.value == 2
+
+    ct.poll()
+    check a.value == 2
