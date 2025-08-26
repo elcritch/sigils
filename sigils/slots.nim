@@ -81,27 +81,6 @@ proc updateProcsSig(
     for ch in node:
       ch.updateProcsSig(isPublic, gens, procLineInfo)
 
-proc makeGenerics*(node: NimNode, gens: seq[string], isIdentDefs = false) =
-  discard
-  if node.kind == nnkGenericParams:
-    return
-  else:
-    for i, ch in node:
-      if ch.kind == nnkBracketExpr:
-        var allIdents = true
-        for n in ch:
-          if n.kind notin [nnkIdentDefs, nnkIdent]:
-            allIdents = false
-        if not allIdents:
-          break
-        let idType = ch
-        let genParam =
-          if idType[1].kind == nnkIdentDefs:
-            idType[1][0]
-          else:
-            idType[1]
-        node[i] = nnkCall.newTree(bindSym("[]", brOpen), ident idType[0].repr, genParam)
-      ch.makeGenerics(gens)
 
 macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
   ## Define a remote procedure call.
@@ -303,7 +282,6 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
   var gens: seq[string]
   for gen in genericParams:
     gens.add gen[0].strVal
-  result.makeGenerics(gens)
 
   # echo "slot: "
   # echo result.lispRepr
