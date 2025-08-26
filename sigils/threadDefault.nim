@@ -67,7 +67,6 @@ if getStartSigilThreadProc().isNil:
 method poll*(
     thread: SigilThreadDefaultPtr, blocking: BlockingKinds = Blocking
 ) {.gcsafe.} =
-  echo "DEFAULT poll: ", blocking
   var sig: ThreadSignal
   case blocking
   of Blocking:
