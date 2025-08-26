@@ -67,18 +67,23 @@ method recv*(
 method setTimer*(
     thread: AsyncSigilThreadPtr, timer: SigilTimer
 ) {.gcsafe.} =
-  when false:
-    if timer.repeat == -1:
-      proc cb(fd: AsyncFD): bool {.closure, gcsafe.} =
-        if thread.timers.contains(timer):
-          emit timer.timeout()
-        return false
-      asyncdispatch.addTimer(timer.duration.inMilliseconds(), true, cb)
-    else:
-      proc cb() {.closure, gcsafe.} =
-        asyncdispatch.addTimer(timer.duration.inMilliseconds(), timer.repeat, cb)
+  if timer.repeat == -1:
+    proc cb(fd: AsyncFD): bool {.closure, gcsafe.} =
+      if thread.timers.getOrDefault(timer, (false,)).running:
         emit timer.timeout()
-      asyncdispatch.addTimer(timer.duration.inMilliseconds(), timer.repeat, cb)
+        return false
+      else:
+        return true # stop timer
+    asyncdispatch.addTimer(timer.duration.inMilliseconds(), oneshot=false, cb)
+  else:
+    proc cb(fd: AsyncFD): bool {.closure, gcsafe.} =
+      if timer.repeat > 0 and thread.timers.getOrDefault(timer, (false,)).running:
+        emit timer.timeout()
+        asyncdispatch.addTimer(timer.duration.inMilliseconds(), oneshot=true, cb)
+        return false
+      else:
+        return true # stop timer
+    asyncdispatch.addTimer(timer.duration.inMilliseconds(), oneshot=true, cb)
 
 proc runAsyncThread*(targ: ptr AsyncSigilThread) {.thread.} =
   var
