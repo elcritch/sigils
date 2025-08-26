@@ -89,3 +89,9 @@ suite "threaded agent slots":
     let bp: AgentProxy[SomeAction] = b.moveToThread(thread)
     check not compiles(connect(a, sendBad, bp, setValueBad))
     # connect(a, sendBad, bp, setValueBad)
+
+  test "local async thread":
+    setLocalSigilThread(newSigilAsyncThread())
+    let ct = getCurrentSigilThread()
+
+    check ct of AsyncSigilThreadPtr

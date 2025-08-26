@@ -214,7 +214,7 @@ proc toSigilThread*[R: SigilThread](t: ptr R): ptr SigilThread =
 proc hasLocalSigilThread*(): bool =
   not localSigilThread.isNil
 
-proc setLocalSigilThread*[R: SigilThread](thread: ptr R) =
+proc setLocalSigilThread*[R: ptr SigilThread](thread: R) =
   localSigilThread = thread.toSigilThread()
 
 proc setStartSigilThreadProc*(cb: proc()) =
