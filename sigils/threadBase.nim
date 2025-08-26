@@ -20,7 +20,7 @@ const SigilTimerRepeat* = -1
 type
   SigilTimer* = ref object of Agent
     duration*: Duration
-    repeat*: int = SigilTimerRepeat # -1 for repeat forever, N > 0 for N times
+    count*: int = SigilTimerRepeat # -1 for repeat forever, N > 0 for N times
 
   MessageQueueFullError* = object of CatchableError
 
@@ -232,13 +232,13 @@ template getCurrentSigilThread*(): SigilThreadPtr =
 proc started*(tp: ThreadAgent) {.signal.}
 
 ## Timer API
-proc newSigilTimer*(duration: Duration, repeat: int = SigilTimerRepeat): SigilTimer =
+proc newSigilTimer*(duration: Duration, count: int = SigilTimerRepeat): SigilTimer =
   result = SigilTimer()
   result.duration = duration
-  result.repeat = repeat
+  result.count = count
 
 proc isRepeat*(timer: SigilTimer): bool =
-  timer.repeat == SigilTimerRepeat
+  timer.count == SigilTimerRepeat
 
 proc startTimer*(timer: SigilTimer, ct: SigilThreadPtr = getCurrentSigilThread()) =
   ct.setTimer(timer)

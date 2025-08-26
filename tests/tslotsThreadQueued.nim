@@ -71,7 +71,7 @@ suite "connectQueued to local thread":
     let ct = getCurrentSigilThread()
     check ct of AsyncSigilThreadPtr
 
-    var timer = SigilTimer(duration: initDuration(milliseconds=2))
+    var timer = newSigilTimer(duration=initDuration(milliseconds=2))
     var a = Counter()
 
     connect(timer, timeout, a, Counter.timerRun())
@@ -89,7 +89,7 @@ suite "connectQueued to local thread":
     let ct = getCurrentSigilThread()
     check ct of AsyncSigilThreadPtr
 
-    var timer = SigilTimer(duration: initDuration(milliseconds=10), repeat: 2)
+    var timer = newSigilTimer(duration=initDuration(milliseconds=10), count=2)
     var a = Counter()
 
     connect(timer, timeout, a, Counter.timerRun())

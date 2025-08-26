@@ -69,11 +69,11 @@ method recv*(
 method setTimer*(
     thread: AsyncSigilThreadPtr, timer: SigilTimer
 ) {.gcsafe.} =
-  echo "setTimer:init: ", timer.duration, " repeat: ", timer.repeat
+  echo "setTimer:init: ", timer.duration, " count: ", timer.count
   if timer.isRepeat():
-    echo "setTimer:repeat: duration: ", timer.duration, " repeat: ", timer.repeat
+    echo "setTimer:repeat: duration: ", timer.duration
     proc cb(fd: AsyncFD): bool {.closure, gcsafe.} =
-      echo "timer cb:repeat: duration: ", timer.duration, " repeat: ", timer.repeat
+      echo "timer cb:repeat: duration: ", timer.duration
       if thread.hasCancelTimer(timer):
         return true # stop timer
       else:
@@ -81,14 +81,14 @@ method setTimer*(
         return false
     asyncdispatch.addTimer(timer.duration.inMilliseconds(), oneshot=false, cb)
   else:
-    echo "setTimer:oneshot: duration: ", timer.duration, " repeat: ", timer.repeat
+    echo "setTimer:oneshot: duration: ", timer.duration, " count: ", timer.count
     proc cb(fd: AsyncFD): bool {.closure, gcsafe.} =
-      echo "timer cb:oneshot: duration: ", timer.duration, " repeat: ", timer.repeat
-      if timer.repeat == 0 or thread.hasCancelTimer(timer):
+      echo "timer cb:oneshot: duration: ", timer.duration, " count: ", timer.count
+      if timer.count == 0 or thread.hasCancelTimer(timer):
         return true # stop timer
       else:
         emit timer.timeout()
-        timer.repeat.dec()
+        timer.count.dec()
         asyncdispatch.addTimer(timer.duration.inMilliseconds(), oneshot=true, cb)
         return false
     asyncdispatch.addTimer(timer.duration.inMilliseconds(), oneshot=true, cb)
