@@ -134,7 +134,7 @@ proc runAsyncThread*(targ: AsyncSigilThreadPtr) {.thread.} =
   echo "async sigil thread waiting!", " (th: ", getThreadId(), ")"
 
   thread.setupThread()
-  while thread.drain.load(Relaxed):
+  while thread.isRunning():
     asyncdispatch.poll()
 
   try:

@@ -30,6 +30,10 @@ proc setValue*(self: Counter, value: int) {.slot.} =
   self.value = value
   asyncCheck ticker(self)
 
+proc setValueNonAsync*(self: Counter, value: int) {.slot.} =
+  echo "setValue! ", value, " (th: ", getThreadId(), ")"
+  self.value = value
+
 proc completed*(self: SomeAction, final: int) {.slot.} =
   echo "Action done! final: ", final, " (th: ", getThreadId(), ")"
   self.value = final
@@ -46,6 +50,33 @@ proc setValueBad*(self: SomeAction, val: Counter) {.slot.} =
 suite "threaded agent slots":
   teardown:
     GC_fullCollect()
+
+  test "sigil object thread runner non-async task":
+    var
+      a = SomeAction()
+      b = Counter()
+
+    echo "thread runner!", " (th: ", getThreadId(), ")"
+    echo "obj a: ", $a.unsafeWeakRef()
+
+    let thread = newSigilAsyncThread()
+    thread.start()
+    startLocalThreadDefault()
+    # os.sleep(100)
+
+    let bp: AgentProxy[Counter] = b.moveToThread(thread)
+    threads.connect(a, valueChanged, bp, setValueNonAsync)
+    threads.connect(bp, updated, a, SomeAction.completed())
+
+    # echo "bp.outbound: ", bp.outbound[].AsyncSigilChan.repr
+    emit a.valueChanged(314)
+    check a.value == 0
+    let ct = getCurrentSigilThread()
+    ct.poll()
+    check a.value == 1337
+
+    thread.stop()
+    thread.join()
 
   test "sigil object thread runner":
     var
