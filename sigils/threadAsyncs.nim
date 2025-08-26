@@ -70,10 +70,10 @@ method setTimer*(
     thread: AsyncSigilThreadPtr, timer: SigilTimer
 ) {.gcsafe.} =
   echo "setTimer:init: ", timer.duration, " repeat: ", timer.repeat
-  if not timer.isOneShot():
-    echo "setTimer:repeat: ", timer.duration, " repeat: ", timer.repeat
+  if timer.isRepeat():
+    echo "setTimer:repeat: duration: ", timer.duration, " repeat: ", timer.repeat
     proc cb(fd: AsyncFD): bool {.closure, gcsafe.} =
-      echo "timer cb:repeat: ", timer.duration, " repeat: ", timer.repeat
+      echo "timer cb:repeat: duration: ", timer.duration, " repeat: ", timer.repeat
       if thread.hasCancelTimer(timer):
         return true # stop timer
       else:
@@ -81,9 +81,9 @@ method setTimer*(
         return false
     asyncdispatch.addTimer(timer.duration.inMilliseconds(), oneshot=false, cb)
   else:
-    echo "setTimer:oneshot: ", timer.duration, " repeat: ", timer.repeat
+    echo "setTimer:oneshot: duration: ", timer.duration, " repeat: ", timer.repeat
     proc cb(fd: AsyncFD): bool {.closure, gcsafe.} =
-      echo "timer cb:oneshot: ", timer.duration, " repeat: ", timer.repeat
+      echo "timer cb:oneshot: duration: ", timer.duration, " repeat: ", timer.repeat
       if timer.repeat > 0 and thread.hasCancelTimer(timer):
         return true # stop timer
       else:
