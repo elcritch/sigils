@@ -133,8 +133,9 @@ method poll*(thread: AsyncSigilThreadPtr, blocking: BlockingKinds = Blocking): b
 proc runAsyncThread*(targ: AsyncSigilThreadPtr) {.thread.} =
   var
     thread = targ
-  
   setGlobalDispatcher(newDispatcher())
+  setLocalSigilThread(thread)
+
   echo "async sigil thread waiting!", " (th: ", getThreadId(), ")"
 
   thread.setupThread()
