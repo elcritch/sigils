@@ -175,10 +175,14 @@ proc exec*(thread: SigilThreadPtr, sig: ThreadSignal) {.gcsafe.} =
           debugPrint "\t threadExec:tgt: ", $sig.tgt, " rc: ", $sig.tgt[].unsafeGcCount()
           let res = sig.tgt[].callMethod(sig.req, sig.slot)
 
-proc started*(tp: ThreadAgent) {.signal.}
-
 proc isRunning*(thread: SigilThreadPtr): bool =
   thread.running.load(Relaxed)
+
+proc setRunning*(thread: SigilThreadPtr, state: bool, immediate = false) =
+  if immediate:
+    thread[].running.store(state, Relaxed)
+  else:
+    thread.send(ThreadSignal(kind: Exit))
 
 proc defaultExceptionHandler*(e: ref Exception) =
   echo "Sigil thread unhandled exception: ", e.msg, " ", e.name
@@ -188,29 +192,6 @@ proc setExceptionHandler*(
     handler: proc(e: ref Exception) {.gcsafe, nimcall.}
 ) =
   thread.exceptionHandler = handler
-
-proc poll*(thread: SigilThreadPtr) =
-  var sig: ThreadSignal
-  discard thread.recv(sig, Blocking)
-  thread.exec(sig)
-
-proc tryPoll*(thread: SigilThreadPtr) =
-  var sig: ThreadSignal
-  if thread.recv(sig, NonBlocking):
-    thread.exec(sig)
-
-proc pollAll*(thread: SigilThreadPtr): int {.discardable.} =
-  var sig: ThreadSignal
-  result = 0
-  while thread.recv(sig, NonBlocking):
-    thread.exec(sig)
-    result.inc()
-
-proc stop*(thread: SigilThreadPtr, immediate: bool = false) =
-  if immediate:
-    thread[].running.store(false, Relaxed)
-  else:
-    thread.send(ThreadSignal(kind: Exit))
 
 var startSigilThreadProc: proc()
 var localSigilThread {.threadVar.}: ptr SigilThread
@@ -236,6 +217,8 @@ template getCurrentSigilThread*(): SigilThreadPtr =
     startSigilThreadProc()
   doAssert hasLocalSigilThread()
   localSigilThread
+
+proc started*(tp: ThreadAgent) {.signal.}
 
 ## Timer API
 proc newTimer*(duration: Duration, repeat: int = SigilTimerOneShot): SigilTimer =

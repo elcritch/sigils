@@ -155,7 +155,7 @@ suite "threaded agent slots":
       check not compiles(connect(a, valueChanged, bp, someAction))
 
       check thread.peek() == 2
-      thread.stop()
+      thread.setRunning(false)
       when not defined(tsan):
         thread.join()
 
