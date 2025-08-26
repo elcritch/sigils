@@ -140,18 +140,6 @@ template connected*(
   else:
     false
 
-  # if sn in a.subcriptionsTable:
-  #   let subs = a.subcriptionsTable[sn]
-  #   let bb = b.unsafeWeakRef().asAgent()
-  #   var res = false
-  #   for sub in subs:
-  #     if sub.tgt == bb:
-  #       res = true
-  #       break
-  #   res
-  # else:
-  #   false
-
 template connected*(
     a: Agent,
     signal: typed,
@@ -164,17 +152,6 @@ template connected*(
     true
   else:
     false
-  # if sn in a.subcriptionsTable:
-  #   let subs = a.subcriptionsTable[sn]
-  #   let bb = b.unsafeWeakRef().asAgent()
-  #   var res = false
-  #   for sub in subs:
-  #     if sub.tgt == bb and sub.slot == agentSlot:
-  #       res = true
-  #       break
-  #   res
-  # else:
-  #   false
 
 template disconnect*[T](
     a: Agent,
@@ -184,7 +161,6 @@ template disconnect*[T](
     acceptVoidSlot: static bool = false,
 ): void =
   ## disconnect
-  # checkSignalTypes(a, signal, b, slot, acceptVoidSlot)
   a.delSubscription(signalName(signal), b, slot)
 
 template disconnect*(
@@ -195,7 +171,6 @@ template disconnect*(
 ): void =
   ## disconnect
   let agentSlot = `slot`(typeof(b))
-  # checkSignalTypes(a, signal, b, agentSlot, acceptVoidSlot)
   a.delSubscription(signalName(signal), b, agentSlot)
 
 template disconnect*(

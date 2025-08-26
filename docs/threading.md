@@ -11,7 +11,7 @@ This document explains the threading architecture implemented in `sigils/threads
 
 ## Core Types
 
-- `SigilThread`/`SigilThreadImpl` (threadBase): Encapsulates a worker thread and its scheduling state. Holds:
+- `SigilThread`/`SigilThreadDefault` (threadBase): Encapsulates a worker thread and its scheduling state. Holds:
   - `inputs: Chan[ThreadSignal]` main control channel for the thread.
   - `signaled: HashSet[WeakRef[AgentRemote]]` set of per-proxy mailboxes to drain.
   - `signaledLock: Lock` protects `signaled`.
@@ -94,7 +94,7 @@ Locks are used to safely access `proxyTwin` and to coordinate with the destinati
 - `Exit` sets `running = false` to end the loop.
 
 Helpers:
-- `newSigilThread()` allocates/initializes a `SigilThreadImpl`.
+- `newSigilThread()` allocates/initializes a `SigilThreadDefault`.
 - `start()/stop()/join()/peek()` manage worker threads.
 - `startLocalThread()/getCurrentSigilThread()` manage a thread-local `SigilThread` for the current (often main) thread.
 

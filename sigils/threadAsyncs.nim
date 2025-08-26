@@ -5,13 +5,6 @@ import threading/smartptrs
 import threading/channels
 import threading/atomics
 
-import agents
-import threads
-import core
-
-export smartptrs, isolation
-export threads
-
 import std/os
 import std/monotimes
 import std/options
@@ -19,11 +12,23 @@ import std/isolation
 import std/uri
 import std/asyncdispatch
 
-type AsyncSigilThread* = object of SigilThread
-  inputs*: SigilChan
-  event*: AsyncEvent
-  drain*: Atomic[bool]
-  thr*: Thread[ptr AsyncSigilThread]
+import agents
+import threadBase
+import threadDefault
+import core
+
+export smartptrs, isolation
+export threadBase
+
+type
+  AsyncSigilThread* = object of SigilThread
+    inputs*: SigilChan
+    event*: AsyncEvent
+    drain*: Atomic[bool]
+    isReady*: bool
+    thr*: Thread[ptr AsyncSigilThread]
+  
+  AsyncSigilThreadPtr* = ptr AsyncSigilThread
 
 proc newSigilAsyncThread*(): ptr AsyncSigilThread =
   result = cast[ptr AsyncSigilThread](allocShared0(sizeof(AsyncSigilThread)))
@@ -36,7 +41,7 @@ proc newSigilAsyncThread*(): ptr AsyncSigilThread =
   echo "newSigilAsyncThread: ", result[].event.repr
 
 method send*(
-    thread: AsyncSigilThread, msg: sink ThreadSignal, blocking: BlockingKinds
+    thread: AsyncSigilThreadPtr, msg: sink ThreadSignal, blocking: BlockingKinds
 ) {.gcsafe.} =
   debugPrint "threadSend: ", thread.id
   var msg = isolateRuntime(msg)
@@ -50,7 +55,7 @@ method send*(
   thread.event.trigger()
 
 method recv*(
-    thread: AsyncSigilThread, msg: var ThreadSignal, blocking: BlockingKinds
+    thread: AsyncSigilThreadPtr, msg: var ThreadSignal, blocking: BlockingKinds
 ): bool {.gcsafe.} =
   debugPrint "threadRecv: ", thread.id
   case blocking
@@ -61,38 +66,87 @@ method recv*(
     result = thread.inputs.tryRecv(msg)
   thread.event.trigger()
 
-proc runAsyncThread*(targ: ptr AsyncSigilThread) {.thread.} =
-  var
-    thread = targ
-    sthr = thread.toSigilThread()
-  echo "async sigil thread waiting!", " (th: ", getThreadId(), ")"
+method setTimer*(
+    thread: AsyncSigilThreadPtr, timer: SigilTimer
+) {.gcsafe.} =
+  if timer.isRepeat():
+    proc cb(fd: AsyncFD): bool {.closure, gcsafe.} =
+      if thread.hasCancelTimer(timer):
+        thread.removeTimer(timer)
+        return true # stop timer
+      else:
+        emit timer.timeout()
+        return false
+    asyncdispatch.addTimer(timer.duration.inMilliseconds(), oneshot=false, cb)
+  else:
+    proc cb(fd: AsyncFD): bool {.closure, gcsafe.} =
+      if timer.count == 0 or thread.hasCancelTimer(timer):
+        thread.removeTimer(timer)
+        return true # stop timer
+      else:
+        emit timer.timeout()
+        timer.count.dec()
+        asyncdispatch.addTimer(timer.duration.inMilliseconds(), oneshot=true, cb)
+        return false
+    asyncdispatch.addTimer(timer.duration.inMilliseconds(), oneshot=true, cb)
 
+proc setupThread*(thread: ptr AsyncSigilThread) =
+  thread[].isReady = true
   let cb = proc(fd: AsyncFD): bool {.closure, gcsafe.} =
-    {.cast(gcsafe).}:
       # echo "async thread running "
       var sig: ThreadSignal
-      while isRunning(thread[]) and thread[].recv(sig, NonBlocking):
+      while isRunning(thread) and thread.recv(sig, NonBlocking):
         try:
-          sthr[].exec(sig)
+          thread.exec(sig)
         except CatchableError as e:
-          if not sthr[].exceptionHandler.isNil:
-            sthr[].exceptionHandler(e)
+          if thread[].exceptionHandler.isNil:
+            raise e
+          else:
+            thread[].exceptionHandler(e)
         except Exception as e:
-          if not sthr[].exceptionHandler.isNil:
-            sthr[].exceptionHandler(e)
+          if thread[].exceptionHandler.isNil:
+            raise e
+          else:
+            thread[].exceptionHandler(e)
         except Defect as e:
-          if not sthr[].exceptionHandler.isNil:
-            sthr[].exceptionHandler(e)
-
+          if thread[].exceptionHandler.isNil:
+            raise e
+          else:
+            thread[].exceptionHandler(e)
   thread[].event.addEvent(cb)
+
+method poll*(thread: AsyncSigilThreadPtr, blocking: BlockingKinds = Blocking): bool {.gcsafe, discardable.} =
+  if not thread[].isReady:
+    thread.setupThread()
+  
+  case blocking
+  of Blocking:
+    asyncdispatch.poll()
+    result = true
+  of NonBlocking:
+    asyncdispatch.poll(1)
+    result = false
+
+proc runAsyncThread*(targ: AsyncSigilThreadPtr) {.thread.} =
+  var
+    thread = targ
+  echo "async sigil thread waiting!", " (th: ", getThreadId(), ")"
+
+  thread.setupThread()
   while thread.drain.load(Relaxed):
-    poll()
+    asyncdispatch.poll()
 
   try:
     if thread.drain.load(Relaxed):
       asyncdispatch.drain()
   except ValueError:
     discard
+
+proc startLocalThreadDispatch*() =
+  if not hasLocalSigilThread():
+    var st = newSigilAsyncThread()
+    st[].threadId.store(getThreadId(), Relaxed)
+    setLocalSigilThread(st)
 
 proc start*(thread: ptr AsyncSigilThread) =
   if thread[].exceptionHandler.isNil:
