@@ -74,6 +74,8 @@ type
 
 proc timeout*(timer: SigilTimer) {.signal.}
 
+proc started*(tp: ThreadAgent) {.signal.}
+
 proc getThreadId*(thread: SigilThread): int =
   addr(thread.threadId)[].load(Relaxed)
 
@@ -114,10 +116,14 @@ method poll*(
 ): bool {.base, gcsafe, discardable.} =
   raise newException(AssertionDefect, "this should never be called!")
 
-method runForever*(
-    thread: SigilThreadPtr
-) {.base, gcsafe, discardable.} =
-  raise newException(AssertionDefect, "this should never be called!")
+proc isRunning*(thread: SigilThreadPtr): bool =
+  thread.running.load(Relaxed)
+
+proc setRunning*(thread: SigilThreadPtr, state: bool, immediate = false) =
+  if immediate:
+    thread[].running.store(state, Relaxed)
+  else:
+    thread.send(ThreadSignal(kind: Exit))
 
 proc gcCollectReferences(thread: SigilThreadPtr) =
   var derefs: seq[WeakRef[Agent]]
@@ -179,14 +185,26 @@ proc exec*(thread: SigilThreadPtr, sig: ThreadSignal) {.gcsafe.} =
           debugPrint "\t threadExec:tgt: ", $sig.tgt, " rc: ", $sig.tgt[].unsafeGcCount()
           let res = sig.tgt[].callMethod(sig.req, sig.slot)
 
-proc isRunning*(thread: SigilThreadPtr): bool =
-  thread.running.load(Relaxed)
-
-proc setRunning*(thread: SigilThreadPtr, state: bool, immediate = false) =
-  if immediate:
-    thread[].running.store(state, Relaxed)
-  else:
-    thread.send(ThreadSignal(kind: Exit))
+proc runForever*(thread: SigilThreadPtr) {.gcsafe.} =
+  emit thread.agent.started()
+  while thread.isRunning():
+    try:
+      discard thread.poll()
+    except CatchableError as e:
+      if thread.exceptionHandler.isNil:
+        raise e
+      else:
+        thread.exceptionHandler(e)
+    except Defect as e:
+      if thread.exceptionHandler.isNil:
+        raise e
+      else:
+        thread.exceptionHandler(e)
+    except Exception as e:
+      if thread.exceptionHandler.isNil:
+        raise e
+      else:
+        thread.exceptionHandler(e)
 
 proc pollAll*(thread: SigilThreadPtr, blocking: BlockingKinds = NonBlocking): int {.discardable.} =
   var sig: ThreadSignal
@@ -227,8 +245,6 @@ template getCurrentSigilThread*(): SigilThreadPtr =
     startSigilThreadProc()
   doAssert hasLocalSigilThread()
   localSigilThread
-
-proc started*(tp: ThreadAgent) {.signal.}
 
 ## Timer API
 proc hasCancelTimer*(thread: SigilThreadPtr, timer: SigilTimer): bool =

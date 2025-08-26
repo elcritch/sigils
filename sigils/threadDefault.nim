@@ -78,27 +78,6 @@ method poll*(
       thread.exec(sig)
       result = true
 
-method runForever*(thread: SigilThreadDefaultPtr) {.gcsafe.} =
-  emit thread.agent.started()
-  while isRunning(thread):
-    try:
-      discard thread.poll()
-    except CatchableError as e:
-      if thread.exceptionHandler.isNil:
-        raise e
-      else:
-        thread.exceptionHandler(e)
-    except Defect as e:
-      if thread.exceptionHandler.isNil:
-        raise e
-      else:
-        thread.exceptionHandler(e)
-    except Exception as e:
-      if thread.exceptionHandler.isNil:
-        raise e
-      else:
-        thread.exceptionHandler(e)
-
 proc runThread*(thread: SigilThreadDefaultPtr) {.thread.} =
   {.cast(gcsafe).}:
     pcnt.inc
