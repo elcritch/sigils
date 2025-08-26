@@ -66,7 +66,7 @@ if getStartSigilThreadProc().isNil:
 
 method poll*(
     thread: SigilThreadDefaultPtr, blocking: BlockingKinds = Blocking
-): bool {.gcsafe.} =
+): bool {.gcsafe, discardable.} =
   var sig: ThreadSignal
   case blocking
   of Blocking:
@@ -82,7 +82,7 @@ proc runForever*(thread: SigilThreadDefaultPtr) =
   emit thread.agent.started()
   while isRunning(thread):
     try:
-      thread.poll()
+      discard thread.poll()
     except CatchableError as e:
       if thread.exceptionHandler.isNil:
         raise e

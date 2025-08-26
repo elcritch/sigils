@@ -118,7 +118,7 @@ proc setupThread*(thread: ptr AsyncSigilThread) =
   thread[].event.addEvent(cb)
   thread[].isReady = true
 
-method poll*(thread: AsyncSigilThreadPtr, blocking: BlockingKinds = Blocking) =
+method poll*(thread: AsyncSigilThreadPtr, blocking: BlockingKinds = Blocking): bool {.gcsafe, discardable.} =
   if not thread[].isReady:
     thread.setupThread()
   
@@ -126,8 +126,11 @@ method poll*(thread: AsyncSigilThreadPtr, blocking: BlockingKinds = Blocking) =
   case blocking
   of Blocking:
     asyncdispatch.poll()
+    result = true
   of NonBlocking:
-    asyncdispatch.poll(timeout=1)
+    if asyncdispatch.hasPendingOperations():
+      asyncdispatch.poll()
+      result = true
 
 proc runAsyncThread*(targ: AsyncSigilThreadPtr) {.thread.} =
   var
