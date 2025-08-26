@@ -84,7 +84,7 @@ method setTimer*(
     echo "setTimer:oneshot: duration: ", timer.duration, " repeat: ", timer.repeat
     proc cb(fd: AsyncFD): bool {.closure, gcsafe.} =
       echo "timer cb:oneshot: duration: ", timer.duration, " repeat: ", timer.repeat
-      if timer.repeat > 0 and thread.hasCancelTimer(timer):
+      if timer.repeat == 0 or thread.hasCancelTimer(timer):
         return true # stop timer
       else:
         emit timer.timeout()
