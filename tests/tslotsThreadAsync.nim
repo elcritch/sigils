@@ -95,3 +95,5 @@ suite "threaded agent slots":
     let ct = getCurrentSigilThread()
 
     check ct of AsyncSigilThreadPtr
+
+    check ct.pollAll() == 0
