@@ -308,6 +308,7 @@ proc stop*(thread: SigilThreadDefaultPtr, immediate: bool = false) =
     thread.send(ThreadSignal(kind: Exit))
 
 proc join*(thread: SigilThreadDefaultPtr) =
+  doAssert not thread.isNil()
   thread[].thr.joinThread()
 
 proc peek*(thread: SigilThreadDefaultPtr): int =
