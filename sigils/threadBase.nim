@@ -66,7 +66,7 @@ type
     when defined(sigilsDebug):
       debugName*: string
     running*: Atomic[bool]
-    timers*: Table[SigilTimer, tuple[running: bool,]]
+    toCancel*: HashSet[SigilTimer]
 
   SigilThreadDefault* = object of SigilThread
     inputs*: SigilChan
@@ -159,8 +159,11 @@ proc hasLocalSigilThread*(): bool =
 proc setLocalSigilThread*[R: SigilThread](thread: ptr R) =
   localSigilThread = thread.toSigilThread()
 
-proc hasTimer*(thread: SigilThread, timer: SigilTimer): bool =
-  thread.timers.getOrDefault(timer, (false,))[0]
+proc hasCancelTimer*(thread: SigilThreadPtr, timer: SigilTimer): bool =
+  timer in thread.toCancel
+
+proc cancelTimer*(thread: SigilThreadPtr, timer: SigilTimer) =
+  thread.toCancel.incl(timer)
 
 proc startLocalThread*() =
   if not hasLocalSigilThread():

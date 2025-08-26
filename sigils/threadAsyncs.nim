@@ -69,20 +69,20 @@ method setTimer*(
 ) {.gcsafe.} =
   if timer.repeat == -1:
     proc cb(fd: AsyncFD): bool {.closure, gcsafe.} =
-      if thread.timers.getOrDefault(timer, (false,)).running:
+      if thread.hasCancelTimer(timer):
+        return true # stop timer
+      else:
         emit timer.timeout()
         return false
-      else:
-        return true # stop timer
     asyncdispatch.addTimer(timer.duration.inMilliseconds(), oneshot=false, cb)
   else:
     proc cb(fd: AsyncFD): bool {.closure, gcsafe.} =
-      if timer.repeat > 0 and thread.timers.getOrDefault(timer, (false,)).running:
+      if timer.repeat > 0 and thread.hasCancelTimer(timer):
+        return true # stop timer
+      else:
         emit timer.timeout()
         asyncdispatch.addTimer(timer.duration.inMilliseconds(), oneshot=true, cb)
         return false
-      else:
-        return true # stop timer
     asyncdispatch.addTimer(timer.duration.inMilliseconds(), oneshot=true, cb)
 
 proc runAsyncThread*(targ: ptr AsyncSigilThread) {.thread.} =
