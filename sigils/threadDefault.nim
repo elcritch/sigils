@@ -64,22 +64,17 @@ proc startLocalThread*() =
 if getStartSigilThreadProc().isNil:
   setStartSigilThreadProc(startLocalThread)
 
-proc poll*(thread: SigilThreadDefaultPtr) =
+method poll*(
+    thread: SigilThreadDefaultPtr, blocking: BlockingKinds = Blocking
+) {.gcsafe.} =
   var sig: ThreadSignal
-  discard thread.recv(sig, Blocking)
-  thread.exec(sig)
-
-proc tryPoll*(thread: SigilThreadDefaultPtr) =
-  var sig: ThreadSignal
-  if thread.recv(sig, NonBlocking):
+  case blocking
+  of Blocking:
+    discard thread.recv(sig, Blocking)
     thread.exec(sig)
-
-proc pollAll*(thread: SigilThreadDefaultPtr): int {.discardable.} =
-  var sig: ThreadSignal
-  result = 0
-  while thread.recv(sig, NonBlocking):
-    thread.exec(sig)
-    result.inc()
+  of NonBlocking:
+    if thread.recv(sig, NonBlocking):
+      thread.exec(sig)
 
 proc runForever*(thread: SigilThreadDefaultPtr) =
   emit thread.agent.started()

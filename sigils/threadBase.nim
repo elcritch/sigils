@@ -109,6 +109,11 @@ method setTimer*(
 ) {.base, gcsafe.} =
   raise newException(AssertionDefect, "this should never be called!")
 
+method poll*(
+    thread: SigilThreadPtr, blocking: BlockingKinds = Blocking
+) {.base, gcsafe.} =
+  raise newException(AssertionDefect, "this should never be called!")
+
 proc hasCancelTimer*(thread: SigilThreadPtr, timer: SigilTimer): bool =
   timer in thread.toCancel
 
@@ -183,6 +188,13 @@ proc setRunning*(thread: SigilThreadPtr, state: bool, immediate = false) =
     thread[].running.store(state, Relaxed)
   else:
     thread.send(ThreadSignal(kind: Exit))
+
+proc pollAll*(thread: SigilThreadPtr): int {.discardable.} =
+  var sig: ThreadSignal
+  result = 0
+  while thread.recv(sig, NonBlocking):
+    thread.exec(sig)
+    result.inc()
 
 proc defaultExceptionHandler*(e: ref Exception) =
   echo "Sigil thread unhandled exception: ", e.msg, " ", e.name
