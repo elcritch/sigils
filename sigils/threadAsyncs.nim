@@ -122,7 +122,6 @@ method poll*(thread: AsyncSigilThreadPtr, blocking: BlockingKinds = Blocking): b
   if not thread[].isReady:
     thread.setupThread()
   
-  echo "ASYNC poll: ", blocking
   case blocking
   of Blocking:
     asyncdispatch.poll()
