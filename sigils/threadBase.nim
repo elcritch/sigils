@@ -114,15 +114,6 @@ method poll*(
 ): bool {.base, gcsafe, discardable.} =
   raise newException(AssertionDefect, "this should never be called!")
 
-proc hasCancelTimer*(thread: SigilThreadPtr, timer: SigilTimer): bool =
-  timer in thread.toCancel
-
-proc cancelTimer*(thread: SigilThreadPtr, timer: SigilTimer) =
-  thread.toCancel.incl(timer)
-
-proc removeTimer*(thread: SigilThreadPtr, timer: SigilTimer) =
-  thread.toCancel.excl(timer)
-
 proc gcCollectReferences(thread: SigilThreadPtr) =
   var derefs: seq[WeakRef[Agent]]
   for agent in thread.references.keys():
@@ -235,6 +226,15 @@ template getCurrentSigilThread*(): SigilThreadPtr =
 proc started*(tp: ThreadAgent) {.signal.}
 
 ## Timer API
+proc hasCancelTimer*(thread: SigilThreadPtr, timer: SigilTimer): bool =
+  timer in thread.toCancel
+
+proc cancelTimer*(thread: SigilThreadPtr, timer: SigilTimer) =
+  thread.toCancel.incl(timer)
+
+proc removeTimer*(thread: SigilThreadPtr, timer: SigilTimer) =
+  thread.toCancel.excl(timer)
+
 proc newSigilTimer*(duration: Duration, count: int = SigilTimerRepeat): SigilTimer =
   result = SigilTimer()
   result.duration = duration
