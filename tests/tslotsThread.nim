@@ -156,7 +156,8 @@ suite "threaded agent slots":
 
       check thread.peek() == 2
       thread.stop()
-      thread.join()
+      when not defined(tsan):
+        thread.join()
 
     GC_fullCollect()
 
