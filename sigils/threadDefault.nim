@@ -66,15 +66,17 @@ if getStartSigilThreadProc().isNil:
 
 method poll*(
     thread: SigilThreadDefaultPtr, blocking: BlockingKinds = Blocking
-) {.gcsafe.} =
+): bool {.gcsafe.} =
   var sig: ThreadSignal
   case blocking
   of Blocking:
     discard thread.recv(sig, Blocking)
     thread.exec(sig)
+    result = true
   of NonBlocking:
     if thread.recv(sig, NonBlocking):
       thread.exec(sig)
+      result = true
 
 proc runForever*(thread: SigilThreadDefaultPtr) =
   emit thread.agent.started()

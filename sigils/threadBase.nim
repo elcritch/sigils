@@ -111,7 +111,7 @@ method setTimer*(
 
 method poll*(
     thread: SigilThreadPtr, blocking: BlockingKinds = Blocking
-) {.base, gcsafe.} =
+): bool {.base, gcsafe.} =
   raise newException(AssertionDefect, "this should never be called!")
 
 proc hasCancelTimer*(thread: SigilThreadPtr, timer: SigilTimer): bool =
@@ -192,7 +192,7 @@ proc setRunning*(thread: SigilThreadPtr, state: bool, immediate = false) =
 proc pollAll*(thread: SigilThreadPtr): int {.discardable.} =
   var sig: ThreadSignal
   result = 0
-  while thread.recv(sig, NonBlocking):
+  while thread.poll(NonBlocking):
     thread.exec(sig)
     result.inc()
 
