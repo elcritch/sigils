@@ -133,6 +133,8 @@ method poll*(thread: AsyncSigilThreadPtr, blocking: BlockingKinds = Blocking): b
 proc runAsyncThread*(targ: AsyncSigilThreadPtr) {.thread.} =
   var
     thread = targ
+
+  doAssert not hasLocalSigilThread()
   setGlobalDispatcher(newDispatcher())
   setLocalSigilThread(thread)
 
