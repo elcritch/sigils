@@ -76,7 +76,7 @@ suite "connectQueued to local thread":
 
     connect(timer, timeout, a, Counter.timerRun())
 
-    startTimer(timer)
+    start(timer)
 
     ct.poll(NonBlocking)
     check a.value == 0
@@ -84,6 +84,9 @@ suite "connectQueued to local thread":
     for i in 1 .. 10:
       ct.poll()
     check a.value == 10
+
+    cancel(timer)
+    ct.poll()
 
   test "timer callback":
     let ct = getCurrentSigilThread()
@@ -94,7 +97,7 @@ suite "connectQueued to local thread":
 
     connect(timer, timeout, a, Counter.timerRun())
 
-    startTimer(timer)
+    start(timer)
 
     ct.poll()
     check a.value == 1

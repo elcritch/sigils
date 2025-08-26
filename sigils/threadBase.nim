@@ -240,8 +240,8 @@ proc newSigilTimer*(duration: Duration, count: int = SigilTimerRepeat): SigilTim
 proc isRepeat*(timer: SigilTimer): bool =
   timer.count == SigilTimerRepeat
 
-proc startTimer*(timer: SigilTimer, ct: SigilThreadPtr = getCurrentSigilThread()) =
+proc start*(timer: SigilTimer, ct: SigilThreadPtr = getCurrentSigilThread()) =
   ct.setTimer(timer)
 
-proc stopTimer*(timer: SigilTimer, ct: SigilThreadPtr = getCurrentSigilThread()) =
+proc cancel*(timer: SigilTimer, ct: SigilThreadPtr = getCurrentSigilThread()) =
   ct.cancelTimer(timer)
