@@ -44,7 +44,7 @@ proc newSigilAsyncThread*(): ptr AsyncSigilThread =
 method send*(
     thread: AsyncSigilThreadPtr, msg: sink ThreadSignal, blocking: BlockingKinds
 ) {.gcsafe.} =
-  echo "threadSend: ", thread.toSigilThread()[].getThreadId()
+  debugPrint "threadSend: ", thread.toSigilThread()[].getThreadId()
   var msg = isolateRuntime(msg)
   case blocking
   of Blocking:

@@ -11,6 +11,7 @@ type
 
 proc valueChanged*(tp: SomeAction, val: int) {.signal.}
 proc updated*(tp: Counter, final: int) {.signal.}
+proc updated*(tp: AgentProxy[Counter], final: int) {.signal.}
 
 ## -------------------------------------------------------- ##
 let start = epochTime()
@@ -142,13 +143,13 @@ suite "threaded agent slots":
 
     let bp: AgentProxy[Counter] = b.moveToThread(thread)
     threads.connect(bp, updated, bp, Counter.setValueNonAsync())
-    # threads.connect(bp, updated, a, SomeAction.completed())
+    threads.connect(bp, updated, a, SomeAction.completed())
 
-    # emit b.init(1337)
-    # check a.value == 0
-    # let ct = getCurrentSigilThread()
-    # ct.poll()
-    # check a.value == 1337
+    emit bp.updated(1337)
 
-    # thread.stop()
-    # thread.join()
+    let ct = getCurrentSigilThread()
+    ct.poll()
+    check a.value == 1337
+
+    thread.stop()
+    thread.join()
