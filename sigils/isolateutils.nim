@@ -14,14 +14,11 @@ proc checkThreadSafety[T, V](field: T, parent: V) =
           ". Use `Isolate[" & $(typeof(v)) & "]` to use it."
       .}
   elif T is tuple or T is object:
-    static:
-      echo "checkThreadSafety: object: ", $(T)
+    {.hint: "checkThreadSafety: object: " & $(T).}
     for n, v in field.fieldPairs():
       checkThreadSafety(v, parent)
   else:
-    static:
-      echo "checkThreadSafety: skip: ", $T
-    discard
+    {.hint: "checkThreadSafety: skip: " & $(T).}
 
 template checkSignalThreadSafety*(sig: typed) =
   checkThreadSafety(sig, sig)
@@ -35,13 +32,9 @@ proc verifyUniqueSkip(tp: typedesc[SysLock]) =
   discard
 
 proc verifyUnique[T, V](field: T, parent: V) =
-  # mixin verifyUnique
   when T is ref:
-    # static:
-    #   echo "verifyUnique: ref: ", $T
     if not field.isNil:
       if not field.isUniqueRef():
-        echo "verifyUnique: count: ", field.unsafeGcCount(), " ", field.repr
         raise newException(
           IsolationError,
           &"reference not unique! Cannot safely isolate {$typeof(field)} parent: {$typeof(parent)} ",
@@ -50,33 +43,19 @@ proc verifyUnique[T, V](field: T, parent: V) =
         verifyUnique(v, parent)
   elif T is tuple or T is object:
     when compiles(verifyUniqueSkip(T)):
-      # static:
-      #   echo "verifyUnique: skipping type: ", $T
       discard
     else:
-      # static:
-      #   echo "verifyUnique: object: ", $(T)
       for n, v in field.fieldPairs():
-        # static:
-        #   echo "verifyUnique: field: ", n, " tp: ", typeof(v)
         verifyUnique(v, parent)
   else:
-    # static:
-    #   echo "verifyUnique: skip: ", $T
     discard
 
 proc isolateRuntime*[T](item: sink T): Isolated[T] {.raises: [IsolationError].} =
   ## Isolates a ref type or type with ref's and ensure that
   ## each ref is unique. This allows safely isolating it.
-  when T is ref:
-    echo "isolateRuntime:call: ", item.unsafeGcCount()
   when compiles(isolate(item)):
-    # static:
-    #   echo "\n### IsolateRuntime: compile isolate: ", $T
     result = isolate(item)
   else:
-    # static:
-    #   echo "\n### IsolateRuntime: runtime isolate: ", $T
     verifyUnique(item, item)
     result = unsafeIsolate(item)
 

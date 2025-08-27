@@ -39,12 +39,11 @@ proc newSigilAsyncThread*(): ptr AsyncSigilThread =
   result[].inputs = newSigilChan()
   result[].running.store(true, Relaxed)
   result[].drain.store(true, Relaxed)
-  echo "newSigilAsyncThread: ", result[].event.repr
 
 method send*(
     thread: AsyncSigilThreadPtr, msg: sink ThreadSignal, blocking: BlockingKinds
 ) {.gcsafe.} =
-  debugPrint "threadSend: ", thread.id
+  debugPrint "threadSend: ", thread.toSigilThread()[].getThreadId()
   var msg = isolateRuntime(msg)
   case blocking
   of Blocking:
@@ -58,7 +57,7 @@ method send*(
 method recv*(
     thread: AsyncSigilThreadPtr, msg: var ThreadSignal, blocking: BlockingKinds
 ): bool {.gcsafe.} =
-  debugPrint "threadRecv: ", thread.id
+  debugPrint "threadRecv: ", thread.toSigilThread()[].getThreadId(), " blocking: ", blocking
   case blocking
   of Blocking:
     msg = thread.inputs.recv()
@@ -92,9 +91,11 @@ method setTimer*(
     asyncdispatch.addTimer(timer.duration.inMilliseconds(), oneshot=true, cb)
 
 proc setupThread*(thread: ptr AsyncSigilThread) =
+  if thread[].isReady:
+    return
   thread[].isReady = true
+
   let cb = proc(fd: AsyncFD): bool {.closure, gcsafe.} =
-      # echo "async thread running "
       var sig: ThreadSignal
       while isRunning(thread) and thread.recv(sig, NonBlocking):
         try:
@@ -131,11 +132,14 @@ method poll*(thread: AsyncSigilThreadPtr, blocking: BlockingKinds = Blocking): b
 proc runAsyncThread*(targ: AsyncSigilThreadPtr) {.thread.} =
   var
     thread = targ
-  echo "async sigil thread waiting!", " (th: ", getThreadId(), ")"
+
+  doAssert not hasLocalSigilThread()
+  setGlobalDispatcher(newDispatcher())
+  setLocalSigilThread(thread)
 
   thread.setupThread()
-  while thread.drain.load(Relaxed):
-    asyncdispatch.poll()
+  while thread.isRunning():
+    asyncdispatch.drain()
 
   try:
     if thread.drain.load(Relaxed):

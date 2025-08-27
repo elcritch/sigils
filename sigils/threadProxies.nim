@@ -205,6 +205,19 @@ proc moveToThread*[T: Agent, R: SigilThread](
 
   return localProxy
 
+template connect*[T, U, S](
+    proxyTy: AgentProxy[T],
+    signal: typed,
+    b: AgentProxy[U],
+    slot: Signal[S],
+    acceptVoidSlot: static bool = false,
+): void =
+  ## connects `AgentProxy[T]` to remote signals
+  ## 
+  checkSignalTypes(T(), signal, U(), slot, acceptVoidSlot)
+  let localProxy = Agent(proxyTy)
+  localProxy.addSubscription(signalName(signal), b, slot)
+
 template connect*[T, S](
     a: Agent,
     signal: typed,
@@ -239,6 +252,19 @@ template connect*[T](
   assert not localProxy.remote.isNil
   localProxy.proxyTwin[].addSubscription(AnySigilName, localProxy.remote[], localSlot)
 
+template connect*[T, S](
+    proxyTy: AgentProxy[T],
+    signal: typed,
+    b: Agent,
+    slot: Signal[S],
+    acceptVoidSlot: static bool = false,
+): void =
+  ## connects `AgentProxy[T]` to remote signals
+  ## 
+  checkSignalTypes(T(), signal, b, slot, acceptVoidSlot)
+  let localProxy = Agent(proxyTy)
+  localProxy.addSubscription(signalName(signal), b, slot)
+
 template connect*[T](
     thr: SigilThreadPtr,
     signal: typed,
@@ -255,25 +281,11 @@ template connect*[T](
   assert not localProxy.remote.isNil
   thr.agent.addSubscription(signalName(signal), localProxy.getRemote()[], agentSlot)
 
-template connect*[T, S](
-    proxyTy: AgentProxy[T],
-    signal: typed,
-    b: Agent,
-    slot: Signal[S],
-    acceptVoidSlot: static bool = false,
-): void =
-  ## connects `AgentProxy[T]` to remote signals
-  ## 
-  checkSignalTypes(T(), signal, b, slot, acceptVoidSlot)
-  let localProxy = Agent(proxyTy)
-  localProxy.addSubscription(signalName(signal), b, slot)
-
 import macros
 
 macro callCode(s: static string): untyped =
   ## calls a code to get the signal type using a static string
   result = parseStmt(s)
-  echo "callCode:result: ", result.repr
 
 proc fwdSlotTy[A: Agent; B: Agent; S: static string](self: Agent, params: SigilParams) {.nimcall.} =
     let agentSlot = callCode(S)

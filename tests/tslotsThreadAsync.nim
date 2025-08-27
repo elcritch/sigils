@@ -11,6 +11,7 @@ type
 
 proc valueChanged*(tp: SomeAction, val: int) {.signal.}
 proc updated*(tp: Counter, final: int) {.signal.}
+proc updated*(tp: AgentProxy[Counter], final: int) {.signal.}
 
 ## -------------------------------------------------------- ##
 let start = epochTime()
@@ -30,6 +31,11 @@ proc setValue*(self: Counter, value: int) {.slot.} =
   self.value = value
   asyncCheck ticker(self)
 
+proc setValueNonAsync*(self: Counter, value: int) {.slot.} =
+  echo "setValueNonAsync! ", value, " (th: ", getThreadId(), ")"
+  self.value = value
+  emit self.updated(1337)
+
 proc completed*(self: SomeAction, final: int) {.slot.} =
   echo "Action done! final: ", final, " (th: ", getThreadId(), ")"
   self.value = final
@@ -46,6 +52,33 @@ proc setValueBad*(self: SomeAction, val: Counter) {.slot.} =
 suite "threaded agent slots":
   teardown:
     GC_fullCollect()
+
+  test "sigil object thread runner non-async task":
+    var
+      a = SomeAction()
+      b = Counter()
+
+    echo "thread runner!", " (th: ", getThreadId(), ")"
+    echo "obj a: ", $a.unsafeWeakRef()
+
+    let thread = newSigilAsyncThread()
+    thread.start()
+    startLocalThreadDefault()
+    # os.sleep(100)
+
+    let bp: AgentProxy[Counter] = b.moveToThread(thread)
+    threads.connect(a, valueChanged, bp, setValueNonAsync)
+    threads.connect(bp, updated, a, SomeAction.completed())
+
+    # echo "bp.outbound: ", bp.outbound[].AsyncSigilChan.repr
+    emit a.valueChanged(314)
+    check a.value == 0
+    let ct = getCurrentSigilThread()
+    ct.poll()
+    check a.value == 1337
+
+    thread.stop()
+    thread.join()
 
   test "sigil object thread runner":
     var
@@ -99,3 +132,24 @@ suite "threaded agent slots":
     ct.poll()
     ct.poll(NonBlocking)
     check ct.pollAll() == 0
+
+  test "remote async thread trigger using local proxy":
+    var a = SomeAction()
+    var b = Counter()
+
+    let thread = newSigilAsyncThread()
+    thread.start()
+    startLocalThreadDefault()
+
+    let bp: AgentProxy[Counter] = b.moveToThread(thread)
+    threads.connect(bp, updated, bp, Counter.setValueNonAsync())
+    threads.connect(bp, updated, a, SomeAction.completed())
+
+    emit bp.updated(1337)
+
+    let ct = getCurrentSigilThread()
+    ct.poll()
+    check a.value == 1337
+
+    thread.stop()
+    thread.join()
