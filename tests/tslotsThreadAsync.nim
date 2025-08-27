@@ -132,7 +132,7 @@ suite "threaded agent slots":
     ct.poll(NonBlocking)
     check ct.pollAll() == 0
 
-  test "remote async thread start":
+  test "remote async thread trigger using local proxy":
     var a = SomeAction()
     var b = Counter()
 
