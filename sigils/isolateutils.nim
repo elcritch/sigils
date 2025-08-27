@@ -14,14 +14,11 @@ proc checkThreadSafety[T, V](field: T, parent: V) =
           ". Use `Isolate[" & $(typeof(v)) & "]` to use it."
       .}
   elif T is tuple or T is object:
-    static:
-      echo "checkThreadSafety: object: ", $(T)
+    {.hint: "checkThreadSafety: object: " & $(T).}
     for n, v in field.fieldPairs():
       checkThreadSafety(v, parent)
   else:
-    static:
-      echo "checkThreadSafety: skip: ", $T
-    discard
+    {.hint: "checkThreadSafety: skip: " & $(T).}
 
 template checkSignalThreadSafety*(sig: typed) =
   checkThreadSafety(sig, sig)

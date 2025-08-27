@@ -258,7 +258,6 @@ proc addSubscription*(
   if not obj.hasSubscription(sig, tgt, slot):
     obj.subcriptions.add((sig, Subscription(tgt: tgt.unsafeWeakRef().asAgent(), slot: slot)))
     tgt.listening.incl(obj.unsafeWeakRef().asAgent())
-    # echo "subcriptionsTable: ", obj.subcriptionsTable.len, " SUBSC: ", tgt.subscribed.len
 
 template addSubscription*(
     obj: Agent, sig: IndexableChars, tgt: Agent | WeakRef[Agent], slot: AgentProc

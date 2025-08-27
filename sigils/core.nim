@@ -32,20 +32,14 @@ type AgentSlotError* = object of CatchableError
 
 proc callSlots*(obj: Agent | WeakRef[Agent], req: SigilRequest) {.gcsafe.} =
   {.cast(gcsafe).}:
-    # echo "call slots:req: ", req.repr
-    # echo "call slots:all: ", req.procName, " ", " subscriptions: ", subscriptions
     for sub in obj.getSubscriptions(req.procName):
-      # echo ""
-      # echo "call listener:tgt: ", sub.tgt, " ", req.procName
-      # echo "call listener:slot: ", repr sub.slot
-      # let tgtRef = sub.tgt.toRef()
       when defined(sigilsDebug):
         if sub.tgt[].freedByThread != 0:
-          echo "exec:call:thread: ", $getThreadId()
-          echo "exec:call:sub.tgt[].freed:thread: ", $sub.tgt[].freedByThread
-          echo "exec:call:sub.tgt[]:id: ", $sub.tgt[].getSigilId()
-          echo "exec:call:sub.req: ", req.repr
-          echo "exec:call:obj:id: ", $obj.getSigilId()
+          debugPrint "exec:call:thread: ", $getThreadId()
+          debugPrint "exec:call:sub.tgt[].freed:thread: ", $sub.tgt[].freedByThread
+          debugPrint "exec:call:sub.tgt[]:id: ", $sub.tgt[].getSigilId()
+          debugPrint "exec:call:sub.req: ", req.repr
+          debugPrint "exec:call:obj:id: ", $obj.getSigilId()
           discard c_raise(11.cint)
         assert sub.tgt[].freedByThread == 0
       var res: SigilResponse = sub.tgt[].callMethod(req, sub.slot)
