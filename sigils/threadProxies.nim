@@ -273,7 +273,6 @@ import macros
 macro callCode(s: static string): untyped =
   ## calls a code to get the signal type using a static string
   result = parseStmt(s)
-  echo "callCode:result: ", result.repr
 
 proc fwdSlotTy[A: Agent; B: Agent; S: static string](self: Agent, params: SigilParams) {.nimcall.} =
     let agentSlot = callCode(S)
