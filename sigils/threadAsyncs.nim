@@ -39,7 +39,6 @@ proc newSigilAsyncThread*(): ptr AsyncSigilThread =
   result[].inputs = newSigilChan()
   result[].running.store(true, Relaxed)
   result[].drain.store(true, Relaxed)
-  echo "newSigilAsyncThread: ", result[].event.repr
 
 method send*(
     thread: AsyncSigilThreadPtr, msg: sink ThreadSignal, blocking: BlockingKinds
