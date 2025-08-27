@@ -131,3 +131,24 @@ suite "threaded agent slots":
     ct.poll()
     ct.poll(NonBlocking)
     check ct.pollAll() == 0
+
+  test "remote async thread start":
+    var a = SomeAction()
+    var b = Counter()
+
+    let thread = newSigilAsyncThread()
+    thread.start()
+    startLocalThreadDefault()
+
+    let bp: AgentProxy[Counter] = b.moveToThread(thread)
+    threads.connect(bp, updated, bp, Counter.setValueNonAsync())
+    # threads.connect(bp, updated, a, SomeAction.completed())
+
+    # emit b.init(1337)
+    # check a.value == 0
+    # let ct = getCurrentSigilThread()
+    # ct.poll()
+    # check a.value == 1337
+
+    # thread.stop()
+    # thread.join()
