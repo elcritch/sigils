@@ -138,11 +138,8 @@ proc runAsyncThread*(targ: AsyncSigilThreadPtr) {.thread.} =
   setGlobalDispatcher(newDispatcher())
   setLocalSigilThread(thread)
 
-  echo "async sigil thread waiting!", " (th: ", getThreadId(), ")"
-
   thread.setupThread()
   while thread.isRunning():
-    echo "async sigil thread running!", " (th: ", getThreadId(), ")"
     asyncdispatch.drain()
 
   try:
