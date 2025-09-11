@@ -214,6 +214,7 @@ proc pollAll*(thread: SigilThreadPtr, blocking: BlockingKinds = NonBlocking): in
 
 proc defaultExceptionHandler*(e: ref Exception) =
   echo "Sigil thread unhandled exception: ", e.msg, " ", e.name
+  echo "Sigil thread unhandled stack trace: ", e.getStackTrace()
 
 proc setExceptionHandler*(
     thread: var SigilThread,
