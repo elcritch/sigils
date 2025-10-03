@@ -23,11 +23,10 @@ export threadBase
 type
   SigilSelectorThread* = object of SigilThread
     inputs*: SigilChan
-    sel*: Selector[int]
+    sel*: Selector[SigilTimer]
     drain*: Atomic[bool]
     isReady*: bool
     thr*: Thread[ptr SigilSelectorThread]
-    timerNext*: Table[SigilTimer, int64]   # next fire time in epoch ms
     timerLock*: Lock
   
   SigilSelectorThreadPtr* = ptr SigilSelectorThread
@@ -35,7 +34,7 @@ type
 proc newSigilSelectorThread*(): ptr SigilSelectorThread =
   result = cast[ptr SigilSelectorThread](allocShared0(sizeof(SigilSelectorThread)))
   result[] = SigilSelectorThread() # important!
-  result[].sel = newSelector[int]()
+  result[].sel = newSelector[SigilTimer]()
   result[].agent = ThreadAgent()
   result[].signaledLock.initLock()
   result[].timerLock.initLock()
@@ -68,42 +67,33 @@ method recv*(
 method setTimer*(
     thread: SigilSelectorThreadPtr, timer: SigilTimer
 ) {.gcsafe.} =
-  ## Schedule a timer on this selector-backed thread.
-  let nowMs = (epochTime() * 1000.0).int64
-  let durMs = timer.duration.inMilliseconds().int64
+  ## Schedule a timer on this selector-backed thread using selector timers.
+  let durMs = max(timer.duration.inMilliseconds(), 1)
   withLock thread.timerLock:
-    thread.timerNext[timer] = nowMs + max(durMs, 1'i64)
+    discard thread.sel.registerTimer(durMs.int, true, timer)
 
-proc processDueTimers(thread: SigilSelectorThreadPtr) {.gcsafe.} =
-  ## Check and deliver any due timers.
-  let nowMs = (epochTime() * 1000.0).int64
-  var toFire: seq[SigilTimer] = @[]
-  withLock thread.timerLock:
-    # Collect timers to fire and update next times or remove canceled.
-    var toRemove: seq[SigilTimer] = @[]
-    for t, due in thread.timerNext.pairs:
-      # Handle cancellation first
-      if thread.hasCancelTimer(t):
-        toRemove.add(t)
-        thread.removeTimer(t)
-        continue
-      # Ready to fire?
-      if nowMs >= due:
-        toFire.add(t)
-        if t.isRepeat():
-          thread.timerNext[t] = nowMs + max(t.duration.inMilliseconds().int64, 1'i64)
-        else:
-          if t.count > 0:
-            t.count.dec()
-          if t.count == 0:
-            toRemove.add(t)
-          else:
-            thread.timerNext[t] = nowMs + max(t.duration.inMilliseconds().int64, 1'i64)
-    for t in toRemove:
-      thread.timerNext.del(t)
-  # Deliver outside lock
-  for t in toFire:
+proc pumpTimers(thread: SigilSelectorThreadPtr, timeoutMs: int) {.gcsafe.} =
+  ## Wait up to timeoutMs and deliver any due timers via selector events.
+  var keys = newSeq[ReadyKey](32)
+  let n = thread.sel.selectInto(timeoutMs, keys)
+  for i in 0 ..< n:
+    let k = keys[i]
+    # Each key corresponds to a fired timer with associated 'data' = SigilTimer
+    let t = getData(thread.sel, k.fd)
+    if t.isNil:
+      continue
+    if thread.hasCancelTimer(t):
+      thread.removeTimer(t)
+      continue
     emit t.timeout()
+    # Reschedule if needed
+    if t.isRepeat():
+      discard thread.sel.registerTimer(max(t.duration.inMilliseconds(), 1).int, true, t)
+    else:
+      if t.count > 0:
+        t.count.dec()
+      if t.count != 0: # schedule again while count remains
+        discard thread.sel.registerTimer(max(t.duration.inMilliseconds(), 1).int, true, t)
 
 method poll*(
     thread: SigilSelectorThreadPtr, blocking: BlockingKinds = Blocking
@@ -113,16 +103,14 @@ method poll*(
   var sig: ThreadSignal
   case blocking
   of Blocking:
-    var events: seq[ReadyKey] = @[]
     # Check timers immediately to avoid missing short intervals.
-    thread.processDueTimers()
-    discard thread.sel.selectInto(2, events) # brief wait in milliseconds
-    thread.processDueTimers()
+    thread.pumpTimers(0)
+    thread.pumpTimers(2) # brief wait in milliseconds
     if thread.recv(sig, NonBlocking):
       thread.exec(sig)
       result = true
   of NonBlocking:
-    thread.processDueTimers()
+    thread.pumpTimers(0)
     if thread.recv(sig, NonBlocking):
       thread.exec(sig)
       result = true
@@ -133,15 +121,14 @@ proc runSelectorThread*(targ: SigilSelectorThreadPtr) {.thread.} =
     setLocalSigilThread(targ)
     targ[].threadId.store(getThreadId(), Relaxed)
     emit targ[].agent.started()
-    # Run until stopped; use selectInto to provide a light sleep between polls.
-    var events: seq[ReadyKey] = @[]
+    # Run until stopped; use selector timers to provide a light sleep between polls.
     while targ.isRunning():
-      targ.processDueTimers()
+      targ.pumpTimers(0)
       # drain any queued signals first
       while targ.poll(NonBlocking):
         discard
       # brief wait so we're not busy-spinning
-      discard targ[].sel.selectInto(5, events)
+      targ.pumpTimers(5)
     # final drain if requested (mirrors async variant's behavior)
     try:
       if targ.drain.load(Relaxed):
