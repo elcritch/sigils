@@ -18,6 +18,10 @@ proc setValue*(self: Counter, value: int) {.slot.} =
   self.value = value
   emit self.updated(value)
 
+proc timerRun*(self: Counter) {.slot.} =
+  self.value.inc()
+  emit self.updated(self.value)
+
 proc completed*(self: SomeAction, final: int) {.slot.} =
   echo "completed: ", final, " (" & $getThreadId() & ")"
   self.value = final
@@ -83,5 +87,53 @@ suite "threaded agent slots (selectors)":
 
     check Counter(bp.remote[]).value == 1337
 
+    thread.stop()
+    thread.join()
+
+  test "local selectors thread timer":
+    setLocalSigilThread(newSigilSelectorThread())
+    let ct = getCurrentSigilThread()
+    check ct of SigilSelectorThreadPtr
+
+    var timer = newSigilTimer(duration=initDuration(milliseconds=2))
+    var a = Counter()
+    connect(timer, timeout, a, Counter.timerRun())
+
+    start(timer)
+
+    discard ct.poll(NonBlocking)
+    check a.value == 0
+
+    for i in 1 .. 100:
+      discard ct.poll()
+      os.sleep(2)
+      if a.value >= 1: break
+    check a.value >= 1
+
+    cancel(timer)
+    discard ct.poll()
+
+  test "remote selectors thread timer":
+    var b = Counter()
+
+    let thread = newSigilSelectorThread()
+    thread.start()
+    startLocalThreadDefault()
+
+    let bp: AgentProxy[Counter] = b.moveToThread(thread)
+
+    var timer = newSigilTimer(duration=initDuration(milliseconds=10), count=2)
+    connectThreaded(timer, timeout, bp, Counter.timerRun())
+    start(timer, thread)
+
+    let ct = getCurrentSigilThread()
+    # Drain local default thread to deliver remote->local proxy Trigger events
+    for i in 0 .. 20:
+      discard ct.poll()
+      os.sleep(10)
+
+    check Counter(bp.remote[]).value >= 2
+
+    cancel(timer, thread)
     thread.stop()
     thread.join()
