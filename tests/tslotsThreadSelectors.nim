@@ -11,7 +11,7 @@ type
 
 proc valueChanged*(tp: SomeAction, val: int) {.signal.}
 proc updated*(tp: Counter, final: int) {.signal.}
-proc updated*(tp: AgentProxy[Counter], final: int) {.signal.}
+proc updates*(tp: AgentProxy[Counter], final: int) {.signal.}
 
 proc setValue*(self: Counter, value: int) {.slot.} =
   echo "setValue: ", value, " (" & $getThreadId() & ")"
@@ -68,16 +68,20 @@ suite "threaded agent slots (selectors)":
     startLocalThreadDefault()
 
     let bp: AgentProxy[Counter] = b.moveToThread(thread)
-    connectThreaded(bp, updated, bp, Counter.setValue())
-    connectThreaded(bp, updated, a, SomeAction.completed())
+    connectThreaded(a, valueChanged, bp, Counter.setValue())
 
-    check a.value == 0
-    emit bp.updated(1337)
-    # check a.value == 0
+    check Counter(bp.remote[]).value == 0
+    emit a.valueChanged(1337)
 
     let ct = getCurrentSigilThread()
     discard ct.poll()
-    check a.value == 1337
+    for i in 1..10:
+      os.sleep(100)
+      echo "test... value: ", Counter(bp.remote[]).value
+      if Counter(bp.remote[]).value != 0:
+        break
+
+    check Counter(bp.remote[]).value == 1337
 
     thread.stop()
     thread.join()
