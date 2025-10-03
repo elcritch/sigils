@@ -67,8 +67,8 @@ suite "threaded agent slots":
     # os.sleep(100)
 
     let bp: AgentProxy[Counter] = b.moveToThread(thread)
-    threads.connect(a, valueChanged, bp, setValueNonAsync)
-    threads.connect(bp, updated, a, SomeAction.completed())
+    connectThreaded(a, valueChanged, bp, setValueNonAsync)
+    connectThreaded(bp, updated, a, SomeAction.completed())
 
     # echo "bp.outbound: ", bp.outbound[].AsyncSigilChan.repr
     emit a.valueChanged(314)
@@ -94,8 +94,8 @@ suite "threaded agent slots":
     # os.sleep(100)
 
     let bp: AgentProxy[Counter] = b.moveToThread(thread)
-    threads.connect(a, valueChanged, bp, setValue)
-    threads.connect(bp, updated, a, SomeAction.completed())
+    connectThreaded(a, valueChanged, bp, setValue)
+    connectThreaded(bp, updated, a, SomeAction.completed())
 
     # echo "bp.outbound: ", bp.outbound[].AsyncSigilChan.repr
     emit a.valueChanged(314)
@@ -142,8 +142,8 @@ suite "threaded agent slots":
     startLocalThreadDefault()
 
     let bp: AgentProxy[Counter] = b.moveToThread(thread)
-    threads.connect(bp, updated, bp, Counter.setValueNonAsync())
-    threads.connect(bp, updated, a, SomeAction.completed())
+    connectThreaded(bp, updated, bp, Counter.setValueNonAsync())
+    connectThreaded(bp, updated, a, SomeAction.completed())
 
     emit bp.updated(1337)
 
