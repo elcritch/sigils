@@ -14,12 +14,9 @@ proc updated*(tp: Counter, final: int) {.signal.}
 proc updated*(tp: AgentProxy[Counter], final: int) {.signal.}
 
 proc setValue*(self: Counter, value: int) {.slot.} =
+  echo "setValue: ", self.value
   self.value = value
-  emit self.updated(1337)
-
-proc setValueNonAsync*(self: Counter, value: int) {.slot.} =
-  self.value = value
-  emit self.updated(1337)
+  emit self.updated(value)
 
 proc completed*(self: SomeAction, final: int) {.slot.} =
   self.value = final
@@ -48,7 +45,7 @@ suite "threaded agent slots (selectors)":
     check a.value == 0
     let ct = getCurrentSigilThread()
     discard ct.poll()
-    check a.value == 1337
+    check a.value == 314
 
     thread.stop()
     thread.join()
@@ -70,7 +67,7 @@ suite "threaded agent slots (selectors)":
     startLocalThreadDefault()
 
     let bp: AgentProxy[Counter] = b.moveToThread(thread)
-    connectThreaded(bp, updated, bp, Counter.setValueNonAsync())
+    connectThreaded(bp, updated, bp, Counter.setValue())
     connectThreaded(bp, updated, a, SomeAction.completed())
 
     emit bp.updated(1337)
