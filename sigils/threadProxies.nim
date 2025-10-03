@@ -205,7 +205,7 @@ proc moveToThread*[T: Agent, R: SigilThread](
 
   return localProxy
 
-template connect*[T, U, S](
+template connectThreaded*[T, U, S](
     proxyTy: AgentProxy[T],
     signal: typed,
     b: AgentProxy[U],
@@ -218,7 +218,7 @@ template connect*[T, U, S](
   let localProxy = Agent(proxyTy)
   localProxy.addSubscription(signalName(signal), b, slot)
 
-template connect*[T, S](
+template connectThreaded*[T, S](
     a: Agent,
     signal: typed,
     localProxy: AgentProxy[T],
@@ -234,7 +234,7 @@ template connect*[T, S](
   assert not localProxy.remote.isNil
   localProxy.proxyTwin[].addSubscription(AnySigilName, localProxy.remote[], localSlot)
 
-template connect*[T](
+template connectThreaded*[T](
     a: Agent,
     signal: typed,
     localProxy: AgentProxy[T],
@@ -252,7 +252,7 @@ template connect*[T](
   assert not localProxy.remote.isNil
   localProxy.proxyTwin[].addSubscription(AnySigilName, localProxy.remote[], localSlot)
 
-template connect*[T, S](
+template connectThreaded*[T, S](
     proxyTy: AgentProxy[T],
     signal: typed,
     b: Agent,
@@ -265,7 +265,7 @@ template connect*[T, S](
   let localProxy = Agent(proxyTy)
   localProxy.addSubscription(signalName(signal), b, slot)
 
-template connect*[T](
+template connectThreaded*[T](
     thr: SigilThreadPtr,
     signal: typed,
     localProxy: AgentProxy[T],
