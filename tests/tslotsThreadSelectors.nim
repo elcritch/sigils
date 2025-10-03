@@ -14,11 +14,12 @@ proc updated*(tp: Counter, final: int) {.signal.}
 proc updated*(tp: AgentProxy[Counter], final: int) {.signal.}
 
 proc setValue*(self: Counter, value: int) {.slot.} =
-  echo "setValue: ", self.value
+  echo "setValue: ", value, " (" & $getThreadId() & ")"
   self.value = value
   emit self.updated(value)
 
 proc completed*(self: SomeAction, final: int) {.slot.} =
+  echo "completed: ", final, " (" & $getThreadId() & ")"
   self.value = final
 
 proc value*(self: Counter): int =
@@ -70,7 +71,9 @@ suite "threaded agent slots (selectors)":
     connectThreaded(bp, updated, bp, Counter.setValue())
     connectThreaded(bp, updated, a, SomeAction.completed())
 
+    check a.value == 0
     emit bp.updated(1337)
+    # check a.value == 0
 
     let ct = getCurrentSigilThread()
     discard ct.poll()
