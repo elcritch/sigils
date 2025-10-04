@@ -72,17 +72,6 @@ type
 proc `$`*(id: SigilId): string =
   "0x" & id.int.toHex(16)
 
-proc pack*[T](ss: var Variant, val: sink T) =
-  # echo "Pack Type: ", getTypeId(T), " <- ", typeof(val)
-  ss = newVariant(ensureMove val)
-
-proc unpack*[T](ss: Variant, obj: var T) =
-  # if ss.ofType(T):
-  assert not ss.isNil
-  obj = ss.get(T)
-  # else:
-  # raise newException(ConversionError, "couldn't convert to: " & $(T))
-
 proc rpcPack*(res: SigilParams): SigilParams {.inline.} =
   result = res
 
@@ -98,7 +87,8 @@ proc rpcUnpack*[T](obj: var T, ss: SigilParams) =
     obj.fromJson(ss.buf)
     discard
   else:
-    ss.buf.unpack(obj)
+    assert not ss.buf.isNil
+    obj = ss.buf.get(T)
 
 proc wrapResponse*(id: SigilId, resp: SigilParams, kind = Response): SigilResponse =
   # echo "WRAP RESP: ", id, " kind: ", kind
