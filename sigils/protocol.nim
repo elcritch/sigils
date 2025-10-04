@@ -102,11 +102,6 @@ proc wrapResponseError*(id: SigilId, err: SigilError): SigilResponse =
   result.id = id.int
   result.result = rpcPack(err)
 
-template packResponse*(res: SigilResponse): Variant =
-  var so = newVariant()
-  so.pack(res)
-  so
-
 proc initSigilRequest*[S, T](
     procName: SigilName,
     args: sink T,
@@ -115,7 +110,10 @@ proc initSigilRequest*[S, T](
 ): SigilRequestTy[S] =
   # echo "SigilRequest: ", procName, " args: ", args.repr
   result = SigilRequestTy[S](
-    kind: reqKind, origin: origin, procName: procName, params: rpcPack(ensureMove args)
+    kind: reqKind,
+    origin: origin,
+    procName: procName,
+    params: rpcPack(ensureMove args)
   )
 
 const sigilsMaxSignalLength* {.intdefine.} = 48
