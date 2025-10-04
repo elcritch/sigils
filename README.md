@@ -82,8 +82,7 @@ test "signal / slot types":
 
 Sigils 0.9+ can now do threaded signals!
 
-For a deeper architectural overview and safety notes, see the
-[Threading Architecture](docs/threading.md).
+**Note**: v0.16.0 changed threads module's `connect` to `connectThreaded` to be more explicit.
 
 ```nim
 test "agent connect then moveToThread and run":
