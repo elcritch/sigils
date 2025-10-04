@@ -105,6 +105,7 @@ test "agent connect then moveToThread and run":
     let bp: AgentProxy[Counter] = b.moveToThread(thread)
     echo "obj bp: ", bp.getSigilId()
 
+    # Note: `connectThreaded` can be used with proxies
     emit a.valueChanged(314)
     let ct = getCurrentSigilThread()
     ct[].poll() # we need to either `poll` or do `runForever` similar to async
