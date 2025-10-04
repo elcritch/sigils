@@ -82,8 +82,7 @@ test "signal / slot types":
 
 Sigils 0.9+ can now do threaded signals!
 
-For a deeper architectural overview and safety notes, see the
-[Threading Architecture](docs/threading.md).
+**Note**: v0.16.0 changed threads module's `connect` to `connectThreaded` to be more explicit.
 
 ```nim
 test "agent connect then moveToThread and run":
@@ -106,6 +105,7 @@ test "agent connect then moveToThread and run":
     let bp: AgentProxy[Counter] = b.moveToThread(thread)
     echo "obj bp: ", bp.getSigilId()
 
+    # Note: `connectThreaded` can be used with proxies
     emit a.valueChanged(314)
     let ct = getCurrentSigilThread()
     ct[].poll() # we need to either `poll` or do `runForever` similar to async

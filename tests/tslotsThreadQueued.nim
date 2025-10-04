@@ -4,6 +4,7 @@ import threading/atomics
 
 import sigils
 import sigils/threads
+import sigils/threadAsyncs
 
 type
   SomeAction* = ref object of Agent
