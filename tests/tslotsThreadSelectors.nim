@@ -20,6 +20,7 @@ proc setValue*(self: Counter, value: int) {.slot.} =
 
 proc timerRun*(self: Counter) {.slot.} =
   self.value.inc()
+  echo "timeout! value: ", self.value
   emit self.updated(self.value)
 
 proc completed*(self: SomeAction, final: int) {.slot.} =
