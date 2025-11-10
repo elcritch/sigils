@@ -56,3 +56,9 @@ when isMainModule:
 
     vx.resetTo(y)
     echo "=> vy: ", vx.getWrapped(array[1024, int])
+
+    var z: int = 16
+    echo "z: ", z
+
+    vx.resetTo(z)
+    echo "=> vz: ", vx.getWrapped(int)
