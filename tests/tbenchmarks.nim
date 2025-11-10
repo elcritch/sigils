@@ -28,9 +28,9 @@ type
   Counter* = ref object of Agent
     value: int
 
-proc bump*(tp: Emitter, val: array[1024, int]) {.signal.}
+proc bump*(tp: Emitter, val: int) {.signal.}
 
-proc onBump*(self: Counter, val: array[1024, int]) {.slot.} =
+proc onBump*(self: Counter, val: int) {.slot.} =
   self.value += 1
 
 var durationMicrosEmitSlot: float
@@ -48,10 +48,8 @@ suite "benchmarks":
     connect(a, bump, b, onBump)
 
     let t0 = getMonoTime()
-    var x: array[1024, int]
     for i in 0 ..< n:
-      x[0] = i
-      emit a.bump(x)
+      emit a.bump(i)
     let dt = getMonoTime() - t0
 
     check b.value == n
@@ -66,10 +64,8 @@ suite "benchmarks":
     var b = Counter()
 
     let t0 = getMonoTime()
-    var x: array[1024, int]
     for i in 0 ..< n:
-      x[0] = i
-      b.onBump(x)
+      b.onBump(i)
     let dt = getMonoTime() - t0
 
     check b.value == n
@@ -78,35 +74,34 @@ suite "benchmarks":
     let opsPerSec = (n.float * 1_000_000.0) / max(1.0, us)
     echo &"[bench] slot direct call: n={n}, time={us:.2f} us, rate={opsPerSec:.0f} ops/s, ratio={durationMicrosEmitSlot / us:.2f}"
 
-  when false:
-    test "reactive computed (lazy) update+read":
-      let x = newSigil(0)
-      let y = computed[int](x{} * 2)
+  test "reactive computed (lazy) update+read":
+    let x = newSigil(0)
+    let y = computed[int](x{} * 2)
 
-      let t0 = getMonoTime()
-      for i in 0 ..< n:
-        x <- i
-        discard y{} # triggers compute on read when dirty
-      let dt = getMonoTime() - t0
+    let t0 = getMonoTime()
+    for i in 0 ..< n:
+      x <- i
+      discard y{} # triggers compute on read when dirty
+    let dt = getMonoTime() - t0
 
-      check y{} == (n - 1) * 2
+    check y{} == (n - 1) * 2
 
-      let ms = dt.inMilliseconds.float
-      let itersPerSec = (n.float * 1000.0) / max(1.0, ms)
-      echo &"[bench] reactive (lazy): n={n}, time={ms:.2f} ms, rate={itersPerSec:.0f} iters/s"
+    let ms = dt.inMilliseconds.float
+    let itersPerSec = (n.float * 1000.0) / max(1.0, ms)
+    echo &"[bench] reactive (lazy): n={n}, time={ms:.2f} ms, rate={itersPerSec:.0f} iters/s"
 
-    test "reactive computedNow eager updates":
-      let x = newSigil(0)
-      let y = computedNow[int](x{} * 2)
+  test "reactive computedNow eager updates":
+    let x = newSigil(0)
+    let y = computedNow[int](x{} * 2)
 
-      let t0 = getMonoTime()
-      for i in 0 ..< n:
-        x <- i # compute happens on set
-      let dt = getMonoTime() - t0
+    let t0 = getMonoTime()
+    for i in 0 ..< n:
+      x <- i # compute happens on set
+    let dt = getMonoTime() - t0
 
-      check y{} == (n - 1) * 2
+    check y{} == (n - 1) * 2
 
-      let ms = dt.inMilliseconds.float
-      let itersPerSec = (n.float * 1000.0) / max(1.0, ms)
-      echo &"[bench] reactive (eager): n={n}, time={ms:.2f} ms, rate={itersPerSec:.0f} iters/s"
+    let ms = dt.inMilliseconds.float
+    let itersPerSec = (n.float * 1000.0) / max(1.0, ms)
+    echo &"[bench] reactive (eager): n={n}, time={ms:.2f} ms, rate={itersPerSec:.0f} iters/s"
 
