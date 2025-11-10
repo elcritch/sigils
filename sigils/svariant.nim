@@ -3,20 +3,22 @@ import std/streams
 import variant
 
 type
-  WrapperBuffer*[T] = object
+  VBuffer* = object
     buff*: string
 
-proc asPtr*[T](wt: WrapperBuffer[T]): ptr T =
+  WBuffer*[T] = VBuffer
+
+proc asPtr*[T](wt: WBuffer[T]): ptr T =
   static: assert sizeof(T) > 0
   cast[ptr T](addr(wt.buff[0]))
 
-proc initWrapper*[T](val: sink T): WrapperBuffer[T] =
+proc initWrapper*[T](val: sink T): WBuffer[T] =
   let sz = sizeof(val)
   result.buff.setLen(sz)
   result.asPtr()[] = move val
 
 proc getWrapped*(v: Variant, T: typedesc): T =
-  v.get(WrapperBuffer[T]).asPtr()[]
+  v.get(WBuffer[T]).asPtr()[]
 
 when isMainModule:
 
