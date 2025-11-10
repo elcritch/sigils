@@ -48,8 +48,9 @@ when isMainModule:
     echo "=> vx: ", vx.getWrapped(int16)
     check x == vx.getWrapped(int16)
 
-    var y: (int, int, int, int, int) = (3, 14, 0, 0, 0)
-    echo "y: ", y
+    var y: array[50, int]
+    y[0] = 0xAA
+    echo "y: ", y[0]
 
     vx.resetTo(y)
-    echo "=> vy: ", vx.getWrapped((int, int, int, int, int))
+    echo "=> vy: ", vx.getWrapped(array[50, int])
