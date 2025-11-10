@@ -38,7 +38,7 @@ proc resetTo*[T](v: WVariant, val: T) =
 
   if cast[VConcrete[VBuffer]](v).val.buff.len() < sz:
     cast[VConcrete[VBuffer]](v).val.buff.setLen(sz)
-  v.get(WBuffer[T]).asPtr()[] = val
+  cast[VConcrete[WBuffer[T]]](v).val.asPtr()[] = val
 
 
 when isMainModule:
