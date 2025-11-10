@@ -20,7 +20,6 @@ proc asPtr*[T](wt: WBuffer[T]): ptr T =
 
 proc initWrapper*[T](val: sink T): WBuffer[T] =
   let sz = sizeof(val)
-  echo "setting len: ", sz
   result.buff.setLen(sz)
   result.asPtr()[] = move val
 

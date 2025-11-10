@@ -2,6 +2,8 @@ import std/[tables, strutils]
 import variant
 import stack_strings
 
+import svariant
+
 export tables
 export variant
 export stack_strings
@@ -80,7 +82,7 @@ proc rpcPack*[T](res: sink T): SigilParams =
     let jn = toJson(res)
     result = SigilParams(buf: jn)
   else:
-    result = SigilParams(buf: newVariant(ensureMove res))
+    result = SigilParams(buf: newWrapperVariant(ensureMove res))
 
 proc rpcUnpack*[T](obj: var T, ss: SigilParams) =
   when defined(nimscript) or defined(useJsonSerde):
@@ -88,7 +90,7 @@ proc rpcUnpack*[T](obj: var T, ss: SigilParams) =
     discard
   else:
     assert not ss.buf.isNil
-    obj = ss.buf.get(T)
+    obj = ss.buf.getWrapped(T)
 
 proc wrapResponse*(id: SigilId, resp: SigilParams, kind = Response): SigilResponse =
   # echo "WRAP RESP: ", id, " kind: ", kind
