@@ -45,8 +45,8 @@ when isMainModule:
     echo "x: ", x
 
     let vx = newVariant(initWrapper(x))
-    echo "=> vx: ", vx.getWrapped(int)
-    check x == vx.getWrapped(int)
+    echo "=> vx: ", vx.getWrapped(int16)
+    check x == vx.getWrapped(int16)
 
     var y: (int, int, int, int, int) = (3, 14, 0, 0, 0)
     echo "y: ", y
