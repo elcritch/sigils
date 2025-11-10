@@ -19,6 +19,7 @@ proc asPtr*[T](wt: WBuffer[T]): ptr T =
 
 proc initWrapper*[T](val: sink T): WBuffer[T] =
   let sz = sizeof(val)
+  echo "setting len: ", sz
   result.buff.setLen(sz)
   result.asPtr()[] = move val
 
@@ -48,7 +49,7 @@ when isMainModule:
     echo "=> vx: ", vx.getWrapped(int16)
     check x == vx.getWrapped(int16)
 
-    var y: array[50, int]
+    var y: array[1024, int]
     y[0] = 0xAA
     y[^1] = 0xFF
     echo "y: ", y[0]
