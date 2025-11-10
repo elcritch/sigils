@@ -55,4 +55,4 @@ when isMainModule:
     echo "y: ", y[0]
 
     vx.resetTo(y)
-    echo "=> vy: ", vx.getWrapped(array[50, int])
+    echo "=> vy: ", vx.getWrapped(array[1024, int])
