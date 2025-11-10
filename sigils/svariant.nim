@@ -50,6 +50,7 @@ when isMainModule:
 
     var y: array[50, int]
     y[0] = 0xAA
+    y[^1] = 0xFF
     echo "y: ", y[0]
 
     vx.resetTo(y)
