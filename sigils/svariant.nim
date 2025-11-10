@@ -33,7 +33,6 @@ proc resetTo*[T](v: Variant, val: sink T) =
     v.mangledName = getMangledName(T)
 
   cast[VConcrete[VBuffer]](v).val.buff.setLen(sz)
-  # v.get(VBuffer).buff.setLen(sz)
   v.get(WBuffer[T]).asPtr()[] = move val
 
 
