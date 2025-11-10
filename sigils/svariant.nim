@@ -29,14 +29,15 @@ proc newWrapperVariant*[T](val: sink T): WVariant =
 proc getWrapped*(v: Variant, T: typedesc): T =
   v.get(WBuffer[T]).asPtr()[]
 
-proc resetTo*[T](v: WVariant, val: sink T) =
+proc resetTo*[T](v: WVariant, val: T) =
   let sz = sizeof(val)
   v.typeId = getTypeId(WBuffer[T])
   when defined(variantDebugTypes):
     v.mangledName = getMangledName(T)
 
-  cast[VConcrete[VBuffer]](v).val.buff.setLen(sz)
-  v.get(WBuffer[T]).asPtr()[] = move val
+  if cast[VConcrete[VBuffer]](v).val.buff.len() < sz:
+    cast[VConcrete[VBuffer]](v).val.buff.setLen(sz)
+  v.get(WBuffer[T]).asPtr()[] = val
 
 
 when isMainModule:
