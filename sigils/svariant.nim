@@ -8,6 +8,7 @@ type
 
   WBuffer*[T] = VBuffer
 
+  WVariant = Variant
   VConcrete[T] = ref object of Variant
     val: T
 
@@ -22,6 +23,9 @@ proc initWrapper*[T](val: sink T): WBuffer[T] =
   echo "setting len: ", sz
   result.buff.setLen(sz)
   result.asPtr()[] = move val
+
+proc newWrapperVariant*[T](val: sink T): WVariant =
+  newVariant(initWrapper(val))
 
 proc getWrapped*(v: Variant, T: typedesc): T =
   v.get(WBuffer[T]).asPtr()[]
@@ -61,3 +65,12 @@ when isMainModule:
 
     vx.resetTo(z)
     echo "=> vz: ", vx.getWrapped(int)
+
+  test "wrapper":
+    var x: int16 = 7
+    echo "x: ", x
+
+    let vx = newWrapperVariant(x)
+    echo "=> vx: ", vx.getWrapped(int16)
+    check x == vx.getWrapped(int16)
+
