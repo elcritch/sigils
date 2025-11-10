@@ -27,7 +27,8 @@ proc newWrapperVariant*[T](val: sink T): WVariant =
   newVariant(initWrapper(val))
 
 proc getWrapped*(v: Variant, T: typedesc): T =
-  v.get(WBuffer[T]).asPtr()[]
+  # v.get(WBuffer[T]).asPtr()[]
+  cast[VConcrete[WBuffer[T]]](v).val.asPtr()[]
 
 proc resetTo*[T](v: WVariant, val: T) =
   let sz = sizeof(val)
