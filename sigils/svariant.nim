@@ -8,8 +8,8 @@ type
 
   WBuffer*[T] = VBuffer
 
-  WVariant = Variant
-  VConcrete[T] = ref object of Variant
+  WVariant* = Variant
+  VConcrete*[T] = ref object of Variant
     val: T
 
 template getMangledName(t: typedesc): string = $t
@@ -29,7 +29,7 @@ proc newWrapperVariant*[T](val: sink T): WVariant =
 proc getWrapped*(v: Variant, T: typedesc): T =
   v.get(WBuffer[T]).asPtr()[]
 
-proc resetTo*[T](v: Variant, val: sink T) =
+proc resetTo*[T](v: WVariant, val: sink T) =
   let sz = sizeof(val)
   v.typeId = getTypeId(WBuffer[T])
   when defined(variantDebugTypes):

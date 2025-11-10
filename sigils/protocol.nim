@@ -74,6 +74,8 @@ type
 proc `$`*(id: SigilId): string =
   "0x" & id.int.toHex(16)
 
+var requestCache {.threadvar.}: WVariant
+
 proc rpcPack*(res: SigilParams): SigilParams {.inline.} =
   result = res
 
@@ -82,7 +84,11 @@ proc rpcPack*[T](res: sink T): SigilParams =
     let jn = toJson(res)
     result = SigilParams(buf: jn)
   else:
-    result = SigilParams(buf: newWrapperVariant(ensureMove res))
+    if requestCache.isNil:
+      requestCache = newWrapperVariant(ensureMove res)
+    else:
+      requestCache.resetTo(ensureMove res)
+    result = SigilParams(buf: requestCache)
 
 proc rpcUnpack*[T](obj: var T, ss: SigilParams) =
   when defined(nimscript) or defined(useJsonSerde):
