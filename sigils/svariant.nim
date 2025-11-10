@@ -41,7 +41,7 @@ when isMainModule:
   import std/unittest
 
   test "basic":
-    var x: int = 7
+    var x: int16 = 7
     echo "x: ", x
 
     let vx = newVariant(initWrapper(x))
