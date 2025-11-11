@@ -21,11 +21,11 @@ elif defined(useJsonSerde):
   import std/jsonutils
   export json
 else:
-  import pkg/variant
+  import svariant
 
 export sets
 export options
-export variant
+export svariant
 
 export IndexableChars
 export weakrefs

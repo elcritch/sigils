@@ -1,11 +1,10 @@
 import std/[tables, strutils]
-import variant
 import stack_strings
 
 import svariant
 
 export tables
-export variant
+export svariant
 export stack_strings
 
 type FastErrorCodes* = enum
@@ -25,7 +24,7 @@ type SigilParams* {.acyclic.} = object ## implementation specific -- handles dat
   when defined(nimscript) or defined(useJsonSerde):
     buf*: JsonNode
   else:
-    buf*: Variant
+    buf*: WVariant
 
 type
   RequestType* {.size: sizeof(uint8).} = enum

@@ -24,7 +24,6 @@ proc newWrapperVariant*[T](val: sink T): WVariant =
   newVariant(initWrapper(val))
 
 proc getWrapped*(v: Variant, T: typedesc): T =
-  # v.get(WBuffer[T]).asPtr()[]
   cast[VariantConcrete[WBuffer[T]]](v).val.asPtr()[]
 
 proc resetTo*[T](v: WVariant, val: T) =
@@ -36,7 +35,6 @@ proc resetTo*[T](v: WVariant, val: T) =
   if cast[VariantConcrete[VBuffer]](v).val.buff.len() < sz:
     cast[VariantConcrete[VBuffer]](v).val.buff.setLen(sz)
   cast[VariantConcrete[WBuffer[T]]](v).val.asPtr()[] = val
-
 
 when isMainModule:
 
