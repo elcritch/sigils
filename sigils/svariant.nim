@@ -1,16 +1,13 @@
 
 import std/streams
-import variant
+include variant
 
 type
   VBuffer* = object
     buff*: string
 
   WBuffer*[T] = VBuffer
-
   WVariant* = Variant
-  VConcrete*[T] = ref object of Variant
-    val: T
 
 template getMangledName(t: typedesc): string = $t
 
@@ -28,7 +25,7 @@ proc newWrapperVariant*[T](val: sink T): WVariant =
 
 proc getWrapped*(v: Variant, T: typedesc): T =
   # v.get(WBuffer[T]).asPtr()[]
-  cast[VConcrete[WBuffer[T]]](v).val.asPtr()[]
+  cast[VariantConcrete[WBuffer[T]]](v).val.asPtr()[]
 
 proc resetTo*[T](v: WVariant, val: T) =
   let sz = sizeof(val)
@@ -36,9 +33,9 @@ proc resetTo*[T](v: WVariant, val: T) =
   when defined(variantDebugTypes):
     v.mangledName = getMangledName(T)
 
-  if cast[VConcrete[VBuffer]](v).val.buff.len() < sz:
-    cast[VConcrete[VBuffer]](v).val.buff.setLen(sz)
-  cast[VConcrete[WBuffer[T]]](v).val.asPtr()[] = val
+  if cast[VariantConcrete[VBuffer]](v).val.buff.len() < sz:
+    cast[VariantConcrete[VBuffer]](v).val.buff.setLen(sz)
+  cast[VariantConcrete[WBuffer[T]]](v).val.asPtr()[] = val
 
 
 when isMainModule:
