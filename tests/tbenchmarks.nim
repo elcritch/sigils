@@ -36,7 +36,7 @@ proc onBump*(self: Counter, val: int) {.slot.} =
 var durationMicrosEmitSlot: float
 
 const n = block:
-  when defined(slowbench): 2_000_000
+  when defined(slowbench): 1_000_000
   else: 40_000
 
 suite "benchmarks":
