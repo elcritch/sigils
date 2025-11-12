@@ -18,6 +18,7 @@ when defined(nimscript) or defined(useJsonSerde) or defined(sigilsJsonSerde):
   export json
 elif defined(sigilsCborSerde):
   import cborious
+  export cborious
 else:
   import svariant
   export svariant
