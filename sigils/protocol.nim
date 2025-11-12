@@ -76,15 +76,25 @@ proc `$`*(id: SigilId): string =
 proc rpcPack*(res: SigilParams): SigilParams {.inline.} =
   result = res
 
+when defined(sigilsCborSerder):
+  import cborious
+
 proc rpcPack*[T](res: sink T): SigilParams =
   when defined(nimscript) or defined(sigilsJsonSerde):
     let jn = toJson(res)
     result = SigilParams(buf: jn)
   elif defined(sigilsOrigSerde):
     result = SigilParams(buf: newVariant(ensureMove res))
+  elif defined(sigilsCborSerde):
+    var buf {.global, threadvar.}: CborStream
+    once:
+      buf = CborStream.init()
+    buf.setPosition(0)
+    let jn = toJson(res)
+    result = SigilParams(buf: jn)
   else:
     var requestCache {.global, threadvar.}: WVariant
-    if requestCache.isNil:
+    once:
       requestCache = newWrapperVariant(res)
     requestCache.resetTo(res)
     result = SigilParams(buf: requestCache)
