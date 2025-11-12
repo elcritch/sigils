@@ -7,7 +7,7 @@ import unittest
 import sigils/signals
 import sigils/slots
 
-when not defined(sigilsCborSerde) or not defined(sigilsJsonSerde):
+when not defined(sigilsCborSerde) and not defined(sigilsJsonSerde):
   import sigils/reactive
 
 #[
@@ -76,7 +76,7 @@ suite "benchmarks":
     let opsPerSec = (n.float * 1_000_000.0) / max(1.0, us)
     echo &"[bench] slot direct call: n={n}, time={us:.2f} us, rate={opsPerSec:.0f} ops/s, ratio={durationMicrosEmitSlot / us:.2f}"
 
-  when not defined(sigilsCborSerde) or not defined(sigilsJsonSerde):
+  when not defined(sigilsCborSerde) and not defined(sigilsJsonSerde):
     test "reactive computed (lazy) update+read":
       let x = newSigil(0)
       let y = computed[int](x{} * 2)
