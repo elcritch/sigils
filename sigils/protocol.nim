@@ -90,7 +90,7 @@ proc rpcPack*[T](res: sink T): SigilParams =
     once:
       buf = CborStream.init()
     buf.setPosition(0)
-    let jn = buf.pack(res)
+    buf.pack(res)
     result = SigilParams(buf: jn)
   else:
     var requestCache {.global, threadvar.}: WVariant
