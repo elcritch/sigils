@@ -73,8 +73,6 @@ type
 proc `$`*(id: SigilId): string =
   "0x" & id.int.toHex(16)
 
-var requestCache {.threadvar.}: WVariant
-
 proc rpcPack*(res: SigilParams): SigilParams {.inline.} =
   result = res
 
@@ -85,6 +83,7 @@ proc rpcPack*[T](res: sink T): SigilParams =
   elif defined(sigilsOrigSerde):
     result = SigilParams(buf: newVariant(ensureMove res))
   else:
+    var requestCache {.global, threadvar.}: WVariant
     if requestCache.isNil:
       requestCache = newWrapperVariant(res)
     requestCache.resetTo(res)
