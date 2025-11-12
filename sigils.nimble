@@ -1,4 +1,4 @@
-version = "0.16.0"
+version = "0.17.0"
 author = "Jaremy Creechley"
 description = "A slot and signals implementation for the Nim programming language"
 license = "MIT"
@@ -9,3 +9,6 @@ requires "variant >= 0.2.12"
 requires "threading >= 0.2.1"
 requires "stack_strings"
 requires "patty >= 0.3.4"
+
+feature "cbor":
+  requires "cborious"

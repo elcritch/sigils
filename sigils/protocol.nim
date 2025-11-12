@@ -1,9 +1,7 @@
 import std/[tables, strutils]
-import variant
 import stack_strings
 
 export tables
-export variant
 export stack_strings
 
 type FastErrorCodes* = enum
@@ -15,15 +13,24 @@ type FastErrorCodes* = enum
   INTERNAL_ERROR = -23
   SERVER_ERROR = -22
 
-when defined(nimscript) or defined(useJsonSerde):
+when defined(nimscript) or defined(useJsonSerde) or defined(sigilsJsonSerde):
   import std/json
   export json
+elif defined(sigilsCborSerde):
+  import cborious
+  export cborious
+else:
+  import svariant
+  export svariant
+
 
 type SigilParams* {.acyclic.} = object ## implementation specific -- handles data buffer
-  when defined(nimscript) or defined(useJsonSerde):
+  when defined(nimscript) or defined(useJsonSerde) or defined(sigilsJsonSerde):
     buf*: JsonNode
+  elif defined(sigilsCborSerde):
+    buf*: CborStream
   else:
-    buf*: Variant
+    buf*: WVariant
 
 type
   RequestType* {.size: sizeof(uint8).} = enum
@@ -72,33 +79,41 @@ type
 proc `$`*(id: SigilId): string =
   "0x" & id.int.toHex(16)
 
-proc pack*[T](ss: var Variant, val: sink T) =
-  # echo "Pack Type: ", getTypeId(T), " <- ", typeof(val)
-  ss = newVariant(ensureMove val)
-
-proc unpack*[T](ss: Variant, obj: var T) =
-  # if ss.ofType(T):
-  assert not ss.isNil
-  obj = ss.get(T)
-  # else:
-  # raise newException(ConversionError, "couldn't convert to: " & $(T))
-
 proc rpcPack*(res: SigilParams): SigilParams {.inline.} =
   result = res
 
 proc rpcPack*[T](res: sink T): SigilParams =
-  when defined(nimscript) or defined(useJsonSerde):
+  when defined(nimscript) or defined(sigilsJsonSerde):
     let jn = toJson(res)
     result = SigilParams(buf: jn)
-  else:
+  elif defined(sigilsOrigSerde):
     result = SigilParams(buf: newVariant(ensureMove res))
+  elif defined(sigilsCborSerde):
+    var buf {.global, threadvar.}: CborStream
+    buf = CborStream.init()
+    buf.setPosition(0)
+    buf.pack(res)
+    result = SigilParams(buf: buf)
+  else:
+    var requestCache {.global, threadvar.}: WVariant
+    if requestCache.isNil:
+      requestCache = newWrapperVariant(res)
+    requestCache.resetTo(res)
+    result = SigilParams(buf: requestCache)
 
 proc rpcUnpack*[T](obj: var T, ss: SigilParams) =
   when defined(nimscript) or defined(useJsonSerde):
     obj.fromJson(ss.buf)
     discard
+  elif defined(sigilsOrigSerde):
+    assert not ss.buf.isNil
+    obj = ss.buf.get(T)
+  elif defined(sigilsCborSerde):
+    ss.buf.setPosition(0)
+    obj = unpack(ss.buf, T)
   else:
-    ss.buf.unpack(obj)
+    assert not ss.buf.isNil
+    obj = ss.buf.getWrapped(T)
 
 proc wrapResponse*(id: SigilId, resp: SigilParams, kind = Response): SigilResponse =
   # echo "WRAP RESP: ", id, " kind: ", kind
@@ -112,20 +127,20 @@ proc wrapResponseError*(id: SigilId, err: SigilError): SigilResponse =
   result.id = id.int
   result.result = rpcPack(err)
 
-template packResponse*(res: SigilResponse): Variant =
-  var so = newVariant()
-  so.pack(res)
-  so
-
 proc initSigilRequest*[S, T](
     procName: SigilName,
     args: sink T,
     origin: SigilId = SigilId(-1),
     reqKind: RequestType = Request,
 ): SigilRequestTy[S] =
-  # echo "SigilRequest: ", procName, " args: ", args.repr
+  static:
+    echo "\n\n==== SigilRequest: ", astToStr(procName), " args: ", args.typeof().repr
+    echo ""
   result = SigilRequestTy[S](
-    kind: reqKind, origin: origin, procName: procName, params: rpcPack(ensureMove args)
+    kind: reqKind,
+    origin: origin,
+    procName: procName,
+    params: rpcPack(ensureMove args)
   )
 
 const sigilsMaxSignalLength* {.intdefine.} = 48

@@ -46,6 +46,8 @@ proc callSlots*(obj: Agent | WeakRef[Agent], req: SigilRequest) {.gcsafe.} =
 
       when defined(nimscript) or defined(useJsonSerde):
         discard
+      elif defined(sigilsCborSerde):
+        discard
       else:
         discard
         variantMatch case res.result.buf as u

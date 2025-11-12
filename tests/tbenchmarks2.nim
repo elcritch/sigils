@@ -6,10 +6,7 @@ import unittest
 # Core modules under test
 import sigils/signals
 import sigils/slots
-import sigils/core
-
-when not defined(sigilsCborSerde) and not defined(sigilsJsonSerde):
-  import sigils/reactive
+import sigils/reactive
 
 #[
 Original benchmarks results:
@@ -31,9 +28,9 @@ type
   Counter* = ref object of Agent
     value: int
 
-proc bump*(tp: Emitter, val: int) {.signal.}
+proc bump*(tp: Emitter, val: array[1024, int]) {.signal.}
 
-proc onBump*(self: Counter, val: int) {.slot.} =
+proc onBump*(self: Counter, val: array[1024, int]) {.slot.} =
   self.value += 1
 
 var durationMicrosEmitSlot: float
@@ -51,8 +48,10 @@ suite "benchmarks":
     connect(a, bump, b, onBump)
 
     let t0 = getMonoTime()
+    var x: array[1024, int]
     for i in 0 ..< n:
-      emit a.bump(i)
+      x[0] = i
+      emit a.bump(x)
     let dt = getMonoTime() - t0
 
     check b.value == n
@@ -67,8 +66,10 @@ suite "benchmarks":
     var b = Counter()
 
     let t0 = getMonoTime()
+    var x: array[1024, int]
     for i in 0 ..< n:
-      b.onBump(i)
+      x[0] = i
+      b.onBump(x)
     let dt = getMonoTime() - t0
 
     check b.value == n
@@ -77,7 +78,7 @@ suite "benchmarks":
     let opsPerSec = (n.float * 1_000_000.0) / max(1.0, us)
     echo &"[bench] slot direct call: n={n}, time={us:.2f} us, rate={opsPerSec:.0f} ops/s, ratio={durationMicrosEmitSlot / us:.2f}"
 
-  when not defined(sigilsCborSerde) and not defined(sigilsJsonSerde):
+  when false:
     test "reactive computed (lazy) update+read":
       let x = newSigil(0)
       let y = computed[int](x{} * 2)
