@@ -94,6 +94,9 @@ proc rpcUnpack*[T](obj: var T, ss: SigilParams) =
   when defined(nimscript) or defined(useJsonSerde):
     obj.fromJson(ss.buf)
     discard
+  elif defined(sigilsOrigSerde):
+    assert not ss.buf.isNil
+    obj = ss.buf.get(T)
   else:
     assert not ss.buf.isNil
     obj = ss.buf.getWrapped(T)
