@@ -79,9 +79,11 @@ proc rpcPack*(res: SigilParams): SigilParams {.inline.} =
   result = res
 
 proc rpcPack*[T](res: sink T): SigilParams =
-  when defined(nimscript) or defined(useJsonSerde):
+  when defined(nimscript) or defined(sigilsJsonSerde):
     let jn = toJson(res)
     result = SigilParams(buf: jn)
+  elif defined(sigilsOrigSerde):
+    result = SigilParams(buf: newVariant(ensureMove res))
   else:
     if requestCache.isNil:
       requestCache = newWrapperVariant(res)
