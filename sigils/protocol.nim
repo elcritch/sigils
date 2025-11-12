@@ -1,10 +1,7 @@
 import std/[tables, strutils]
 import stack_strings
 
-import svariant
-
 export tables
-export svariant
 export stack_strings
 
 type FastErrorCodes* = enum
@@ -16,13 +13,21 @@ type FastErrorCodes* = enum
   INTERNAL_ERROR = -23
   SERVER_ERROR = -22
 
-when defined(nimscript) or defined(useJsonSerde):
+when defined(nimscript) or defined(useJsonSerde) or defined(sigilsJsonSerde):
   import std/json
   export json
+elif defined(sigilsCborSerde):
+  import cborious
+else:
+  import svariant
+  export svariant
+
 
 type SigilParams* {.acyclic.} = object ## implementation specific -- handles data buffer
-  when defined(nimscript) or defined(useJsonSerde):
+  when defined(nimscript) or defined(useJsonSerde) or defined(sigilsJsonSerde):
     buf*: JsonNode
+  elif defined(sigilsCborSerde):
+    buf*: CborStream
   else:
     buf*: WVariant
 
@@ -76,9 +81,6 @@ proc `$`*(id: SigilId): string =
 proc rpcPack*(res: SigilParams): SigilParams {.inline.} =
   result = res
 
-when defined(sigilsCborSerde):
-  import cborious
-
 proc rpcPack*[T](res: sink T): SigilParams =
   when defined(nimscript) or defined(sigilsJsonSerde):
     let jn = toJson(res)
@@ -91,7 +93,7 @@ proc rpcPack*[T](res: sink T): SigilParams =
       buf = CborStream.init()
     buf.setPosition(0)
     buf.pack(res)
-    result = SigilParams(buf: jn)
+    result = SigilParams(buf: buf)
   else:
     var requestCache {.global, threadvar.}: WVariant
     once:
