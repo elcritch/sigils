@@ -6,6 +6,7 @@ import unittest
 # Core modules under test
 import sigils/signals
 import sigils/slots
+import sigils/core
 
 when not defined(sigilsCborSerde) and not defined(sigilsJsonSerde):
   import sigils/reactive
