@@ -36,8 +36,8 @@ proc onBump*(self: Counter, val: array[1024, int]) {.slot.} =
 var durationMicrosEmitSlot: float
 
 const n = block:
-  when defined(slowbench): 2_000_000
-  else: 40_000
+  when defined(slowbench): 1_000_000
+  else: 100_000
 
 suite "benchmarks":
   test "emit->slot throughput (tight loop)":
