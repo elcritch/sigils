@@ -9,8 +9,6 @@ type
   WBuffer*[T] = VBuffer
   WVariant* = Variant
 
-template getMangledName(t: typedesc): string = $t
-
 proc asPtr*[T](wt: WBuffer[T]): ptr T =
   static: assert sizeof(T) > 0
   cast[ptr T](addr(wt.buff[0]))
