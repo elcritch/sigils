@@ -9,12 +9,9 @@ jobs:
     strategy:
       matrix:
         nimversion:
-          - '2.0.14'
-
+          - '2.2.6'
         os:
           - ubuntu-latest
-          # - macOS-latest
-          # - windows-latest
     steps:
     - uses: actions/checkout@v1
 
