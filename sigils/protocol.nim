@@ -76,7 +76,7 @@ proc `$`*(id: SigilId): string =
 proc rpcPack*(res: SigilParams): SigilParams {.inline.} =
   result = res
 
-when defined(sigilsCborSerder):
+when defined(sigilsCborSerde):
   import cborious
 
 proc rpcPack*[T](res: sink T): SigilParams =
