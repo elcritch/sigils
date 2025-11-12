@@ -109,6 +109,9 @@ proc rpcUnpack*[T](obj: var T, ss: SigilParams) =
   elif defined(sigilsOrigSerde):
     assert not ss.buf.isNil
     obj = ss.buf.get(T)
+  elif defined(sigilsCborSerde):
+    ss.buf.setPosition(0)
+    obj = unpack(ss.buf, T)
   else:
     assert not ss.buf.isNil
     obj = ss.buf.getWrapped(T)
