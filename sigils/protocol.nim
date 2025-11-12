@@ -90,14 +90,13 @@ proc rpcPack*[T](res: sink T): SigilParams =
     result = SigilParams(buf: newVariant(ensureMove res))
   elif defined(sigilsCborSerde):
     var buf {.global, threadvar.}: CborStream
-    once:
-      buf = CborStream.init()
+    buf = CborStream.init()
     buf.setPosition(0)
     buf.pack(res)
     result = SigilParams(buf: buf)
   else:
     var requestCache {.global, threadvar.}: WVariant
-    once:
+    if requestCache.isNil:
       requestCache = newWrapperVariant(res)
     requestCache.resetTo(res)
     result = SigilParams(buf: requestCache)
