@@ -175,3 +175,9 @@ Calling `connect` _does not_ create a new reference of either the target or sour
 However, `Agent` objects are still memory safe to use. They have a destructor which removes an `Agent` from any of it's "listeners" connections to ensure freed agents aren't signaled after they're freed. Nifty!
 
 Note however, that means you need to ensure your `Agent`'s aren't destroyed before you're done with them. This applies to threaded signals using `AgentProxy[T]` as well.
+
+### Serialization
+
+Internally `sigils` was based on an RPC system. There are many similarities when calling typed compiled functions in a generic fashion.
+
+To wit `sigils` supports multiple serialization methods. The default uses [variant](https://github.com/yglukhov/variant). In theory we could use the `any` type. Additionally JSON and CBOR methods are also supported by passing `-d:sigilsCborSerde` or `-d:sigilsJsonSerde`. These can be useful for backeneds such as NimScript and JavaScript. Using CBOR can be handy for networking which might be added in the future.
