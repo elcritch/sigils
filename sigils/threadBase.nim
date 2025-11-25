@@ -141,11 +141,15 @@ proc exec*(thread: SigilThreadPtr, sig: ThreadSignal) {.gcsafe.} =
   ## It works in several stages that all work through this proc that executes
   ## commands from either side of the "command" queue:
   ##
-  ## 1. Move message: moves an object to the remote thread when a proxy is made
-  ## 2. Call message: immediately calls a given remote slot 
-  ## 3. Trigger message: executes calls on signaled objects
-  ## 4. Deref message: decr the ref count - will free remote object without thread-local refs 
-  ## 5. Exit message: executes calls on signaled objects
+  ## 1. `Move` message: moves an object to the remote thread when a proxy is made
+  ## 2. `Trigger` message: executes calls on signaled objects
+  ## 3. `Deref` message: decr the ref count - will free remote object without thread-local refs 
+  ## 4. `Exit` message: executes calls on signaled objects
+  ##
+  ## As an alternative to Trigger a call can be executed directly but is normally
+  ## used for local queued connections rather than remote ones.
+  ##
+  ## 5. `Call` message: used for local calls - immediately calls
   ##
   debugPrint "\nthread got request: ", $sig.kind
   case sig.kind
@@ -154,6 +158,19 @@ proc exec*(thread: SigilThreadPtr, sig: ThreadSignal) {.gcsafe.} =
       $sig.item.unsafeWeakRef(), " refcount: ", $sig.item.unsafeGcCount()
     var item = sig.item
     thread.references[item.unsafeWeakRef()] = move item
+  of Trigger:
+    debugPrint "Triggering"
+    var signaled: HashSet[WeakRef[AgentRemote]]
+    withLock thread.signaledLock:
+      signaled = move thread.signaled
+    {.cast(gcsafe).}:
+      for signaled in signaled:
+        debugPrint "triggering: ", signaled
+        var sig: ThreadSignal
+        debugPrint "triggering:inbox: ", signaled[].inbox.repr
+        while signaled[].inbox.tryRecv(sig):
+          debugPrint "\t threadExec:tgt: ", $sig.tgt, " rc: ", $sig.tgt[].unsafeGcCount()
+          let res = sig.tgt[].callMethod(sig.req, sig.slot)
   of Call:
     debugPrint "\t threadExec:call: ", $sig.tgt[].getSigilId()
     when defined(sigilsDebug) or defined(debug):
@@ -170,19 +187,6 @@ proc exec*(thread: SigilThreadPtr, sig: ThreadSignal) {.gcsafe.} =
       let res = sig.tgt[].callMethod(sig.req, sig.slot)
     debugPrint "\t threadExec:tgt: ",
       $sig.tgt[].getSigilId(), " rc: ", $sig.tgt[].unsafeGcCount()
-  of Trigger:
-    debugPrint "Triggering"
-    var signaled: HashSet[WeakRef[AgentRemote]]
-    withLock thread.signaledLock:
-      signaled = move thread.signaled
-    {.cast(gcsafe).}:
-      for signaled in signaled:
-        debugPrint "triggering: ", signaled
-        var sig: ThreadSignal
-        debugPrint "triggering:inbox: ", signaled[].inbox.repr
-        while signaled[].inbox.tryRecv(sig):
-          debugPrint "\t threadExec:tgt: ", $sig.tgt, " rc: ", $sig.tgt[].unsafeGcCount()
-          let res = sig.tgt[].callMethod(sig.req, sig.slot)
   of Deref:
     debugPrint "\t threadExec:deref: ", $sig.deref.unsafeWeakRef()
     if thread.references.contains(sig.deref):
