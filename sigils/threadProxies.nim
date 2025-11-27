@@ -72,12 +72,7 @@ method callMethod*(
     " slot: ",
     repr(slot)
   if slot == remoteSlot:
-    var req = SigilRequest(
-      kind: req.kind,
-      origin: req.origin,
-      procName: req.procName,
-      params: req.params.copy(),
-    )
+    var req = req.duplicate()
     #debugPrint "\t proxy:callMethod:remoteSlot: ", "req: ", $req
     debugPrint "\t proxy:callMethod:remoteSlot: ", "proxy.remote: ", $proxy.remote
     var pt: WeakRef[AgentProxyShared]
