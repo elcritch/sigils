@@ -99,7 +99,7 @@ method callMethod*(
     debugPrint "\t proxy:callMethod:localSlot: "
     callSlots(proxy, req)
   else:
-    var req = req.deepCopy()
+    var req = req.duplicate()
     debugPrint "\t callMethod:agentProxy:InitCall:Outbound: ",
       req.procName, " proxy:remote:obj: ", proxy.remote.getSigilId()
     var msg = isolateRuntime ThreadSignal(
@@ -290,7 +290,7 @@ macro callCode(s: static string): untyped =
 proc fwdSlotTy[A: Agent; B: Agent; S: static string](self: Agent, params: SigilParams) {.nimcall.} =
     let agentSlot = callCode(S)
     let req = SigilRequest(
-      kind: Request, origin: SigilId(-1), procName: signalName(signal), params: params.deepCopy()
+      kind: Request, origin: SigilId(-1), procName: signalName(signal), params: params.duplicate()
     )
     var msg = ThreadSignal(kind: Call)
     msg.slot = agentSlot
@@ -323,7 +323,7 @@ macro callSlot(s: static string, a: typed): untyped =
 proc fwdSlot[A: Agent; B: Agent; S: static string](self: Agent, params: SigilParams) {.nimcall.} =
     let agentSlot = callSlot(S, typeof(B))
     let req = SigilRequest(
-      kind: Request, origin: SigilId(-1), procName: signalName(signal), params: params.deepCopy()
+      kind: Request, origin: SigilId(-1), procName: signalName(signal), params: params.duplicate()
     )
     var msg = ThreadSignal(kind: Call)
     msg.slot = agentSlot
