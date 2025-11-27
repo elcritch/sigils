@@ -12,9 +12,6 @@ import std/selectors
 import std/times
 import std/tables
 
-when defined(posix) and not defined(lwip):
-  import std/posix
-
 import agents
 import threadBase
 import threadDefault
@@ -31,41 +28,19 @@ type
     isReady*: bool
     thr*: Thread[ptr SigilSelectorThread]
     timerLock*: Lock
-    dataWatchers*: seq[SigilDataReady]
-
+  
   SigilSelectorThreadPtr* = ptr SigilSelectorThread
-
-when defined(posix) and not defined(lwip):
-  proc pollDataReady(thread: SigilSelectorThreadPtr) {.gcsafe.} =
-    ## Poll registered SigilDataReady descriptors using poll(2) with
-    ## a zero timeout so that the call is non-blocking.
-    for ev in thread.dataWatchers:
-      if ev.isNil:
-        continue
-      let fd = ev.fd
-      if fd < 0:
-        continue
-      var pfd: TPollfd
-      pfd.fd = cint(fd)
-      pfd.events = POLLIN or POLLPRI
-      pfd.revents = 0
-      let rc = poll(addr pfd, Tnfds(1), 0.cint)
-      if rc > 0 and (pfd.revents and (POLLIN or POLLPRI)) != 0:
-        emit ev.dataReady()
-else:
-  proc pollDataReady(thread: SigilSelectorThreadPtr) {.gcsafe.} = discard
 
 proc registerDataReady*(
     thread: SigilSelectorThreadPtr, fd: int, ev: SigilDataReady
 ) {.gcsafe.} =
-  ## Register a file/socket descriptor so that when it becomes readable a
-  ## `dataReady` signal is emitted on `ev`.
+  ## Register a file/socket descriptor with the selector so that when it
+  ## becomes readable, a `dataReady` signal is emitted on `ev`.
   ev.fd = fd
-  thread.dataWatchers.add(ev)
+  discard registerHandle(thread.sel, fd, {Event.Read}, SigilThreadEvent(ev))
 
 proc newSigilSelectorThread*(): ptr SigilSelectorThread =
-  result = cast[ptr SigilSelectorThread](allocShared0(sizeof(
-      SigilSelectorThread)))
+  result = cast[ptr SigilSelectorThread](allocShared0(sizeof(SigilSelectorThread)))
   result[] = SigilSelectorThread() # important!
   result[].sel = newSelector[SigilThreadEvent]()
   result[].agent = ThreadAgent()
@@ -76,8 +51,7 @@ proc newSigilSelectorThread*(): ptr SigilSelectorThread =
   result[].drain.store(true, Relaxed)
 
 method send*(
-    thread: SigilSelectorThreadPtr, msg: sink ThreadSignal,
-        blocking: BlockingKinds
+    thread: SigilSelectorThreadPtr, msg: sink ThreadSignal, blocking: BlockingKinds
 ) {.gcsafe.} =
   var msg = isolateRuntime(msg)
   case blocking
@@ -89,8 +63,7 @@ method send*(
       raise newException(MessageQueueFullError, "could not send!")
 
 method recv*(
-    thread: SigilSelectorThreadPtr, msg: var ThreadSignal,
-        blocking: BlockingKinds
+    thread: SigilSelectorThreadPtr, msg: var ThreadSignal, blocking: BlockingKinds
 ): bool {.gcsafe.} =
   case blocking
   of Blocking:
@@ -113,30 +86,32 @@ proc pumpTimers(thread: SigilSelectorThreadPtr, timeoutMs: int) {.gcsafe.} =
   let n = thread.sel.selectInto(timeoutMs, keys)
   for i in 0 ..< n:
     let k = keys[i]
-    # Each key corresponds to a fired timer with associated 'data' = SigilTimer
-    let t = getData(thread.sel, k.fd)
-    if t.isNil:
+    # Each key corresponds to a fired selector event with associated
+    # application data stored as a SigilThreadEvent (either SigilTimer or
+    # SigilDataReady).
+    let ev = getData(thread.sel, k.fd)
+    if ev.isNil:
       continue
 
-    if t of SigilTimer:
-      let t = SigilTimer(t)
+    if ev of SigilTimer:
+      let t = SigilTimer(ev)
       if thread.hasCancelTimer(t):
         thread.removeTimer(t)
         continue
       emit t.timeout()
       # Reschedule if needed
       if t.isRepeat():
-        discard thread.sel.registerTimer(max(t.duration.inMilliseconds(),
-            1).int, true, t)
+        discard thread.sel.registerTimer(max(t.duration.inMilliseconds(), 1).int, true, t)
       else:
         if t.count > 0:
           t.count.dec()
         if t.count != 0: # schedule again while count remains
-          discard thread.sel.registerTimer(max(t.duration.inMilliseconds(),
-              1).int, true, t)
-  # Also poll registered data-ready descriptors using a non-blocking
-  # poll(2) call so that we emit dataReady when sockets become readable.
-  #thread.pollDataReady()
+          discard thread.sel.registerTimer(max(t.duration.inMilliseconds(), 1).int, true, t)
+    elif ev of SigilDataReady:
+      let dr = SigilDataReady(ev)
+      # Only emit when the descriptor is readable.
+      if Event.Read in k.events:
+        emit dr.dataReady()
 
 method poll*(
     thread: SigilSelectorThreadPtr, blocking: BlockingKinds = Blocking
@@ -185,8 +160,7 @@ proc start*(thread: ptr SigilSelectorThread) =
     thread[].exceptionHandler = defaultExceptionHandler
   createThread(thread[].thr, runSelectorThread, thread)
 
-proc stop*(thread: ptr SigilSelectorThread, immediate: bool = false,
-    drain: bool = false) =
+proc stop*(thread: ptr SigilSelectorThread, immediate: bool = false, drain: bool = false) =
   thread[].running.store(false, Relaxed)
   thread[].drain.store(drain or immediate, Relaxed)
 
