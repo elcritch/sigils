@@ -13,7 +13,7 @@ proc asPtr*[T](wt: WBuffer[T]): ptr T =
   static: assert sizeof(T) > 0
   cast[ptr T](addr(wt.buff[0]))
 
-proc copy*(v: WVariant): WVariant =
+proc duplicate*(v: WVariant): WVariant =
   result = VariantConcrete[VBuffer]()
   result.typeId = v.typeId
   when defined(variantDebugTypes):
