@@ -32,9 +32,16 @@ type
   
   SigilSelectorThreadPtr* = ptr SigilSelectorThread
 
-proc newSigilDataReady*(
+  SigilSocketReady* = ref object of SigilThreadEvent
+    fd*: int
+
+  SigilCustomReady* = ref object of SigilThreadEvent
+
+proc dataReady*(ev: SigilSocketReady) {.signal.}
+
+proc newSigilSocketReady*(
   thread: SigilSelectorThreadPtr, fd: int | Socket
-): SigilDataReady {.gcsafe.} =
+): SigilSocketReady {.gcsafe.} =
   ## Register a file/socket descriptor with the selector so that when it
   ## becomes readable, a `dataReady` signal is emitted on `ev`.
   when fd is Socket:
@@ -92,7 +99,7 @@ proc pumpTimers(thread: SigilSelectorThreadPtr, timeoutMs: int) {.gcsafe.} =
     let k = keys[i]
     # Each key corresponds to a fired selector event with associated
     # application data stored as a SigilThreadEvent (either SigilTimer or
-    # SigilDataReady).
+    # SigilSocketReady).
     let ev = getData(thread.sel, k.fd)
     if ev.isNil:
       continue
@@ -113,8 +120,8 @@ proc pumpTimers(thread: SigilSelectorThreadPtr, timeoutMs: int) {.gcsafe.} =
           tt.count.dec()
         if tt.count != 0: # schedule again while count remains
           discard thread.sel.registerTimer(dur, true, tt)
-    elif ev of SigilDataReady:
-      let dr = SigilDataReady(ev)
+    elif ev of SigilSocketReady:
+      let dr = SigilSocketReady(ev)
       # Only emit when the descriptor is readable.
       if Event.Read in k.events:
         emit dr.dataReady()

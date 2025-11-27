@@ -23,8 +23,6 @@ type
   SigilTimer* = ref object of SigilThreadEvent
     duration*: Duration
     count*: int = SigilTimerRepeat # -1 for repeat forever, N > 0 for N times
-  SigilDataReady* = ref object of SigilThreadEvent
-    fd*: int
 
   MessageQueueFullError* = object of CatchableError
 
@@ -77,7 +75,6 @@ type
   SigilThreadPtr* = ptr SigilThread
 
 proc timeout*(timer: SigilTimer) {.signal.}
-proc dataReady*(ev: SigilDataReady) {.signal.}
 
 proc started*(tp: ThreadAgent) {.signal.}
 

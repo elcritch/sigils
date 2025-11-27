@@ -146,7 +146,7 @@ suite "threaded agent slots (selectors)":
     thread.join()
 
   test "selectors dataReady for socket handle":
-    ## Verify that registering a SigilDataReady with the selector
+    ## Verify that registering a SigilSocketReady with the selector
     ## results in a dataReady signal when the underlying socket
     ## becomes readable.
     setLocalSigilThread(newSigilSelectorThread())
@@ -160,7 +160,7 @@ suite "threaded agent slots (selectors)":
     check res == 0
 
     var watcher = DataWatcher()
-    var ready = newSigilDataReady(st, fds[0].int)
+    var ready = newSigilSocketReady(st, fds[0].int)
 
     connect(ready, dataReady, watcher, DataWatcher.onReady())
 
@@ -190,5 +190,5 @@ suite "threaded agent slots (selectors)":
     let st = SigilSelectorThreadPtr(ct)
 
     var sock = newSocket()
-    var ready = newSigilDataReady(st, sock)
+    var ready = newSigilSocketReady(st, sock)
 
