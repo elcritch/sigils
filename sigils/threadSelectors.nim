@@ -32,16 +32,19 @@ type
   
   SigilSelectorThreadPtr* = ptr SigilSelectorThread
 
-  SigilSocketReady* = ref object of SigilThreadEvent
+type
+  SigilSocketEvent* = ref object of SigilThreadEvent
     fd*: int
 
-  SigilCustomReady* = ref object of SigilThreadEvent
+  SigilSelectEvent* = ref object of SigilThreadEvent
+    evt*: SelectEvent
 
-proc dataReady*(ev: SigilSocketReady) {.signal.}
+proc dataReady*(ev: SigilSocketEvent) {.signal.}
+proc selectReady*(ev: SigilSelectEvent) {.signal.}
 
-proc newSigilSocketReady*(
+proc newSigilSocketEvent*(
   thread: SigilSelectorThreadPtr, fd: int | Socket
-): SigilSocketReady {.gcsafe.} =
+): SigilSocketEvent {.gcsafe.} =
   ## Register a file/socket descriptor with the selector so that when it
   ## becomes readable, a `dataReady` signal is emitted on `ev`.
   when fd is Socket:
@@ -49,6 +52,14 @@ proc newSigilSocketReady*(
   result.new()
   result.fd = fd
   registerHandle(thread.sel, fd, {Event.Read}, SigilThreadEvent(result))
+
+proc newSigilSelectEvent*(
+  thread: SigilSelectorThreadPtr, event = newSelectEvent()
+): SigilSocketEvent {.gcsafe.} =
+  ## Register a file/socket descriptor with the selector so that when it
+  ## becomes readable, a `dataReady` signal is emitted on `ev`.
+  result.new()
+  registerEvent(thread.sel, event, result)
 
 proc newSigilSelectorThread*(): ptr SigilSelectorThread =
   result = cast[ptr SigilSelectorThread](allocShared0(sizeof(SigilSelectorThread)))
@@ -99,7 +110,7 @@ proc pumpTimers(thread: SigilSelectorThreadPtr, timeoutMs: int) {.gcsafe.} =
     let k = keys[i]
     # Each key corresponds to a fired selector event with associated
     # application data stored as a SigilThreadEvent (either SigilTimer or
-    # SigilSocketReady).
+    # SigilSocketEvent).
     let ev = getData(thread.sel, k.fd)
     if ev.isNil:
       continue
@@ -120,8 +131,8 @@ proc pumpTimers(thread: SigilSelectorThreadPtr, timeoutMs: int) {.gcsafe.} =
           tt.count.dec()
         if tt.count != 0: # schedule again while count remains
           discard thread.sel.registerTimer(dur, true, tt)
-    elif ev of SigilSocketReady:
-      let dr = SigilSocketReady(ev)
+    elif ev of SigilSocketEvent:
+      let dr = SigilSocketEvent(ev)
       # Only emit when the descriptor is readable.
       if Event.Read in k.events:
         emit dr.dataReady()
