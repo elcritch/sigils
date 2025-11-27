@@ -82,7 +82,7 @@ proc duplicate*(params: SigilParams): SigilParams =
   elif defined(sigilsCborSerde):
     result.buf = params.buf
   else:
-    result.buf = params.buf.copy()
+    result.buf = params.buf.duplicate()
 
 proc duplicate*(req: SigilRequest): SigilRequest =
   result = SigilRequest(
