@@ -76,6 +76,22 @@ type
     msg*: string
     stacktrace*: seq[string]
 
+proc duplicate*(params: SigilParams): SigilParams =
+  when defined(nimscript) or defined(useJsonSerde) or defined(sigilsJsonSerde):
+    result.buf = params.buf
+  elif defined(sigilsCborSerde):
+    result.buf = params.buf
+  else:
+    result.buf = params.buf.duplicate()
+
+proc duplicate*(req: SigilRequest): SigilRequest =
+  result = SigilRequest(
+    kind: req.kind,
+    origin: req.origin,
+    procName: req.procName,
+    params: req.params.duplicate(),
+  )
+
 proc `$`*(id: SigilId): string =
   "0x" & id.int.toHex(16)
 
