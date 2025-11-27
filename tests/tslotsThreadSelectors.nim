@@ -153,7 +153,7 @@ suite "threaded agent slots (selectors)":
     let ct = getCurrentSigilThread()
     check ct of SigilSelectorThreadPtr
 
-    let st = cast[SigilSelectorThreadPtr](ct)
+    let st = SigilSelectorThreadPtr(ct)
 
     var fds: array[0..1, cint]
     let res = socketpair(AF_UNIX, SOCK_STREAM, 0.cint, fds)
