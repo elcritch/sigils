@@ -1,4 +1,4 @@
-import std/[unittest, times, strutils, os]
+import std/[unittest, times, net, strutils, os, posix, selectors]
 import sigils
 import sigils/threadSelectors
 
@@ -8,6 +8,9 @@ type
 
   Counter* = ref object of Agent
     value: int
+
+  DataWatcher* = ref object of Agent
+    hits: int
 
 proc valueChanged*(tp: SomeAction, val: int) {.signal.}
 proc updated*(tp: Counter, final: int) {.signal.}
@@ -29,6 +32,9 @@ proc completed*(self: SomeAction, final: int) {.slot.} =
 
 proc value*(self: Counter): int =
   self.value
+
+proc onReady*(self: DataWatcher) {.slot.} =
+  self.hits.inc()
 
 suite "threaded agent slots (selectors)":
   teardown:
@@ -96,7 +102,7 @@ suite "threaded agent slots (selectors)":
     let ct = getCurrentSigilThread()
     check ct of SigilSelectorThreadPtr
 
-    var timer = newSigilTimer(duration=initDuration(milliseconds=2))
+    var timer = newSigilTimer(duration = initDuration(milliseconds = 2))
     var a = Counter()
     connect(timer, timeout, a, Counter.timerRun())
 
@@ -123,7 +129,7 @@ suite "threaded agent slots (selectors)":
 
     let bp: AgentProxy[Counter] = b.moveToThread(thread)
 
-    var timer = newSigilTimer(duration=initDuration(milliseconds=10), count=2)
+    var timer = newSigilTimer(duration = initDuration(milliseconds = 10), count = 2)
     connectThreaded(timer, timeout, bp, Counter.timerRun())
     start(timer, thread)
 
@@ -138,3 +144,109 @@ suite "threaded agent slots (selectors)":
     cancel(timer, thread)
     thread.stop()
     thread.join()
+
+  test "selectors dataReady for socket handle":
+    ## Verify that registering a SigilSocketEvent with the selector
+    ## results in a dataReady signal when the underlying socket
+    ## becomes readable.
+    setLocalSigilThread(newSigilSelectorThread())
+    let ct = getCurrentSigilThread()
+    check ct of SigilSelectorThreadPtr
+
+    let st = SigilSelectorThreadPtr(ct)
+
+    var fds: array[0..1, cint]
+    let res = socketpair(AF_UNIX, SOCK_STREAM, 0.cint, fds)
+    check res == 0
+
+    var watcher = DataWatcher()
+    var ready = newSigilSocketEvent(st, fds[0].int)
+
+    connect(ready, dataReady, watcher, DataWatcher.onReady())
+
+    # No data written yet; polling should not trigger the watcher.
+    discard ct.poll(NonBlocking)
+    check watcher.hits == 0
+
+    let msg = "hello"
+    let written = write(fds[1], cast[pointer](msg.cstring), msg.len)
+    check written == msg.len
+
+    var attempts = 0
+    while watcher.hits == 0 and attempts < 50:
+      discard ct.poll()
+      os.sleep(2)
+      attempts.inc()
+
+    check watcher.hits >= 1
+
+    discard close(fds[0])
+    discard close(fds[1])
+
+  test "selectors dataReady for readable socket":
+    ## Similar to the previous test, but verifies the overload that
+    ## accepts a high-level Socket rather than a raw file descriptor.
+    setLocalSigilThread(newSigilSelectorThread())
+    let ct = getCurrentSigilThread()
+    check ct of SigilSelectorThreadPtr
+    let st = SigilSelectorThreadPtr(ct)
+
+    var fds: array[0..1, cint]
+    let res = socketpair(AF_UNIX, SOCK_STREAM, 0.cint, fds)
+    check res == 0
+
+    # Wrap the read end of the socketpair in a Nim Socket.
+    var sock = newSocket(SocketHandle(fds[0]), Domain.AF_UNIX,
+        SockType.SOCK_STREAM, Protocol.IPPROTO_TCP, buffered = false)
+
+    var watcher = DataWatcher()
+    var ready = newSigilSocketEvent(st, sock)
+
+    connect(ready, dataReady, watcher, DataWatcher.onReady())
+
+    # No data written yet; polling should not trigger the watcher.
+    discard ct.poll(NonBlocking)
+    check watcher.hits == 0
+
+    let msg = "ping"
+    let written = write(fds[1], cast[pointer](msg.cstring), msg.len)
+    check written == msg.len
+
+    var attempts = 0
+    while watcher.hits == 0 and attempts < 50:
+      discard ct.poll()
+      os.sleep(2)
+      attempts.inc()
+
+    check watcher.hits >= 1
+
+    discard close(fds[1])
+
+  test "selectors custom SelectEvent emits selectEvent":
+    ## Verify that a custom std/selectors SelectEvent registered via
+    ## newSigilSelectEvent results in the SigilSelectEvent's
+    ## selectEvent signal being emitted when triggered.
+    setLocalSigilThread(newSigilSelectorThread())
+    let ct = getCurrentSigilThread()
+    check ct of SigilSelectorThreadPtr
+    let st = SigilSelectorThreadPtr(ct)
+
+    var watcher = DataWatcher()
+    let sev = newSigilSelectEvent(st)
+
+    connect(sev, selectEvent, watcher, DataWatcher.onReady())
+
+    # No trigger yet; polling should not increment hitCount.
+    discard ct.poll(NonBlocking)
+    check watcher.hits == 0
+
+    # Trigger the underlying std/selectors SelectEvent.
+    sev.evt.trigger()
+
+    var attempts2 = 0
+    while watcher.hits == 0 and attempts2 < 50:
+      discard ct.poll()
+      os.sleep(2)
+      attempts2.inc()
+
+    check watcher.hits >= 1

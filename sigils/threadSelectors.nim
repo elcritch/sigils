@@ -11,6 +11,7 @@ import std/isolation
 import std/selectors
 import std/times
 import std/tables
+import std/net
 
 import agents
 import threadBase
@@ -23,18 +24,53 @@ export threadBase
 type
   SigilSelectorThread* = object of SigilThread
     inputs*: SigilChan
-    sel*: Selector[SigilTimer]
+    sel*: Selector[SigilThreadEvent]
     drain*: Atomic[bool]
     isReady*: bool
     thr*: Thread[ptr SigilSelectorThread]
     timerLock*: Lock
-  
+
   SigilSelectorThreadPtr* = ptr SigilSelectorThread
 
+type
+  SigilSocketEvent* = ref object of SigilThreadEvent
+    fd*: int
+
+  SigilSelectEvent* = ref object of SigilThreadEvent
+    ## Wrapper for std/selectors SelectEvent so it can
+    ## participate in the Sigils signaling system.
+    evt*: SelectEvent
+
+proc dataReady*(ev: SigilSocketEvent) {.signal.}
+proc selectReady*(ev: SigilSelectEvent) {.signal.}
+proc selectEvent*(ev: SigilSelectEvent) {.signal.}
+
+proc newSigilSocketEvent*(
+  thread: SigilSelectorThreadPtr, fd: int | Socket
+): SigilSocketEvent {.gcsafe.} =
+  ## Register a file/socket descriptor with the selector so that when it
+  ## becomes readable, a `dataReady` signal is emitted on `ev`.
+  when fd is Socket:
+    let fd = fd.getFd().int
+  result.new()
+  result.fd = fd
+  registerHandle(thread.sel, fd, {Event.Read}, SigilThreadEvent(result))
+
+proc newSigilSelectEvent*(
+  thread: SigilSelectorThreadPtr, event = newSelectEvent()
+): SigilSelectEvent {.gcsafe.} =
+  ## Register a custom std/selectors SelectEvent with this selector
+  ## thread and emit `selectEvent` (and `selectReady` for
+  ## compatibility) when it is triggered.
+  result.new()
+  result.evt = event
+  registerEvent(thread.sel, event, SigilThreadEvent(result))
+
 proc newSigilSelectorThread*(): ptr SigilSelectorThread =
-  result = cast[ptr SigilSelectorThread](allocShared0(sizeof(SigilSelectorThread)))
+  result = cast[ptr SigilSelectorThread](allocShared0(sizeof(
+      SigilSelectorThread)))
   result[] = SigilSelectorThread() # important!
-  result[].sel = newSelector[SigilTimer]()
+  result[].sel = newSelector[SigilThreadEvent]()
   result[].agent = ThreadAgent()
   result[].signaledLock.initLock()
   result[].timerLock.initLock()
@@ -43,7 +79,8 @@ proc newSigilSelectorThread*(): ptr SigilSelectorThread =
   result[].drain.store(true, Relaxed)
 
 method send*(
-    thread: SigilSelectorThreadPtr, msg: sink ThreadSignal, blocking: BlockingKinds
+    thread: SigilSelectorThreadPtr, msg: sink ThreadSignal,
+        blocking: BlockingKinds
 ) {.gcsafe.} =
   var msg = isolateRuntime(msg)
   case blocking
@@ -55,7 +92,8 @@ method send*(
       raise newException(MessageQueueFullError, "could not send!")
 
 method recv*(
-    thread: SigilSelectorThreadPtr, msg: var ThreadSignal, blocking: BlockingKinds
+    thread: SigilSelectorThreadPtr, msg: var ThreadSignal,
+        blocking: BlockingKinds
 ): bool {.gcsafe.} =
   case blocking
   of Blocking:
@@ -78,22 +116,39 @@ proc pumpTimers(thread: SigilSelectorThreadPtr, timeoutMs: int) {.gcsafe.} =
   let n = thread.sel.selectInto(timeoutMs, keys)
   for i in 0 ..< n:
     let k = keys[i]
-    # Each key corresponds to a fired timer with associated 'data' = SigilTimer
-    let t = getData(thread.sel, k.fd)
-    if t.isNil:
+    # Each key corresponds to a fired selector event with associated
+    # application data stored as a SigilThreadEvent (either SigilTimer or
+    # SigilSocketEvent).
+    let ev = getData(thread.sel, k.fd)
+    if ev.isNil:
       continue
-    if thread.hasCancelTimer(t):
-      thread.removeTimer(t)
-      continue
-    emit t.timeout()
-    # Reschedule if needed
-    if t.isRepeat():
-      discard thread.sel.registerTimer(max(t.duration.inMilliseconds(), 1).int, true, t)
-    else:
-      if t.count > 0:
-        t.count.dec()
-      if t.count != 0: # schedule again while count remains
-        discard thread.sel.registerTimer(max(t.duration.inMilliseconds(), 1).int, true, t)
+
+    if ev of SigilTimer:
+      let tt = SigilTimer(ev)
+      if thread.hasCancelTimer(tt):
+        thread.removeTimer(tt)
+        continue
+      emit tt.timeout()
+
+      # Reschedule if needed
+      let dur = max(tt.duration.inMilliseconds(), 1).int
+      if tt.isRepeat():
+        discard thread.sel.registerTimer(dur, true, tt)
+      else:
+        if tt.count > 0:
+          tt.count.dec()
+        if tt.count != 0: # schedule again while count remains
+          discard thread.sel.registerTimer(dur, true, tt)
+    elif ev of SigilSocketEvent:
+      let dr = SigilSocketEvent(ev)
+      # Only emit when the descriptor is readable.
+      if Event.Read in k.events:
+        emit dr.dataReady()
+    elif ev of SigilSelectEvent:
+      let se = SigilSelectEvent(ev)
+      # Forward selector events into the Sigils signal system.
+      emit se.selectEvent()
+      emit se.selectReady()
 
 method poll*(
     thread: SigilSelectorThreadPtr, blocking: BlockingKinds = Blocking
@@ -142,7 +197,8 @@ proc start*(thread: ptr SigilSelectorThread) =
     thread[].exceptionHandler = defaultExceptionHandler
   createThread(thread[].thr, runSelectorThread, thread)
 
-proc stop*(thread: ptr SigilSelectorThread, immediate: bool = false, drain: bool = false) =
+proc stop*(thread: ptr SigilSelectorThread, immediate: bool = false,
+    drain: bool = false) =
   thread[].running.store(false, Relaxed)
   thread[].drain.store(drain or immediate, Relaxed)
 

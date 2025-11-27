@@ -18,7 +18,9 @@ export isolateutils
 const SigilTimerRepeat* = -1
 
 type
-  SigilTimer* = ref object of Agent
+  SigilThreadEvent* = ref object of Agent
+
+  SigilTimer* = ref object of SigilThreadEvent
     duration*: Duration
     count*: int = SigilTimerRepeat # -1 for repeat forever, N > 0 for N times
 
