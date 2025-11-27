@@ -160,7 +160,7 @@ suite "threaded agent slots (selectors)":
     check res == 0
 
     var watcher = DataWatcher()
-    var ready = newSigilDataReady(fds[0].int)
+    var ready = newSigilDataReady(st, fds[0].int)
 
     connect(ready, dataReady, watcher, DataWatcher.onReady())
 
