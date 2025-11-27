@@ -164,8 +164,6 @@ suite "threaded agent slots (selectors)":
 
     connect(ready, dataReady, watcher, DataWatcher.onReady())
 
-    #registerDataReady(st, fds[0].int, ready)
-
     # No data written yet; polling should not trigger the watcher.
     discard ct.poll(NonBlocking)
     check watcher.hits == 0
