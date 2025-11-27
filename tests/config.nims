@@ -12,8 +12,6 @@
   on
 --debugger:
   native
---deepcopy:
-  on
 
 --d:
   sigilsDebug
