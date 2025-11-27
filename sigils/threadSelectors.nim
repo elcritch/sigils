@@ -33,18 +33,15 @@ type
   SigilSelectorThreadPtr* = ptr SigilSelectorThread
 
 proc newSigilDataReady*(
-  thread: SigilSelectorThreadPtr, fd: int
+  thread: SigilSelectorThreadPtr, fd: int | Socket
 ): SigilDataReady {.gcsafe.} =
   ## Register a file/socket descriptor with the selector so that when it
   ## becomes readable, a `dataReady` signal is emitted on `ev`.
+  when fd is Socket:
+    let fd = fd.getFd().int
   result.new()
   result.fd = fd
   registerHandle(thread.sel, fd, {Event.Read}, SigilThreadEvent(result))
-
-proc newSigilDataReady*(
-  thread: SigilSelectorThreadPtr, socket: Socket
-): SigilDataReady {.gcsafe.} =
-  result = newSigilDataReady(thread, socket.getFd().int)
 
 proc newSigilSelectorThread*(): ptr SigilSelectorThread =
   result = cast[ptr SigilSelectorThread](allocShared0(sizeof(SigilSelectorThread)))

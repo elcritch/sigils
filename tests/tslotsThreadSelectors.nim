@@ -1,4 +1,4 @@
-import std/[unittest, times, strutils, os, posix]
+import std/[unittest, times, net, strutils, os, posix]
 import sigils
 import sigils/threadSelectors
 
@@ -144,6 +144,15 @@ suite "threaded agent slots (selectors)":
     cancel(timer, thread)
     thread.stop()
     thread.join()
+
+  test "selectors dataReady for readable socket":
+    setLocalSigilThread(newSigilSelectorThread())
+    let ct = getCurrentSigilThread()
+    check ct of SigilSelectorThreadPtr
+    let st = SigilSelectorThreadPtr(ct)
+
+    var sock = newSocket()
+    var ready = newSigilDataReady(st, sock)
 
   test "selectors dataReady for readable socket":
     ## Verify that registering a SigilDataReady with the selector
