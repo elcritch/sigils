@@ -23,7 +23,7 @@ export threadBase
 type
   SigilSelectorThread* = object of SigilThread
     inputs*: SigilChan
-    sel*: Selector[SigilTimer]
+    sel*: Selector[SigilThreadEvent]
     drain*: Atomic[bool]
     isReady*: bool
     thr*: Thread[ptr SigilSelectorThread]
@@ -34,7 +34,7 @@ type
 proc newSigilSelectorThread*(): ptr SigilSelectorThread =
   result = cast[ptr SigilSelectorThread](allocShared0(sizeof(SigilSelectorThread)))
   result[] = SigilSelectorThread() # important!
-  result[].sel = newSelector[SigilTimer]()
+  result[].sel = newSelector[SigilThreadEvent]()
   result[].agent = ThreadAgent()
   result[].signaledLock.initLock()
   result[].timerLock.initLock()
@@ -82,18 +82,21 @@ proc pumpTimers(thread: SigilSelectorThreadPtr, timeoutMs: int) {.gcsafe.} =
     let t = getData(thread.sel, k.fd)
     if t.isNil:
       continue
-    if thread.hasCancelTimer(t):
-      thread.removeTimer(t)
-      continue
-    emit t.timeout()
-    # Reschedule if needed
-    if t.isRepeat():
-      discard thread.sel.registerTimer(max(t.duration.inMilliseconds(), 1).int, true, t)
-    else:
-      if t.count > 0:
-        t.count.dec()
-      if t.count != 0: # schedule again while count remains
+
+    if t of SigilTimer:
+      let t = SigilTimer(t)
+      if thread.hasCancelTimer(t):
+        thread.removeTimer(t)
+        continue
+      emit t.timeout()
+      # Reschedule if needed
+      if t.isRepeat():
         discard thread.sel.registerTimer(max(t.duration.inMilliseconds(), 1).int, true, t)
+      else:
+        if t.count > 0:
+          t.count.dec()
+        if t.count != 0: # schedule again while count remains
+          discard thread.sel.registerTimer(max(t.duration.inMilliseconds(), 1).int, true, t)
 
 method poll*(
     thread: SigilSelectorThreadPtr, blocking: BlockingKinds = Blocking
