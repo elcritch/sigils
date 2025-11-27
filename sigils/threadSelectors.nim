@@ -37,7 +37,7 @@ proc registerDataReady*(
   ## Register a file/socket descriptor with the selector so that when it
   ## becomes readable, a `dataReady` signal is emitted on `ev`.
   ev.fd = fd
-  discard registerHandle(thread.sel, fd, {Event.Read}, SigilThreadEvent(ev))
+  registerHandle(thread.sel, fd, {Event.Read}, SigilThreadEvent(ev))
 
 proc newSigilSelectorThread*(): ptr SigilSelectorThread =
   result = cast[ptr SigilSelectorThread](allocShared0(sizeof(SigilSelectorThread)))
