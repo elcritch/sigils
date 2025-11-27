@@ -12,4 +12,4 @@ task test, "Compile and run all tests in tests/":
         let name = splitFile(path).name
         if not name.startsWith("t"): continue # run only t*.nim files
         echo fmt"[sigils] Running {path}"
-        exec fmt"nim c --nimcache:../.nimcache -r {path}"
+        exec fmt"nim c -r {path}"

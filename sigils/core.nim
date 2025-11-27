@@ -23,22 +23,13 @@ method callMethod*(
 
     result = SigilResponse(kind: Response, id: req.origin.int, result: res)
 
-from system/ansi_c import c_raise
-
 type AgentSlotError* = object of CatchableError
 
 proc callSlots*(obj: Agent | WeakRef[Agent], req: SigilRequest) {.gcsafe.} =
   {.cast(gcsafe).}:
     for sub in obj.getSubscriptions(req.procName):
       when defined(sigilsDebug):
-        if sub.tgt[].freedByThread != 0:
-          debugPrint "exec:call:thread: ", $getThreadId()
-          debugPrint "exec:call:sub.tgt[].freed:thread: ", $sub.tgt[].freedByThread
-          debugPrint "exec:call:sub.tgt[]:id: ", $sub.tgt[].getSigilId()
-          debugPrint "exec:call:sub.req: ", req.repr
-          debugPrint "exec:call:obj:id: ", $obj.getSigilId()
-          discard c_raise(11.cint)
-        assert sub.tgt[].freedByThread == 0
+        doAssert sub.tgt[].freedByThread == 0
       var res: SigilResponse = sub.tgt[].callMethod(req, sub.slot)
 
       when defined(nimscript) or defined(useJsonSerde):
