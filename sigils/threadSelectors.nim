@@ -11,6 +11,7 @@ import std/isolation
 import std/selectors
 import std/times
 import std/tables
+import std/net
 
 import agents
 import threadBase
@@ -31,13 +32,19 @@ type
   
   SigilSelectorThreadPtr* = ptr SigilSelectorThread
 
-proc registerDataReady*(
-    thread: SigilSelectorThreadPtr, fd: int, ev: SigilDataReady
-) {.gcsafe.} =
+proc newSigilDataReady*(
+  thread: SigilSelectorThreadPtr, fd: int
+): SigilDataReady {.gcsafe.} =
   ## Register a file/socket descriptor with the selector so that when it
   ## becomes readable, a `dataReady` signal is emitted on `ev`.
-  ev.fd = fd
-  registerHandle(thread.sel, fd, {Event.Read}, SigilThreadEvent(ev))
+  result.new()
+  result.fd = fd
+  registerHandle(thread.sel, fd, {Event.Read}, SigilThreadEvent(result))
+
+proc newSigilDataReady*(
+  thread: SigilSelectorThreadPtr, socket: Socket
+): SigilDataReady {.gcsafe.} =
+  result = newSigilDataReady(thread, socket.getFd().int)
 
 proc newSigilSelectorThread*(): ptr SigilSelectorThread =
   result = cast[ptr SigilSelectorThread](allocShared0(sizeof(SigilSelectorThread)))

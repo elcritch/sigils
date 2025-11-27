@@ -160,11 +160,11 @@ suite "threaded agent slots (selectors)":
     check res == 0
 
     var watcher = DataWatcher()
-    var ready = SigilDataReady(fd: fds[0].int)
+    var ready = newSigilDataReady(fds[0].int)
 
     connect(ready, dataReady, watcher, DataWatcher.onReady())
 
-    registerDataReady(st, fds[0].int, ready)
+    #registerDataReady(st, fds[0].int, ready)
 
     # No data written yet; polling should not trigger the watcher.
     discard ct.poll(NonBlocking)
