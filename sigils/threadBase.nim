@@ -170,7 +170,7 @@ proc exec*(thread: SigilThreadPtr, sig: ThreadSignal) {.gcsafe.} =
         debugPrint "triggering:inbox: ", signaled[].inbox.repr
         while signaled[].inbox.tryRecv(sig):
           debugPrint "\t threadExec:tgt: ", $sig.tgt, " rc: ", $sig.tgt[].unsafeGcCount()
-          let res = sig.tgt[].callMethod(sig.req, sig.slot)
+          discard sig.tgt[].callMethod(sig.req, sig.slot)
   of Call:
     debugPrint "\t threadExec:call: ", $sig.tgt[].getSigilId()
     when defined(sigilsDebug) or defined(debug):
