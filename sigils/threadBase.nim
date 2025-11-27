@@ -77,6 +77,7 @@ type
   SigilThreadPtr* = ptr SigilThread
 
 proc timeout*(timer: SigilTimer) {.signal.}
+proc dataReady*(ev: SigilDataReady) {.signal.}
 
 proc started*(tp: ThreadAgent) {.signal.}
 
