@@ -145,16 +145,7 @@ suite "threaded agent slots (selectors)":
     thread.stop()
     thread.join()
 
-  test "selectors dataReady for readable socket":
-    setLocalSigilThread(newSigilSelectorThread())
-    let ct = getCurrentSigilThread()
-    check ct of SigilSelectorThreadPtr
-    let st = SigilSelectorThreadPtr(ct)
-
-    var sock = newSocket()
-    var ready = newSigilDataReady(st, sock)
-
-  test "selectors dataReady for readable socket":
+  test "selectors dataReady for socket handle":
     ## Verify that registering a SigilDataReady with the selector
     ## results in a dataReady signal when the underlying socket
     ## becomes readable.
@@ -191,3 +182,13 @@ suite "threaded agent slots (selectors)":
 
     discard close(fds[0])
     discard close(fds[1])
+
+  test "selectors dataReady for readable socket":
+    setLocalSigilThread(newSigilSelectorThread())
+    let ct = getCurrentSigilThread()
+    check ct of SigilSelectorThreadPtr
+    let st = SigilSelectorThreadPtr(ct)
+
+    var sock = newSocket()
+    var ready = newSigilDataReady(st, sock)
+

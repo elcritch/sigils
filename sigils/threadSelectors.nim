@@ -105,14 +105,14 @@ proc pumpTimers(thread: SigilSelectorThreadPtr, timeoutMs: int) {.gcsafe.} =
       emit tt.timeout()
 
       # Reschedule if needed
+      let dur = max(tt.duration.inMilliseconds(), 1).int
       if tt.isRepeat():
-        let dur = max(tt.duration.inMilliseconds(), 1).int
         discard thread.sel.registerTimer(dur, true, tt)
       else:
         if tt.count > 0:
           tt.count.dec()
         if tt.count != 0: # schedule again while count remains
-          discard thread.sel.registerTimer(max(tt.duration.inMilliseconds(), 1).int, true, tt)
+          discard thread.sel.registerTimer(dur, true, tt)
     elif ev of SigilDataReady:
       let dr = SigilDataReady(ev)
       # Only emit when the descriptor is readable.
