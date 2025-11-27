@@ -8,7 +8,6 @@ requires "nim >= 2.0.2"
 requires "variant >= 0.2.12"
 requires "threading >= 0.2.1"
 requires "stack_strings"
-requires "patty >= 0.3.4"
 
 feature "cbor":
   requires "cborious"
