@@ -154,49 +154,28 @@ proc exec*(thread: SigilThreadPtr, sig: ThreadSignal) {.gcsafe.} =
   debugPrint "\nthread got request: ", $sig.kind
   case sig.kind
   of Move:
-    debugPrint "\t threadExec:move: ",
-      $sig.item.unsafeWeakRef(), " refcount: ", $sig.item.unsafeGcCount()
     var item = sig.item
     thread.references[item.unsafeWeakRef()] = move item
   of Trigger:
-    debugPrint "Triggering"
     var signaled: HashSet[WeakRef[AgentRemote]]
     withLock thread.signaledLock:
       signaled = move thread.signaled
-    {.cast(gcsafe).}:
-      for signaled in signaled:
-        debugPrint "triggering: ", signaled
-        var sig: ThreadSignal
-        debugPrint "triggering:inbox: ", signaled[].inbox.repr
-        while signaled[].inbox.tryRecv(sig):
-          debugPrint "\t threadExec:tgt: ", $sig.tgt, " rc: ", $sig.tgt[].unsafeGcCount()
+    # loop and execute calls for all triggered agents
+    for signaled in signaled:
+      var sig: ThreadSignal
+      while signaled[].inbox.tryRecv(sig):
+        {.cast(gcsafe).}:
           discard sig.tgt[].callMethod(sig.req, sig.slot)
   of Call:
-    debugPrint "\t threadExec:call: ", $sig.tgt[].getSigilId()
-    when defined(sigilsDebug) or defined(debug):
-      if sig.tgt[].freedByThread != 0:
-        echo "exec:call:sig.tgt[].freedByThread:thread: ", $sig.tgt[].freedByThread
-        echo "exec:call:sig.req: ", sig.req.repr
-        echo "exec:call:thr: ", $getThreadId()
-        echo "exec:call: ", $sig.tgt[].getSigilId()
-        echo "exec:call:isUnique: ", sig.tgt[].isUniqueRef
-        # echo "exec:call:has: ", sig.tgt[] in getCurrentSigilThread()[].references
-        # discard c_raise(11.cint)
-      assert sig.tgt[].freedByThread == 0
     {.cast(gcsafe).}:
-      let res = sig.tgt[].callMethod(sig.req, sig.slot)
-    debugPrint "\t threadExec:tgt: ",
-      $sig.tgt[].getSigilId(), " rc: ", $sig.tgt[].unsafeGcCount()
+      discard sig.tgt[].callMethod(sig.req, sig.slot)
   of Deref:
-    debugPrint "\t threadExec:deref: ", $sig.deref.unsafeWeakRef()
     if thread.references.contains(sig.deref):
-      debugPrint "\t threadExec:run:deref: ", $sig.deref.unsafeWeakRef()
       thread.references.del(sig.deref)
     withLock thread.signaledLock:
       thread.signaled.excl(cast[WeakRef[AgentRemote]](sig.deref))
     thread.gcCollectReferences()
   of Exit:
-    debugPrint "\t threadExec:exit: ", $getThreadId()
     thread.running.store(false, Relaxed)
 
 proc runForever*(thread: SigilThreadPtr) {.gcsafe.} =
