@@ -5,13 +5,21 @@ include variant
 type
   VBuffer* = object
     buff*: string
-
   WBuffer*[T] = VBuffer
+
   WVariant* = Variant
 
 proc asPtr*[T](wt: WBuffer[T]): ptr T =
   static: assert sizeof(T) > 0
   cast[ptr T](addr(wt.buff[0]))
+
+proc copy*(v: WVariant): WVariant =
+  result = VariantConcrete[VBuffer]()
+  result.typeId = v.typeId
+  when defined(variantDebugTypes):
+    result.mangledName = v.mangledName
+  cast[VariantConcrete[VBuffer]](result).val.buff =
+    cast[VariantConcrete[VBuffer]](v).val.buff
 
 proc initWrapper*[T](val: sink T): WBuffer[T] =
   let sz = sizeof(val)
