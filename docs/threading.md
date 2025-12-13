@@ -2,13 +2,21 @@
 
 This document explains the threading architecture implemented in `sigils/threadBase.nim`, `sigils/threadDefault.nim`, and `sigils/threadProxies.nim` (re-exported via `sigils/threads.nim`), with examples from `tests/tslotsThread.nim`. It focuses on how agents are moved across threads, how calls and signals travel safely between threads, and the key safety guarantees and caveats.
 
+At a high level, Sigils follows a "don't share, communicate" approach to concurrency. Each thread is treated as the exclusive owner of the agents it runs: an agent's internal state is meant to be read and written by only one thread. Instead of letting multiple threads call into the same object directly (which would require locks around every access), Sigils keeps agent code single-threaded and uses message passing to request work from other threads.
+
+The key operation is a move. Moving an agent to another thread is an ownership transfer: after the move, the destination thread is the only place where the real agent lives and executes. The source thread should behave as if it no longer has the agent at all. What it keeps is a small local stand-in whose job is to forward method calls and signals across threads. This is similar in spirit to moving an object to another process and then talking to it through a handle.
+
+Communication is built around inboxes (message queues). When code on one thread wants something to happen on another thread, it packages the request as a message and puts it into the destination thread's inbox. The destination thread runs a simple loop: it repeatedly takes messages out of its inbox and executes them one at a time. Because all requests are handled serially on the owning thread, the agent doesn't need internal locking to stay consistent.
+
+Signals travel back the same way. When an agent running on a worker thread emits a signal that has listeners on a different thread, that signal becomes a message placed into the other thread's inbox. Importantly, the receiving thread must periodically drain its own inbox to deliver those callbacks. If you forget to pump the inbox on the receiving side, cross-thread signals won't be observed even though they were queued.
+
 ## Overview
 
 - Sigils uses a message-passing model to keep agent logic thread-confined while enabling cross-thread signaling.
-- Agents can be **moved** to a worker thread; callers interact with them through a local proxy (`AgentProxy[T]`).
-- Cross-thread work is represented as `ThreadSignal`s and executed by a per-thread scheduler (`SigilThread`).
-- Worker threads run the scheduler loop automatically; the main thread must call `poll()`/`pollAll()` to process forwarded events.
-- Cleanup is synchronized: moved agents are owned by the destination thread, and proxies send `Deref` messages so the destination thread can release remote state.
+- Agents can be **moved** to a worker thread; callers interact with them through a local proxy that forwards requests.
+- Cross-thread work is executed by a per-thread scheduler that processes messages serially.
+- Worker threads run the scheduler loop automatically; threads without a built-in loop must periodically poll to process forwarded events.
+- Cleanup is synchronized: moved agents are owned by the destination thread, and proxies send dereference messages so the destination thread can release remote state.
 
 ## Mental Model
 
@@ -62,7 +70,7 @@ This document explains the threading architecture implemented in `sigils/threadB
   - Outbound (agent listening to others): rebinds listeners so the local proxy receives those signals and forwards across threads.
   - Inbound (others listening to agent): rebinds so callers attach to `localProxy`; the remote agent publishes to `remoteProxy`, which forwards back.
 - Ownership transfer:
-  - Sends `Move(agent)` and `Move(remoteProxy)` to the destination thread so they are owned (and managed) by that thread’s `references` table.
+  - Sends `Move(agent)` and `Move(remoteProxy)` to the destination thread so they are owned (and managed) by that thread's `references` table.
 - Returns `localProxy` to the caller; the original `agent` variable is moved (becomes `nil`).
 
 The tests demonstrate this flow, e.g.:
@@ -82,7 +90,7 @@ Two paths deliver work on the destination thread:
 
 2) Direct control path
 - `Move`, `Deref`, and `Exit` are sent to the destination thread via `thread.send(...)` and handled immediately.
-- `Call` is also supported as a direct `ThreadSignal(Call)` on a thread’s input channel (used by `connectQueued`), though proxy code primarily uses per-proxy inbox + `Trigger`.
+- `Call` is also supported as a direct `ThreadSignal(Call)` on a thread's input channel (used by `connectQueued`), though proxy code primarily uses per-proxy inbox + `Trigger`.
 
 All cross-thread messages are isolated (`isolateRuntime`) before enqueueing to ensure thread-safe transfer of data.
 
@@ -99,7 +107,7 @@ All cross-thread messages are isolated (`isolateRuntime`) before enqueueing to e
 - Otherwise — regular slot call bound for the remote agent.
   - Wraps as `Call(slot, req, tgt = proxy.remote)`, enqueues into `proxyTwin.inbox` (on remote), and `Trigger`s the remote thread.
 
-Locks are used to safely access `proxyTwin` and to coordinate with the destination thread’s `signaled` set.
+Locks are used to safely access `proxyTwin` and to coordinate with the destination thread's `signaled` set.
 
 ## Thread Loop and Lifecycle
 
@@ -117,7 +125,7 @@ Helpers:
 
 ## Queued Calls (Same Thread)
 
-`connectQueued(...)` routes a signal to a slot by enqueueing a `ThreadSignal(Call)` onto the current thread’s `SigilThread` instead of calling inline. The slot runs the next time you `poll()`/`pollAll()` that thread.
+`connectQueued(...)` routes a signal to a slot by enqueueing a `ThreadSignal(Call)` onto the current thread's `SigilThread` instead of calling inline. The slot runs the next time you `poll()`/`pollAll()` that thread.
 
 Because it uses `SigilThread.send(...)` under the hood, the queued `ThreadSignal` is still passed through `isolateRuntime(...)` before it is enqueued.
 
@@ -125,7 +133,7 @@ Because it uses `SigilThread.send(...)` under the hood, the queued `ThreadSignal
 
 - Agents have a destructor (`destroyAgent`) that removes them from all subscriptions and listeners. Debug builds assert destruction happens on the owning thread (`freedByThread` checks).
 - Proxies break cycles on destruction:
-  - `AgentProxyShared.=destroy` clears the opposite twin’s link under `lock`, removes it from the remote thread’s `signaled`, and posts a `Deref` to drop the remote reference.
+  - `AgentProxyShared.=destroy` clears the opposite twin's link under `lock`, removes it from the remote thread's `signaled`, and posts a `Deref` to drop the remote reference.
   - Destroys local `lock` and `remoteThread` refs last.
 - The destination thread periodically cleans `references` via `gcCollectReferences()` (after `Deref`), removing entries for agents that have no connections.
 
