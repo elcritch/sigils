@@ -87,7 +87,6 @@ proc toAgentProxy*[T](location: AgentLocation, tp: typeof[T]): AgentProxy[T] =
 
   # Ensure the remote proxy is kept alive until it is wired on the remote thread.
   remoteProxy.addSubscription(AnySigilName, result, localSlot)
-  #location.agent[].addSubscription(AnySigilName, remoteProxy, remoteSlot)
 
   let remoteProxyRef = remoteProxy.unsafeWeakRef().toKind(AgentProxyShared)
   location.thread.send(ThreadSignal(kind: Move, item: move remoteProxy))

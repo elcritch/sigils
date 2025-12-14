@@ -160,11 +160,15 @@ proc exec*(thread: SigilThreadPtr, sig: ThreadSignal) {.gcsafe.} =
       " src: ", $sig.src,
       " tgt: ", $sig.subTgt
     if sig.src.isNil or sig.subTgt.isNil: 
-      raise newException(UnableToSubscribe, "unable to subscribe" &
+      raise newException(UnableToSubscribe, "unable to subscribe nils" &
                                             " src: " & $sig.src &
                                             " to " & $sig.subTgt)
     if sig.src in thread.references and sig.subTgt in thread.references:
       sig.src[].addSubscription(sig.name, sig.subTgt[], sig.subProc)
+    else:
+      raise newException(UnableToSubscribe, "unable to subscribe to missing" &
+                                            " src: " & $sig.src &
+                                            " to " & $sig.subTgt)
     thread.gcCollectReferences()
   of Deref:
     debugPrint "\t threadExec:deref: ", $sig.deref.unsafeWeakRef()
