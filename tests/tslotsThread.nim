@@ -378,6 +378,8 @@ suite "threaded agent slots":
       echo "obj a: ", $a.getSigilId()
       echo "obj b: ", $b.getSigilId()
 
+      connect(a, valueChanged, b, setValueGlobal)
+
       let bp: AgentProxy[Counter] = b.moveToThread(thread)
       echo "obj bp: ", $bp.getSigilId()
       # echo "obj bp.remote: ", bp.remote[].unsafeWeakRef
@@ -385,7 +387,8 @@ suite "threaded agent slots":
       echo "obj bp: ", $bp.getSigilId()
 
       #connectThreaded(bp, updated, ap, SomeAction.completed())
-      connectThreaded(ap, valueChanged, bp, setValueGlobal)
+      #connectThreaded(ap, valueChanged, bp, setValueGlobal)
+
 
       emit ap.valueChanged(137)
 
