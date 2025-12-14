@@ -128,7 +128,7 @@ suite "threaded agent slots":
     ct.poll()
     check c.value == bid
 
-    let res = lookupGlobalName(sn"objectCounter")
+    let res = lookupGlobalName(sn"objectCounter").get()
     check res.agent == bp.remote
     check res.thread == bp.remoteThread
 
@@ -136,8 +136,9 @@ suite "threaded agent slots":
 
   test "test multiple thread setup":
 
-    let res = lookupGlobalName(sn"objectCounter")
-    check res.thread == threadA
+    let counter = lookupGlobalName(sn"objectCounter").get()
+
+    check counter.thread == threadA
 
     GC_fullCollect()
 
