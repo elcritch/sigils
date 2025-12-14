@@ -84,6 +84,12 @@ proc completedSum*(self: SomeAction, final: int) {.slot.} =
 proc value*(self: Counter): int =
   self.value
 
+var threadA = newSigilThread()
+var threadB = newSigilThread()
+
+threadA.start()
+threadB.start()
+
 suite "threaded agent slots":
   setup:
     printConnectionsSlotNames = {
@@ -98,37 +104,40 @@ suite "threaded agent slots":
   test "connect, moveToThread, and register":
     var a = SomeAction.new()
 
-    block:
-      echo "sigil object thread connect change"
-      var
-        b = Counter.new()
-        c = SomeAction.new()
-      echo "thread runner!", " (th: ", getThreadId(), ")"
-      echo "obj a: ", a.getSigilId
-      echo "obj b: ", b.getSigilId
-      echo "obj c: ", c.getSigilId
-      let thread = newSigilThread()
-      thread.start()
-      startLocalThreadDefault()
+    echo "sigil object thread connect change"
+    var
+      b = Counter.new()
+      c = SomeAction.new()
+    echo "thread runner!", " (th: ", getThreadId(), ")"
+    echo "obj a: ", a.getSigilId
+    echo "obj b: ", b.getSigilId
+    echo "obj c: ", c.getSigilId
+    startLocalThreadDefault()
 
-      connect(a, valueChanged, b, setValue)
-      connect(b, updated, c, SomeAction.completed())
+    connect(a, valueChanged, b, setValue)
+    connect(b, updated, c, SomeAction.completed())
 
-      let bp: AgentProxy[Counter] = b.moveToThread(thread)
-      echo "obj bp: ", bp.getSigilId()
+    let bp: AgentProxy[Counter] = b.moveToThread(threadA)
+    echo "obj bp: ", bp.getSigilId()
 
-      registerGlobalName(sn"objectCounter", bp)
+    registerGlobalName(sn"objectCounter", bp)
 
-      let bid = cast[int](bp.remote.pt)
-      emit a.valueChanged(bid)
-      let ct = getCurrentSigilThread()
-      ct.poll()
-      check c.value == bid
+    let bid = cast[int](bp.remote.pt)
+    emit a.valueChanged(bid)
+    let ct = getCurrentSigilThread()
+    ct.poll()
+    check c.value == bid
 
-      let res = lookupGlobalName(sn"objectCounter")
-      check res.agent == bp.remote
-      check res.thread == bp.remoteThread
+    let res = lookupGlobalName(sn"objectCounter")
+    check res.agent == bp.remote
+    check res.thread == bp.remoteThread
 
+    GC_fullCollect()
+
+  test "test multiple thread setup":
+
+    let res = lookupGlobalName(sn"objectCounter")
+    check res.thread == threadA
 
     GC_fullCollect()
 
