@@ -1,37 +1,61 @@
 # Sigils Threading Architecture
 
-This document explains the threading architecture implemented in `sigils/threads.nim`, `sigils/threadBase.nim`, and `sigils/threadProxies.nim`, with examples from `tests/tslotsThread.nim`. It focuses on how agents are moved across threads, how calls and signals travel safely between threads, and the guarantees and caveats for thread and async safety.
+This document explains the threading architecture implemented in `sigils/threadBase.nim`, `sigils/threadDefault.nim`, and `sigils/threadProxies.nim` (re-exported via `sigils/threads.nim`), with examples from `tests/tslotsThread.nim`. It focuses on how agents are moved across threads, how calls and signals travel safely between threads, and the key safety guarantees and caveats.
+
+At a high level, Sigils follows a "don't share, communicate" approach to concurrency. Each thread is treated as the exclusive owner of the agents it runs: an agent's internal state is meant to be read and written by only one thread. Instead of letting multiple threads call into the same object directly (which would require locks around every access), Sigils keeps agent code single-threaded and uses message passing to request work from other threads.
+
+The key operation is a move. Moving an agent to another thread is an ownership transfer: after the move, the destination thread is the only place where the real agent lives and executes. The source thread should behave as if it no longer has the agent at all. What it keeps is a small local stand-in whose job is to forward method calls and signals across threads. This is similar in spirit to moving an object to another process and then talking to it through a handle.
+
+Communication is built around inboxes (message queues). When code on one thread wants something to happen on another thread, it packages the request as a message and puts it into the destination thread's inbox. The destination thread runs a simple loop: it repeatedly takes messages out of its inbox and executes them one at a time. Because all requests are handled serially on the owning thread, the agent doesn't need internal locking to stay consistent.
+
+Signals travel back the same way. When an agent running on a worker thread emits a signal that has listeners on a different thread, that signal becomes a message placed into the other thread's inbox. Importantly, the receiving thread must periodically drain its own inbox to deliver those callbacks. If you forget to pump the inbox on the receiving side, cross-thread signals won't be observed even though they were queued.
 
 ## Overview
 
 - Sigils uses a message-passing model to keep agent logic thread-confined while enabling cross-thread signaling.
-- Agents can be **moved** to a worker thread; callers interact with them through a local proxy (`AgentProxy[T]`).
-- Cross-thread calls are delivered over channels and a small scheduler loop on the target thread.
-- Cleanup is synchronized: moved agents are owned by the destination thread, and cross-thread references are tracked and dereferenced via messages to the remote thread. When all remote proxies are destructed the moved agent will be destroyed as well.
+- Agents can be **moved** to a worker thread; callers interact with them through a local proxy that forwards requests.
+- Cross-thread work is executed by a per-thread scheduler that processes messages serially.
+- Worker threads run the scheduler loop automatically; threads without a built-in loop must periodically poll to process forwarded events.
+- Cleanup is synchronized: moved agents are owned by the destination thread, and proxies send dereference messages so the destination thread can release remote state.
+
+## Mental Model
+
+- Every participating OS thread has a thread-local `SigilThread` (`getCurrentSigilThread()` in `sigils/threadBase.nim`).
+- A `SigilThread` executes messages serially; there is no parallel execution within a single `SigilThread`.
+- `SigilThreadDefault.start()` spawns a worker that calls `runForever()` and blocks in `poll()`.
+- If your current thread needs to receive events from other threads, you must pump its scheduler by calling `poll()`/`pollAll()` periodically.
 
 ## Core Types
 
-- `SigilThread`/`SigilThreadDefault` (threadBase): Encapsulates a worker thread and its scheduling state. Holds:
-  - `inputs: Chan[ThreadSignal]` main control channel for the thread.
+- `SigilThread` (threadBase): Common scheduler/state shared by all thread implementations. Holds:
   - `signaled: HashSet[WeakRef[AgentRemote]]` set of per-proxy mailboxes to drain.
   - `signaledLock: Lock` protects `signaled`.
   - `references: Table[WeakRef[Agent], Agent]` ownership table of agents moved onto this thread.
   - `agent: ThreadAgent` a local agent for thread lifecycle signals (e.g., `started`).
+  - `exceptionHandler` invoked by `runForever()` if a slot raises.
   - `running: Atomic[bool]`, `threadId: Atomic[int]`.
+
+- `SigilThreadDefault` (threadDefault): Default blocking worker thread implementation. Adds:
+  - `inputs: Chan[ThreadSignal]` main control channel for `Move`/`Deref`/`Trigger`/`Call`/`Exit`.
+  - `thr: Thread[ptr SigilThreadDefault]` OS thread handle.
+
+- Thread-local access (threadBase):
+  - `localSigilThread {.threadVar.}` stores the current scheduler pointer.
+  - `getCurrentSigilThread()` lazily initializes it by calling `startSigilThreadProc` (defaults to `startLocalThreadDefault()` from `sigils/threadDefault.nim`).
 
 - `ThreadSignal` (threadBase): Control and invocation messages routed to threads.
   - `Call(slot, req, tgt)` — invoke `slot` on `tgt` with `req`.
   - `Move(item)` — move an `Agent` (or proxy) to the thread; stored in `references`.
   - `Trigger` — instructs the scheduler to drain signaled proxy inboxes.
-  - `Deref(deref)` — drop a reference previously `Move`-ed to this thread.
+  - `Deref(deref)` — drop a reference previously `Move`-ed to this thread and prune dead `references`.
   - `Exit` — stop the scheduler loop.
 
 - `AgentRemote` (threadBase): A mailbox-capable agent base with `inbox: Chan[ThreadSignal]`. Proxies extend this to implement per-proxy mailboxes.
 
 - `AgentProxy[T]`/`AgentProxyShared` (threadProxies): Twin proxies mediating cross-thread communication.
-  - `remote: WeakRef[Agent]` — the actual agent (lives on remote thread after move).
+  - `remote: WeakRef[Agent]` — the real agent (owned by the destination thread after a move).
   - `proxyTwin: WeakRef[AgentProxyShared]` — the opposite-side proxy.
-  - `remoteThread: ptr SigilThread` — the thread that should execute work.
+  - `remoteThread: SigilThreadPtr` — scheduler for the thread that owns `proxyTwin`.
   - `lock: Lock` — protects proxy twin access and local proxy state.
 
 ## Moving Agents Across Threads
@@ -46,7 +70,7 @@ This document explains the threading architecture implemented in `sigils/threads
   - Outbound (agent listening to others): rebinds listeners so the local proxy receives those signals and forwards across threads.
   - Inbound (others listening to agent): rebinds so callers attach to `localProxy`; the remote agent publishes to `remoteProxy`, which forwards back.
 - Ownership transfer:
-  - Sends `Move(agent)` and `Move(remoteProxy)` to the destination thread so they are owned (and managed) by that thread’s `references` table.
+  - Sends `Move(agent)` and `Move(remoteProxy)` to the destination thread so they are owned (and managed) by that thread's `references` table.
 - Returns `localProxy` to the caller; the original `agent` variable is moved (becomes `nil`).
 
 The tests demonstrate this flow, e.g.:
@@ -61,12 +85,12 @@ Two paths deliver work on the destination thread:
 1) Per-proxy mailbox path (dominant path)
 - The sender enqueues a `Call` into `proxyTwin.inbox` (the twin on the destination thread).
 - The sender marks the twin as signaled in `remoteThread.signaled` under `signaledLock`.
-- The sender posts `Trigger` to `remoteThread.inputs`.
+- The sender posts `Trigger` to `remoteThread` (via `remoteThread.send(ThreadSignal(kind: Trigger))`).
 - The scheduler handles `Trigger` by moving `signaled` into a local set, then for each signaled proxy drains its `inbox` with `tryRecv` and invokes `tgt.callMethod(req, slot)`.
 
 2) Direct control path
-- `Move`, `Deref`, and `Exit` are posted to `remoteThread.inputs` and handled immediately.
-- `Call` is also supported on `inputs` (threadBase), though proxy code primarily uses per-proxy inbox + `Trigger`.
+- `Move`, `Deref`, and `Exit` are sent to the destination thread via `thread.send(...)` and handled immediately.
+- `Call` is also supported as a direct `ThreadSignal(Call)` on a thread's input channel (used by `connectQueued`), though proxy code primarily uses per-proxy inbox + `Trigger`.
 
 All cross-thread messages are isolated (`isolateRuntime`) before enqueueing to ensure thread-safe transfer of data.
 
@@ -83,7 +107,7 @@ All cross-thread messages are isolated (`isolateRuntime`) before enqueueing to e
 - Otherwise — regular slot call bound for the remote agent.
   - Wraps as `Call(slot, req, tgt = proxy.remote)`, enqueues into `proxyTwin.inbox` (on remote), and `Trigger`s the remote thread.
 
-Locks are used to safely access `proxyTwin` and to coordinate with the destination thread’s `signaled` set.
+Locks are used to safely access `proxyTwin` and to coordinate with the destination thread's `signaled` set.
 
 ## Thread Loop and Lifecycle
 
@@ -95,14 +119,21 @@ Locks are used to safely access `proxyTwin` and to coordinate with the destinati
 
 Helpers:
 - `newSigilThread()` allocates/initializes a `SigilThreadDefault`.
-- `start()/stop()/join()/peek()` manage worker threads.
-- `startLocalThread()/getCurrentSigilThread()` manage a thread-local `SigilThread` for the current (often main) thread.
+- `start()/join()/peek()` manage the worker OS thread.
+- `setRunning(false)` (or sending `Exit`) stops `runForever()` for a thread.
+- `startLocalThreadDefault()` and `getCurrentSigilThread()` manage a thread-local `SigilThread` for the current (often main) thread; `getCurrentSigilThread()` is lazy and will call `startSigilThreadProc` if needed.
+
+## Queued Calls (Same Thread)
+
+`connectQueued(...)` routes a signal to a slot by enqueueing a `ThreadSignal(Call)` onto the current thread's `SigilThread` instead of calling inline. The slot runs the next time you `poll()`/`pollAll()` that thread.
+
+Because it uses `SigilThread.send(...)` under the hood, the queued `ThreadSignal` is still passed through `isolateRuntime(...)` before it is enqueued.
 
 ## Destruction and Cleanup
 
 - Agents have a destructor (`destroyAgent`) that removes them from all subscriptions and listeners. Debug builds assert destruction happens on the owning thread (`freedByThread` checks).
 - Proxies break cycles on destruction:
-  - `AgentProxyShared.=destroy` clears the opposite twin’s link under `lock`, removes it from the remote thread’s `signaled`, and posts a `Deref` to drop the remote reference.
+  - `AgentProxyShared.=destroy` clears the opposite twin's link under `lock`, removes it from the remote thread's `signaled`, and posts a `Deref` to drop the remote reference.
   - Destroys local `lock` and `remoteThread` refs last.
 - The destination thread periodically cleans `references` via `gcCollectReferences()` (after `Deref`), removing entries for agents that have no connections.
 
@@ -113,16 +144,18 @@ Patterns illustrated by the tests:
 - Direct cross-thread emit via a `WeakRef`: build a request in a background thread and deliver it back to main via a channel, then `emit resp` on the main thread.
 - Moving and connecting:
   - Move `Counter` to a worker thread, hold `AgentProxy[Counter]` locally.
-  - `threads.connect(a, valueChanged, bp, setValue)` wires signal `a.valueChanged` to the remote `bp.setValue()`; the handler runs on the worker thread.
-  - Use `getCurrentSigilThread()[].poll()` or `pollAll()` on the local thread to process inbound forwarded events.
+  - `connectThreaded(a, valueChanged, bp, setValue)` wires signal `a.valueChanged` to the remote `bp.setValue()`; the handler runs on the worker thread.
+  - `connectThreaded(bp, updated, a, SomeAction.completed())` wires the remote signal back to a local slot (and demonstrates that the local thread must be polled).
+  - Use `getCurrentSigilThread().poll()` or `pollAll()` on the local thread to process inbound forwarded events.
 - Thread lifecycle signals:
-  - `connect(thread[].agent, started, bp.getRemote()[], ticker)` to run a slot when the remote thread starts.
+  - `connectThreaded(thread, started, bp, ticker)` to run a remote slot when the worker thread starts (emitted by `thread[].agent.started()` in `runForever()`).
 - Assertions about subscription topology are used to verify that proxies have the expected inbound/outbound connections after `moveToThread`.
 
 ## Thread Safety Notes
 
 - Ownership: After `moveToThread`, the destination thread exclusively owns the moved agent (and its `remoteProxy`) via `references`. Do not retain or use the original agent ref on the source thread.
-- Isolation: Cross-thread messages isolate (`isolateRuntime`) their payloads; slot/param types must be isolatable or moved safely.
+- Isolation: Cross-thread `ThreadSignal`s are passed through `isolateRuntime(...)` before enqueueing. If the payload contains non-unique `ref`s, `isolateRuntime` raises `IsolationError` to prevent unsafe sharing.
+- Signal params: Cross-thread signal parameter types must be thread-safe (no `ref` fields). The `connectThreaded` helpers use `checkSignalThreadSafety` for common patterns; use `Isolate[T]` for heap payloads you need to transfer.
 - No shared GC refs: The code defends against sharing by requiring unique refs before move and by using `WeakRef` identifiers for cross-thread targeting.
 - Synchronization:
   - `signaled` guarded by `signaledLock`.
@@ -132,17 +165,17 @@ Patterns illustrated by the tests:
 
 ## Async Safety Notes
 
-- The base API documented here is thread-centric. For integration with `asyncdispatch`, use the async variant in `sigils/threadAsyncs.nim` (`AsyncSigilThread`). It:
-  - Replaces the blocking loop with an `AsyncEvent` callback that drains signals during the event loop.
+- The base API documented here is thread-centric. For integration with `asyncdispatch`, use the async variant in `sigils/threadAsyncs.nim` (`AsyncSigilThread`) (not currently re-exported by `sigils/threads.nim`, so import it directly). It:
+  - Uses an `AsyncEvent` callback to drain signals during the event loop.
   - Triggers the event on every send/recv to schedule work.
-  - Provides `start/stop/join/peek` analogous to the blocking version.
-- Do not run async operations on a thread that is not running an event loop; use `AsyncSigilThread` for agents that must interact with async APIs.
+  - Implements `setTimer` via `asyncdispatch.addTimer` (timers are not implemented by `SigilThreadDefault`).
+- To make `getCurrentSigilThread()` create an async scheduler for the current thread, call `setStartSigilThreadProc(startLocalThreadDispatch)` (or call `startLocalThreadDispatch()` manually).
 
 ## Gotchas and Best Practices
 
 - Always check uniqueness before moving (`moveToThread` enforces this and raises on violation).
 - After moving, update all connections through the returned `AgentProxy[T]`; direct references to the old agent are invalid on the source thread.
-- Use `threads.connect(...)` overloads when connecting to a proxy to ensure correct signal/slot typing and thread routing.
+- Use `connectThreaded(...)` when wiring signals across threads; it validates thread-safety and routes through the proxy correctly.
 - Poll the local thread (`poll`/`pollAll`) when expecting inbound events forwarded from a worker thread.
 - Consider setting a custom `exceptionHandler` on threads used in tests or long-running services to surface handler exceptions clearly.
 - In debug builds, heed `freedByThread` assertions; they catch cross-thread destruction misuse.
@@ -150,18 +183,23 @@ Patterns illustrated by the tests:
 ## Minimal Example
 
 ```nim
+import sigils
+import sigils/threads
+
 let t = newSigilThread()
 t.start()
-startLocalThread()
+
+let ct = getCurrentSigilThread() # ensure local scheduler exists
 
 var src = SomeAction.new()
 var dst = Counter.new()
 let p: AgentProxy[Counter] = dst.moveToThread(t)
 
-threads.connect(src, valueChanged, p, setValue)
+connectThreaded(src, valueChanged, p, setValue)
+connectThreaded(p, updated, src, SomeAction.completed()) # optional: remote -> local flow
 
 emit src.valueChanged(42)
-getCurrentSigilThread()[].pollAll()  # drain local events
+discard ct.pollAll()  # drain local forwarded events
 ```
 
 This schedules `Counter.setValue` on `t` and keeps all cross-thread traffic safe through the proxy and thread scheduler.

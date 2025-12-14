@@ -2,6 +2,7 @@ import std/sets
 import std/isolation
 import std/options
 import std/locks
+import std/tables
 import threading/smartptrs
 import threading/channels
 import threading/atomics
@@ -25,6 +26,7 @@ type
     count*: int = SigilTimerRepeat # -1 for repeat forever, N > 0 for N times
 
   MessageQueueFullError* = object of CatchableError
+  UnableToSubscribe* = object of CatchableError
 
   BlockingKinds* {.pure.} = enum
     Blocking
@@ -33,6 +35,7 @@ type
   ThreadSignalKind* {.pure.} = enum
     Call
     Move
+    AddSubscription
     Trigger
     Deref
     Exit
@@ -45,6 +48,11 @@ type
       tgt*: WeakRef[Agent]
     of Move:
       item*: Agent
+    of AddSubscription:
+      src*: WeakRef[Agent]
+      name*: SigilName
+      subTgt*: WeakRef[Agent]
+      subProc*: AgentProc
     of Trigger:
       discard
     of Deref:
@@ -64,6 +72,7 @@ type
 
     signaledLock*: Lock
     signaled*: HashSet[WeakRef[AgentRemote]]
+
     references*: Table[WeakRef[Agent], Agent]
     agent*: ThreadAgent
     exceptionHandler*: proc(e: ref Exception) {.gcsafe, nimcall.}
@@ -128,10 +137,11 @@ proc setRunning*(thread: SigilThreadPtr, state: bool, immediate = false) =
     thread.send(ThreadSignal(kind: Exit))
 
 proc gcCollectReferences(thread: SigilThreadPtr) =
-  var derefs: seq[WeakRef[Agent]]
+  var derefs: HashSet[WeakRef[Agent]]
   for agent in thread.references.keys():
     if not agent[].hasConnections():
-      derefs.add(agent)
+      derefs.incl(agent)
+
   for agent in derefs:
     debugPrint "\tderef cleanup: ", agent.unsafeWeakRef()
     thread.references.del(agent)
@@ -147,6 +157,22 @@ proc exec*(thread: SigilThreadPtr, sig: ThreadSignal) {.gcsafe.} =
       $sig.item.unsafeWeakRef(), " refcount: ", $sig.item.unsafeGcCount()
     var item = sig.item
     thread.references[item.unsafeWeakRef()] = move item
+  of AddSubscription:
+    echo "\t threadExec:subscribe: ",
+      " src: ", $sig.src,
+      " tgt: ", $sig.subTgt,
+      " srcExists: ", sig.src in thread.references
+    if sig.src.isNil:
+      raise newException(UnableToSubscribe, "unable to subscribe nil" &
+                                            " src: " & $sig.src &
+                                            " to " & $sig.subTgt)
+    if sig.src in thread.references and sig.subTgt in thread.references:
+      sig.src[].addSubscription(sig.name, sig.subTgt[], sig.subProc)
+    else:
+      raise newException(UnableToSubscribe, "unable to subscribe to missing" &
+                                            " src: " & $sig.src &
+                                            " to " & $sig.subTgt)
+    thread.gcCollectReferences()
   of Deref:
     debugPrint "\t threadExec:deref: ", $sig.deref.unsafeWeakRef()
     if thread.references.contains(sig.deref):

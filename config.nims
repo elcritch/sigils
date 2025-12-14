@@ -12,4 +12,9 @@ task test, "Compile and run all tests in tests/":
         let name = splitFile(path).name
         if not name.startsWith("t"): continue # run only t*.nim files
         echo fmt"[sigils] Running {path}"
-        exec fmt"nim c --nimcache:../.nimcache -r {path}"
+        exec fmt"nim c -r {path}"
+
+task testTsan, "Compile and run all tests in tests/":
+  putEnv("TSAN_OPTIONS", "suppressions=tests/tsan.ignore")
+  exec fmt"nim c -r tests/tmultiThreads.nim"
+
