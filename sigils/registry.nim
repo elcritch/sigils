@@ -36,6 +36,5 @@ proc lookupGlobalName*(name: SigilName): Option[AgentLocation] =
 proc toAgentProxy*[T](location: AgentLocation, tp: typeof[T]): AgentProxy[T] =
   if getTypeId(T) != location.typeId:
     raise newException(ValueError, "can't create proxy of the correct type!")
-  discard
-
+  discard #TODO: implement
 
