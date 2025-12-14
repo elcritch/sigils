@@ -209,7 +209,7 @@ proc exec*(thread: SigilThreadPtr, sig: ThreadSignal) {.gcsafe.} =
     debugPrint "\t threadExec:tgt: ",
       $sig.tgt[].getSigilId(), " rc: ", $sig.tgt[].unsafeGcCount()
   of Trigger:
-    echo "Triggering"
+    debugPrint "Triggering"
     var signaled: HashSet[WeakRef[AgentRemote]]
     withLock thread.signaledLock:
       signaled = move thread.signaled

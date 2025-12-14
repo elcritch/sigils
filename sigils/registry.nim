@@ -11,7 +11,6 @@ type AgentLocation* = object
   typeId*: TypeId
 
 var registry: Table[SigilName, AgentLocation]
-#var keepAlive: Table[SigilName, AgentProxyShared]
 var regLock: Lock
 regLock.initLock()
 
@@ -32,7 +31,6 @@ proc registerGlobalName*[T](name: SigilName, proxy: AgentProxy[T],
       agent: proxy.remote,
       typeId: getTypeId(T),
     )
-    #keepAlive[name] = AgentProxyShared(proxy)
     proxy.remoteThread.extReference(proxy.remote)
 
 proc removeGlobalName*[T](name: SigilName, proxy: AgentProxy[T]): bool =
@@ -98,3 +96,4 @@ proc toAgentProxy*[T](location: AgentLocation, tp: typeof[T]): AgentProxy[T] =
                                     subProc: remoteSlot))
 
   proxyCache[key] = AgentProxyShared(result)
+
