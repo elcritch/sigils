@@ -45,12 +45,8 @@ proc valueChanged*(tp: SomeAction, val: int) {.signal.}
 proc updated*(tp: Counter, final: int) {.signal.}
 
 proc setValue*(self: Counter, value: int) {.slot.} =
-  # echo "setValue! ", value, " id: ", self.getSigilId().int, " (th: ", getThreadId(), ")"
-  # echo "setValue! self:refcount: ", self.unsafeGcCount() 
   if self.value != value:
     self.value = value
-  # echo "setValue:subcriptionsTable: ", self.subcriptionsTable.pairs().toSeq.mapIt(it[1].mapIt(cast[pointer](it.tgt.getSigilId()).repr))
-  # echo "setValue:listening: ", $self.listening.toSeq.mapIt(cast[pointer](it.getSigilId()).repr)
   if value == 756809:
     os.sleep(1)
   emit self.updated(self.value)
@@ -98,7 +94,7 @@ suite "threaded agent slots":
       Counter.setValueGlobal().pointer: "setValueGlobal",
     }.toTable()
 
-  test "agent connect then moveToThread and run":
+  test "connect, moveToThread, and register":
     var a = SomeAction.new()
 
     block:
@@ -120,9 +116,12 @@ suite "threaded agent slots":
       let bp: AgentProxy[Counter] = b.moveToThread(thread)
       echo "obj bp: ", bp.getSigilId()
 
-      emit a.valueChanged(314)
+      let bid = cast[int](bp.remote.pt)
+      emit a.valueChanged(bid)
       let ct = getCurrentSigilThread()
       ct.poll()
-      check c.value == 314
+      check c.value == bid
+
+
     GC_fullCollect()
 
