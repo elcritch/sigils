@@ -42,7 +42,7 @@ proc registerGlobalName*[T](name: SigilName, proxy: AgentProxy[T],
     proxy.remoteThread.send(ThreadSignal(kind: Trigger))
     proxy.remoteThread.send(ThreadSignal(kind: AddSubscription,
                                     src: proxy.remote,
-                                    name: sn"sigil:registryKeepAlive",
+                                    name: sn"sigils:registryKeepAlive",
                                     subTgt: proxy.remote,
                                     subProc: keepAlive))
 
