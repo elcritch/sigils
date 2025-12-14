@@ -13,13 +13,15 @@ import std/strutils
 
 
 type
-  SomeAction* = ref object of Agent
-    value: int
+  SomeTrigger* = ref object of Agent
 
   Counter* = ref object of Agent
     value: int
 
-proc valueChanged*(tp: SomeAction, val: int) {.signal.}
+  SomeTarget* = ref object of Agent
+    value: int
+
+proc valueChanged*(tp: SomeTrigger, val: int) {.signal.}
 proc updated*(tp: Counter, final: int) {.signal.}
 
 proc setValue*(self: Counter, value: int) {.slot.} =
@@ -29,7 +31,7 @@ proc setValue*(self: Counter, value: int) {.slot.} =
     os.sleep(1)
   emit self.updated(self.value)
 
-proc completed*(self: SomeAction, final: int) {.slot.} =
+proc completed*(self: SomeTarget, final: int) {.slot.} =
   echo "Action done! final: ",
     final, " id: ", $self.unsafeWeakRef(), " (th: ", getThreadId(), ")"
   self.value = final
@@ -44,32 +46,33 @@ threadB.start()
 var threadBRemoteReady: Atomic[int]
 threadBRemoteReady.store 0
 
-var agentA = SomeAction.new()
+var actionA = SomeTrigger.new()
 
 suite "threaded agent slots":
   setup:
     printConnectionsSlotNames = {
       remoteSlot.pointer: "remoteSlot",
       localSlot.pointer: "localSlot",
-      SomeAction.completed().pointer: "completed",
+      SomeTarget.completed().pointer: "completed",
       Counter.setValue().pointer: "setValue",
     }.toTable()
 
   test "connect, moveToThread, and register":
-    var agentA = SomeAction.new()
+    var actionA = SomeTrigger.new()
 
     echo "sigil object thread connect change"
     var
       counter = Counter.new()
-      c1 = SomeAction.new()
+      results1 = SomeTarget.new()
+
     echo "thread runner!", " (th: ", getThreadId(), ")"
-    echo "obj a: ", agentA.getSigilId
+    echo "obj actionA: ", actionA.getSigilId
     echo "obj counter: ", counter.getSigilId
-    echo "obj c: ", c1.getSigilId
+    echo "obj results1: ", results1.getSigilId
     startLocalThreadDefault()
 
-    connect(agentA, valueChanged, counter, setValue)
-    connect(counter, updated, c1, SomeAction.completed())
+    connect(actionA, valueChanged, counter, setValue)
+    connect(counter, updated, results1, SomeTarget.completed())
 
     let counterProxy: AgentProxy[Counter] = counter.moveToThread(threadA)
     echo "obj bp: ", counterProxy.getSigilId()
@@ -77,20 +80,20 @@ suite "threaded agent slots":
     registerGlobalName(sn"objectCounter", counterProxy)
 
     let bid = cast[int](counterProxy.remote.pt)
-    emit agentA.valueChanged(bid)
+    emit actionA.valueChanged(bid)
 
     # Poll and check action response
     let ct = getCurrentSigilThread()
     ct.poll()
-    check c1.value == bid
+    check results1.value == bid
 
     let res = lookupGlobalName(sn"objectCounter").get()
     check res.agent == counterProxy.remote
     check res.thread == counterProxy.remoteThread
 
-    proc remoteTrigger(counter: AgentProxy[SomeAction]) {.signal.}
+    proc remoteTrigger(counter: AgentProxy[SomeTarget]) {.signal.}
 
-    proc remoteRun(cc2: SomeAction) {.slot.} =
+    proc remoteRun(cc2: SomeTarget) {.slot.} =
       echo "remote run!"
       let res = lookupGlobalName(sn"objectCounter")
       check res.isSome()
@@ -99,13 +102,12 @@ suite "threaded agent slots":
 
       let localCounterProxy = loc.toAgentProxy(Counter)
       if localCounterProxy != nil:
-        connectThreaded(cc2, valueChanged, localCounterProxy, setValue)
+        connectThreaded(localCounterProxy, updated, cc2, cc2.type.completed())
 
       threadBRemoteReady.store 1
 
-
-    var c2 = SomeAction.new()
-    let c2p: AgentProxy[SomeAction] = c2.moveToThread(threadB)
+    var c2 = SomeTarget.new()
+    let c2p: AgentProxy[SomeTarget] = c2.moveToThread(threadB)
     echo "obj c2p: ", c2p.getSigilId()
 
     connectThreaded(c2p, remoteTrigger, c2p, remoteRun)
