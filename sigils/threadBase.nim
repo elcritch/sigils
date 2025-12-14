@@ -72,7 +72,6 @@ type
 
     signaledLock*: Lock
     signaled*: HashSet[WeakRef[AgentRemote]]
-    externalRefs*: Table[WeakRef[Agent], int]
 
     references*: Table[WeakRef[Agent], Agent]
     agent*: ThreadAgent
@@ -137,23 +136,15 @@ proc setRunning*(thread: SigilThreadPtr, state: bool, immediate = false) =
   else:
     thread.send(ThreadSignal(kind: Exit))
 
-proc extReference*(thread: SigilThreadPtr, obj: WeakRef[Agent]) =
-  withLock thread.signaledLock:
-    thread.externalRefs.mgetOrPut(obj, 0).inc()
-
 proc gcCollectReferences(thread: SigilThreadPtr) =
   var derefs: HashSet[WeakRef[Agent]]
   for agent in thread.references.keys():
     if not agent[].hasConnections():
       derefs.incl(agent)
 
-  withLock thread.signaledLock:
-    for agent in derefs:
-      if agent in thread.externalRefs:
-        debugPrint "\tderef cleanup skipping: ", agent.unsafeWeakRef()
-      else:
-        debugPrint "\tderef cleanup: ", agent.unsafeWeakRef()
-        thread.references.del(agent)
+  for agent in derefs:
+    debugPrint "\tderef cleanup: ", agent.unsafeWeakRef()
+    thread.references.del(agent)
 
 proc exec*(thread: SigilThreadPtr, sig: ThreadSignal) {.gcsafe.} =
   debugPrint "\nthread got request: ", $sig.kind

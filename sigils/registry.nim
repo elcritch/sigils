@@ -21,6 +21,9 @@ var proxyCache {.threadVar.}: Table[ProxyCacheKey, AgentProxyShared]
 type SetupProxyParams = object
   proxy*: WeakRef[AgentProxyShared]
 
+proc keepAlive(context: Agent, params: SigilParams) {.nimcall.} =
+  raise newException(AssertionDefect, "this should never be called!")
+
 proc registerGlobalName*[T](name: SigilName, proxy: AgentProxy[T],
     override = false) =
   withLock regLock:
@@ -31,7 +34,18 @@ proc registerGlobalName*[T](name: SigilName, proxy: AgentProxy[T],
       agent: proxy.remote,
       typeId: getTypeId(T),
     )
-    proxy.remoteThread.extReference(proxy.remote)
+    #proxy.remoteThread.extReference(proxy.remote)
+    #withLock proxy.lock:
+    #  if not proxy.proxyTwin.isNil:
+    #    withLock proxy.remoteThread[].signaledLock:
+    #      proxy.remoteThread[].signaled.incl(proxy.proxyTwin.toKind(AgentRemote))
+    proxy.remoteThread.send(ThreadSignal(kind: Trigger))
+    proxy.remoteThread.send(ThreadSignal(kind: AddSubscription,
+                                    src: proxy.remote,
+                                    name: sn"sigil:registryKeepAlive",
+                                    subTgt: proxy.remote,
+                                    subProc: keepAlive))
+
 
 proc removeGlobalName*[T](name: SigilName, proxy: AgentProxy[T]): bool =
   withLock regLock:
