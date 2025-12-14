@@ -41,6 +41,9 @@ var threadB = newSigilThread()
 threadA.start()
 threadB.start()
 
+var threadBRemoteReady: Atomic[int]
+threadBRemoteReady.store 0
+
 var agentA = SomeAction.new()
 
 suite "threaded agent slots":
@@ -95,6 +98,7 @@ suite "threaded agent slots":
       echo "counter found: ", loc
 
       let counter = loc.toAgentProxy(Counter)
+      threadBRemoteReady.store 1
 
 
     var c2 = SomeAction.new()
@@ -104,7 +108,12 @@ suite "threaded agent slots":
     connectThreaded(c2p, remoteTrigger, c2p, remoteRun)
 
     emit c2p.remoteTrigger()
-    os.sleep(200)
+
+    for i in 1..10_000:
+      if threadBRemoteReady.load() == 1: break
+      doAssert i != 10_000
+
+    check threadBRemoteReady.load() == 1
     
     GC_fullCollect()
 
