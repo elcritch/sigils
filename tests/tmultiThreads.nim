@@ -108,9 +108,9 @@ suite "threaded agent slots":
 
       let localCounterProxy = loc.toAgentProxy(Counter)
       if localCounterProxy != nil:
-        connectThreaded(localCounterProxy, updated, cc2, cc2.type.completed())
+        connectThreaded(localCounterProxy, updated, cc2, remoteCompleted(SomeTarget))
         threadBRemoteReady.store 1
-      else: 
+      else:
         threadBRemoteReady.store 2
 
     var c2 = SomeTarget.new()
@@ -127,17 +127,16 @@ suite "threaded agent slots":
 
     check threadBRemoteReady.load() == 1
     threadBRemoteReady.store 0
-    
+
     GC_fullCollect()
 
   test "ensure globalCounter update updates target2":
 
     emit actionA.valueChanged(1010)
-    
-    for i in 1..1_000_000:
+
+    for i in 1..10_000_000:
       if threadBRemoteReady.load() != 0: break
-      doAssert i != 1_000_000
+      doAssert i != 10_000_000
 
     check threadBRemoteReady.load() == 3
-
 
