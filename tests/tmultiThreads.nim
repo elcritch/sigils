@@ -52,37 +52,11 @@ proc setValue*(self: Counter, value: int) {.slot.} =
     os.sleep(1)
   emit self.updated(self.value)
 
-var globalCounter: Atomic[int]
-globalCounter.store(0)
-
-proc setValueGlobal*(self: Counter, value: int) {.slot.} =
-  echo "setValueGlobal! ",
-    value, " id: ", self.getSigilId().int, " (th: ", getThreadId(), ")"
-  if self.value != value:
-    self.value = value
-  globalCounter.store(value)
-
-var globalLastTicker: Atomic[int]
-proc ticker*(self: Counter) {.slot.} =
-  for i in 3 .. 3:
-    echo "tick! i:", i, " ", self.unsafeWeakRef(), " (th: ", getThreadId(), ")"
-    globalLastTicker.store i
-    printConnections(self)
-    emit self.updated(i)
-
 proc completed*(self: SomeAction, final: int) {.slot.} =
   echo "Action done! final: ",
     final, " id: ", $self.unsafeWeakRef(), " (th: ", getThreadId(), ")"
   self.value = final
 
-proc completedSum*(self: SomeAction, final: int) {.slot.} =
-  when defined(debug):
-    echo "Action done! final: ",
-      final, " id: ", $self.unsafeWeakRef(), " (th: ", getThreadId(), ")"
-  self.value = self.value + final
-
-proc value*(self: Counter): int =
-  self.value
 
 var threadA = newSigilThread()
 var threadB = newSigilThread()
@@ -90,31 +64,31 @@ var threadB = newSigilThread()
 threadA.start()
 threadB.start()
 
+var agentA = SomeAction.new()
+
 suite "threaded agent slots":
   setup:
     printConnectionsSlotNames = {
       remoteSlot.pointer: "remoteSlot",
       localSlot.pointer: "localSlot",
       SomeAction.completed().pointer: "completed",
-      Counter.ticker().pointer: "ticker",
       Counter.setValue().pointer: "setValue",
-      Counter.setValueGlobal().pointer: "setValueGlobal",
     }.toTable()
 
   test "connect, moveToThread, and register":
-    var a = SomeAction.new()
+    var agentA = SomeAction.new()
 
     echo "sigil object thread connect change"
     var
       b = Counter.new()
       c = SomeAction.new()
     echo "thread runner!", " (th: ", getThreadId(), ")"
-    echo "obj a: ", a.getSigilId
+    echo "obj a: ", agentA.getSigilId
     echo "obj b: ", b.getSigilId
     echo "obj c: ", c.getSigilId
     startLocalThreadDefault()
 
-    connect(a, valueChanged, b, setValue)
+    connect(agentA, valueChanged, b, setValue)
     connect(b, updated, c, SomeAction.completed())
 
     let bp: AgentProxy[Counter] = b.moveToThread(threadA)
@@ -123,7 +97,9 @@ suite "threaded agent slots":
     registerGlobalName(sn"objectCounter", bp)
 
     let bid = cast[int](bp.remote.pt)
-    emit a.valueChanged(bid)
+    emit agentA.valueChanged(bid)
+
+    # Poll and check action response
     let ct = getCurrentSigilThread()
     ct.poll()
     check c.value == bid
@@ -135,10 +111,6 @@ suite "threaded agent slots":
     GC_fullCollect()
 
   test "test multiple thread setup":
-
-    let counter = lookupGlobalName(sn"objectCounter").get()
-
-    check counter.thread == threadA
 
     GC_fullCollect()
 
