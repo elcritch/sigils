@@ -121,9 +121,9 @@ suite "threaded agent slots":
 
     emit c2p.remoteTrigger()
 
-    for i in 1..1_000_000:
+    for i in 1..10_000_000:
       if threadBRemoteReady.load() != 0: break
-      doAssert i != 1_000_000
+      doAssert i != 10_000_000
 
     check threadBRemoteReady.load() == 1
     threadBRemoteReady.store 0

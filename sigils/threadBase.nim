@@ -25,6 +25,7 @@ type
     count*: int = SigilTimerRepeat # -1 for repeat forever, N > 0 for N times
 
   MessageQueueFullError* = object of CatchableError
+  UnableToSubscribe* = object of CatchableError
 
   BlockingKinds* {.pure.} = enum
     Blocking
@@ -33,6 +34,7 @@ type
   ThreadSignalKind* {.pure.} = enum
     Call
     Move
+    AddSubscription
     Trigger
     Deref
     Exit
@@ -45,6 +47,11 @@ type
       tgt*: WeakRef[Agent]
     of Move:
       item*: Agent
+    of AddSubscription:
+      src*: WeakRef[Agent]
+      name*: SigilName
+      subTgt*: WeakRef[Agent]
+      subProc*: AgentProc
     of Trigger:
       discard
     of Deref:
@@ -147,6 +154,18 @@ proc exec*(thread: SigilThreadPtr, sig: ThreadSignal) {.gcsafe.} =
       $sig.item.unsafeWeakRef(), " refcount: ", $sig.item.unsafeGcCount()
     var item = sig.item
     thread.references[item.unsafeWeakRef()] = move item
+  of AddSubscription:
+    debugPrint "\t threadExec:subscribe: ",
+      $sig.item.unsafeWeakRef(),
+      " src: ", $sig.src,
+      " tgt: ", $sig.subTgt
+    if sig.src.isNil or sig.subTgt.isNil: 
+      raise newException(UnableToSubscribe, "unable to subscribe" &
+                                            " src: " & $sig.src &
+                                            " to " & $sig.subTgt)
+    if sig.src in thread.references and sig.subTgt in thread.references:
+      sig.src[].addSubscription(sig.name, sig.subTgt[], sig.subProc)
+    thread.gcCollectReferences()
   of Deref:
     debugPrint "\t threadExec:deref: ", $sig.deref.unsafeWeakRef()
     if thread.references.contains(sig.deref):

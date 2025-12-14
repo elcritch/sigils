@@ -22,16 +22,6 @@ var proxyCache {.threadVar.}: Table[ProxyCacheKey, AgentProxyShared]
 type SetupProxyParams = object
   proxy*: WeakRef[AgentProxyShared]
 
-proc setupRemoteProxy(context: Agent, params: SigilParams) {.nimcall.} =
-  var setup: SetupProxyParams
-  rpcUnpack(setup, params)
-  if setup.proxy.isNil:
-    return
-
-  let remoteProxy = setup.proxy[]
-  remoteProxy.addSubscription(AnySigilName, context, localSlot)
-  context.addSubscription(AnySigilName, remoteProxy, remoteSlot)
-
 proc registerGlobalName*[T](name: SigilName, proxy: AgentProxy[T],
     override = false) =
   withLock regLock:
@@ -97,20 +87,14 @@ proc toAgentProxy*[T](location: AgentLocation, tp: typeof[T]): AgentProxy[T] =
 
   # Ensure the remote proxy is kept alive until it is wired on the remote thread.
   remoteProxy.addSubscription(AnySigilName, result, localSlot)
+  #location.agent[].addSubscription(AnySigilName, remoteProxy, remoteSlot)
 
   let remoteProxyRef = remoteProxy.unsafeWeakRef().toKind(AgentProxyShared)
   location.thread.send(ThreadSignal(kind: Move, item: move remoteProxy))
-
-  let setupReq = SigilRequest(
-    kind: Request,
-    origin: SigilId(-1),
-    procName: sn"setupRemoteProxy",
-    params: SigilParams(buf: newWrapperVariant(SetupProxyParams(
-        proxy: remoteProxyRef))),
-  )
-  location.thread.send(
-    ThreadSignal(kind: Call, slot: setupRemoteProxy, req: setupReq,
-        tgt: location.agent)
-  )
+  location.thread.send(ThreadSignal(kind: AddSubscription,
+                                    src: location.agent,
+                                    name: AnySigilName,
+                                    subTgt: remoteProxyRef.toKind(Agent),
+                                    subProc: remoteSlot))
 
   proxyCache[key] = AgentProxyShared(result)
