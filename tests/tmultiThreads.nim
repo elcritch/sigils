@@ -27,21 +27,6 @@ type
   InnerC = object
     id: int
 
-var globalLastInnerADestroyed: Atomic[int]
-globalLastInnerADestroyed.store(0)
-proc `=destroy`*(obj: InnerA) =
-  if obj.id != 0:
-    echo "destroyed InnerA!"
-  globalLastInnerADestroyed.store obj.id
-
-var globalLastInnerCDestroyed: Atomic[int]
-globalLastInnerCDestroyed.store(0)
-
-proc `=destroy`*(obj: InnerC) =
-  if obj.id != 0:
-    echo "destroyed InnerC!"
-  globalLastInnerCDestroyed.store obj.id
-
 proc valueChanged*(tp: SomeAction, val: int) {.signal.}
 proc updated*(tp: Counter, final: int) {.signal.}
 
