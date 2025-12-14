@@ -160,13 +160,13 @@ suite "threaded agent slots":
 
     connectThreaded(actionCProx, remoteTrigger, actionCProx, remoteSetup)
 
+    threadBRemoteReady.store 0
     emit actionCProx.remoteTrigger()
 
     for i in 1..100_000_000:
       if threadBRemoteReady.load() == 1: break
 
     check threadBRemoteReady.load() == 1
-    threadBRemoteReady.store 0
 
     GC_fullCollect()
 
@@ -178,12 +178,13 @@ suite "threaded agent slots":
       emit c2.valueChanged(val)
 
     #connect(actionBProx, valueChanged, actionBProx, setValue(SomeTrigger))
+    threadBRemoteReady.store 0
+
     emit actionCProx.valueChanged(1010)
 
     for i in 1..1_000:
       os.sleep(1)
-      if threadBRemoteReady.load() != 0: break
-      doAssert i != 1_000
+      if threadBRemoteReady.load() == 3: break
 
     check threadBRemoteReady.load() == 3
 
