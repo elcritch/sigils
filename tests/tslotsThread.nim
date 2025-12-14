@@ -388,7 +388,7 @@ suite "threaded agent slots":
 
       #connectThreaded(bp, updated, ap, SomeAction.completed())
       #connectThreaded(ap, valueChanged, bp, setValueGlobal)
-
+      printConnections(ap)
 
       emit ap.valueChanged(137)
 

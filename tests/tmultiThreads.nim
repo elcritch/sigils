@@ -71,6 +71,7 @@ suite "threaded agent slots":
       counter = Counter.new()
       target1 = SomeTarget.new()
 
+    echo "counter global: ", counter.unsafeWeakRef()
     when defined(sigilsDebug):
       counter.debugName = "counter"
       target1.debugName = "target1"
@@ -143,18 +144,20 @@ suite "threaded agent slots":
   test "connect actionB on threadC to globalCounter":
     proc remoteTrigger(counter: AgentProxy[SomeTrigger]) {.signal.}
 
-    proc remoteSetup(b2: SomeTrigger) {.slot.} =
+    proc remoteSetup(self: SomeTrigger) {.slot.} =
       os.sleep(10)
       echo "REMOTE RUN!"
       let localCounterProxy = lookupAgentProxy(sn"globalCounter", Counter)
       if localCounterProxy != nil:
-        connectThreaded(b2, valueChanged, localCounterProxy, setValue(Counter))
+        echo "connecting: ", self.unsafeWeakRef(), " to: ", localCounterProxy.remote
+        connectThreaded(self, valueChanged, localCounterProxy, setValue(Counter))
+        connect(self, valueChanged, self, valuePrint(SomeTrigger))
         threadBRemoteReady.store 1
       else:
         threadBRemoteReady.store 2
 
     var actionC = SomeTrigger.new()
-    connect(actionC, valueChanged, actionC, valuePrint(SomeTrigger))
+    #connect(actionC, valueChanged, actionC, valuePrint(SomeTrigger))
     actionCProx = actionC.moveToThread(threadC)
     echo "obj actionBProx: ", actionCProx.getSigilId()
 
@@ -177,9 +180,9 @@ suite "threaded agent slots":
     proc setValue(c2: SomeTrigger, val: int) {.slot.} =
       emit c2.valueChanged(val)
 
-    #connect(actionBProx, valueChanged, actionBProx, setValue(SomeTrigger))
     threadBRemoteReady.store 0
-
+    connect(actionCProx, valueChanged, actionCProx, setValue(SomeTrigger))
+    printConnections(actionCProx)
     emit actionCProx.valueChanged(1010)
 
     for i in 1..1_000:
