@@ -39,14 +39,17 @@ proc completed*(self: SomeTarget, final: int) {.slot.} =
 
 var threadA = newSigilThread()
 var threadB = newSigilThread()
+var threadC = newSigilThread()
 
 threadA.start()
 threadB.start()
+threadC.start()
 
 var threadBRemoteReady: Atomic[int]
 threadBRemoteReady.store 0
 
 var actionA = SomeTrigger.new()
+var actionBProx: AgentProxy[SomeTrigger]
 var cpRef: AgentProxy[Counter]
 
 suite "threaded agent slots":
@@ -79,7 +82,7 @@ suite "threaded agent slots":
     connect(counter, updated, target1, SomeTarget.completed())
 
     let counterProxy: AgentProxy[Counter] = counter.moveToThread(threadA)
-    cpRef = counterProxy
+    #cpRef = counterProxy
     echo "obj bp: ", counterProxy.getSigilId()
     when defined(sigilsDebug):
       counterProxy.debugName = "counterProxyLocal"
@@ -134,9 +137,44 @@ suite "threaded agent slots":
 
     GC_fullCollect()
 
-  test "ensure globalCounter update updates target2":
+  test "connect actionB on threadC to globalCounter":
+    proc remoteTrigger(counter: AgentProxy[SomeTrigger]) {.signal.}
 
-    emit actionA.valueChanged(1010)
+    proc remoteSetup(b2: SomeTrigger) {.slot.} =
+      os.sleep(10)
+      echo "REMOTE RUN!"
+      let localCounterProxy = lookupAgentProxy(sn"globalCounter", Counter)
+      if localCounterProxy != nil:
+        connectThreaded(b2, valueChanged, localCounterProxy, setValue(Counter))
+        threadBRemoteReady.store 1
+      else:
+        threadBRemoteReady.store 2
+
+    var actionB = SomeTrigger.new()
+    actionBProx = actionB.moveToThread(threadB)
+    echo "obj actionBProx: ", actionBProx.getSigilId()
+
+    connectThreaded(actionBProx, remoteTrigger, actionBProx, remoteSetup)
+
+    emit actionBProx.remoteTrigger()
+
+    for i in 1..100_000_000:
+      if threadBRemoteReady.load() != 0: break
+      doAssert i != 100_000_000
+
+    check threadBRemoteReady.load() == 1
+    threadBRemoteReady.store 0
+
+    GC_fullCollect()
+
+  test "ensure globalCounter update updates target2":
+    proc valueChanged(st: AgentProxy[SomeTrigger], val: int) {.signal.}
+
+    proc setValue(b2: SomeTrigger, val: int) {.slot.} =
+      emit b2.valueChanged(val)
+
+    connect(actionBProx, valueChanged, actionBProx, setValue(SomeTrigger))
+    emit actionBProx.valueChanged(1010)
 
     for i in 1..100_000_000:
       if threadBRemoteReady.load() != 0: break
