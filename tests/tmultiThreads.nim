@@ -6,6 +6,7 @@ import threading/atomics
 
 import sigils
 import sigils/threads
+import sigils/registry
 
 import std/terminal
 import std/strutils
@@ -116,11 +117,17 @@ suite "threaded agent slots":
       let bp: AgentProxy[Counter] = b.moveToThread(thread)
       echo "obj bp: ", bp.getSigilId()
 
+      registerGlobalName(sn"objectCounter", bp)
+
       let bid = cast[int](bp.remote.pt)
       emit a.valueChanged(bid)
       let ct = getCurrentSigilThread()
       ct.poll()
       check c.value == bid
+
+      let res = lookupGlobalName(sn"objectCounter")
+      check res.agent == bp.remote
+      check res.thread == bp.remoteThread
 
 
     GC_fullCollect()
