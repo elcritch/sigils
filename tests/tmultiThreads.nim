@@ -98,13 +98,14 @@ suite "threaded agent slots":
       let res = lookupGlobalName(sn"globalCounter")
       check res.isSome()
       let loc = res.get()
-      echo "counter found: ", loc
+      echo "global counter found: ", loc
 
       let localCounterProxy = loc.toAgentProxy(Counter)
       if localCounterProxy != nil:
         connectThreaded(localCounterProxy, updated, cc2, cc2.type.completed())
-
-      threadBRemoteReady.store 1
+        threadBRemoteReady.store 1
+      else: 
+        threadBRemoteReady.store 2
 
     var c2 = SomeTarget.new()
     let c2p: AgentProxy[SomeTarget] = c2.moveToThread(threadB)
@@ -115,7 +116,7 @@ suite "threaded agent slots":
     emit c2p.remoteTrigger()
 
     for i in 1..100_000:
-      if threadBRemoteReady.load() == 1: break
+      if threadBRemoteReady.load() != 0: break
       doAssert i != 100_000
 
     check threadBRemoteReady.load() == 1
