@@ -8,13 +8,13 @@
 --d:
   useMalloc
 
---debuginfo:
-  on
+#--debuginfo:
+#  on
 --debugger:
   native
 
---d:
-  sigilsDebug
+#--d:
+#  sigilsDebug
 
 --passc:
   "-Wno-int-conversion"

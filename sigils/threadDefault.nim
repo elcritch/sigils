@@ -80,8 +80,9 @@ method poll*(
 
 proc runThread*(thread: SigilThreadDefaultPtr) {.thread.} =
   {.cast(gcsafe).}:
-    pcnt.inc
-    pidx = pcnt
+    when defined(sigilsDebugPrint):
+      pcnt.inc
+      pidx = pcnt
     doAssert not hasLocalSigilThread()
     setLocalSigilThread(thread)
     thread[].threadId.store(getThreadId(), Relaxed)

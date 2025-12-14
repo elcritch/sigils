@@ -4,6 +4,8 @@ import std/isolation
 import std/[locks, options]
 import stack_strings
 
+import threading/atomics
+
 import protocol
 import weakrefs
 

@@ -149,9 +149,9 @@ suite "threaded agent slots":
       echo "REMOTE RUN!"
       let localCounterProxy = lookupAgentProxy(sn"globalCounter", Counter)
       if localCounterProxy != nil:
-        echo "connecting: ", self.unsafeWeakRef(), " to: ", localCounterProxy.remote
+        echo "connecting: ", self.unsafeWeakRef(), " to: ", localCounterProxy.remote, " th: ", " (th: ", getThreadId(), ")"
         connectThreaded(self, valueChanged, localCounterProxy, setValue(Counter))
-        connect(self, valueChanged, self, valuePrint(SomeTrigger))
+        #connect(self, valueChanged, self, valuePrint(SomeTrigger))
         threadBRemoteReady.store 1
       else:
         threadBRemoteReady.store 2

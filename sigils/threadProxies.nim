@@ -61,6 +61,10 @@ proc remoteSlot*(context: Agent, params: SigilParams) {.nimcall.} =
 proc localSlot*(context: Agent, params: SigilParams) {.nimcall.} =
   raise newException(AssertionDefect, "this should never be called!")
 
+method hasConnections*(proxy: AgentProxyShared): bool {.gcsafe, raises: [].} =
+  withLock proxy.lock:
+    result = proxy.subcriptions.len() != 0 or proxy.listening.len() != 0
+
 method callMethod*(
     proxy: AgentProxyShared, req: SigilRequest, slot: AgentProc
 ): SigilResponse {.gcsafe, effectsOf: slot.} =
@@ -156,14 +160,20 @@ proc moveToThread*[T: Agent, R: SigilThread](
     ct = getCurrentSigilThread()
     agent = agentTy.unsafeWeakRef.asAgent()
 
+  var
     localProxy = AgentProxy[T](
       remote: agent,
       remoteThread: thread.toSigilThread(),
       inbox: newChan[ThreadSignal](1_000),
     )
+
+  var
     remoteProxy = AgentProxy[T](
       remote: agent, remoteThread: ct, inbox: newChan[ThreadSignal](1_000)
     )
+
+
+
   localProxy.lock.initLock()
   remoteProxy.lock.initLock()
   localProxy.proxyTwin = remoteProxy.unsafeWeakRef().toKind(AgentProxyShared)
@@ -229,10 +239,10 @@ template connectThreaded*[T, S](
   ## 
   checkSignalTypes(a, signal, T(), slot, acceptVoidSlot)
   a.addSubscription(signalName(signal), localProxy, slot)
-  # ugh, this should be locked based on remote proxy still existing?
   assert not localProxy.proxyTwin.isNil
   assert not localProxy.remote.isNil
-  localProxy.proxyTwin[].addSubscription(AnySigilName, localProxy.remote[], localSlot)
+  withLock localProxy.proxyTwin[].lock:
+    localProxy.proxyTwin[].addSubscription(AnySigilName, localProxy.remote[], localSlot)
 
 template connectThreaded*[T](
     a: Agent,
@@ -247,10 +257,10 @@ template connectThreaded*[T](
   let agentSlot = `slot`(T)
   checkSignalTypes(a, signal, T(), agentSlot, acceptVoidSlot)
   a.addSubscription(signalName(signal), localProxy, agentSlot)
-  # ugh, this should be locked based on remote proxy still existing?
   assert not localProxy.proxyTwin.isNil
   assert not localProxy.remote.isNil
-  localProxy.proxyTwin[].addSubscription(AnySigilName, localProxy.remote[], localSlot)
+  withLock localProxy.proxyTwin[].lock:
+    localProxy.proxyTwin[].addSubscription(AnySigilName, localProxy.remote[], localSlot)
 
 template connectThreaded*[T, S](
     proxyTy: AgentProxy[T],
