@@ -13,6 +13,8 @@ type AgentLocation* = object
 var registry: Table[SigilName, AgentLocation]
 var regLock: Lock
 
+regLock.initLock()
+
 proc registerGlobalName*[T](name: SigilName, proxy: AgentProxy[T], override = false) =
   withLock regLock:
     if not override and name in registry:
