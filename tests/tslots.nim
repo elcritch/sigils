@@ -16,7 +16,8 @@ type
     avg: int
 
 proc `=destroy`*(x: var typeof(CounterWithDestroy()[])) =
-  echo "CounterWithDestroy:destroy: ", x.debugName
+  when defined(sigilsDebug):
+    echo "CounterWithDestroy:destroy: ", x.debugName
   destroyAgent(x)
 
 proc change*(tp: Originator, val: int) {.signal.}
@@ -260,8 +261,9 @@ suite "test destroys":
         var
           awd {.used.} = CounterWithDestroy()
 
-        awd.debugName = "AWD"
-        b.debugName = "B"
+        when defined(sigilsDebug):
+          awd.debugName = "AWD"
+          b.debugName = "B"
         connect(awd, valueChanged, b, setValue)
 
         check b.value == 0
