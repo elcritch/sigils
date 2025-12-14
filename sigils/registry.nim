@@ -37,8 +37,6 @@ proc removeGlobalName*[T](name: SigilName, proxy: AgentProxy[T]): bool =
   withLock regLock:
     if name in registry:
       registry.del(name)
-      #if name in keepAlive:
-      #  keepAlive.del(name)
       return true
     return false
 
