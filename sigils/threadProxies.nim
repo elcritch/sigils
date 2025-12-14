@@ -346,3 +346,4 @@ template connectQueued*(
   let ct = getCurrentSigilThread()
   let fs: AgentProc = fwdSlot[a, b, astToStr(slot)]
   a.addSubscription(signalName(signal), b, fs)
+

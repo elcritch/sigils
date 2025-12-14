@@ -77,6 +77,13 @@ proc completed*(self: SomeAction, final: int) {.slot.} =
     final, " id: ", $self.unsafeWeakRef(), " (th: ", getThreadId(), ")"
   self.value = final
 
+proc completedSetGlobal*(self: SomeAction, final: int) {.slot.} =
+  echo "Action done! setting global final: ",
+    final, " id: ", $self.unsafeWeakRef(), " (th: ", getThreadId(), ")"
+  self.value = final
+  globalCounter.store(final)
+
+
 proc completedSum*(self: SomeAction, final: int) {.slot.} =
   when defined(debug):
     echo "Action done! final: ",
@@ -320,7 +327,6 @@ suite "threaded agent slots":
       check c.value == 314
     GC_fullCollect()
 
-  # when true:
   test "agent move to thread then connect and run":
     var a = SomeAction.new()
 
@@ -355,6 +361,44 @@ suite "threaded agent slots":
       echo "a.subcriptions: ", a.subcriptions
     if a.listening.len() > 0:
       echo "a.listening: ", a.listening
+    GC_fullCollect()
+
+  # when true:
+  test "agent move to thread then connect and emit proxy":
+    var a = SomeAction.new()
+
+    let thread = newSigilThread()
+    thread.start()
+    startLocalThreadDefault()
+    proc valueChanged(tp: AgentProxy[SomeAction], final: int) {.signal.}
+
+    block:
+      var b = Counter.new()
+      echo "thread runner!", " (th: ", getThreadId(), ")"
+      echo "obj a: ", $a.getSigilId()
+      echo "obj b: ", $b.getSigilId()
+
+      let bp: AgentProxy[Counter] = b.moveToThread(thread)
+      echo "obj bp: ", $bp.getSigilId()
+      # echo "obj bp.remote: ", bp.remote[].unsafeWeakRef
+      let ap: AgentProxy[SomeAction] = a.moveToThread(thread)
+      echo "obj bp: ", $bp.getSigilId()
+
+      #connectThreaded(bp, updated, ap, SomeAction.completed())
+      connectThreaded(ap, valueChanged, bp, setValueGlobal)
+
+      emit ap.valueChanged(137)
+
+      #let ct = getCurrentSigilThread()
+      for i in 1..1_000:
+        os.sleep(1)
+        if globalCounter.load() == 137: break
+      check globalCounter.load() == 137
+      #let ct = getCurrentSigilThread()
+      #ct.poll()
+      #check a.value == 137
+      GC_fullCollect()
+
     GC_fullCollect()
 
   test "sigil object thread runner multiple emits":
