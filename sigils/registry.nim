@@ -45,7 +45,7 @@ proc lookupGlobalName*(name: SigilName): Option[AgentLocation] =
     if name in registry:
       result = some registry[name]
 
-proc toAgentProxy*[T](location: AgentLocation, tp: typeof[T]): AgentProxy[T] =
+proc lookupAgentProxyImpl[T](location: AgentLocation, tp: typeof[T]): AgentProxy[T] =
   if getTypeId(T) != location.typeId:
     raise newException(ValueError, "can't create proxy of the correct type!")
   if location.thread.isNil or location.agent.isNil:
@@ -94,4 +94,11 @@ proc toAgentProxy*[T](location: AgentLocation, tp: typeof[T]): AgentProxy[T] =
                                     subProc: remoteSlot))
 
   proxyCache[key] = AgentProxyShared(result)
+
+proc lookupAgentProxy*[T](name: SigilName, tp: typeof[T]): AgentProxy[T] =
+  withLock regLock:
+    if name notin registry:
+      return nil
+    else:
+      return lookupAgentProxyImpl(registry[name], tp)
 

@@ -110,8 +110,7 @@ suite "threaded agent slots":
     proc remoteRun(cc2: SomeTarget) {.slot.} =
       os.sleep(10)
       echo "REMOTE RUN!"
-      let loc = lookupGlobalName(sn"globalCounter").get()
-      let localCounterProxy = loc.toAgentProxy(Counter)
+      let localCounterProxy = lookupAgentProxy(sn"globalCounter", Counter)
       if localCounterProxy != nil:
         connectThreaded(localCounterProxy, updated, cc2, remoteCompleted(SomeTarget))
         threadBRemoteReady.store 1
