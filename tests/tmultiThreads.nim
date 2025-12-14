@@ -89,6 +89,13 @@ suite "threaded agent slots":
 
     proc remoteRun(cc: SomeAction) {.slot.} =
       echo "remote run!"
+      let res = lookupGlobalName(sn"objectCounter")
+      check res.isSome()
+      let loc = res.get()
+      echo "counter found: ", loc
+
+      let counter = loc.toAgentProxy(Counter)
+
 
     var c2 = SomeAction.new()
     let c2p: AgentProxy[SomeAction] = c2.moveToThread(threadB)
