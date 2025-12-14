@@ -25,6 +25,7 @@ proc valueChanged*(tp: SomeTrigger, val: int) {.signal.}
 proc updated*(tp: Counter, final: int) {.signal.}
 
 proc setValue*(self: Counter, value: int) {.slot.} =
+  echo "set value: ", value
   if self.value != value:
     self.value = value
   if value == 756809:
@@ -36,6 +37,8 @@ proc completed*(self: SomeTarget, final: int) {.slot.} =
     final, " id: ", $self.unsafeWeakRef(), " (th: ", getThreadId(), ")"
   self.value = final
 
+proc valuePrint*(tp: SomeTrigger, val: int) {.slot.} =
+  echo "print tp: ", $tp.unsafeWeakRef(), " value: ", val, " (th: ", getThreadId(), ")"
 
 var threadA = newSigilThread()
 var threadB = newSigilThread()
@@ -49,7 +52,7 @@ var threadBRemoteReady: Atomic[int]
 threadBRemoteReady.store 0
 
 var actionA = SomeTrigger.new()
-var actionBProx: AgentProxy[SomeTrigger]
+var actionCProx: AgentProxy[SomeTrigger]
 var cpRef: AgentProxy[Counter]
 
 suite "threaded agent slots":
@@ -150,17 +153,17 @@ suite "threaded agent slots":
       else:
         threadBRemoteReady.store 2
 
-    var actionB = SomeTrigger.new()
-    actionBProx = actionB.moveToThread(threadB)
-    echo "obj actionBProx: ", actionBProx.getSigilId()
+    var actionC = SomeTrigger.new()
+    connect(actionC, valueChanged, actionC, valuePrint(SomeTrigger))
+    actionCProx = actionC.moveToThread(threadC)
+    echo "obj actionBProx: ", actionCProx.getSigilId()
 
-    connectThreaded(actionBProx, remoteTrigger, actionBProx, remoteSetup)
+    connectThreaded(actionCProx, remoteTrigger, actionCProx, remoteSetup)
 
-    emit actionBProx.remoteTrigger()
+    emit actionCProx.remoteTrigger()
 
     for i in 1..100_000_000:
-      if threadBRemoteReady.load() != 0: break
-      doAssert i != 100_000_000
+      if threadBRemoteReady.load() == 1: break
 
     check threadBRemoteReady.load() == 1
     threadBRemoteReady.store 0
@@ -168,17 +171,19 @@ suite "threaded agent slots":
     GC_fullCollect()
 
   test "ensure globalCounter update updates target2":
+    echo "main thread: ", " (th: ", getThreadId(), ")"
     proc valueChanged(st: AgentProxy[SomeTrigger], val: int) {.signal.}
 
-    proc setValue(b2: SomeTrigger, val: int) {.slot.} =
-      emit b2.valueChanged(val)
+    proc setValue(c2: SomeTrigger, val: int) {.slot.} =
+      emit c2.valueChanged(val)
 
-    connect(actionBProx, valueChanged, actionBProx, setValue(SomeTrigger))
-    emit actionBProx.valueChanged(1010)
+    #connect(actionBProx, valueChanged, actionBProx, setValue(SomeTrigger))
+    emit actionCProx.valueChanged(1010)
 
-    for i in 1..100_000_000:
+    for i in 1..1_000:
+      os.sleep(1)
       if threadBRemoteReady.load() != 0: break
-      doAssert i != 100_000_000
+      doAssert i != 1_000
 
     check threadBRemoteReady.load() == 3
 
