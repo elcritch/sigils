@@ -57,7 +57,7 @@ suite "threaded agent slots":
       Counter.setValue().pointer: "setValue",
     }.toTable()
 
-  test "connect, moveToThread, and register":
+  test "create globalCounter and move to threadA":
 
     echo "sigil object thread connect change"
     var
@@ -90,8 +90,14 @@ suite "threaded agent slots":
     check res.agent == counterProxy.remote
     check res.thread == counterProxy.remoteThread
 
-  test "update counter and ensure target2 is run":
+  test "connect target2 on threadB to globalCounter":
     proc remoteTrigger(counter: AgentProxy[SomeTarget]) {.signal.}
+
+    proc remoteCompleted(self: SomeTarget, final: int) {.slot.} =
+      echo "Action done on remote! final: ",
+        final, " id: ", $self.unsafeWeakRef(), " (th: ", getThreadId(), ")"
+      self.value = final
+      threadBRemoteReady.store 3
 
     proc remoteRun(cc2: SomeTarget) {.slot.} =
       echo "remote run!"
@@ -115,11 +121,23 @@ suite "threaded agent slots":
 
     emit c2p.remoteTrigger()
 
-    for i in 1..100_000:
+    for i in 1..1_000_000:
       if threadBRemoteReady.load() != 0: break
-      doAssert i != 100_000
+      doAssert i != 1_000_000
 
     check threadBRemoteReady.load() == 1
+    threadBRemoteReady.store 0
     
     GC_fullCollect()
 
+  test "ensure globalCounter update updates target2":
+
+    emit actionA.valueChanged(1010)
+    
+    for i in 1..1_000_000:
+      if threadBRemoteReady.load() != 0: break
+      doAssert i != 1_000_000
+
+    check threadBRemoteReady.load() == 3
+
+    
