@@ -170,7 +170,7 @@ suite "threaded agent slots":
 
   test "agent connect a->b then moveToThread then destroy proxy":
     # debugPrintQuiet = true
-    var a = SomeAction(debugName: "A")
+    var a = SomeAction.new()
     when defined(sigilsDebug):
       a.debugName = "A"
       a.obj.id = 1010
@@ -235,7 +235,7 @@ suite "threaded agent slots":
     debugPrintQuiet = false
 
     let ct = getCurrentSigilThread()
-    var a = SomeAction(debugName: "A")
+    var a = SomeAction()
     when defined(sigilsDebug):
       a.debugName = "A"
       a.obj.id = 1010
@@ -388,7 +388,7 @@ suite "threaded agent slots":
 
       #connectThreaded(bp, updated, ap, SomeAction.completed())
       #connectThreaded(ap, valueChanged, bp, setValueGlobal)
-      printConnections(ap)
+      #printConnections(ap)
 
       emit ap.valueChanged(137)
 
