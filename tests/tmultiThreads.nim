@@ -15,17 +15,9 @@ import std/strutils
 type
   SomeAction* = ref object of Agent
     value: int
-    obj: InnerA
 
   Counter* = ref object of Agent
     value: int
-    obj: InnerC
-
-  InnerA = object
-    id: int
-
-  InnerC = object
-    id: int
 
 proc valueChanged*(tp: SomeAction, val: int) {.signal.}
 proc updated*(tp: Counter, final: int) {.signal.}
