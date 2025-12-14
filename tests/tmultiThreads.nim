@@ -58,26 +58,25 @@ suite "threaded agent slots":
     }.toTable()
 
   test "connect, moveToThread, and register":
-    var actionA = SomeTrigger.new()
 
     echo "sigil object thread connect change"
     var
       counter = Counter.new()
-      results1 = SomeTarget.new()
+      target1 = SomeTarget.new()
 
     echo "thread runner!", " (th: ", getThreadId(), ")"
     echo "obj actionA: ", actionA.getSigilId
     echo "obj counter: ", counter.getSigilId
-    echo "obj results1: ", results1.getSigilId
+    echo "obj target1: ", target1.getSigilId
     startLocalThreadDefault()
 
     connect(actionA, valueChanged, counter, setValue)
-    connect(counter, updated, results1, SomeTarget.completed())
+    connect(counter, updated, target1, SomeTarget.completed())
 
     let counterProxy: AgentProxy[Counter] = counter.moveToThread(threadA)
     echo "obj bp: ", counterProxy.getSigilId()
 
-    registerGlobalName(sn"objectCounter", counterProxy)
+    registerGlobalName(sn"globalCounter", counterProxy)
 
     let bid = cast[int](counterProxy.remote.pt)
     emit actionA.valueChanged(bid)
@@ -85,17 +84,18 @@ suite "threaded agent slots":
     # Poll and check action response
     let ct = getCurrentSigilThread()
     ct.poll()
-    check results1.value == bid
+    check target1.value == bid
 
-    let res = lookupGlobalName(sn"objectCounter").get()
+    let res = lookupGlobalName(sn"globalCounter").get()
     check res.agent == counterProxy.remote
     check res.thread == counterProxy.remoteThread
 
+  test "update counter and ensure target2 is run":
     proc remoteTrigger(counter: AgentProxy[SomeTarget]) {.signal.}
 
     proc remoteRun(cc2: SomeTarget) {.slot.} =
       echo "remote run!"
-      let res = lookupGlobalName(sn"objectCounter")
+      let res = lookupGlobalName(sn"globalCounter")
       check res.isSome()
       let loc = res.get()
       echo "counter found: ", loc
