@@ -13,10 +13,10 @@ Signals travel back the same way. When an agent running on a worker thread emits
 ## Overview
 
 - Sigils uses a message-passing model to keep agent logic thread-confined while enabling cross-thread signaling.
-- Agents can be **moved** to a worker thread; callers interact with them through a local proxy that forwards requests.
-- Cross-thread work is executed by a per-thread scheduler that processes messages serially.
-- Worker threads run the scheduler loop automatically; threads without a built-in loop must periodically poll to process forwarded events.
-- Cleanup is synchronized: moved agents are owned by the destination thread, and proxies send dereference messages so the destination thread can release remote state.
+- Agents can be **moved** to a worker thread; callers interact with them through a local proxy (`AgentProxy[T]`).
+- Cross-thread work is represented as `ThreadSignal`s and executed by a per-thread scheduler (`SigilThread`).
+- Worker threads run the scheduler loop automatically; the main thread must call `poll()`/`pollAll()` to process forwarded events.
+- Cleanup is synchronized: moved agents are owned by the destination thread, and proxies send `Deref` messages so the destination thread can release remote state.
 
 ## Mental Model
 
@@ -90,7 +90,7 @@ Two paths deliver work on the destination thread:
 
 2) Direct control path
 - `Move`, `Deref`, and `Exit` are sent to the destination thread via `thread.send(...)` and handled immediately.
-- `Call` is also supported as a direct `ThreadSignal(Call)` on a thread's input channel (used by `connectQueued`), though proxy code primarily uses per-proxy inbox + `Trigger`.
+- `Call` is also supported as a direct `ThreadSignal(Call)` on a thread’s input channel (used by `connectQueued`), though proxy code primarily uses per-proxy inbox + `Trigger`.
 
 All cross-thread messages are isolated (`isolateRuntime`) before enqueueing to ensure thread-safe transfer of data.
 
@@ -125,7 +125,7 @@ Helpers:
 
 ## Queued Calls (Same Thread)
 
-`connectQueued(...)` routes a signal to a slot by enqueueing a `ThreadSignal(Call)` onto the current thread's `SigilThread` instead of calling inline. The slot runs the next time you `poll()`/`pollAll()` that thread.
+`connectQueued(...)` routes a signal to a slot by enqueueing a `ThreadSignal(Call)` onto the current thread’s `SigilThread` instead of calling inline. The slot runs the next time you `poll()`/`pollAll()` that thread.
 
 Because it uses `SigilThread.send(...)` under the hood, the queued `ThreadSignal` is still passed through `isolateRuntime(...)` before it is enqueued.
 
