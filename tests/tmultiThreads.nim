@@ -47,6 +47,7 @@ var threadBRemoteReady: Atomic[int]
 threadBRemoteReady.store 0
 
 var actionA = SomeTrigger.new()
+var cpRef: AgentProxy[Counter]
 
 suite "threaded agent slots":
   setup:
@@ -64,6 +65,10 @@ suite "threaded agent slots":
       counter = Counter.new()
       target1 = SomeTarget.new()
 
+    when defined(sigilsDebug):
+      counter.debugName = "counter"
+      target1.debugName = "target1"
+
     echo "thread runner!", " (th: ", getThreadId(), ")"
     echo "obj actionA: ", actionA.getSigilId
     echo "obj counter: ", counter.getSigilId
@@ -74,7 +79,10 @@ suite "threaded agent slots":
     connect(counter, updated, target1, SomeTarget.completed())
 
     let counterProxy: AgentProxy[Counter] = counter.moveToThread(threadA)
+    cpRef = counterProxy
     echo "obj bp: ", counterProxy.getSigilId()
+    when defined(sigilsDebug):
+      counterProxy.debugName = "counterProxyLocal"
 
     registerGlobalName(sn"globalCounter", counterProxy)
 
@@ -100,12 +108,9 @@ suite "threaded agent slots":
       threadBRemoteReady.store 3
 
     proc remoteRun(cc2: SomeTarget) {.slot.} =
-      echo "remote run!"
-      let res = lookupGlobalName(sn"globalCounter")
-      check res.isSome()
-      let loc = res.get()
-      echo "global counter found: ", loc
-
+      os.sleep(10)
+      echo "REMOTE RUN!"
+      let loc = lookupGlobalName(sn"globalCounter").get()
       let localCounterProxy = loc.toAgentProxy(Counter)
       if localCounterProxy != nil:
         connectThreaded(localCounterProxy, updated, cc2, remoteCompleted(SomeTarget))
@@ -121,9 +126,9 @@ suite "threaded agent slots":
 
     emit c2p.remoteTrigger()
 
-    for i in 1..10_000_000:
+    for i in 1..100_000_000:
       if threadBRemoteReady.load() != 0: break
-      doAssert i != 10_000_000
+      doAssert i != 100_000_000
 
     check threadBRemoteReady.load() == 1
     threadBRemoteReady.store 0
@@ -134,9 +139,9 @@ suite "threaded agent slots":
 
     emit actionA.valueChanged(1010)
 
-    for i in 1..10_000_000:
+    for i in 1..100_000_000:
       if threadBRemoteReady.load() != 0: break
-      doAssert i != 10_000_000
+      doAssert i != 100_000_000
 
     check threadBRemoteReady.load() == 3
 

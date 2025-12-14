@@ -2,6 +2,7 @@ import std/sets
 import std/isolation
 import std/options
 import std/locks
+import std/tables
 import threading/smartptrs
 import threading/channels
 import threading/atomics
@@ -71,6 +72,8 @@ type
 
     signaledLock*: Lock
     signaled*: HashSet[WeakRef[AgentRemote]]
+    externalRefs*: Table[WeakRef[Agent], int]
+
     references*: Table[WeakRef[Agent], Agent]
     agent*: ThreadAgent
     exceptionHandler*: proc(e: ref Exception) {.gcsafe, nimcall.}
@@ -134,14 +137,23 @@ proc setRunning*(thread: SigilThreadPtr, state: bool, immediate = false) =
   else:
     thread.send(ThreadSignal(kind: Exit))
 
+proc extReference*(thread: SigilThreadPtr, obj: WeakRef[Agent]) =
+  withLock thread.signaledLock:
+    thread.externalRefs.mgetOrPut(obj, 0).inc()
+
 proc gcCollectReferences(thread: SigilThreadPtr) =
-  var derefs: seq[WeakRef[Agent]]
+  var derefs: HashSet[WeakRef[Agent]]
   for agent in thread.references.keys():
     if not agent[].hasConnections():
-      derefs.add(agent)
-  for agent in derefs:
-    debugPrint "\tderef cleanup: ", agent.unsafeWeakRef()
-    thread.references.del(agent)
+      derefs.incl(agent)
+
+  withLock thread.signaledLock:
+    for agent in derefs:
+      if agent in thread.externalRefs:
+        debugPrint "\tderef cleanup skipping: ", agent.unsafeWeakRef()
+      else:
+        debugPrint "\tderef cleanup: ", agent.unsafeWeakRef()
+        thread.references.del(agent)
 
 proc exec*(thread: SigilThreadPtr, sig: ThreadSignal) {.gcsafe.} =
   debugPrint "\nthread got request: ", $sig.kind
@@ -155,12 +167,12 @@ proc exec*(thread: SigilThreadPtr, sig: ThreadSignal) {.gcsafe.} =
     var item = sig.item
     thread.references[item.unsafeWeakRef()] = move item
   of AddSubscription:
-    debugPrint "\t threadExec:subscribe: ",
-      $sig.item.unsafeWeakRef(),
+    echo "\t threadExec:subscribe: ",
       " src: ", $sig.src,
-      " tgt: ", $sig.subTgt
-    if sig.src.isNil or sig.subTgt.isNil: 
-      raise newException(UnableToSubscribe, "unable to subscribe nils" &
+      " tgt: ", $sig.subTgt,
+      " srcExists: ", sig.src in thread.references
+    if sig.src.isNil:
+      raise newException(UnableToSubscribe, "unable to subscribe nil" &
                                             " src: " & $sig.src &
                                             " to " & $sig.subTgt)
     if sig.src in thread.references and sig.subTgt in thread.references:
@@ -197,7 +209,7 @@ proc exec*(thread: SigilThreadPtr, sig: ThreadSignal) {.gcsafe.} =
     debugPrint "\t threadExec:tgt: ",
       $sig.tgt[].getSigilId(), " rc: ", $sig.tgt[].unsafeGcCount()
   of Trigger:
-    debugPrint "Triggering"
+    echo "Triggering"
     var signaled: HashSet[WeakRef[AgentRemote]]
     withLock thread.signaledLock:
       signaled = move thread.signaled
