@@ -58,15 +58,15 @@ suite "threaded agent slots":
     echo "sigil object thread connect change"
     var
       b = Counter.new()
-      c = SomeAction.new()
+      c1 = SomeAction.new()
     echo "thread runner!", " (th: ", getThreadId(), ")"
     echo "obj a: ", agentA.getSigilId
     echo "obj b: ", b.getSigilId
-    echo "obj c: ", c.getSigilId
+    echo "obj c: ", c1.getSigilId
     startLocalThreadDefault()
 
     connect(agentA, valueChanged, b, setValue)
-    connect(b, updated, c, SomeAction.completed())
+    connect(b, updated, c1, SomeAction.completed())
 
     let bp: AgentProxy[Counter] = b.moveToThread(threadA)
     echo "obj bp: ", bp.getSigilId()
@@ -79,15 +79,25 @@ suite "threaded agent slots":
     # Poll and check action response
     let ct = getCurrentSigilThread()
     ct.poll()
-    check c.value == bid
+    check c1.value == bid
 
     let res = lookupGlobalName(sn"objectCounter").get()
     check res.agent == bp.remote
     check res.thread == bp.remoteThread
 
-    GC_fullCollect()
+    proc remoteTrigger(counter: AgentProxy[SomeAction]) {.signal.}
 
-  test "test multiple thread setup":
+    proc remoteRun(cc: SomeAction) {.slot.} =
+      echo "remote run!"
 
+    var c2 = SomeAction.new()
+    let c2p: AgentProxy[SomeAction] = c2.moveToThread(threadB)
+    echo "obj c2p: ", c2p.getSigilId()
+
+    connectThreaded(c2p, remoteTrigger, c2p, remoteRun)
+
+    emit c2p.remoteTrigger()
+    os.sleep(200)
+    
     GC_fullCollect()
 
