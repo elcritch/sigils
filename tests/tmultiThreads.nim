@@ -60,23 +60,23 @@ suite "threaded agent slots":
 
     echo "sigil object thread connect change"
     var
-      b = Counter.new()
+      counter = Counter.new()
       c1 = SomeAction.new()
     echo "thread runner!", " (th: ", getThreadId(), ")"
     echo "obj a: ", agentA.getSigilId
-    echo "obj b: ", b.getSigilId
+    echo "obj counter: ", counter.getSigilId
     echo "obj c: ", c1.getSigilId
     startLocalThreadDefault()
 
-    connect(agentA, valueChanged, b, setValue)
-    connect(b, updated, c1, SomeAction.completed())
+    connect(agentA, valueChanged, counter, setValue)
+    connect(counter, updated, c1, SomeAction.completed())
 
-    let bp: AgentProxy[Counter] = b.moveToThread(threadA)
-    echo "obj bp: ", bp.getSigilId()
+    let counterProxy: AgentProxy[Counter] = counter.moveToThread(threadA)
+    echo "obj bp: ", counterProxy.getSigilId()
 
-    registerGlobalName(sn"objectCounter", bp)
+    registerGlobalName(sn"objectCounter", counterProxy)
 
-    let bid = cast[int](bp.remote.pt)
+    let bid = cast[int](counterProxy.remote.pt)
     emit agentA.valueChanged(bid)
 
     # Poll and check action response
@@ -85,19 +85,22 @@ suite "threaded agent slots":
     check c1.value == bid
 
     let res = lookupGlobalName(sn"objectCounter").get()
-    check res.agent == bp.remote
-    check res.thread == bp.remoteThread
+    check res.agent == counterProxy.remote
+    check res.thread == counterProxy.remoteThread
 
     proc remoteTrigger(counter: AgentProxy[SomeAction]) {.signal.}
 
-    proc remoteRun(cc: SomeAction) {.slot.} =
+    proc remoteRun(cc2: SomeAction) {.slot.} =
       echo "remote run!"
       let res = lookupGlobalName(sn"objectCounter")
       check res.isSome()
       let loc = res.get()
       echo "counter found: ", loc
 
-      let counter = loc.toAgentProxy(Counter)
+      let localCounterProxy = loc.toAgentProxy(Counter)
+      if localCounterProxy != nil:
+        connectThreaded(cc2, valueChanged, localCounterProxy, setValue)
+
       threadBRemoteReady.store 1
 
 
@@ -109,9 +112,9 @@ suite "threaded agent slots":
 
     emit c2p.remoteTrigger()
 
-    for i in 1..10_000:
+    for i in 1..100_000:
       if threadBRemoteReady.load() == 1: break
-      doAssert i != 10_000
+      doAssert i != 100_000
 
     check threadBRemoteReady.load() == 1
     
