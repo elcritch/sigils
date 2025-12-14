@@ -177,9 +177,9 @@ suite "threaded agent slots":
 
     block:
       var b = Counter()
+      b.obj.id = 2020
       when defined(sigilsDebug):
         b.debugName = "B"
-        b.obj.id = 2020
 
       brightPrint "thread runner!", &" (th: {getThreadId()})"
       brightPrint "obj a: ", $a.unsafeWeakRef()
@@ -235,7 +235,7 @@ suite "threaded agent slots":
     debugPrintQuiet = false
 
     let ct = getCurrentSigilThread()
-    var a = SomeAction()
+    var a = SomeAction.new()
     when defined(sigilsDebug):
       a.debugName = "A"
       a.obj.id = 1010
@@ -388,7 +388,7 @@ suite "threaded agent slots":
 
       #connectThreaded(bp, updated, ap, SomeAction.completed())
       #connectThreaded(ap, valueChanged, bp, setValueGlobal)
-      #printConnections(ap)
+      printConnections(ap)
 
       emit ap.valueChanged(137)
 
