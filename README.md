@@ -181,3 +181,73 @@ Note however, that means you need to ensure your `Agent`'s aren't destroyed befo
 Internally `sigils` was based on an RPC system. There are many similarities when calling typed compiled functions in a generic fashion.
 
 To wit `sigils` supports multiple serialization methods. The default uses [variant](https://github.com/yglukhov/variant). In theory we could use the `any` type. Additionally JSON and CBOR methods are also supported by passing `-d:sigilsCborSerde` or `-d:sigilsJsonSerde`. These can be useful for backeneds such as NimScript and JavaScript. Using CBOR can be handy for networking which might be added in the future.
+
+
+### Multiple Threads
+
+This example sends one signal to two different agents living on two different threads, then collects both results back on the main thread.
+
+```nim
+import sigils
+import sigils/threads
+
+type
+  Trigger = ref object of Agent
+
+  Worker = ref object of Agent
+    value: int
+
+  Collector = ref object of Agent
+    a: int
+    b: int
+
+proc valueChanged(tp: Trigger, val: int) {.signal.}
+proc updated(tp: Worker, final: int) {.signal.}
+
+proc setValue(self: Worker, value: int) {.slot.} =
+  self.value = value
+  echo "worker:setValue: ", value, " (th: ", getThreadId(), ")"
+  emit self.updated(self.value)
+
+proc gotA(self: Collector, final: int) {.slot.} =
+  echo "collector: gotA: ", final, " (th: ", getThreadId(), ")"
+  self.a = final
+
+proc gotB(self: Collector, final: int) {.slot.} =
+  echo "collector: gotB: ", final, " (th: ", getThreadId(), ")"
+  self.b = final
+
+let trigger = Trigger()
+let collector = Collector()
+
+let threadA = newSigilThread()
+let threadB = newSigilThread()
+threadA.start()
+threadB.start()
+startLocalThreadDefault()
+
+var wA = Worker()
+var wB = Worker()
+
+let workerA: AgentProxy[Worker] = wA.moveToThread(threadA)
+let workerB: AgentProxy[Worker] = wB.moveToThread(threadB)
+
+connectThreaded(trigger, valueChanged, workerA, setValue)
+connectThreaded(trigger, valueChanged, workerB, setValue)
+connectThreaded(workerA, updated, collector, Collector.gotA())
+connectThreaded(workerB, updated, collector, Collector.gotB())
+
+emit trigger.valueChanged(42)
+
+let ct = getCurrentSigilThread()
+discard ct.poll() # workerA result
+discard ct.poll() # workerB result
+doAssert collector.a == 42
+doAssert collector.b == 42
+
+setRunning(threadA, false)
+setRunning(threadB, false)
+threadA.join()
+threadB.join()
+```
+
