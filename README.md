@@ -188,15 +188,12 @@ To wit `sigils` supports multiple serialization methods. The default uses [varia
 This example sends one signal to two different agents living on two different threads, then collects both results back on the main thread.
 
 ```nim
-import sigils
-import sigils/threads
+import sigils, sigils/threads
 
 type
   Trigger = ref object of Agent
-
   Worker = ref object of Agent
     value: int
-
   Collector = ref object of Agent
     a: int
     b: int

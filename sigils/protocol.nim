@@ -149,9 +149,6 @@ proc initSigilRequest*[S, T](
     origin: SigilId = SigilId(-1),
     reqKind: RequestType = Request,
 ): SigilRequestTy[S] =
-  static:
-    echo "\n\n==== SigilRequest: ", astToStr(procName), " args: ", args.typeof().repr
-    echo ""
   result = SigilRequestTy[S](
     kind: reqKind,
     origin: origin,

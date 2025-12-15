@@ -1,5 +1,4 @@
-import sigils
-import sigils/threads
+import sigils, sigils/threads
 
 type
   Trigger = ref object of Agent
