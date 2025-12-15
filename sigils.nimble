@@ -11,3 +11,7 @@ requires "stack_strings"
 
 feature "cbor":
   requires "cborious"
+
+feature "mummy":
+  requires "mummy"
+
