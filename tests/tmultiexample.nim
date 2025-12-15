@@ -46,13 +46,15 @@ connectThreaded(trigger, valueChanged, workerB, setValue)
 connectThreaded(workerA, updated, collector, Collector.gotA())
 connectThreaded(workerB, updated, collector, Collector.gotB())
 
-emit trigger.valueChanged(42)
-
 let ct = getCurrentSigilThread()
-discard ct.poll() # workerA result
-discard ct.poll() # workerB result
-doAssert collector.a == 42
-doAssert collector.b == 42
+
+for n in [42, 137]:
+  echo "N: ", n
+  emit trigger.valueChanged(n)
+  discard ct.poll() # workerA result
+  discard ct.poll() # workerB result
+  doAssert collector.a == n
+  doAssert collector.b == n
 
 setRunning(threadA, false)
 setRunning(threadB, false)
