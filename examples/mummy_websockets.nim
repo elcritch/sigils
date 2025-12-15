@@ -37,13 +37,6 @@ proc clientAnnounced*(events: ServerEvents, websocket: WebSocket, channel: strin
 proc socketOpened*(events: ServerEvents, websocket: WebSocket) {.signal.}
 proc socketClosed*(events: ServerEvents, websocket: WebSocket) {.signal.}
 
-proc setup*(hub: ChannelHub) {.slot.}
-proc registerClient*(hub: ChannelHub, websocket: WebSocket, channel: string) {.slot.}
-proc openClient*(hub: ChannelHub, websocket: WebSocket) {.slot.}
-proc closeClient*(hub: ChannelHub, websocket: WebSocket) {.slot.}
-proc publish*(hub: ChannelHub, channel: string, message: string) {.slot.}
-proc sendHeartbeat*(hub: ChannelHub) {.slot.}
-
 proc setup*(hub: ChannelHub) {.slot.} =
   hub.clientToChannel = initTable[WebSocket, string]()
   hub.channels = initTable[string, HashSet[WebSocket]]()
