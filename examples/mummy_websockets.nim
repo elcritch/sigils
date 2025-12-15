@@ -146,7 +146,7 @@ startLocalThreadDefault()
 let sigilThread = newSigilSelectorThread()
 var hub = ChannelHub()
 let hubProxy: AgentProxy[ChannelHub] = hub.moveToThread(sigilThread)
-var serverEvents = ServerEvents()
+let serverEvents = ServerEvents()
 
 connectThreaded(sigilThread.agent, started, hubProxy, ChannelHub.setup())
 connectThreaded(serverEvents, clientAnnounced, hubProxy, ChannelHub.registerClient())
@@ -155,42 +155,63 @@ connectThreaded(serverEvents, socketClosed, hubProxy, ChannelHub.closeClient())
 
 sigilThread.start()
 
-# This is the HTTP handler for /* requests. These requests are upgraded to websockets.
-proc upgradeHandler(request: Request) =
+proc makeUpgradeHandler(events: ServerEvents): RequestHandler =
+  result = proc(request: Request) {.gcsafe.} =
+    startLocalThreadDefault()
+    let channel = request.uri[1 .. ^1] # Everything after / is the channel name.
+    let websocket = request.upgradeToWebSocket()
+    emit events.clientAnnounced(websocket, channel)
+
+proc makeWebsocketHandler(events: ServerEvents): WebSocketHandler =
+  result = proc(
+    websocket: WebSocket,
+    event: WebSocketEvent,
+    message: Message
+  ) {.gcsafe.} =
+    startLocalThreadDefault()
+    case event:
+    of OpenEvent:
+      emit events.socketOpened(websocket)
+
+    of MessageEvent:
+      if message.kind == Ping:
+        websocket.send("", Pong)
+
+    of ErrorEvent:
+      discard
+
+    of CloseEvent:
+      emit events.socketClosed(websocket)
+
+proc main() =
   startLocalThreadDefault()
-  let channel = request.uri[1 .. ^1] # Everything after / is the channel name.
-  let websocket = request.upgradeToWebSocket()
-  emit serverEvents.clientAnnounced(websocket, channel)
 
-# WebSocket events are received by this handler.
-proc websocketHandler(
-  websocket: WebSocket,
-  event: WebSocketEvent,
-  message: Message
-) =
-  startLocalThreadDefault()
-  case event:
-  of OpenEvent:
-    emit serverEvents.socketOpened(websocket)
+  let sigilThread = newSigilSelectorThread()
+  var hub = ChannelHub()
+  let hubProxy: AgentProxy[ChannelHub] = hub.moveToThread(sigilThread)
+  let serverEvents = ServerEvents()
 
-  of MessageEvent:
-    if message.kind == Ping:
-      websocket.send("", Pong)
+  connectThreaded(sigilThread.agent, started, hubProxy, ChannelHub.setup())
+  connectThreaded(serverEvents, clientAnnounced, hubProxy, ChannelHub.registerClient())
+  connectThreaded(serverEvents, socketOpened, hubProxy, ChannelHub.openClient())
+  connectThreaded(serverEvents, socketClosed, hubProxy, ChannelHub.closeClient())
 
-  of ErrorEvent:
-    discard
+  sigilThread.start()
 
-  of CloseEvent:
-    emit serverEvents.socketClosed(websocket)
+  let upgradeHandler = makeUpgradeHandler(serverEvents)
+  let websocketHandler = makeWebsocketHandler(serverEvents)
 
-# A simple router sending all requests to be upgraded to websockets.
-var router: Router
-router.get("/*", upgradeHandler)
+  # A simple router sending all requests to be upgraded to websockets.
+  var router: Router
+  router.get("/*", upgradeHandler)
 
-let server = newServer(
-  router,
-  websocketHandler,
-  workerThreads = workerThreads
-)
-echo "Serving on localhost port ", port
-server.serve(Port(port))
+  let server = newServer(
+    router,
+    websocketHandler,
+    workerThreads = workerThreads
+  )
+  echo "Serving on localhost port ", port
+  server.serve(Port(port))
+
+when isMainModule:
+  main()
