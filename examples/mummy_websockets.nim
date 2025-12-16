@@ -28,8 +28,6 @@ var
   clientToChannel: Table[WebSocket, string] # Store what channel this websocket is subscribed to.
 
 initLock(lock)
-channelHubThr.start()
-heartbeatThr.start()
 
 proc findChannelName*(ws: WebSocket): string {.gcsafe.} =
   withLock(lock):
@@ -44,16 +42,27 @@ type
 
 proc add*(heartbeats: AgentProxy[HeartBeats], websocket: WebSocket) {.signal.}
 proc remove*(heartbeats: HeartBeats, websocket: WebSocket) {.signal.}
+proc heartbeat*(heartbeats: HeartBeats, bucket: int) {.signal.}
 
 proc toBucketId*(hb: HeartBeats, websocket: WebSocket): int =
   result = abs(websocket.hash()) mod hb.buckets.len()
 
-proc start*(self: HeartBeats) {.slot.} =
-  self.timer = newSigilTimer(initDuration(seconds = 1))
-
-proc sendHeartbeats*(hb: HeartBeats, bucket: int) {.slot.} =
-  for websocket in hb.buckets[bucket]:
+proc sendBucket*(self: HeartBeats, bucket: int) {.slot.} =
+  echo "Run heartbeat: ", bucket
+  for websocket in self.buckets[bucket]:
     websocket.send(heartbeatMessage)
+
+  if bucket < 30:
+    emit self.heartbeat(bucket + 1)
+
+proc runHeartbeat*(self: HeartBeats) {.slot.} =
+  self.sendBucket(0)
+
+proc start*(self: HeartBeats) {.slot.} =
+  echo "Starting heartbeat!"
+  self.timer = newSigilTimer(initDuration(seconds = 1))
+  connect(self.timer, timeout, self, runHeartbeat)
+  connect(self, heartbeat, self, sendBucket)
 
 ## ====================== Channels ====================== ##
 type
@@ -133,6 +142,14 @@ proc upgradeHandler(request: Request) {.gcsafe.} =
 
 proc main() =
   echo "Serving on localhost port ", port
+
+  channelHubThr.start()
+
+  var hbs = HeartBeats()
+  let hbsProxy = hbs.moveToThread(heartbeatThr)
+  connectThreaded(heartbeatThr, started, hbsProxy, start)
+  registerGlobalName(sn"HeartBeat", hbsProxy)
+  heartbeatThr.start()
 
   var router: Router
   router.get("/*", upgradeHandler)
