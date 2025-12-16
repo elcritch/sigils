@@ -103,6 +103,7 @@ method callMethod*(
     debugPrint "\t proxy:callMethod:localSlot: "
     callSlots(proxy, req)
   else:
+    #doAssert false
     var req = req.duplicate()
     debugPrint "\t callMethod:agentProxy:InitCall:Outbound: ",
       req.procName, " proxy:remote:obj: ", proxy.remote.getSigilId()
@@ -207,7 +208,7 @@ proc moveToThread*[T: Agent, R: SigilThread](
   for item in oldListeningSubs:
     item.subscription.tgt[].addSubscription(item.signal, localProxy, item.subscription.slot)
     listenSubs = true
-  remoteProxy.addSubscription(AnySigilName, agentTy, localSlot)
+  #remoteProxy.addSubscription(AnySigilName, agentTy, localSlot)
 
   # update my subcriptionsTable so agent uses the remote proxy to send events back
   var hasSubs = false
@@ -247,8 +248,8 @@ template connectThreaded*[T, S](
   assert not localProxy.proxyTwin.isNil
   assert not localProxy.remote.isNil
   a.addSubscription(signalName(signal), localProxy, slot)
-  withLock localProxy.proxyTwin[].lock:
-    localProxy.proxyTwin[].addSubscription(AnySigilName, localProxy.remote[], localSlot)
+  #withLock localProxy.proxyTwin[].lock:
+  #  localProxy.proxyTwin[].addSubscription(AnySigilName, localProxy.remote[], localSlot)
 
 template connectThreaded*[T](
     a: Agent,
@@ -265,8 +266,8 @@ template connectThreaded*[T](
   let agentSlot = `slot`(T)
   checkSignalTypes(a, signal, T(), agentSlot, acceptVoidSlot)
   a.addSubscription(signalName(signal), localProxy, agentSlot)
-  withLock localProxy.proxyTwin[].lock:
-    localProxy.proxyTwin[].addSubscription(AnySigilName, localProxy.remote[], localSlot)
+  #withLock localProxy.proxyTwin[].lock:
+  #  localProxy.proxyTwin[].addSubscription(AnySigilName, localProxy.remote[], localSlot)
 
 template connectThreaded*[T, S](
     remoteProxy: AgentProxy[T],
