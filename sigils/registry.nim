@@ -9,6 +9,7 @@ type AgentLocation* = object
   thread*: SigilThreadPtr
   agent*: WeakRef[Agent]
   typeId*: TypeId
+  isProxy*: bool
 
 var registry: Table[SigilName, AgentLocation]
 var regLock: Lock
@@ -24,18 +25,50 @@ type SetupProxyParams = object
 proc keepAlive(context: Agent, params: SigilParams) {.nimcall.} =
   raise newException(AssertionDefect, "this should never be called!")
 
+proc initProxy[T](proxy: var AgentProxy[T],
+                  agent: WeakRef[Agent],
+                  thread: SigilThreadPtr,
+                  isRemote = false, inbox = 1_000) =
+  proxy = AgentProxy[T](
+    remote: agent,
+    remoteThread: thread,
+    inbox: newChan[ThreadSignal](inbox),
+  )
+  proxy.lock.initLock()
+  when defined(sigilsDebug):
+    let aid = $agent
+    if remote:
+      proxy.debugName = "remoteProxy::" & aid
+    else:
+      proxy.debugName = "localProxy::" & aid
+
+proc bindProxies[T](a, b: AgentProxy[T]) =
+  a.proxyTwin = b.unsafeWeakRef().toKind(AgentProxyShared)
+  b.proxyTwin = a.unsafeWeakRef().toKind(AgentProxyShared)
+
 proc registerGlobalAgent*[T](
-    name: SigilName, proxy: AgentProxy[T], override = false
+    name: SigilName, agent: T, override = false
 ) {.gcsafe.} =
   withLock regLock:
     {.cast(gcsafe).}:
       if not override and name in registry:
         raise newException(ValueError, "Name already registered! Name: " & $name)
+
+      let remoteProxyRef = remoteProxy.unsafeWeakRef().toKind(AgentProxyShared)
+      location.thread.send(ThreadSignal(kind: Move, item: move remoteProxy))
+      let sub = ThreadSub(src: location.agent,
+                          name: AnySigilName,
+                          tgt: remoteProxyRef.toKind(Agent),
+                          fn: remoteSlot)
+      location.thread.send(ThreadSignal(kind: AddSub, add: sub))
+
       registry[name] = AgentLocation(
         thread: proxy.remoteThread,
         agent: proxy.remote,
         typeId: getTypeId(T),
+        isProxy: true
       )
+
       let sub = ThreadSub(src: proxy.remote,
                           name: sn"sigils:registryKeepAliveProxy",
                           tgt: proxy.remote,
@@ -92,29 +125,11 @@ proc lookupAgentProxyImpl[T](location: AgentLocation, tp: typeof[T], cache = tru
       return cast[AgentProxy[T]](cached)
 
   let ct = getCurrentSigilThread()
+  var remoteProxy: AgentProxy[T]
 
-  result = AgentProxy[T](
-    remote: location.agent,
-    remoteThread: location.thread,
-    inbox: newChan[ThreadSignal](1_000),
-  )
-
-  var remoteProxy = AgentProxy[T](
-    remote: location.agent,
-    remoteThread: ct,
-    inbox: newChan[ThreadSignal](1_000),
-  )
-
-  result.lock.initLock()
-  remoteProxy.lock.initLock()
-
-  result.proxyTwin = remoteProxy.unsafeWeakRef().toKind(AgentProxyShared)
-  remoteProxy.proxyTwin = result.unsafeWeakRef().toKind(AgentProxyShared)
-
-  when defined(sigilsDebug):
-    let aid = $location.agent
-    result.debugName = "localProxy::" & aid
-    remoteProxy.debugName = "remoteProxy::" & aid
+  result.initProxy(location.agent, location.thread, isRemote = false)
+  remoteProxy.initProxy(location.agent, ct, isRemote = true)
+  bindProxies(result, remoteProxy)
 
   # Ensure the remote proxy is kept alive until it is wired on the remote thread.
   remoteProxy.addSubscription(AnySigilName, result, localSlot)
