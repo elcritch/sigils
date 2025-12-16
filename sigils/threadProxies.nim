@@ -147,7 +147,7 @@ iterator findSubscribedTo(
 
 proc moveToThread*[T: Agent, R: SigilThread](
     agentTy: var T, thread: ptr R
-): AgentProxy[T] =
+): AgentProxy[T] {.gcsafe.} =
   ## move agent to another thread
   debugPrint "moveToThread: ", $agentTy.unsafeWeakRef()
   if not isUniqueRef(agentTy):

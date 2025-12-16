@@ -250,7 +250,9 @@ proc setExceptionHandler*(
 ) =
   thread.exceptionHandler = handler
 
-var startSigilThreadProc: proc()
+type SigilThreadProc* = proc() {.nimcall, gcsafe.}
+
+var startSigilThreadProc: SigilThreadProc
 var localSigilThread {.threadVar.}: ptr SigilThread
 
 proc toSigilThread*[R: SigilThread](t: ptr R): ptr SigilThread =
@@ -262,10 +264,10 @@ proc hasLocalSigilThread*(): bool =
 proc setLocalSigilThread*[R: ptr SigilThread](thread: R) =
   localSigilThread = thread.toSigilThread()
 
-proc setStartSigilThreadProc*(cb: proc()) =
+proc setStartSigilThreadProc*(cb: SigilThreadProc) =
   startSigilThreadProc = cb
 
-proc getStartSigilThreadProc*(): proc() =
+proc getStartSigilThreadProc*(): SigilThreadProc =
   startSigilThreadProc
 
 template getCurrentSigilThread*(): SigilThreadPtr =

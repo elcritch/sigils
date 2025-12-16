@@ -24,40 +24,44 @@ type SetupProxyParams = object
 proc keepAlive(context: Agent, params: SigilParams) {.nimcall.} =
   raise newException(AssertionDefect, "this should never be called!")
 
-proc registerGlobalName*[T](name: SigilName, proxy: AgentProxy[T],
-    override = false) =
+proc registerGlobalName*[T](
+    name: SigilName, proxy: AgentProxy[T], override = false
+) {.gcsafe.} =
   withLock regLock:
-    if not override and name in registry:
-      raise newException(ValueError, "Name already registered! Name: " & $name)
-    registry[name] = AgentLocation(
-      thread: proxy.remoteThread,
-      agent: proxy.remote,
-      typeId: getTypeId(T),
-    )
-    proxy.remoteThread.send(ThreadSignal(kind: Trigger))
-    proxy.remoteThread.send(ThreadSignal(kind: AddSubscription,
-                                    src: proxy.remote,
-                                    name: sn"sigils:registryKeepAlive",
-                                    subTgt: proxy.remote,
-                                    subProc: keepAlive))
+    {.cast(gcsafe).}:
+      if not override and name in registry:
+        raise newException(ValueError, "Name already registered! Name: " & $name)
+      registry[name] = AgentLocation(
+        thread: proxy.remoteThread,
+        agent: proxy.remote,
+        typeId: getTypeId(T),
+      )
+      proxy.remoteThread.send(ThreadSignal(kind: Trigger))
+      proxy.remoteThread.send(ThreadSignal(kind: AddSubscription,
+                                      src: proxy.remote,
+                                      name: sn"sigils:registryKeepAlive",
+                                      subTgt: proxy.remote,
+                                      subProc: keepAlive))
 
 
-proc removeGlobalName*[T](name: SigilName, proxy: AgentProxy[T]): bool =
+proc removeGlobalName*[T](name: SigilName, proxy: AgentProxy[T]): bool {.gcsafe.} =
   withLock regLock:
-    if name in registry:
-      registry.del(name)
-      #proxy.remoteThread.send(ThreadSignal(kind: DelSubscription,
-      #                                     src: proxy.remote,
-      #                                     name: sn"sigils:registryKeepAlive",
-      #                                     subTgt: proxy.remote,
-      #                                     subProc: keepAlive))
-      return true
-    return false
+    {.cast(gcsafe).}:
+      if name in registry:
+        registry.del(name)
+        #proxy.remoteThread.send(ThreadSignal(kind: DelSubscription,
+        #                                     src: proxy.remote,
+        #                                     name: sn"sigils:registryKeepAlive",
+        #                                     subTgt: proxy.remote,
+        #                                     subProc: keepAlive))
+        return true
+      return false
 
-proc lookupGlobalName*(name: SigilName): Option[AgentLocation] =
+proc lookupGlobalName*(name: SigilName): Option[AgentLocation] {.gcsafe.} =
   withLock regLock:
-    if name in registry:
-      result = some registry[name]
+    {.cast(gcsafe).}:
+      if name in registry:
+        result = some registry[name]
 
 proc lookupAgentProxyImpl[T](location: AgentLocation, tp: typeof[T], cache = true): AgentProxy[T] =
   if getTypeId(T) != location.typeId:
@@ -110,10 +114,11 @@ proc lookupAgentProxyImpl[T](location: AgentLocation, tp: typeof[T], cache = tru
   if cache:
     proxyCache[key] = AgentProxyShared(result)
 
-proc lookupAgentProxy*[T](name: SigilName, tp: typeof[T]): AgentProxy[T] =
+proc lookupAgentProxy*[T](name: SigilName, tp: typeof[T]): AgentProxy[T] {.gcsafe.} =
   withLock regLock:
-    if name notin registry:
-      return nil
-    else:
-      return lookupAgentProxyImpl(registry[name], tp)
+    {.cast(gcsafe).}:
+      if name notin registry:
+        return nil
+      else:
+        return lookupAgentProxyImpl(registry[name], tp)
 

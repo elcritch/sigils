@@ -61,7 +61,7 @@ type
     clients: HashSet[WebSocket]
     thr: SigilSelectorThreadPtr
 
-proc joining*(channel: Channel, websocket: WebSocket) {.signal.}
+proc joining*(channel: AgentProxy[Channel], websocket: WebSocket) {.signal.}
 proc leaving*(channel: AgentProxy[Channel], websocket: WebSocket) {.signal.}
 
 proc publish*(channel: AgentProxy[Channel], message: Message) {.signal.}
@@ -104,7 +104,7 @@ proc websocketHandler(websocket: WebSocket, event: WebSocketEvent, message: Mess
       let channel = lookupAgentProxy(name.toSigilName, Channel)
       emit channel.leaving(websocket)
 
-proc findChannelOrCreate(name: string): AgentProxy[Channel] =
+proc findChannelOrCreate(name: string): AgentProxy[Channel] {.gcsafe.} =
   let cn = name.toSigName()
   result = lookupAgentProxy(cn, Channel)
   if result.isNil:
@@ -113,7 +113,7 @@ proc findChannelOrCreate(name: string): AgentProxy[Channel] =
     var channel = Channel(name: name, thr: thr)
     registerGlobalName(cn, channel.moveToThread(thr))
 
-proc upgradeHandler(request: Request) =
+proc upgradeHandler(request: Request) {.gcsafe.} =
 
   let channelName =
     if request.uri.len > 1: request.uri[1 .. ^1] # Everything after / is the channel name.
