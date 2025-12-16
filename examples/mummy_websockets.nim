@@ -2,7 +2,7 @@ import mummy, mummy/routers
 import std/[hashes, sets, tables, times]
 
 import sigils
-import sigils/[threadSelectors, registry]
+import sigils/[threads, threadSelectors, registry]
 
 ## This is a simple websocket server that uses Sigils to manage its heartbeat
 ## timer on a dedicated selector thread.
