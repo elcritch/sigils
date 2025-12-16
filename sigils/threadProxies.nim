@@ -244,9 +244,9 @@ template connectThreaded*[T, S](
   ## connects `AgentProxy[T]` to remote signals
   ## 
   checkSignalTypes(a, signal, T(), slot, acceptVoidSlot)
-  a.addSubscription(signalName(signal), localProxy, slot)
   assert not localProxy.proxyTwin.isNil
   assert not localProxy.remote.isNil
+  a.addSubscription(signalName(signal), localProxy, slot)
   withLock localProxy.proxyTwin[].lock:
     localProxy.proxyTwin[].addSubscription(AnySigilName, localProxy.remote[], localSlot)
 
@@ -260,16 +260,16 @@ template connectThreaded*[T](
   ## connects `AgentProxy[T]` to remote signals
   ## 
   checkSignalThreadSafety(SignalTypes.`signal`(typeof(a)))
+  assert not localProxy.proxyTwin.isNil
+  assert not localProxy.remote.isNil
   let agentSlot = `slot`(T)
   checkSignalTypes(a, signal, T(), agentSlot, acceptVoidSlot)
   a.addSubscription(signalName(signal), localProxy, agentSlot)
-  assert not localProxy.proxyTwin.isNil
-  assert not localProxy.remote.isNil
   withLock localProxy.proxyTwin[].lock:
     localProxy.proxyTwin[].addSubscription(AnySigilName, localProxy.remote[], localSlot)
 
 template connectThreaded*[T, S](
-    proxyTy: AgentProxy[T],
+    remoteProxy: AgentProxy[T],
     signal: typed,
     b: Agent,
     slot: Signal[S],
@@ -278,7 +278,7 @@ template connectThreaded*[T, S](
   ## connects `AgentProxy[T]` to remote signals
   ## 
   checkSignalTypes(T(), signal, b, slot, acceptVoidSlot)
-  let localProxy = Agent(proxyTy)
+  let localProxy = Agent(remoteProxy)
   localProxy.addSubscription(signalName(signal), b, slot)
 
 template connectThreaded*[T](
