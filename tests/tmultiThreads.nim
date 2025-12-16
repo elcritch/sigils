@@ -190,7 +190,7 @@ suite "threaded agent slots":
       emit c2.valueChanged(val)
 
     threadBRemoteReady.store 0
-    connect(actionCProx, valueChanged, actionCProx, setValue(SomeTrigger))
+    connectThreaded(actionCProx, valueChanged, actionCProx, setValue(SomeTrigger))
     printConnections(actionCProx)
     emit actionCProx.valueChanged(1010)
 
