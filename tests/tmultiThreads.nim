@@ -70,6 +70,8 @@ suite "threaded agent slots":
     var
       counter = Counter.new()
       target1 = SomeTarget.new()
+      counter2 = Counter.new()
+      target2 = SomeTarget.new()
 
     echo "counter global: ", counter.unsafeWeakRef()
     when defined(sigilsDebug):
@@ -84,6 +86,7 @@ suite "threaded agent slots":
 
     connect(actionA, valueChanged, counter, setValue)
     connect(counter, updated, target1, SomeTarget.completed())
+    connect(counter2, updated, target2, SomeTarget.completed())
 
     let counterProxy: AgentProxy[Counter] = counter.moveToThread(threadA)
     #cpRef = counterProxy
@@ -92,6 +95,7 @@ suite "threaded agent slots":
       counterProxy.debugName = "counterProxyLocal"
 
     registerGlobalName(sn"globalCounter", counterProxy)
+    registerGlobalAgent(sn"globalCounter2", threadA, counter2)
 
     let bid = cast[int](counterProxy.remote.pt)
     emit actionA.valueChanged(bid)
@@ -104,6 +108,11 @@ suite "threaded agent slots":
     let res = lookupGlobalName(sn"globalCounter").get()
     check res.agent == counterProxy.remote
     check res.thread == counterProxy.remoteThread
+
+    let res2 = lookupGlobalName(sn"globalCounter2").get()
+    check res2.agent == counterProxy.remote
+    check res2.thread == counterProxy.remoteThread
+
 
   test "connect target2 on threadB to globalCounter":
     proc remoteTrigger(counter: AgentProxy[SomeTarget]) {.signal.}

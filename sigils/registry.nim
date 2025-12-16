@@ -49,8 +49,13 @@ proc registerGlobalAgent*[T](
   withLock regLock:
     {.cast(gcsafe).}:
       let proxy = agent.moveToThread(thread)
+      let remoteProxy = proxy.proxyTwin
       registerGlobalName(name, proxy, override = override)
 
+      if not proxy.proxyTwin.isNil:
+        withLock proxy.proxyTwin[].lock:
+          proxy.proxyTwin[].proxyTwin.pt = nil
+      proxy.proxyTwin.pt = nil
 
 proc removeGlobalName*[T](name: SigilName, proxy: AgentProxy[T]): bool {.gcsafe.} =
   withLock regLock:
