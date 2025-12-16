@@ -63,6 +63,7 @@ proc start*(self: HeartBeats) {.slot.} =
   self.timer = newSigilTimer(initDuration(seconds = 1))
   connect(self.timer, timeout, self, runHeartbeat)
   connect(self, heartbeat, self, sendBucket)
+  self.timer.start()
 
 ## ====================== Channels ====================== ##
 type
