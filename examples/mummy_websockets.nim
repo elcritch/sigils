@@ -1,5 +1,8 @@
-import mummy, mummy/routers, std/hashes, std/sets, std/tables, std/times,
-    ../sigils, ../sigils/threadSelectors
+import mummy, mummy/routers
+import std/[hashes, sets, tables, times]
+
+import sigils
+import sigils/[threadSelectors, registry]
 
 ## This is a simple websocket server that uses Sigils to manage its heartbeat
 ## timer on a dedicated selector thread.
@@ -24,12 +27,16 @@ var
 type
   HeartBeats {.acyclic.} = ref object of Agent
     buckets: array[30, HashSet[WebSocket]]
+    timer: SigilTimer
+
+proc add*(heartbeats: AgentProxy[HeartBeats], websocket: WebSocket) {.signal.}
+proc remove*(heartbeats: HeartBeats, websocket: WebSocket) {.signal.}
 
 proc toBucketId*(hb: HeartBeats, websocket: WebSocket): int =
   result = abs(websocket.hash()) mod hb.buckets.len()
 
-proc start*(hb: HeartBeats) {.slot.} =
-  hub.heartbeatTimer = newSigilTimer(initDuration(seconds = 1))
+proc start*(self: HeartBeats) {.slot.} =
+  self.timer = newSigilTimer(initDuration(seconds = 1))
 
 proc sendHeartbeats*(hb: HeartBeats, bucket: int) {.slot.} =
   for websocket in hb.buckets[bucket]:
@@ -42,15 +49,15 @@ type
     clients: HashSet[WebSocket]
     thr: SigilSelectorThreadPtr
 
-proc joined*(channel: ChannelHub, websocket: WebSocket) {.signal.}
+proc joined*(channel: Channel, websocket: WebSocket) {.signal.}
 
-proc toSigName*(name: string): SignalName =
+proc toSigName*(name: string): SigilName =
   result = toSigilName("channel:" & name)
 
 proc join*(self: Channel, websocket: WebSocket) {.slot.} =
   self.clients.incl(websocket)
 
-proc publish*(clients: Channel, message: Message) {.slot.} =
+proc publish*(self: Channel, message: Message) {.slot.} =
   for websocket in self.clients:
     websocket.send(message.data, message.kind)
 
@@ -59,9 +66,13 @@ proc websocketHandler(websocket: WebSocket, event: WebSocketEvent, message: Mess
 
   case event:
   of OpenEvent:
-    emit heartbeats.join(websocket)
+    let heartbeats = lookupAgentProxy(sn"HeatBeats", HeartBeats)
+    if heartbeats != nil:
+      emit heartbeats.add(websocket)
 
   of MessageEvent:
+    let channel = lookupAgentProxy(websocket.toChannel(), Channel)
+
     emit channelP.publish(message)
 
   of ErrorEvent:
