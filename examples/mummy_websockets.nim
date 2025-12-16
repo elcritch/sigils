@@ -31,9 +31,9 @@ initLock(lock)
 channelHubThr.start()
 heartbeatThr.start()
 
-proc findChannel*(ws: WebSocket): string =
+proc findChannelName*(ws: WebSocket): string =
   withLock(lock):
-    result = clientToChannel.get(ws, "")
+    result = clientToChannel.getOrDefault(ws, "")
 
 ## ====================== HeartBeat ====================== ##
 type
@@ -61,15 +61,18 @@ type
     clients: HashSet[WebSocket]
     thr: SigilSelectorThreadPtr
 
-proc joined*(channel: Channel, websocket: WebSocket) {.signal.}
+proc joining*(channel: Channel, websocket: WebSocket) {.signal.}
+proc leaving*(channel: AgentProxy[Channel], websocket: WebSocket) {.signal.}
+
+proc publish*(channel: AgentProxy[Channel], message: Message) {.signal.}
 
 proc toSigName*(name: string): SigilName =
   result = toSigilName("channel:" & name)
 
-proc join*(self: Channel, websocket: WebSocket) {.slot.} =
+proc joined*(self: Channel, websocket: WebSocket) {.slot.} =
   self.clients.incl(websocket)
 
-proc publish*(self: Channel, message: Message) {.slot.} =
+proc send*(self: Channel, message: Message) {.slot.} =
   for websocket in self.clients:
     websocket.send(message.data, message.kind)
 
@@ -83,14 +86,23 @@ proc websocketHandler(websocket: WebSocket, event: WebSocketEvent, message: Mess
       emit heartbeats.add(websocket)
 
   of MessageEvent:
-    let channel = lookupAgentProxy(websocket.toChannel(), Channel)
-    emit channel.publish(message)
+    let name = websocket.findChannelName()
+    if name == "":
+      echo "No clientToChannel entry at websocket open"
+    else:
+      let channel = lookupAgentProxy(name.toSigilName, Channel)
+      emit channel.publish(message)
 
   of ErrorEvent:
     discard
 
   of CloseEvent:
-    emit events.closed(websocket)
+    let name = websocket.findChannelName()
+    if name == "":
+      echo "No clientToChannel entry at websocket open"
+    else:
+      let channel = lookupAgentProxy(name.toSigilName, Channel)
+      emit channel.leaving(websocket)
 
 proc findChannelOrCreate(name: string): AgentProxy[Channel] =
   let cn = name.toSigName()
@@ -99,10 +111,9 @@ proc findChannelOrCreate(name: string): AgentProxy[Channel] =
     let thr = newSigilSelectorThread()
     thr.start()
     var channel = Channel(name: name, thr: thr)
-    registerGlobalName(cn, thr.moveToThread(channel))
+    registerGlobalName(cn, channel.moveToThread(thr))
 
 proc upgradeHandler(request: Request) =
-  let clientHub = lookupAgentProxy(sn"ChannelHub", ChannelHub)
 
   let channelName =
     if request.uri.len > 1: request.uri[1 .. ^1] # Everything after / is the channel name.
@@ -110,7 +121,7 @@ proc upgradeHandler(request: Request) =
 
   let websocket = request.upgradeToWebSocket()
   let channel = findChannelOrCreate(channelName)
-  emit channel.joined(websocket)
+  emit channel.joining(websocket)
 
 ## ====================== Main Setup ====================== ##
 
