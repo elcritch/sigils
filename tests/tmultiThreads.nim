@@ -109,9 +109,9 @@ suite "threaded agent slots":
     check res.agent == counterProxy.remote
     check res.thread == counterProxy.remoteThread
 
-    #let res2 = lookupGlobalName(sn"globalCounter2").get()
-    #check res2.agent == counterProxy.remote
-    #check res2.thread == counterProxy.remoteThread
+    let res2 = lookupGlobalName(sn"globalCounter2")
+    check res2.isSome
+    check res2.get().thread == threadA
 
 
   test "connect target2 on threadB to globalCounter":
