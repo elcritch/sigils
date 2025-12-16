@@ -184,9 +184,8 @@ proc closeClient(client: var WebSocketClient) =
     discard
   close(client.socket)
 
-proc runClient(runtime: ptr ServerRuntime) {.thread.} =
-  runtime[].server.waitUntilReady()
-
+proc runClient() =
+  let port = 8123
   var client = connectWebSocket("127.0.0.1", port, testChannel)
 
   let first = client.readFrame()
@@ -203,16 +202,15 @@ proc runClient(runtime: ptr ServerRuntime) {.thread.} =
 
   closeClient(client)
 
-  runtime[].server.close()
-
 proc main() =
   randomize()
-  var runtime = newServerRuntime()
-  var clientThread: Thread[ptr ServerRuntime]
-  createThread(clientThread, runClient, addr runtime)
-  runtime.server.serve(Port(port))
-  joinThread(clientThread)
-  runtime.shutdown()
+  runClient()
+  #var runtime = newServerRuntime()
+  #var clientThread: Thread[ptr ServerRuntime]
+  #createThread(clientThread, runClient, addr runtime)
+  #runtime.server.serve(Port(port))
+  #joinThread(clientThread)
+  #runtime.shutdown()
   GC_fullCollect()
 
   echo "WebSocket server responded with heartbeats and pong successfully"

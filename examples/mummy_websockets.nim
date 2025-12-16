@@ -82,11 +82,13 @@ proc websocketHandler(websocket: WebSocket, event: WebSocketEvent, message: Mess
 
   case event:
   of OpenEvent:
+    echo "OpenEvent: ", message
     let heartbeats = lookupAgentProxy(sn"HeatBeats", HeartBeats)
     if heartbeats != nil:
       emit heartbeats.add(websocket)
 
   of MessageEvent:
+    echo "MessageEvent: ", message
     let name = websocket.findChannelName()
     if name == "":
       echo "No clientToChannel entry at websocket open"
@@ -95,9 +97,11 @@ proc websocketHandler(websocket: WebSocket, event: WebSocketEvent, message: Mess
       emit channel.publish(message)
 
   of ErrorEvent:
+    echo "ErrorEvent: ", message
     discard
 
   of CloseEvent:
+    echo "ErrorEvent: ", message
     let name = websocket.findChannelName()
     if name == "":
       echo "No clientToChannel entry at websocket open"
@@ -107,12 +111,12 @@ proc websocketHandler(websocket: WebSocket, event: WebSocketEvent, message: Mess
 
 proc findChannelOrCreate(name: string): AgentProxy[Channel] {.gcsafe.} =
   let cn = name.toSigName()
-  result = lookupAgentProxy(cn, Channel)
-  if result.isNil:
+  if not lookupGlobalName(cn).isSome:
     let thr = newSigilSelectorThread()
     thr.start()
     var channel = Channel(name: name, thr: thr)
     registerGlobalName(cn, channel.moveToThread(thr))
+  result = lookupAgentProxy(cn, Channel)
 
 proc upgradeHandler(request: Request) {.gcsafe.} =
 
@@ -122,6 +126,7 @@ proc upgradeHandler(request: Request) {.gcsafe.} =
 
   let websocket = request.upgradeToWebSocket()
   let channel = findChannelOrCreate(channelName)
+  doAssert channel != nil
   emit channel.joining(websocket)
 
 ## ====================== Main Setup ====================== ##

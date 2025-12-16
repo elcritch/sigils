@@ -164,7 +164,7 @@ proc exec*(thread: SigilThreadPtr, sig: ThreadSignal) {.gcsafe.} =
     var item = sig.item
     thread.references[item.unsafeWeakRef()] = move item
   of AddSub:
-    echo "\t threadExec:subscribe: ",
+    debugPrint "\t threadExec:subscribe: ",
       " src: ", $sig.add.src,
       " tgt: ", $sig.add.tgt,
       " srcExists: ", sig.add.src in thread.references
@@ -180,7 +180,7 @@ proc exec*(thread: SigilThreadPtr, sig: ThreadSignal) {.gcsafe.} =
                                             " to " & $sig.add.tgt)
     thread.gcCollectReferences()
   of DelSub:
-    echo "\t threadExec:subscribe: ",
+    debugPrint "\t threadExec:subscribe: ",
       " src: ", $sig.del.src,
       " tgt: ", $sig.del.tgt,
       " srcExists: ", sig.del.src in thread.references
