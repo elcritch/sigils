@@ -36,11 +36,11 @@ proc registerGlobalAgent*[T](
         agent: proxy.remote,
         typeId: getTypeId(T),
       )
-      proxy.remoteThread.send(ThreadSignal(kind: AddSubscription,
-                                      src: proxy.remote,
-                                      name: sn"sigils:registryKeepAlive",
-                                      subTgt: proxy.remote,
-                                      subProc: keepAlive))
+      let sub = ThreadSub(src: proxy.remote,
+                          name: sn"sigils:registryKeepAliveProxy",
+                          tgt: proxy.remote,
+                          fn: keepAlive)
+      proxy.remoteThread.send(ThreadSignal(kind: AddSub, add: sub))
 
 proc registerGlobalName*[T](
     name: SigilName, proxy: AgentProxy[T], override = false
