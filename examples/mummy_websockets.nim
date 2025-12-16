@@ -48,14 +48,14 @@ proc toBucketId*(hb: HeartBeats, websocket: WebSocket): int =
   result = abs(websocket.hash()) mod hb.buckets.len()
 
 proc sendBucket*(self: HeartBeats, bucket: int) {.slot.} =
-  echo "Run heartbeat: ", bucket
   for websocket in self.buckets[bucket]:
     websocket.send(heartbeatMessage)
 
-  if bucket < 30:
+  if bucket < self.buckets.len() - 1:
     emit self.heartbeat(bucket + 1)
 
 proc runHeartbeat*(self: HeartBeats) {.slot.} =
+  echo "Run heartbeat..."
   self.sendBucket(0)
 
 proc start*(self: HeartBeats) {.slot.} =
