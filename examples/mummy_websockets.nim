@@ -108,13 +108,18 @@ proc websocketHandler(websocket: WebSocket, event: WebSocketEvent, message: Mess
       emit heartbeats.add(websocket)
 
   of MessageEvent:
-    echo "MessageEvent: ", message
-    let name = websocket.findChannelName()
-    if name == "":
-      echo "No clientToChannel entry at websocket open"
+    if message.kind == Ping:
+      websocket.send("", Pong)
+    elif message.kind == Pong:
+      discard
     else:
-      let channel = lookupAgentProxy(name.toSigilName, Channel)
-      emit channel.publish(message)
+      echo "MessageEvent: ", message
+      let name = websocket.findChannelName()
+      if name == "":
+        echo "No clientToChannel entry at websocket open"
+      else:
+        let channel = lookupAgentProxy(name.toSigilName, Channel)
+        emit channel.publish(message)
 
   of ErrorEvent:
     echo "ErrorEvent: ", message
