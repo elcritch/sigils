@@ -96,7 +96,7 @@ All cross-thread messages are isolated (`isolateRuntime`) before enqueueing to e
 
 ## Proxy Call Semantics
 
-`AgentProxyShared.callMethod(req, slot)` routes calls based on `slot`:
+`AgentProxyShared.callMethod(req, slot)` routes calls based on `slot` sentinal values:
 
 - `slot == remoteSlot` — event forwarding from the remote agent back to the local side.
   - Wraps as `Call(localSlot, req, tgt = proxyTwin)` and enqueues into `proxyTwin.inbox` on the other thread with `Trigger`.
@@ -106,6 +106,12 @@ All cross-thread messages are isolated (`isolateRuntime`) before enqueueing to e
 
 - Otherwise — regular slot call bound for the remote agent.
   - Wraps as `Call(slot, req, tgt = proxy.remote)`, enqueues into `proxyTwin.inbox` (on remote), and `Trigger`s the remote thread.
+
+**Note**:
+  The "local" proxy holds the slots to be called both remotely and on incoming signals.
+  This is so that the remote proxy only knows to send and trigger but the local proxies
+  handle which slots and subscriptions get called. This means we don't need to lock
+  the remote proxy to add/del subscriptions.
 
 Locks are used to safely access `proxyTwin` and to coordinate with the destination thread's `signaled` set.
 
