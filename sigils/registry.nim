@@ -24,6 +24,24 @@ type SetupProxyParams = object
 proc keepAlive(context: Agent, params: SigilParams) {.nimcall.} =
   raise newException(AssertionDefect, "this should never be called!")
 
+proc registerGlobalAgent*[T](
+    name: SigilName, proxy: AgentProxy[T], override = false
+) {.gcsafe.} =
+  withLock regLock:
+    {.cast(gcsafe).}:
+      if not override and name in registry:
+        raise newException(ValueError, "Name already registered! Name: " & $name)
+      registry[name] = AgentLocation(
+        thread: proxy.remoteThread,
+        agent: proxy.remote,
+        typeId: getTypeId(T),
+      )
+      proxy.remoteThread.send(ThreadSignal(kind: AddSubscription,
+                                      src: proxy.remote,
+                                      name: sn"sigils:registryKeepAlive",
+                                      subTgt: proxy.remote,
+                                      subProc: keepAlive))
+
 proc registerGlobalName*[T](
     name: SigilName, proxy: AgentProxy[T], override = false
 ) {.gcsafe.} =
@@ -36,24 +54,22 @@ proc registerGlobalName*[T](
         agent: proxy.remote,
         typeId: getTypeId(T),
       )
-      proxy.remoteThread.send(ThreadSignal(kind: Trigger))
-      proxy.remoteThread.send(ThreadSignal(kind: AddSubscription,
-                                      src: proxy.remote,
-                                      name: sn"sigils:registryKeepAlive",
-                                      subTgt: proxy.remote,
-                                      subProc: keepAlive))
-
+      let sub = ThreadSub(src: proxy.remote,
+                          name: sn"sigils:registryKeepAlive",
+                          tgt: proxy.remote,
+                          fn: keepAlive)
+      proxy.remoteThread.send(ThreadSignal(kind: AddSub, add: sub))
 
 proc removeGlobalName*[T](name: SigilName, proxy: AgentProxy[T]): bool {.gcsafe.} =
   withLock regLock:
     {.cast(gcsafe).}:
       if name in registry:
-        registry.del(name)
-        #proxy.remoteThread.send(ThreadSignal(kind: DelSubscription,
-        #                                     src: proxy.remote,
-        #                                     name: sn"sigils:registryKeepAlive",
-        #                                     subTgt: proxy.remote,
-        #                                     subProc: keepAlive))
+        let loc = registry[name]
+        let sub = ThreadSub(src: proxy.remote,
+                            name: sn"sigils:registryKeepAlive",
+                            tgt: proxy.remote,
+                            fn: keepAlive)
+        loc.thread.send(ThreadSignal(kind: DelSub, del: sub))
         return true
       return false
 
@@ -105,11 +121,11 @@ proc lookupAgentProxyImpl[T](location: AgentLocation, tp: typeof[T], cache = tru
 
   let remoteProxyRef = remoteProxy.unsafeWeakRef().toKind(AgentProxyShared)
   location.thread.send(ThreadSignal(kind: Move, item: move remoteProxy))
-  location.thread.send(ThreadSignal(kind: AddSubscription,
-                                    src: location.agent,
-                                    name: AnySigilName,
-                                    subTgt: remoteProxyRef.toKind(Agent),
-                                    subProc: remoteSlot))
+  let sub = ThreadSub(src: location.agent,
+                      name: AnySigilName,
+                      tgt: remoteProxyRef.toKind(Agent),
+                      fn: remoteSlot)
+  location.thread.send(ThreadSignal(kind: AddSub, add: sub))
 
   if cache:
     proxyCache[key] = AgentProxyShared(result)
