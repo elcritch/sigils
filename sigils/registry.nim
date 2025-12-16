@@ -25,28 +25,6 @@ type SetupProxyParams = object
 proc keepAlive(context: Agent, params: SigilParams) {.nimcall.} =
   raise newException(AssertionDefect, "this should never be called!")
 
-proc initProxy[T](proxy: var AgentProxy[T],
-                  agent: WeakRef[Agent],
-                  thread: SigilThreadPtr,
-                  isRemote = false, inbox = 1_000) =
-  assert agent[] of T
-  proxy = AgentProxy[T](
-    remote: agent,
-    remoteThread: thread,
-    inbox: newChan[ThreadSignal](inbox),
-  )
-  proxy.lock.initLock()
-  when defined(sigilsDebug):
-    let aid = $agent
-    if remote:
-      proxy.debugName = "remoteProxy::" & aid
-    else:
-      proxy.debugName = "localProxy::" & aid
-
-proc bindProxies[T](a, b: AgentProxy[T]) =
-  a.proxyTwin = b.unsafeWeakRef().toKind(AgentProxyShared)
-  b.proxyTwin = a.unsafeWeakRef().toKind(AgentProxyShared)
-
 proc registerGlobalAgent*[T](
     name: SigilName, agent: T, override = false
 ) {.gcsafe.} =

@@ -144,9 +144,29 @@ iterator findSubscribedTo(
     if item.subscription.tgt == agent:
       yield (item.signal, Subscription(tgt: other, slot: item.subscription.slot))
 
+proc initProxy*[T](proxy: var AgentProxy[T],
+                  agent: WeakRef[Agent],
+                  thread: SigilThreadPtr,
+                  isRemote = false, inbox = 1_000) =
+  assert agent[] of T
+  proxy = AgentProxy[T](
+    remote: agent,
+    remoteThread: thread,
+    inbox: newChan[ThreadSignal](inbox),
+  )
+  proxy.lock.initLock()
+  when defined(sigilsDebug):
+    if remote:
+      proxy.debugName = "remoteProxy::" & agent.debugName
+    else:
+      proxy.debugName = "localProxy::" & agent.debugName
+
+proc bindProxies*[T](a, b: AgentProxy[T]) =
+  a.proxyTwin = b.unsafeWeakRef().toKind(AgentProxyShared)
+  b.proxyTwin = a.unsafeWeakRef().toKind(AgentProxyShared)
 
 proc moveToThread*[T: Agent, R: SigilThread](
-    agentTy: var T, thread: ptr R
+    agentTy: var T, thread: ptr R, inbox = 1_000
 ): AgentProxy[T] {.gcsafe.} =
   ## move agent to another thread
   debugPrint "moveToThread: ", $agentTy.unsafeWeakRef()
@@ -161,26 +181,12 @@ proc moveToThread*[T: Agent, R: SigilThread](
     agent = agentTy.unsafeWeakRef.asAgent()
 
   var
-    localProxy = AgentProxy[T](
-      remote: agent,
-      remoteThread: thread.toSigilThread(),
-      inbox: newChan[ThreadSignal](1_000),
-    )
+    localProxy: AgentProxy[T]
+    remoteProxy: AgentProxy[T]
 
-  var
-    remoteProxy = AgentProxy[T](
-      remote: agent, remoteThread: ct, inbox: newChan[ThreadSignal](1_000)
-    )
-
-
-
-  localProxy.lock.initLock()
-  remoteProxy.lock.initLock()
-  localProxy.proxyTwin = remoteProxy.unsafeWeakRef().toKind(AgentProxyShared)
-  remoteProxy.proxyTwin = localProxy.unsafeWeakRef().toKind(AgentProxyShared)
-  when defined(sigilsDebug):
-    localProxy.debugName = "localProxy::" & agentTy.debugName
-    remoteProxy.debugName = "remoteProxy::" & agentTy.debugName
+  localProxy.initProxy(agent, thread.toSigilThread(), inbox = inbox)
+  remoteProxy.initProxy(agent, ct, inbox = inbox)
+  bindProxies(localProxy, remoteProxy)
 
   # handle things subscribed to `agent`, ie the inverse
   var
