@@ -25,23 +25,29 @@ type SetupProxyParams = object
 proc keepAlive(context: Agent, params: SigilParams) {.nimcall.} =
   raise newException(AssertionDefect, "this should never be called!")
 
+proc registerGlobalNameImpl[T](
+    name: SigilName, proxy: AgentProxy[T], override = false
+) {.gcsafe.} =
+  {.cast(gcsafe).}:
+    if not override and name in registry:
+      raise newException(ValueError, "Name already registered! Name: " & $name)
+    registry[name] = AgentLocation(
+      thread: proxy.remoteThread,
+      agent: proxy.remote,
+      typeId: getTypeId(T),
+    )
+    let sub = ThreadSub(src: proxy.remote,
+                        name: sn"sigils:registryKeepAlive",
+                        tgt: proxy.remote,
+                        fn: keepAlive)
+    proxy.remoteThread.send(ThreadSignal(kind: AddSub, add: sub))
+
 proc registerGlobalName*[T](
     name: SigilName, proxy: AgentProxy[T], override = false
 ) {.gcsafe.} =
   withLock regLock:
     {.cast(gcsafe).}:
-      if not override and name in registry:
-        raise newException(ValueError, "Name already registered! Name: " & $name)
-      registry[name] = AgentLocation(
-        thread: proxy.remoteThread,
-        agent: proxy.remote,
-        typeId: getTypeId(T),
-      )
-      let sub = ThreadSub(src: proxy.remote,
-                          name: sn"sigils:registryKeepAlive",
-                          tgt: proxy.remote,
-                          fn: keepAlive)
-      proxy.remoteThread.send(ThreadSignal(kind: AddSub, add: sub))
+      registerGlobalNameImpl(name, proxy, override)
 
 proc registerGlobalAgent*[T](
     name: SigilName, thread: SigilThreadPtr, agent: var T, override = false
@@ -50,7 +56,7 @@ proc registerGlobalAgent*[T](
     {.cast(gcsafe).}:
       let proxy = agent.moveToThread(thread)
       let remoteProxy = proxy.proxyTwin
-      registerGlobalName(name, proxy, override = override)
+      registerGlobalNameImpl(name, proxy, override = override)
 
       if not proxy.proxyTwin.isNil:
         withLock proxy.proxyTwin[].lock:
