@@ -104,6 +104,10 @@ method callMethod*(
     callSlots(proxy, req)
   else:
     when defined(sigilsAllRemoteSlotsDeprecated):
+      # Note: the method where we only use localSlot and remoteSlot sort of works
+      # but it fails tsan due to data races on the `addSubscriptions`
+      # This method of using 'forwarding' the slot lets the "local proxy" handle
+      # keep track of what slots to call on the remote agent
       doAssert false
     var req = req.duplicate()
     debugPrint "\t callMethod:agentProxy:InitCall:Outbound: ",
