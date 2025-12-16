@@ -25,35 +25,6 @@ type SetupProxyParams = object
 proc keepAlive(context: Agent, params: SigilParams) {.nimcall.} =
   raise newException(AssertionDefect, "this should never be called!")
 
-proc registerGlobalAgent*[T](
-    name: SigilName, agent: T, override = false
-) {.gcsafe.} =
-  withLock regLock:
-    {.cast(gcsafe).}:
-      if not override and name in registry:
-        raise newException(ValueError, "Name already registered! Name: " & $name)
-
-      let remoteProxyRef = remoteProxy.unsafeWeakRef().toKind(AgentProxyShared)
-      location.thread.send(ThreadSignal(kind: Move, item: move remoteProxy))
-      let sub = ThreadSub(src: location.agent,
-                          name: AnySigilName,
-                          tgt: remoteProxyRef.toKind(Agent),
-                          fn: remoteSlot)
-      location.thread.send(ThreadSignal(kind: AddSub, add: sub))
-
-      registry[name] = AgentLocation(
-        thread: proxy.remoteThread,
-        agent: proxy.remote,
-        typeId: getTypeId(T),
-        isProxy: true
-      )
-
-      let sub = ThreadSub(src: proxy.remote,
-                          name: sn"sigils:registryKeepAliveProxy",
-                          tgt: proxy.remote,
-                          fn: keepAlive)
-      proxy.remoteThread.send(ThreadSignal(kind: AddSub, add: sub))
-
 proc registerGlobalName*[T](
     name: SigilName, proxy: AgentProxy[T], override = false
 ) {.gcsafe.} =
@@ -71,6 +42,15 @@ proc registerGlobalName*[T](
                           tgt: proxy.remote,
                           fn: keepAlive)
       proxy.remoteThread.send(ThreadSignal(kind: AddSub, add: sub))
+
+proc registerGlobalAgent*[T](
+    name: SigilName, thread: SigilThreadPtr, agent: var T, override = false
+) {.gcsafe.} =
+  withLock regLock:
+    {.cast(gcsafe).}:
+      let proxy = agent.moveToThread(thread)
+      registerGlobalName(name, proxy, override = override)
+
 
 proc removeGlobalName*[T](name: SigilName, proxy: AgentProxy[T]): bool {.gcsafe.} =
   withLock regLock:
