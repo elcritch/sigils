@@ -31,9 +31,10 @@ initLock(lock)
 channelHubThr.start()
 heartbeatThr.start()
 
-proc findChannelName*(ws: WebSocket): string =
+proc findChannelName*(ws: WebSocket): string {.gcsafe.} =
   withLock(lock):
-    result = clientToChannel.getOrDefault(ws, "")
+    {.cast(gcsafe).}:
+      result = clientToChannel.getOrDefault(ws, "")
 
 ## ====================== HeartBeat ====================== ##
 type
@@ -76,7 +77,7 @@ proc send*(self: Channel, message: Message) {.slot.} =
   for websocket in self.clients:
     websocket.send(message.data, message.kind)
 
-proc websocketHandler(websocket: WebSocket, event: WebSocketEvent, message: Message) =
+proc websocketHandler(websocket: WebSocket, event: WebSocketEvent, message: Message) {.gcsafe.} =
   startLocalThreadDefault()
 
   case event:
@@ -130,10 +131,12 @@ proc main() =
 
   var router: Router
   router.get("/*", upgradeHandler)
+  let wsHandler = proc(ws: WebSocket, event: WebSocketEvent, message: Message) {.closure, gcsafe.} =
+    websocketHandler(ws, event, message)
 
   let server = newServer(
     router,
-    websocketHandler,
+    wsHandler,
     workerThreads = workerThreads
   )
 
