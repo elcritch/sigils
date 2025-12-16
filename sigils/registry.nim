@@ -34,11 +34,6 @@ proc registerGlobalName*[T](name: SigilName, proxy: AgentProxy[T],
       agent: proxy.remote,
       typeId: getTypeId(T),
     )
-    #proxy.remoteThread.extReference(proxy.remote)
-    #withLock proxy.lock:
-    #  if not proxy.proxyTwin.isNil:
-    #    withLock proxy.remoteThread[].signaledLock:
-    #      proxy.remoteThread[].signaled.incl(proxy.proxyTwin.toKind(AgentRemote))
     proxy.remoteThread.send(ThreadSignal(kind: Trigger))
     proxy.remoteThread.send(ThreadSignal(kind: AddSubscription,
                                     src: proxy.remote,
@@ -51,6 +46,11 @@ proc removeGlobalName*[T](name: SigilName, proxy: AgentProxy[T]): bool =
   withLock regLock:
     if name in registry:
       registry.del(name)
+      #proxy.remoteThread.send(ThreadSignal(kind: DelSubscription,
+      #                                     src: proxy.remote,
+      #                                     name: sn"sigils:registryKeepAlive",
+      #                                     subTgt: proxy.remote,
+      #                                     subProc: keepAlive))
       return true
     return false
 
@@ -59,7 +59,7 @@ proc lookupGlobalName*(name: SigilName): Option[AgentLocation] =
     if name in registry:
       result = some registry[name]
 
-proc lookupAgentProxyImpl[T](location: AgentLocation, tp: typeof[T]): AgentProxy[T] =
+proc lookupAgentProxyImpl[T](location: AgentLocation, tp: typeof[T], cache = true): AgentProxy[T] =
   if getTypeId(T) != location.typeId:
     raise newException(ValueError, "can't create proxy of the correct type!")
   if location.thread.isNil or location.agent.isNil:
@@ -107,7 +107,8 @@ proc lookupAgentProxyImpl[T](location: AgentLocation, tp: typeof[T]): AgentProxy
                                     subTgt: remoteProxyRef.toKind(Agent),
                                     subProc: remoteSlot))
 
-  proxyCache[key] = AgentProxyShared(result)
+  if cache:
+    proxyCache[key] = AgentProxyShared(result)
 
 proc lookupAgentProxy*[T](name: SigilName, tp: typeof[T]): AgentProxy[T] =
   withLock regLock:
