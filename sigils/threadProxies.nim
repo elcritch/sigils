@@ -103,7 +103,7 @@ method callMethod*(
     debugPrint "\t proxy:callMethod:localSlot: "
     callSlots(proxy, req)
   else:
-    when defined(sigilsAllRemoteSlots):
+    when defined(sigilsAllRemoteSlotsDeprecated):
       doAssert false
     var req = req.duplicate()
     debugPrint "\t callMethod:agentProxy:InitCall:Outbound: ",
@@ -207,7 +207,7 @@ proc moveToThread*[T: Agent, R: SigilThread](
   # update subscriptions agent is listening to use the local proxy to send events
   var listenSubs = false
   for item in oldListeningSubs:
-    when defined(sigilsAllRemoteSlots):
+    when defined(sigilsAllRemoteSlotsDeprecated):
       item.subscription.tgt[].addSubscription(item.signal, localProxy, remoteSlot)
       remoteProxy.addSubscription(item.signal, agentTy, item.subscription.slot)
     else:
@@ -264,7 +264,7 @@ template connectThreaded*[T, S](
   checkSignalTypes(a, signal, T(), slot, acceptVoidSlot)
   assert not localProxy.proxyTwin.isNil
   assert not localProxy.remote.isNil
-  when defined(sigilsAllRemoteSlots):
+  when defined(sigilsAllRemoteSlotsDeprecated):
     a.addSubscription(signalName(signal), localProxy, remoteSlot)
     withLock localProxy.proxyTwin[].lock:
       localProxy.proxyTwin[].addSubscription(signalName(signal), localProxy.remote[], slot)
@@ -285,7 +285,7 @@ template connectThreaded*[T](
   assert not localProxy.remote.isNil
   let agentSlot = `slot`(T)
   checkSignalTypes(a, signal, T(), agentSlot, acceptVoidSlot)
-  when defined(sigilsAllRemoteSlots):
+  when defined(sigilsAllRemoteSlotsDeprecated):
     a.addSubscription(signalName(signal), localProxy, remoteSlot)
     withLock localProxy.proxyTwin[].lock:
       localProxy.proxyTwin[].addSubscription(signalName(signal), localProxy.remote[], agentSlot)
