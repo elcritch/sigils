@@ -16,162 +16,95 @@ const
   port* = 8123 # The HTTP port to listen on.
   heartbeatMessage* = """{"type":"heartbeat"}""" # The JSON heartbeat message.
 
+var
+  channelHubThr* = newSigilSelectorThread()
+  heartbeatThr* = newSigilSelectorThread()
+
+## ====================== HeartBeat ====================== ##
 type
-  ServerEvents {.acyclic.} = ref object of Agent
+  HeartBeats {.acyclic.} = ref object of Agent
+    buckets: array[30, HashSet[WebSocket]]
 
-  ChannelHub {.acyclic.} = ref object of Agent
-    clientToChannel: Table[WebSocket, string]
-    channels: Table[string, HashSet[WebSocket]]
-    heartbeatBuckets: array[30, HashSet[WebSocket]]
-    nextBucket: int
+proc toBucketId*(hb: HeartBeats, websocket: WebSocket): int =
+  result = abs(websocket.hash()) mod hb.buckets.len()
 
-  ServerRuntime* = object
-    server*: Server
-    hubThread*: SigilSelectorThreadPtr
-    heartbeatThread*: SigilSelectorThreadPtr
-    heartbeatTimer*: SigilTimer
-    hubProxy*: AgentProxy[ChannelHub]
-    serverEvents*: ServerEvents
+proc start*(hb: HeartBeats) {.slot.} =
+  hub.heartbeatTimer = newSigilTimer(initDuration(seconds = 1))
 
-proc clientAnnounced*(events: ServerEvents, websocket: WebSocket, channel: string) {.signal.}
-proc socketOpened*(events: ServerEvents, websocket: WebSocket) {.signal.}
-proc socketClosed*(events: ServerEvents, websocket: WebSocket) {.signal.}
-
-proc setup*(hub: ChannelHub) {.slot.} =
-  hub.clientToChannel = initTable[WebSocket, string]()
-  hub.channels = initTable[string, HashSet[WebSocket]]()
-  hub.heartbeatBuckets = default(array[30, HashSet[WebSocket]])
-  hub.nextBucket = 0
-
-proc registerClient*(hub: ChannelHub, websocket: WebSocket, channel: string) {.slot.} =
-  hub.clientToChannel[websocket] = channel
-
-proc openClient*(hub: ChannelHub, websocket: WebSocket) {.slot.} =
-  let channel = hub.clientToChannel.getOrDefault(websocket, "")
-  if channel.len == 0:
-    echo "No clientToChannel entry at websocket open"
-    return
-
-  var clients = hub.channels.mgetOrPut(channel, initHashSet[WebSocket]())
-  clients.incl(websocket)
-
-  let bucket = abs(websocket.hash()) mod hub.heartbeatBuckets.len
-  hub.heartbeatBuckets[bucket].incl(websocket)
-  hub.nextBucket = bucket
-
-  websocket.send(heartbeatMessage)
-
-proc closeClient*(hub: ChannelHub, websocket: WebSocket) {.slot.} =
-  if websocket notin hub.clientToChannel:
-    echo "No clientToChannel entry at websocket close"
-    return
-
-  let channel = hub.clientToChannel[websocket]
-  hub.clientToChannel.del(websocket)
-
-  if channel in hub.channels:
-    hub.channels[channel].excl(websocket)
-    let bucket = abs(websocket.hash()) mod hub.heartbeatBuckets.len
-    hub.heartbeatBuckets[bucket].excl(websocket)
-    if hub.channels[channel].len == 0:
-      hub.channels.del(channel)
-  else:
-    echo "No channels entry for channel at websocket close"
-
-proc publish*(hub: ChannelHub, channel: string, message: string) {.slot.} =
-  if channel in hub.channels and hub.channels[channel].len > 0:
-    for websocket in hub.channels[channel]:
-      websocket.send(message, TextMessage)
-  else:
-    echo "Dropped message to channel without clients"
-
-proc sendHeartbeat*(hub: ChannelHub) {.slot.} =
-  let bucket = hub.nextBucket
-  for websocket in hub.heartbeatBuckets[bucket]:
+proc sendHeartbeats*(hb: HeartBeats, bucket: int) {.slot.} =
+  for websocket in hb.buckets[bucket]:
     websocket.send(heartbeatMessage)
-  hub.nextBucket = (hub.nextBucket + 1) mod hub.heartbeatBuckets.len
 
-proc makeUpgradeHandler(events: ServerEvents): RequestHandler =
-  result = proc(request: Request) {.gcsafe.} =
-    startLocalThreadDefault()
-    let channel =
-      if request.uri.len > 1: request.uri[1 .. ^1] # Everything after / is the channel name.
-      else: ""
-    let websocket = request.upgradeToWebSocket()
-    emit events.clientAnnounced(websocket, channel)
+## ====================== Channels ====================== ##
+type
+  Channel = ref object of Agent
+    name: string
+    clients: HashSet[WebSocket]
+    thr: SigilSelectorThreadPtr
 
-proc makeWebsocketHandler(events: ServerEvents): WebSocketHandler =
-  result = proc(
-    websocket: WebSocket,
-    event: WebSocketEvent,
-    message: Message
-  ) {.gcsafe.} =
-    startLocalThreadDefault()
-    case event:
-    of OpenEvent:
-      emit events.socketOpened(websocket)
+proc joined*(channel: ChannelHub, websocket: WebSocket) {.signal.}
 
-    of MessageEvent:
-      if message.kind == Ping:
-        websocket.send("", Pong)
+proc toSigName*(name: string): SignalName =
+  result = toSigilName("channel:" & name)
 
-    of ErrorEvent:
-      discard
+proc join*(self: Channel, websocket: WebSocket) {.slot.} =
+  self.clients.incl(websocket)
 
-    of CloseEvent:
-      emit events.socketClosed(websocket)
+proc publish*(clients: Channel, message: Message) {.slot.} =
+  for websocket in self.clients:
+    websocket.send(message.data, message.kind)
 
-proc newServerRuntime*(): ServerRuntime =
+proc websocketHandler(websocket: WebSocket, event: WebSocketEvent, message: Message) =
   startLocalThreadDefault()
 
-  result.hubThread = newSigilSelectorThread()
-  var hub = ChannelHub()
-  result.hubProxy = hub.moveToThread(result.hubThread)
-  result.serverEvents = ServerEvents()
+  case event:
+  of OpenEvent:
+    emit heartbeats.join(websocket)
 
-  connectThreaded(result.hubThread.agent, started, result.hubProxy, ChannelHub.setup())
-  connectThreaded(result.serverEvents, clientAnnounced, result.hubProxy, ChannelHub.registerClient())
-  connectThreaded(result.serverEvents, socketOpened, result.hubProxy, ChannelHub.openClient())
-  connectThreaded(result.serverEvents, socketClosed, result.hubProxy, ChannelHub.closeClient())
+  of MessageEvent:
+    emit channelP.publish(message)
 
-  result.hubThread.start()
+  of ErrorEvent:
+    discard
 
-  result.heartbeatThread = newSigilSelectorThread()
-  result.heartbeatThread.start()
+  of CloseEvent:
+    emit events.closed(websocket)
 
-  result.heartbeatTimer = newSigilTimer(initDuration(seconds = 1))
-  connectThreaded(result.heartbeatTimer, timeout, result.hubProxy, ChannelHub.sendHeartbeat())
-  start(result.heartbeatTimer, result.heartbeatThread)
+proc findChannelOrCreate(name: string): AgentProxy[Channel] =
+  let cn = name.toSigName()
+  result = lookupAgentProxy(cn, Channel)
+  if result.isNil:
+    let thr = newSigilSelectorThread()
+    thr.start()
+    var channel = Channel(name: name, thr: thr)
+    registerGlobalName(cn, thr.moveToThread(channel))
 
-  let upgradeHandler = makeUpgradeHandler(result.serverEvents)
-  let websocketHandler = makeWebsocketHandler(result.serverEvents)
+proc upgradeHandler(request: Request) =
+  let clientHub = lookupAgentProxy(sn"ChannelHub", ChannelHub)
+
+  let channelName =
+    if request.uri.len > 1: request.uri[1 .. ^1] # Everything after / is the channel name.
+    else: ""
+
+  let websocket = request.upgradeToWebSocket()
+  let channel = findChannelOrCreate(channelName)
+  emit channel.joined(websocket)
+
+## ====================== Main Setup ====================== ##
+
+proc main() =
+  echo "Serving on localhost port ", port
 
   var router: Router
   router.get("/*", upgradeHandler)
 
-  result.server = newServer(
+  let server = newServer(
     router,
     websocketHandler,
     workerThreads = workerThreads
   )
 
-proc shutdown*(runtime: var ServerRuntime) =
-  if runtime.heartbeatTimer != nil and runtime.heartbeatThread != nil:
-    cancel(runtime.heartbeatTimer, runtime.heartbeatThread)
-
-  if runtime.heartbeatThread != nil:
-    runtime.heartbeatThread.stop()
-    runtime.heartbeatThread.join()
-
-  if runtime.hubThread != nil:
-    runtime.hubThread.stop()
-    runtime.hubThread.join()
-
-proc main() =
-  var runtime = newServerRuntime()
-  echo "Serving on localhost port ", port
-  runtime.server.serve(Port(port))
-  runtime.shutdown()
+  server.serve(Port(port))
 
 when isMainModule:
   main()
