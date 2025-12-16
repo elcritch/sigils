@@ -17,6 +17,7 @@ Signals travel back the same way. When an agent running on a worker thread emits
 - Cross-thread work is executed by a per-thread scheduler that processes messages serially.
 - Worker threads run the scheduler loop automatically; threads without a built-in loop must periodically poll to process forwarded events.
 - Cleanup is synchronized: moved agents are owned by the destination thread, and proxies send dereference messages so the destination thread can release remote state.
+- Subscriptions and slots are configured on the local proxy.
 
 ## Mental Model
 
