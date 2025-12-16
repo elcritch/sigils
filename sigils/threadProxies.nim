@@ -109,21 +109,22 @@ method callMethod*(
       # This method of using 'forwarding' the slot lets the "local proxy" handle
       # keep track of what slots to call on the remote agent
       doAssert false
-    var req = req.duplicate()
-    debugPrint "\t callMethod:agentProxy:InitCall:Outbound: ",
-      req.procName, " proxy:remote:obj: ", proxy.remote.getSigilId()
-    var msg = isolateRuntime ThreadSignal(
-      kind: Call, slot: slot, req: move req, tgt: proxy.remote
-    )
-    when defined(sigilNonBlockingThreads):
-      discard
     else:
-      debugPrint "\t callMethod:agentProxy:proxyTwin: ", proxy.proxyTwin
-      withLock proxy.lock:
-        proxy.proxyTwin[].inbox.send(msg)
-        withLock proxy.remoteThread[].signaledLock:
-          proxy.remoteThread[].signaled.incl(proxy.proxyTwin.toKind(AgentRemote))
-      proxy.remoteThread.send(ThreadSignal(kind: Trigger))
+      var req = req.duplicate()
+      debugPrint "\t callMethod:agentProxy:InitCall:Outbound: ",
+        req.procName, " proxy:remote:obj: ", proxy.remote.getSigilId()
+      var msg = isolateRuntime ThreadSignal(
+        kind: Call, slot: slot, req: move req, tgt: proxy.remote
+      )
+      when defined(sigilNonBlockingThreads):
+        discard
+      else:
+        debugPrint "\t callMethod:agentProxy:proxyTwin: ", proxy.proxyTwin
+        withLock proxy.lock:
+          proxy.proxyTwin[].inbox.send(msg)
+          withLock proxy.remoteThread[].signaledLock:
+            proxy.remoteThread[].signaled.incl(proxy.proxyTwin.toKind(AgentRemote))
+        proxy.remoteThread.send(ThreadSignal(kind: Trigger))
 
 method removeSubscriptionsFor*(
     self: AgentProxyShared, subscriber: WeakRef[Agent]
