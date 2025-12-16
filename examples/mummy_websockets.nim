@@ -1,8 +1,8 @@
 import mummy, mummy/routers
-import std/[hashes, sets, tables, times]
+import std/[hashes, sets, tables, locks, times]
 
-import sigils
-import sigils/[threads, threadSelectors, registry]
+import ../sigils
+import ../sigils/[threads, threadSelectors, registry]
 
 ## This is a simple websocket server that uses Sigils to manage its heartbeat
 ## timer on a dedicated selector thread.
@@ -22,6 +22,18 @@ const
 var
   channelHubThr* = newSigilSelectorThread()
   heartbeatThr* = newSigilSelectorThread()
+
+var
+  lock: Lock # The lock for global memory, just one lock is fine.
+  clientToChannel: Table[WebSocket, string] # Store what channel this websocket is subscribed to.
+
+initLock(lock)
+channelHubThr.start()
+heartbeatThr.start()
+
+proc findChannel*(ws: WebSocket): string =
+  withLock(lock):
+    result = clientToChannel.get(ws, "")
 
 ## ====================== HeartBeat ====================== ##
 type
@@ -72,8 +84,7 @@ proc websocketHandler(websocket: WebSocket, event: WebSocketEvent, message: Mess
 
   of MessageEvent:
     let channel = lookupAgentProxy(websocket.toChannel(), Channel)
-
-    emit channelP.publish(message)
+    emit channel.publish(message)
 
   of ErrorEvent:
     discard
