@@ -137,13 +137,6 @@ method unregisterSubscriber*(
     debugPrint "   unregisterSubscriber:proxy:ready: self:id: ", $self.unsafeWeakRef()
     unregisterSubscriberImpl(self, listener)
 
-iterator findSubscribedTo(
-    other: WeakRef[Agent], agent: WeakRef[Agent]
-): tuple[signal: SigilName, subscription: Subscription] =
-  for item in other[].subcriptions.mitems():
-    if item.subscription.tgt == agent:
-      yield (item.signal, Subscription(tgt: other, slot: item.subscription.slot))
-
 proc initProxy*[T](proxy: var AgentProxy[T],
                   agent: WeakRef[Agent],
                   thread: SigilThreadPtr,
@@ -164,6 +157,13 @@ proc initProxy*[T](proxy: var AgentProxy[T],
 proc bindProxies*[T](a, b: AgentProxy[T]) =
   a.proxyTwin = b.unsafeWeakRef().toKind(AgentProxyShared)
   b.proxyTwin = a.unsafeWeakRef().toKind(AgentProxyShared)
+
+iterator findSubscribedTo(
+    other: WeakRef[Agent], agent: WeakRef[Agent]
+): tuple[signal: SigilName, subscription: Subscription] =
+  for item in other[].subcriptions.mitems():
+    if item.subscription.tgt == agent:
+      yield (item.signal, Subscription(tgt: other, slot: item.subscription.slot))
 
 proc moveToThread*[T: Agent, R: SigilThread](
     agentTy: var T, thread: ptr R, inbox = 1_000
