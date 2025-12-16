@@ -50,6 +50,8 @@ threadC.start()
 
 var threadBRemoteReady: Atomic[int]
 threadBRemoteReady.store 0
+var threadCRemoteReady: Atomic[int]
+threadCRemoteReady.store 0
 
 var actionA = SomeTrigger.new()
 var actionCProx: AgentProxy[SomeTrigger]
@@ -122,6 +124,11 @@ suite "threaded agent slots":
         final, " id: ", $self.unsafeWeakRef(), " (th: ", getThreadId(), ")"
       self.value = final
       threadBRemoteReady.store 3
+    proc remoteCompleted2(self: SomeTarget, final: int) {.slot.} =
+      echo "Action done on remote! final: ",
+        final, " id: ", $self.unsafeWeakRef(), " (th: ", getThreadId(), ")"
+      self.value = final
+      threadCRemoteReady.store 3
 
     proc remoteRun(cc2: SomeTarget) {.slot.} =
       os.sleep(10)
@@ -132,6 +139,13 @@ suite "threaded agent slots":
         threadBRemoteReady.store 1
       else:
         threadBRemoteReady.store 2
+
+      let localCounterProxy2 = lookupAgentProxy(sn"globalCounter2", Counter)
+      if localCounterProxy2 != nil:
+        threadCRemoteReady.store 1
+        connectThreaded(localCounterProxy2, updated, cc2, remoteCompleted2(SomeTarget))
+      else:
+        threadCRemoteReady.store 2
 
     var c2 = SomeTarget.new()
     let c2p: AgentProxy[SomeTarget] = c2.moveToThread(threadB)
@@ -146,7 +160,12 @@ suite "threaded agent slots":
       doAssert i != 100_000_000
 
     check threadBRemoteReady.load() == 1
-    threadBRemoteReady.store 0
+
+    for i in 1..100_000_000:
+      if threadCRemoteReady.load() != 0: break
+      doAssert i != 100_000_000
+
+    check threadCRemoteReady.load() == 1
 
     GC_fullCollect()
 
@@ -160,10 +179,16 @@ suite "threaded agent slots":
       if localCounterProxy != nil:
         echo "connecting: ", self.unsafeWeakRef(), " to: ", localCounterProxy.remote, " th: ", " (th: ", getThreadId(), ")"
         connectThreaded(self, valueChanged, localCounterProxy, setValue(Counter))
-        #connect(self, valueChanged, self, valuePrint(SomeTrigger))
         threadBRemoteReady.store 1
       else:
         threadBRemoteReady.store 2
+
+      let localCounterProxy2 = lookupAgentProxy(sn"globalCounter2", Counter)
+      if localCounterProxy2 != nil:
+        connectThreaded(self, valueChanged, localCounterProxy2, setValue(Counter))
+        threadCRemoteReady.store 1
+      else:
+        threadCRemoteReady.store 2
 
     var actionC = SomeTrigger.new()
     #connect(actionC, valueChanged, actionC, valuePrint(SomeTrigger))
@@ -190,6 +215,8 @@ suite "threaded agent slots":
       emit c2.valueChanged(val)
 
     threadBRemoteReady.store 0
+    threadCRemoteReady.store 0
+
     connectThreaded(actionCProx, valueChanged, actionCProx, setValue(SomeTrigger))
     printConnections(actionCProx)
     emit actionCProx.valueChanged(1010)
@@ -199,4 +226,10 @@ suite "threaded agent slots":
       if threadBRemoteReady.load() == 3: break
 
     check threadBRemoteReady.load() == 3
+
+    for i in 1..1_000:
+      os.sleep(1)
+      if threadCRemoteReady.load() == 3: break
+
+    check threadCRemoteReady.load() == 3
 
