@@ -55,7 +55,7 @@ proc registerGlobalAgent*[T](
   withLock regLock:
     {.cast(gcsafe).}:
       let proxy = agent.moveToThread(thread)
-      let remoteProxy = proxy.proxyTwin
+      let remoteRouter = proxy.proxyTwin
       registerGlobalNameImpl(name, proxy, override = override)
 
       if not proxy.proxyTwin.isNil:
@@ -95,20 +95,20 @@ proc lookupAgentProxyImpl[T](location: AgentLocation, tp: typeof[T], cache = tru
       return cast[AgentProxy[T]](cached)
 
   let ct = getCurrentSigilThread()
-  var remoteProxy: AgentProxy[T]
+  var remoteRouter: AgentProxy[T]
 
   result.initProxy(location.agent, location.thread, isRemote = false)
-  remoteProxy.initProxy(location.agent, ct, isRemote = true)
-  bindProxies(result, remoteProxy)
+  remoteRouter.initProxy(location.agent, ct, isRemote = true)
+  bindProxies(result, remoteRouter)
 
   # Ensure the remote proxy is kept alive until it is wired on the remote thread.
-  remoteProxy.addSubscription(AnySigilName, result, localSlot)
+  remoteRouter.addSubscription(AnySigilName, result, localSlot)
 
-  let remoteProxyRef = remoteProxy.unsafeWeakRef().toKind(AgentProxyShared)
-  location.thread.send(ThreadSignal(kind: Move, item: move remoteProxy))
+  let remoteRouterRef = remoteRouter.unsafeWeakRef().toKind(AgentProxyShared)
+  location.thread.send(ThreadSignal(kind: Move, item: move remoteRouter))
   let sub = ThreadSub(src: location.agent,
                       name: AnySigilName,
-                      tgt: remoteProxyRef.toKind(Agent),
+                      tgt: remoteRouterRef.toKind(Agent),
                       fn: remoteSlot)
   location.thread.send(ThreadSignal(kind: AddSub, add: sub))
 

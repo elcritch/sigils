@@ -157,7 +157,7 @@ proc initProxy*[T](proxy: var AgentProxy[T],
   proxy.lock.initLock()
   when defined(sigilsDebug):
     if remote:
-      proxy.debugName = "remoteProxy::" & agent.debugName
+      proxy.debugName = "remoteRouter::" & agent.debugName
     else:
       proxy.debugName = "localProxy::" & agent.debugName
 
@@ -189,11 +189,11 @@ proc moveToThread*[T: Agent, R: SigilThread](
 
   var
     localProxy: AgentProxy[T]
-    remoteProxy: AgentProxy[T]
+    remoteRouter: AgentProxy[T]
 
   localProxy.initProxy(agent, thread.toSigilThread(), inbox = inbox)
-  remoteProxy.initProxy(agent, ct, inbox = inbox)
-  bindProxies(localProxy, remoteProxy)
+  remoteRouter.initProxy(agent, ct, inbox = inbox)
+  bindProxies(localProxy, remoteRouter)
 
   # handle things subscribed to `agent`, ie the inverse
   var
@@ -214,7 +214,7 @@ proc moveToThread*[T: Agent, R: SigilThread](
   for item in oldListeningSubs:
     when defined(sigilsAllRemoteSlotsDeprecated):
       item.subscription.tgt[].addSubscription(item.signal, localProxy, remoteSlot)
-      remoteProxy.addSubscription(item.signal, agentTy, item.subscription.slot)
+      remoteRouter.addSubscription(item.signal, agentTy, item.subscription.slot)
     else:
       item.subscription.tgt[].addSubscription(item.signal, localProxy, item.subscription.slot)
     listenSubs = true
@@ -224,10 +224,10 @@ proc moveToThread*[T: Agent, R: SigilThread](
   for item in oldSubscribers:
     localProxy.addSubscription(item.signal, item.subscription.tgt[], item.subscription.slot)
     hasSubs = true
-  agent[].addSubscription(AnySigilName, remoteProxy, remoteSlot)
+  agent[].addSubscription(AnySigilName, remoteRouter, remoteSlot)
 
   thread.send(ThreadSignal(kind: Move, item: move agentTy))
-  thread.send(ThreadSignal(kind: Move, item: move remoteProxy))
+  thread.send(ThreadSignal(kind: Move, item: move remoteRouter))
 
   return localProxy
 
@@ -245,7 +245,7 @@ template connectThreaded*[T, U, S](
   localProxy.addSubscription(signalName(signal), b, slot)
 
 template connectThreaded*[T, S](
-    remoteProxy: AgentProxy[T],
+    remoteRouter: AgentProxy[T],
     signal: typed,
     b: Agent,
     slot: Signal[S],
@@ -254,7 +254,7 @@ template connectThreaded*[T, S](
   ## connects `AgentProxy[T]` to remote signals
   ## 
   checkSignalTypes(T(), signal, b, slot, acceptVoidSlot)
-  let localProxy = Agent(remoteProxy)
+  let localProxy = Agent(remoteRouter)
   localProxy.addSubscription(signalName(signal), b, slot)
 
 template connectThreaded*[T, S](

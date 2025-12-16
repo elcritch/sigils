@@ -202,15 +202,15 @@ suite "threaded agent slots":
         subLocalProxy = Subscription(
           tgt: bp.unsafeWeakRef().asAgent(), slot: setValueGlobal(Counter)
         )
-        remoteProxy = bp.proxyTwin
+        remoteRouter = bp.proxyTwin
         subs = a.getSubscriptions(sigName"valueChanged").toSeq()
       doAssert subs.len() >= 1
       #check subs[0] == subLocalProxy
       check bp.listening.contains(a.unsafeWeakRef().asAgent())
       check bp.subcriptions.len() == 0
 
-      #check remoteProxy[].subcriptions.len() == 1
-      check remoteProxy[].listening.len() == 1
+      #check remoteRouter[].subcriptions.len() == 1
+      check remoteRouter[].listening.len() == 1
       check bp[].remote[].subcriptions.len() == 1
       #check bp[].remote[].listening.len() == 1
 
@@ -274,14 +274,14 @@ suite "threaded agent slots":
         subLocalProxy = Subscription(
           tgt: bp.unsafeWeakRef().asAgent(), slot: setValueGlobal(Counter)
         )
-        remoteProxy = bp.proxyTwin
+        remoteRouter = bp.proxyTwin
       check a.subcriptions.len() == 0
       check a.listening.len() == 1
       check bp.subcriptions.len() == 1
       check bp.listening.len() == 0
 
-      check remoteProxy[].subcriptions.len() == 0
-      check remoteProxy[].listening.len() == 1
+      check remoteRouter[].subcriptions.len() == 0
+      check remoteRouter[].listening.len() == 1
       check bp[].remote[].subcriptions.len() == 1
       check bp[].remote[].listening.len() == 1 # listening to thread
 
