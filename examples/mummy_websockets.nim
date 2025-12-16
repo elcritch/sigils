@@ -35,17 +35,22 @@ proc findChannelName*(ws: WebSocket): string {.gcsafe.} =
       result = clientToChannel.getOrDefault(ws, "")
 
 ## ====================== HeartBeat ====================== ##
+const HbBuckets = 30
 type
   HeartBeats {.acyclic.} = ref object of Agent
-    buckets: array[30, HashSet[WebSocket]]
+    buckets: array[HbBuckets, HashSet[WebSocket]]
     timer: SigilTimer
 
 proc add*(heartbeats: AgentProxy[HeartBeats], websocket: WebSocket) {.signal.}
 proc remove*(heartbeats: HeartBeats, websocket: WebSocket) {.signal.}
 proc heartbeat*(heartbeats: HeartBeats, bucket: int) {.signal.}
 
-proc toBucketId*(hb: HeartBeats, websocket: WebSocket): int =
-  result = abs(websocket.hash()) mod hb.buckets.len()
+proc toBucketId*(websocket: WebSocket): int =
+  result = abs(websocket.hash()) mod HbBuckets
+
+proc addClient*(self: HeartBeats, ws: WebSocket) {.slot.} =
+  echo "add heartbeat client"
+  self.buckets[ws.toBucketId()].incl(ws)
 
 proc sendBucket*(self: HeartBeats, bucket: int) {.slot.} =
   for websocket in self.buckets[bucket]:
@@ -64,6 +69,11 @@ proc start*(self: HeartBeats) {.slot.} =
   connect(self.timer, timeout, self, runHeartbeat)
   connect(self, heartbeat, self, sendBucket)
   self.timer.start()
+
+proc lookupHeartbeat(): AgentProxy[Heartbeats] =
+  result = lookupAgentProxy(sn"HeatBeats", HeartBeats)
+  if not result.hasConnections():
+    connectThreaded(result, add, result, addClient)
 
 ## ====================== Channels ====================== ##
 type
