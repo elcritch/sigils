@@ -29,6 +29,7 @@ proc initProxy[T](proxy: var AgentProxy[T],
                   agent: WeakRef[Agent],
                   thread: SigilThreadPtr,
                   isRemote = false, inbox = 1_000) =
+  assert agent[] of T
   proxy = AgentProxy[T](
     remote: agent,
     remoteThread: thread,
