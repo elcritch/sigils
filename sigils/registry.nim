@@ -86,7 +86,7 @@ proc lookupAgentProxyImpl[T](location: AgentLocation, tp: typeof[T], cache = tru
   if getTypeId(T) != location.typeId:
     raise newException(ValueError, "can't create proxy of the correct type!")
   if location.thread.isNil or location.agent.isNil:
-    return nil
+    raise newException(KeyError, "could not find agent")
 
   let key: ProxyCacheKey = (location.thread, location.agent)
   if key in proxyCache:
@@ -119,7 +119,7 @@ proc lookupAgentProxy*[T](name: SigilName, tp: typeof[T]): AgentProxy[T] {.gcsaf
   withLock regLock:
     {.cast(gcsafe).}:
       if name notin registry:
-        return nil
+        raise newException(KeyError, "could not find agent proxy: " & $(name))
       else:
         return lookupAgentProxyImpl(registry[name], tp)
 

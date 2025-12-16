@@ -41,7 +41,7 @@ type
     buckets: array[HbBuckets, HashSet[WebSocket]]
     timer: SigilTimer
 
-proc add*(heartbeats: AgentProxy[HeartBeats], websocket: WebSocket) {.signal.}
+proc add*(heartbeats: Agent, websocket: WebSocket) {.signal.}
 proc remove*(heartbeats: HeartBeats, websocket: WebSocket) {.signal.}
 proc heartbeat*(heartbeats: HeartBeats, bucket: int) {.signal.}
 
@@ -71,9 +71,9 @@ proc start*(self: HeartBeats) {.slot.} =
   self.timer.start()
 
 proc lookupHeartbeat(): AgentProxy[Heartbeats] =
-  result = lookupAgentProxy(sn"HeatBeats", HeartBeats)
-  if not result.hasConnections():
-    connectThreaded(result, add, result, addClient)
+  result = lookupAgentProxy(sn"HeartBeats", HeartBeats)
+  echo "connect heartbeat proxy..."
+  connectThreaded(result, add, result, addClient)
 
 ## ====================== Channels ====================== ##
 type
@@ -103,7 +103,7 @@ proc websocketHandler(websocket: WebSocket, event: WebSocketEvent, message: Mess
   case event:
   of OpenEvent:
     echo "OpenEvent: ", message
-    let heartbeats = lookupAgentProxy(sn"HeatBeats", HeartBeats)
+    let heartbeats = lookupHeartbeat()
     if heartbeats != nil:
       emit heartbeats.add(websocket)
 
@@ -159,7 +159,7 @@ proc main() =
   var hbs = HeartBeats()
   let hbsProxy = hbs.moveToThread(heartbeatThr)
   connectThreaded(heartbeatThr, started, hbsProxy, start)
-  registerGlobalName(sn"HeartBeat", hbsProxy)
+  registerGlobalName(sn"HeartBeats", hbsProxy)
   heartbeatThr.start()
 
   var router: Router
