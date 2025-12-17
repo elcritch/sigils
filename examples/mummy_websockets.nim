@@ -39,6 +39,11 @@ proc setChannelName*(ws: WebSocket, name: string) {.gcsafe.} =
     {.cast(gcsafe).}:
       clientToChannel[ws] = name
 
+proc removeWebsocket*(ws: WebSocket) {.gcsafe.} =
+  withLock(lock):
+    {.cast(gcsafe).}:
+      clientToChannel.del ws
+
 ## ====================== HeartBeat ====================== ##
 const HbBuckets = 30
 type
@@ -54,6 +59,10 @@ proc toBucketId*(websocket: WebSocket): int =
   result = abs(websocket.hash()) mod HbBuckets
 
 proc addClient*(self: HeartBeats, ws: WebSocket) {.slot.} =
+  echo "add heartbeat client"
+  self.buckets[ws.toBucketId()].incl(ws)
+
+proc removeClient*(self: HeartBeats, ws: WebSocket) {.slot.} =
   echo "add heartbeat client"
   self.buckets[ws.toBucketId()].incl(ws)
 
@@ -77,7 +86,7 @@ proc start*(self: HeartBeats) {.slot.} =
 
 proc lookupHeartbeat(): AgentProxy[Heartbeats] =
   result = lookupAgentProxy(sn"HeartBeats", HeartBeats)
-  echo "connect heartbeat proxy..."
+  echo "connect heartbeat proxy... "
   connectThreaded(result, add, result, addClient)
 
 ## ====================== Channels ====================== ##
@@ -88,6 +97,7 @@ type
     thr: SigilSelectorThreadPtr
 
 proc joining*(channel: AgentProxy[Channel], websocket: WebSocket) {.signal.}
+proc error*(channel: AgentProxy[Channel], websocket: WebSocket, message: Message) {.signal.}
 proc leaving*(channel: AgentProxy[Channel], websocket: WebSocket) {.signal.}
 
 proc publish*(channel: AgentProxy[Channel], message: Message) {.signal.}
@@ -96,8 +106,12 @@ proc toSigName*(name: string): SigilName =
   result = toSigilName("channel:" & name)
 
 proc joined*(self: Channel, websocket: WebSocket) {.slot.} =
-  echo "Channel: ", self.name, " client joined: ", websocket
+  echo "CHANNEL: ", self.name, " Client JOINED: ", websocket
   self.clients.incl(websocket)
+
+proc left*(self: Channel, websocket: WebSocket) {.slot.} =
+  echo "CHANNEL: ", self.name, " Client LEFT: ", websocket
+  self.clients.excl(websocket)
 
 proc send*(self: Channel, message: Message) {.slot.} =
   for websocket in self.clients:
@@ -110,9 +124,22 @@ proc findChannelOrCreate(name: string): AgentProxy[Channel] {.gcsafe.} =
     thr.start()
     var channel = Channel(name: name, thr: thr)
     registerGlobalName(cn, channel.moveToThread(thr))
+    connectThreaded(result, joining, result, joined)
+    connectThreaded(result, leaving, result, left)
+    let hb = lookupHeartbeat()
+    if hb != nil:
+      connectThreaded(result, leaving, hb, removeClient)
   result = lookupAgentProxy(cn, Channel)
   doAssert result != nil
-  connectThreaded(result, joining, result, joined)
+
+template withChannel(ws: WebSocket, blk: untyped) =
+  let name = ws.findChannelName()
+  if name == "":
+    echo "Websocket client not in a room! client: ", ws
+  else:
+    let channel {.inject.} = findChannelOrCreate(name)
+    `blk`
+
 
 proc websocketHandler(websocket: WebSocket, event: WebSocketEvent, message: Message) {.gcsafe.} =
   startLocalThreadDefault()
@@ -131,20 +158,17 @@ proc websocketHandler(websocket: WebSocket, event: WebSocketEvent, message: Mess
       discard
     else:
       echo "MessageEvent: ", message
-      let name = websocket.findChannelName()
-      if name == "":
-        echo "No clientToChannel entry at websocket open"
-      else:
-        let channel = lookupAgentProxy(name.toSigilName, Channel)
+      withChannel(websocket):
         emit channel.publish(message)
 
-  of ErrorEvent, CloseEvent:
+  of ErrorEvent:
     echo "ErrorEvent: ", message
-    let name = websocket.findChannelName()
-    if name == "":
-      echo "Websocket client not in a room! client: ", websocket
-    else:
-      let channel = findChannelOrCreate(name)
+    withChannel(websocket):
+      emit channel.error(websocket, message)
+
+  of CloseEvent:
+    echo "CloseEvent: ", message
+    withChannel(websocket):
       emit channel.leaving(websocket)
 
 proc upgradeHandler(request: Request) {.gcsafe.} =
