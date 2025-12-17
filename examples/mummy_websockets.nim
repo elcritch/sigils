@@ -34,6 +34,11 @@ proc findChannelName*(ws: WebSocket): string {.gcsafe.} =
     {.cast(gcsafe).}:
       result = clientToChannel.getOrDefault(ws, "")
 
+proc setChannelName*(ws: WebSocket, name: string) {.gcsafe.} =
+  withLock(lock):
+    {.cast(gcsafe).}:
+      clientToChannel[ws] = name
+
 ## ====================== HeartBeat ====================== ##
 const HbBuckets = 30
 type
@@ -91,6 +96,7 @@ proc toSigName*(name: string): SigilName =
   result = toSigilName("channel:" & name)
 
 proc joined*(self: Channel, websocket: WebSocket) {.slot.} =
+  echo "Channel: ", self.name, " client joined: ", websocket
   self.clients.incl(websocket)
 
 proc send*(self: Channel, message: Message) {.slot.} =
@@ -142,6 +148,8 @@ proc findChannelOrCreate(name: string): AgentProxy[Channel] {.gcsafe.} =
     var channel = Channel(name: name, thr: thr)
     registerGlobalName(cn, channel.moveToThread(thr))
   result = lookupAgentProxy(cn, Channel)
+  doAssert result != nil
+  connectThreaded(result, joining, result, joined)
 
 proc upgradeHandler(request: Request) {.gcsafe.} =
 
@@ -150,6 +158,7 @@ proc upgradeHandler(request: Request) {.gcsafe.} =
     else: ""
 
   let websocket = request.upgradeToWebSocket()
+  websocket.setChannelName(channelName)
   let channel = findChannelOrCreate(channelName)
   doAssert channel != nil
   emit channel.joining(websocket)
