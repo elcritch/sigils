@@ -63,7 +63,7 @@ proc addClient*(self: HeartBeats, ws: WebSocket) {.slot.} =
   self.buckets[ws.toBucketId()].incl(ws)
 
 proc removeClient*(self: HeartBeats, ws: WebSocket) {.slot.} =
-  echo "add heartbeat client"
+  echo "remove heartbeat client"
   self.buckets[ws.toBucketId()].incl(ws)
 
 proc sendBucket*(self: HeartBeats, bucket: int) {.slot.} =
@@ -117,20 +117,20 @@ proc send*(self: Channel, message: Message) {.slot.} =
   for websocket in self.clients:
     websocket.send(message.data, message.kind)
 
-proc findChannelOrCreate(name: string): AgentProxy[Channel] {.gcsafe.} =
+proc findChannelOrCreate*(name: string): AgentProxy[Channel] {.gcsafe.} =
   let cn = name.toSigName()
   if not lookupGlobalName(cn).isSome:
     let thr = newSigilSelectorThread()
     thr.start()
     var channel = Channel(name: name, thr: thr)
     registerGlobalName(cn, channel.moveToThread(thr))
+
+    result = lookupAgentProxy(cn, Channel)
     connectThreaded(result, joining, result, joined)
     connectThreaded(result, leaving, result, left)
-    let hb = lookupHeartbeat()
-    if hb != nil:
-      connectThreaded(result, leaving, hb, removeClient)
-  result = lookupAgentProxy(cn, Channel)
-  doAssert result != nil
+  else:
+    result = lookupAgentProxy(cn, Channel)
+    doAssert result != nil
 
 template withChannel(ws: WebSocket, blk: untyped) =
   let name = ws.findChannelName()
