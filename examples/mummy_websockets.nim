@@ -64,7 +64,7 @@ proc addClient*(self: HeartBeats, ws: WebSocket) {.slot.} =
 
 proc removeClient*(self: HeartBeats, ws: WebSocket) {.slot.} =
   echo "remove heartbeat client"
-  self.buckets[ws.toBucketId()].incl(ws)
+  self.buckets[ws.toBucketId()].excl(ws)
 
 proc sendBucket*(self: HeartBeats, bucket: int) {.slot.} =
   for websocket in self.buckets[bucket]:
@@ -99,7 +99,7 @@ type
 
 proc joining*(channel: AgentProxy[Channel], websocket: WebSocket) {.signal.}
 proc error*(channel: AgentProxy[Channel], websocket: WebSocket, message: Message) {.signal.}
-proc leaving*(channel: Agent, websocket: WebSocket) {.signal.}
+proc leaving*(channel: AgentProxy[Channel], websocket: WebSocket) {.signal.}
 
 proc publish*(channel: AgentProxy[Channel], message: Message) {.signal.}
 
@@ -126,14 +126,12 @@ proc findChannelOrCreate*(name: string): AgentProxy[Channel] {.gcsafe.} =
     var channel = Channel(name: name, thr: thr)
     registerGlobalName(cn, channel.moveToThread(thr))
 
-    result = lookupAgentProxy(cn, Channel)
-    connectThreaded(result, joining, result, joined)
-    connectThreaded(result, leaving, result, left)
-    let hb = lookupHeartbeat()
-    connectThreaded(result, leaving, hb, removeClient)
-  else:
-    result = lookupAgentProxy(cn, Channel)
-    doAssert result != nil
+  result = lookupAgentProxy(cn, Channel)
+  doAssert result != nil
+  connectThreaded(result, joining, result, joined)
+  connectThreaded(result, leaving, result, left)
+  let hb = lookupHeartbeat()
+  connectThreaded(result, leaving, hb, removeClient)
 
 template withChannel(ws: WebSocket, blk: untyped) =
   let name = ws.findChannelName()
