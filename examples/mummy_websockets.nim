@@ -68,6 +68,7 @@ proc removeClient*(self: HeartBeats, ws: WebSocket) {.slot.} =
 
 proc sendBucket*(self: HeartBeats, bucket: int) {.slot.} =
   for websocket in self.buckets[bucket]:
+    echo "ping: ", websocket
     websocket.send(heartbeatMessage)
 
   if bucket < self.buckets.len() - 1:
@@ -98,7 +99,7 @@ type
 
 proc joining*(channel: AgentProxy[Channel], websocket: WebSocket) {.signal.}
 proc error*(channel: AgentProxy[Channel], websocket: WebSocket, message: Message) {.signal.}
-proc leaving*(channel: AgentProxy[Channel], websocket: WebSocket) {.signal.}
+proc leaving*(channel: Agent, websocket: WebSocket) {.signal.}
 
 proc publish*(channel: AgentProxy[Channel], message: Message) {.signal.}
 
@@ -128,6 +129,8 @@ proc findChannelOrCreate*(name: string): AgentProxy[Channel] {.gcsafe.} =
     result = lookupAgentProxy(cn, Channel)
     connectThreaded(result, joining, result, joined)
     connectThreaded(result, leaving, result, left)
+    let hb = lookupHeartbeat()
+    connectThreaded(result, leaving, hb, removeClient)
   else:
     result = lookupAgentProxy(cn, Channel)
     doAssert result != nil
