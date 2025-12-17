@@ -1,5 +1,8 @@
 import mummy, std/[base64, net, random, sha1, strformat, strutils]
-import ./mummy_websockets
+#import ./mummy_websockets
+const
+  heartbeatMessage* = """{"type":"heartbeat"}""" # The JSON heartbeat message.
+
 
 const
   testChannel = "/demo"

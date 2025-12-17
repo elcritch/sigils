@@ -103,6 +103,17 @@ proc send*(self: Channel, message: Message) {.slot.} =
   for websocket in self.clients:
     websocket.send(message.data, message.kind)
 
+proc findChannelOrCreate(name: string): AgentProxy[Channel] {.gcsafe.} =
+  let cn = name.toSigName()
+  if not lookupGlobalName(cn).isSome:
+    let thr = newSigilSelectorThread()
+    thr.start()
+    var channel = Channel(name: name, thr: thr)
+    registerGlobalName(cn, channel.moveToThread(thr))
+  result = lookupAgentProxy(cn, Channel)
+  doAssert result != nil
+  connectThreaded(result, joining, result, joined)
+
 proc websocketHandler(websocket: WebSocket, event: WebSocketEvent, message: Message) {.gcsafe.} =
   startLocalThreadDefault()
 
@@ -127,29 +138,14 @@ proc websocketHandler(websocket: WebSocket, event: WebSocketEvent, message: Mess
         let channel = lookupAgentProxy(name.toSigilName, Channel)
         emit channel.publish(message)
 
-  of ErrorEvent:
-    echo "ErrorEvent: ", message
-    discard
-
-  of CloseEvent:
+  of ErrorEvent, CloseEvent:
     echo "ErrorEvent: ", message
     let name = websocket.findChannelName()
     if name == "":
-      echo "No clientToChannel entry at websocket open"
+      echo "Websocket client not in a room! client: ", websocket
     else:
-      let channel = lookupAgentProxy(name.toSigilName, Channel)
+      let channel = findChannelOrCreate(name)
       emit channel.leaving(websocket)
-
-proc findChannelOrCreate(name: string): AgentProxy[Channel] {.gcsafe.} =
-  let cn = name.toSigName()
-  if not lookupGlobalName(cn).isSome:
-    let thr = newSigilSelectorThread()
-    thr.start()
-    var channel = Channel(name: name, thr: thr)
-    registerGlobalName(cn, channel.moveToThread(thr))
-  result = lookupAgentProxy(cn, Channel)
-  doAssert result != nil
-  connectThreaded(result, joining, result, joined)
 
 proc upgradeHandler(request: Request) {.gcsafe.} =
 
