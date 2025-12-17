@@ -51,9 +51,9 @@ type
     buckets: array[HbBuckets, HashSet[WebSocket]]
     timer: SigilTimer
 
-proc add*(heartbeats: Agent, websocket: WebSocket) {.signal.}
-proc remove*(heartbeats: HeartBeats, websocket: WebSocket) {.signal.}
-proc heartbeat*(heartbeats: HeartBeats, bucket: int) {.signal.}
+proc doAdd*(heartbeats: Agent, websocket: WebSocket) {.signal.}
+proc doRemove*(heartbeats: Agent, websocket: WebSocket) {.signal.}
+proc doHeartbeat*(heartbeats: HeartBeats, bucket: int) {.signal.}
 
 proc toBucketId*(websocket: WebSocket): int =
   result = abs(websocket.hash()) mod HbBuckets
@@ -72,7 +72,7 @@ proc sendBucket*(self: HeartBeats, bucket: int) {.slot.} =
     websocket.send(heartbeatMessage)
 
   if bucket < self.buckets.len() - 1:
-    emit self.heartbeat(bucket + 1)
+    emit self.doHeartbeat(bucket + 1)
 
 proc runHeartbeat*(self: HeartBeats) {.slot.} =
   echo "Run heartbeat...", " (th: ", getThreadId(), ")"
@@ -82,13 +82,14 @@ proc start*(self: HeartBeats) {.slot.} =
   echo "Starting heartbeat!"
   self.timer = newSigilTimer(initDuration(seconds = 1))
   connect(self.timer, timeout, self, runHeartbeat)
-  connect(self, heartbeat, self, sendBucket)
+  connect(self, doHeartbeat, self, sendBucket)
   self.timer.start()
 
 proc lookupHeartbeat(): AgentProxy[Heartbeats] =
   result = lookupAgentProxy(sn"HeartBeats", HeartBeats)
   echo "connect heartbeat proxy... "
-  connectThreaded(result, add, result, addClient)
+  connectThreaded(result, doAdd, result, addClient)
+  connectThreaded(result, doRemove, result, removeClient)
 
 ## ====================== Channels ====================== ##
 type
@@ -130,8 +131,6 @@ proc findChannelOrCreate*(name: string): AgentProxy[Channel] {.gcsafe.} =
   doAssert result != nil
   connectThreaded(result, joining, result, joined)
   connectThreaded(result, leaving, result, left)
-  let hb = lookupHeartbeat()
-  connectThreaded(result, leaving, hb, removeClient)
 
 template withChannel(ws: WebSocket, blk: untyped) =
   let name = ws.findChannelName()
@@ -150,7 +149,7 @@ proc websocketHandler(websocket: WebSocket, event: WebSocketEvent, message: Mess
     echo "OpenEvent: ", message
     let heartbeats = lookupHeartbeat()
     if heartbeats != nil:
-      emit heartbeats.add(websocket)
+      emit heartbeats.doAdd(websocket)
 
   of MessageEvent:
     if message.kind == Ping:
@@ -171,6 +170,8 @@ proc websocketHandler(websocket: WebSocket, event: WebSocketEvent, message: Mess
     echo "CloseEvent: ", message
     withChannel(websocket):
       emit channel.leaving(websocket)
+    let hb = lookupHeartbeat()
+    emit hb.doRemove(websocket)
 
 proc upgradeHandler(request: Request) {.gcsafe.} =
 

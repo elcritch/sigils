@@ -82,7 +82,7 @@ proc lookupGlobalName*(name: SigilName): Option[AgentLocation] {.gcsafe.} =
       if name in registry:
         result = some registry[name]
 
-proc lookupAgentProxyImpl[T](location: AgentLocation, tp: typeof[T], cache = true): AgentProxy[T] =
+proc lookupAgentProxyImpl[T](name: SigilName, location: AgentLocation, tp: typeof[T], cache = true): AgentProxy[T] =
   if getTypeId(T) != location.typeId:
     raise newException(ValueError, "can't create proxy of the correct type!")
   if location.thread.isNil or location.agent.isNil:
@@ -92,7 +92,8 @@ proc lookupAgentProxyImpl[T](location: AgentLocation, tp: typeof[T], cache = tru
   if key in proxyCache:
     let cached = proxyCache[key]
     if not cached.isNil:
-      return cast[AgentProxy[T]](cached)
+      echo "Registry:cached: ", name, " ref: ", $cached.unsafeWeakRef()
+      return AgentProxy[T](cached)
 
   let ct = getCurrentSigilThread()
   var remoteRouter: AgentProxy[T]
@@ -113,6 +114,7 @@ proc lookupAgentProxyImpl[T](location: AgentLocation, tp: typeof[T], cache = tru
   location.thread.send(ThreadSignal(kind: AddSub, add: sub))
 
   if cache:
+    echo "Registry:cache: ", $result.unsafeWeakRef()
     proxyCache[key] = AgentProxyShared(result)
 
 proc lookupAgentProxy*[T](name: SigilName, tp: typeof[T]): AgentProxy[T] {.gcsafe.} =
@@ -121,5 +123,5 @@ proc lookupAgentProxy*[T](name: SigilName, tp: typeof[T]): AgentProxy[T] {.gcsaf
       if name notin registry:
         raise newException(KeyError, "could not find agent proxy: " & $(name))
       else:
-        return lookupAgentProxyImpl(registry[name], tp)
+        return lookupAgentProxyImpl(name, registry[name], tp)
 
