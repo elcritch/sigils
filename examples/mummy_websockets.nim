@@ -75,7 +75,7 @@ proc sendBucket*(self: HeartBeats, bucket: int) {.slot.} =
     emit self.heartbeat(bucket + 1)
 
 proc runHeartbeat*(self: HeartBeats) {.slot.} =
-  echo "Run heartbeat..."
+  echo "Run heartbeat...", " (th: ", getThreadId(), ")"
   self.sendBucket(0)
 
 proc start*(self: HeartBeats) {.slot.} =
