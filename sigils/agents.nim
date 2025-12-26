@@ -232,9 +232,9 @@ template addSubscription*(
 
 var printConnectionsSlotNames* = initTable[pointer, string]()
 
-proc delSubscriptionImpl*(
+method delSubscription*(
     self: Agent, sig: SigilName, tgt: WeakRef[Agent], slot: AgentProc
-): void =
+) {.base, gcsafe, raises: [].} =
 
   var
     subsFound: int
@@ -251,17 +251,17 @@ proc delSubscriptionImpl*(
   if subsFound == subsDeleted:
     tgt[].listening.excl(self.unsafeWeakRef())
 
-method delSubscription*(
-    self: Agent, sig: SigilName, tgt: Agent | WeakRef[Agent], slot: AgentProc
-) {.base, gcsafe, raises: [].} =
-  let tgtRef = tgt.unsafeWeakRef().toKind(Agent)
-  delSubscriptionImpl(self, sig, tgtRef, slot)
 
 template delSubscription*(
-    obj: Agent, sig: IndexableChars, tgt: Agent | WeakRef[Agent],
-        slot: AgentProc
+    obj: Agent, sig: IndexableChars, tgt: WeakRef[Agent], slot: AgentProc
 ): void =
   delSubscription(obj, sig.toSigilName(), tgt, slot)
+
+template delSubscription*(
+    obj: Agent, sig: IndexableChars, tgt: Agent, slot: AgentProc
+): void =
+  let tgtRef = tgt.unsafeWeakRef().toKind(Agent)
+  delSubscription(obj, sig.toSigilName(), tgtRef, slot)
 
 proc printConnections*(agent: Agent) =
   when defined(sigilsDebugPrint):

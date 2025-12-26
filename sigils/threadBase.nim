@@ -153,7 +153,7 @@ proc exec*(thread: SigilThreadPtr, sig: ThreadSignal) {.gcsafe.} =
                                             " del: " & $sig.del.src &
                                             " to " & $sig.del.tgt)
     if sig.del.src in thread.references and sig.del.tgt in thread.references:
-      sig.del.src[].delSubscription(sig.del.name, sig.del.tgt[], sig.del.fn)
+      sig.del.src[].delSubscription(sig.del.name, sig.del.tgt, sig.del.fn)
     else:
       raise newException(UnableToSubscribe, "unable to subscribe to missing" &
                                             " src: " & $sig.del.src &
