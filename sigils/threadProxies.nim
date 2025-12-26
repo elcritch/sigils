@@ -74,7 +74,6 @@ method callMethod*(
     repr(slot)
   if slot == remoteSlot:
     var req = req.duplicate()
-    #debugPrint "\t proxy:callMethod:remoteSlot: ", "req: ", $req
     debugPrint "\t proxy:callMethod:remoteSlot: ", "proxy.remote: ", $proxy.remote
     var pt: WeakRef[AgentProxyShared]
     withLock proxy.lock:
@@ -133,16 +132,14 @@ method removeSubscriptionsFor*(
     self: AgentProxyShared, subscriber: WeakRef[Agent]
 ) {.gcsafe, raises: [].} =
   debugPrint "   removeSubscriptionsFor:proxy: self:id: ", $self.unsafeWeakRef()
-  debugPrint "   removeSubscriptionsFor:proxy:ready: self:id: ",
-      $self.unsafeWeakRef()
+  debugPrint "   removeSubscriptionsFor:proxy:ready: self:id: ", $self.unsafeWeakRef()
   procCall removeSubscriptionsFor(AgentActor(self), subscriber)
 
 method unregisterSubscriber*(
     self: AgentProxyShared, listener: WeakRef[Agent]
 ) {.gcsafe, raises: [].} =
   debugPrint "   unregisterSubscriber:proxy: self:id: ", $self.unsafeWeakRef()
-  debugPrint "   unregisterSubscriber:proxy:ready: self:id: ",
-      $self.unsafeWeakRef()
+  debugPrint "   unregisterSubscriber:proxy:ready: self:id: ", $self.unsafeWeakRef()
   procCall unregisterSubscriber(AgentActor(self), listener)
 
 proc initProxy*[T](proxy: var AgentProxy[T],
