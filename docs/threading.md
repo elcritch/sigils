@@ -17,6 +17,7 @@ Signals travel back the same way. When an agent running on a worker thread emits
 - Cross-thread work is executed by a per-thread scheduler that processes messages serially.
 - Worker threads run the scheduler loop automatically; threads without a built-in loop must periodically poll to process forwarded events.
 - Cleanup is synchronized: moved agents are owned by the destination thread, and proxies send dereference messages so the destination thread can release remote state.
+- Subscriptions and slots are configured on the local proxy.
 
 ## Mental Model
 
@@ -65,12 +66,12 @@ Signals travel back the same way. When an agent running on a worker thread emits
 - Preconditions: `agent` must be unique (`isUniqueRef`) to prevent sharing GC refs across threads.
 - Creates two proxies:
   - `localProxy` — lives on the current thread; used by local code to talk to the remote agent.
-  - `remoteProxy` — lives on the destination thread; used to forward events back to the local side.
+  - `remoteRouter` — lives on the destination thread; used to forward events back to the local side.
 - Rewrites subscriptions:
   - Outbound (agent listening to others): rebinds listeners so the local proxy receives those signals and forwards across threads.
-  - Inbound (others listening to agent): rebinds so callers attach to `localProxy`; the remote agent publishes to `remoteProxy`, which forwards back.
+  - Inbound (others listening to agent): rebinds so callers attach to `localProxy`; the remote agent publishes to `remoteRouter`, which forwards back.
 - Ownership transfer:
-  - Sends `Move(agent)` and `Move(remoteProxy)` to the destination thread so they are owned (and managed) by that thread's `references` table.
+  - Sends `Move(agent)` and `Move(remoteRouter)` to the destination thread so they are owned (and managed) by that thread's `references` table.
 - Returns `localProxy` to the caller; the original `agent` variable is moved (becomes `nil`).
 
 The tests demonstrate this flow, e.g.:
@@ -96,7 +97,7 @@ All cross-thread messages are isolated (`isolateRuntime`) before enqueueing to e
 
 ## Proxy Call Semantics
 
-`AgentProxyShared.callMethod(req, slot)` routes calls based on `slot`:
+`AgentProxyShared.callMethod(req, slot)` routes calls based on `slot` sentinal values:
 
 - `slot == remoteSlot` — event forwarding from the remote agent back to the local side.
   - Wraps as `Call(localSlot, req, tgt = proxyTwin)` and enqueues into `proxyTwin.inbox` on the other thread with `Trigger`.
@@ -106,6 +107,12 @@ All cross-thread messages are isolated (`isolateRuntime`) before enqueueing to e
 
 - Otherwise — regular slot call bound for the remote agent.
   - Wraps as `Call(slot, req, tgt = proxy.remote)`, enqueues into `proxyTwin.inbox` (on remote), and `Trigger`s the remote thread.
+
+**Note**:
+  The "local" proxy holds the slots to be called both remotely and on incoming signals.
+  This is so that the remote router only knows to send and trigger but the local proxies
+  handle which slots and subscriptions get called. This means we don't need to lock
+  the remote router to add/del subscriptions.
 
 Locks are used to safely access `proxyTwin` and to coordinate with the destination thread's `signaled` set.
 
@@ -153,7 +160,7 @@ Patterns illustrated by the tests:
 
 ## Thread Safety Notes
 
-- Ownership: After `moveToThread`, the destination thread exclusively owns the moved agent (and its `remoteProxy`) via `references`. Do not retain or use the original agent ref on the source thread.
+- Ownership: After `moveToThread`, the destination thread exclusively owns the moved agent (and its `remoteRouter`) via `references`. Do not retain or use the original agent ref on the source thread.
 - Isolation: Cross-thread `ThreadSignal`s are passed through `isolateRuntime(...)` before enqueueing. If the payload contains non-unique `ref`s, `isolateRuntime` raises `IsolationError` to prevent unsafe sharing.
 - Signal params: Cross-thread signal parameter types must be thread-safe (no `ref` fields). The `connectThreaded` helpers use `checkSignalThreadSafety` for common patterns; use `Isolate[T]` for heap payloads you need to transfer.
 - No shared GC refs: The code defends against sharing by requiring unique refs before move and by using `WeakRef` identifiers for cross-thread targeting.

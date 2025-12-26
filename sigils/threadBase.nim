@@ -35,7 +35,8 @@ type
   ThreadSignalKind* {.pure.} = enum
     Call
     Move
-    AddSubscription
+    AddSub
+    DelSub
     Trigger
     Deref
     Exit
@@ -48,17 +49,22 @@ type
       tgt*: WeakRef[Agent]
     of Move:
       item*: Agent
-    of AddSubscription:
-      src*: WeakRef[Agent]
-      name*: SigilName
-      subTgt*: WeakRef[Agent]
-      subProc*: AgentProc
+    of AddSub:
+      add*: ThreadSub
+    of DelSub:
+      del*: ThreadSub
     of Trigger:
       discard
     of Deref:
       deref*: WeakRef[Agent]
     of Exit:
       discard
+
+  ThreadSub* = object
+    src*: WeakRef[Agent]
+    name*: SigilName
+    tgt*: WeakRef[Agent]
+    fn*: AgentProc
 
   SigilChan* = Chan[ThreadSignal]
 
@@ -157,21 +163,37 @@ proc exec*(thread: SigilThreadPtr, sig: ThreadSignal) {.gcsafe.} =
       $sig.item.unsafeWeakRef(), " refcount: ", $sig.item.unsafeGcCount()
     var item = sig.item
     thread.references[item.unsafeWeakRef()] = move item
-  of AddSubscription:
-    echo "\t threadExec:subscribe: ",
-      " src: ", $sig.src,
-      " tgt: ", $sig.subTgt,
-      " srcExists: ", sig.src in thread.references
-    if sig.src.isNil:
+  of AddSub:
+    debugPrint "\t threadExec:subscribe: ",
+      " src: ", $sig.add.src,
+      " tgt: ", $sig.add.tgt,
+      " srcExists: ", sig.add.src in thread.references
+    if sig.add.src.isNil:
       raise newException(UnableToSubscribe, "unable to subscribe nil" &
-                                            " src: " & $sig.src &
-                                            " to " & $sig.subTgt)
-    if sig.src in thread.references and sig.subTgt in thread.references:
-      sig.src[].addSubscription(sig.name, sig.subTgt[], sig.subProc)
+                                            " src: " & $sig.add.src &
+                                            " to " & $sig.add.tgt)
+    if sig.add.src in thread.references and sig.add.tgt in thread.references:
+      sig.add.src[].addSubscription(sig.add.name, sig.add.tgt[], sig.add.fn)
     else:
       raise newException(UnableToSubscribe, "unable to subscribe to missing" &
-                                            " src: " & $sig.src &
-                                            " to " & $sig.subTgt)
+                                            " src: " & $sig.add.src &
+                                            " to " & $sig.add.tgt)
+    thread.gcCollectReferences()
+  of DelSub:
+    debugPrint "\t threadExec:subscribe: ",
+      " src: ", $sig.del.src,
+      " tgt: ", $sig.del.tgt,
+      " srcExists: ", sig.del.src in thread.references
+    if sig.del.src.isNil:
+      raise newException(UnableToSubscribe, "unable to unsubscribe nil" &
+                                            " del: " & $sig.del.src &
+                                            " to " & $sig.del.tgt)
+    if sig.del.src in thread.references and sig.del.tgt in thread.references:
+      sig.del.src[].delSubscription(sig.del.name, sig.del.tgt[], sig.del.fn)
+    else:
+      raise newException(UnableToSubscribe, "unable to subscribe to missing" &
+                                            " src: " & $sig.del.src &
+                                            " to " & $sig.del.tgt)
     thread.gcCollectReferences()
   of Deref:
     debugPrint "\t threadExec:deref: ", $sig.deref.unsafeWeakRef()
@@ -250,7 +272,9 @@ proc setExceptionHandler*(
 ) =
   thread.exceptionHandler = handler
 
-var startSigilThreadProc: proc()
+type SigilThreadProc* = proc() {.nimcall, gcsafe.}
+
+var startSigilThreadProc: SigilThreadProc
 var localSigilThread {.threadVar.}: ptr SigilThread
 
 proc toSigilThread*[R: SigilThread](t: ptr R): ptr SigilThread =
@@ -262,10 +286,10 @@ proc hasLocalSigilThread*(): bool =
 proc setLocalSigilThread*[R: ptr SigilThread](thread: R) =
   localSigilThread = thread.toSigilThread()
 
-proc setStartSigilThreadProc*(cb: proc()) =
+proc setStartSigilThreadProc*(cb: SigilThreadProc) =
   startSigilThreadProc = cb
 
-proc getStartSigilThreadProc*(): proc() =
+proc getStartSigilThreadProc*(): SigilThreadProc =
   startSigilThreadProc
 
 template getCurrentSigilThread*(): SigilThreadPtr =

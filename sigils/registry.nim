@@ -9,6 +9,7 @@ type AgentLocation* = object
   thread*: SigilThreadPtr
   agent*: WeakRef[Agent]
   typeId*: TypeId
+  isProxy*: bool
 
 var registry: Table[SigilName, AgentLocation]
 var regLock: Lock
@@ -24,9 +25,10 @@ type SetupProxyParams = object
 proc keepAlive(context: Agent, params: SigilParams) {.nimcall.} =
   raise newException(AssertionDefect, "this should never be called!")
 
-proc registerGlobalName*[T](name: SigilName, proxy: AgentProxy[T],
-    override = false) =
-  withLock regLock:
+proc registerGlobalNameImpl[T](
+    name: SigilName, proxy: AgentProxy[T], override = false
+) {.gcsafe.} =
+  {.cast(gcsafe).}:
     if not override and name in registry:
       raise newException(ValueError, "Name already registered! Name: " & $name)
     registry[name] = AgentLocation(
@@ -34,85 +36,92 @@ proc registerGlobalName*[T](name: SigilName, proxy: AgentProxy[T],
       agent: proxy.remote,
       typeId: getTypeId(T),
     )
-    #proxy.remoteThread.extReference(proxy.remote)
-    #withLock proxy.lock:
-    #  if not proxy.proxyTwin.isNil:
-    #    withLock proxy.remoteThread[].signaledLock:
-    #      proxy.remoteThread[].signaled.incl(proxy.proxyTwin.toKind(AgentRemote))
-    proxy.remoteThread.send(ThreadSignal(kind: Trigger))
-    proxy.remoteThread.send(ThreadSignal(kind: AddSubscription,
-                                    src: proxy.remote,
-                                    name: sn"sigils:registryKeepAlive",
-                                    subTgt: proxy.remote,
-                                    subProc: keepAlive))
+    let sub = ThreadSub(src: proxy.remote,
+                        name: sn"sigils:registryKeepAlive",
+                        tgt: proxy.remote,
+                        fn: keepAlive)
+    proxy.remoteThread.send(ThreadSignal(kind: AddSub, add: sub))
 
-
-proc removeGlobalName*[T](name: SigilName, proxy: AgentProxy[T]): bool =
+proc registerGlobalName*[T](
+    name: SigilName, proxy: AgentProxy[T], override = false
+) {.gcsafe.} =
   withLock regLock:
-    if name in registry:
-      registry.del(name)
-      return true
-    return false
+    {.cast(gcsafe).}:
+      registerGlobalNameImpl(name, proxy, override)
 
-proc lookupGlobalName*(name: SigilName): Option[AgentLocation] =
+proc registerGlobalAgent*[T](
+    name: SigilName, thread: SigilThreadPtr, agent: var T, override = false
+) {.gcsafe.} =
   withLock regLock:
-    if name in registry:
-      result = some registry[name]
+    {.cast(gcsafe).}:
+      let proxy = agent.moveToThread(thread)
+      let remoteRouter = proxy.proxyTwin
+      registerGlobalNameImpl(name, proxy, override = override)
 
-proc lookupAgentProxyImpl[T](location: AgentLocation, tp: typeof[T]): AgentProxy[T] =
+      if not proxy.proxyTwin.isNil:
+        withLock proxy.proxyTwin[].lock:
+          proxy.proxyTwin[].proxyTwin.pt = nil
+      proxy.proxyTwin.pt = nil
+
+proc removeGlobalName*[T](name: SigilName, proxy: AgentProxy[T]): bool {.gcsafe.} =
+  withLock regLock:
+    {.cast(gcsafe).}:
+      if name in registry:
+        let loc = registry[name]
+        let sub = ThreadSub(src: proxy.remote,
+                            name: sn"sigils:registryKeepAlive",
+                            tgt: proxy.remote,
+                            fn: keepAlive)
+        loc.thread.send(ThreadSignal(kind: DelSub, del: sub))
+        return true
+      return false
+
+proc lookupGlobalName*(name: SigilName): Option[AgentLocation] {.gcsafe.} =
+  withLock regLock:
+    {.cast(gcsafe).}:
+      if name in registry:
+        result = some registry[name]
+
+proc lookupAgentProxyImpl[T](name: SigilName, location: AgentLocation, tp: typeof[T], cache = true): AgentProxy[T] =
   if getTypeId(T) != location.typeId:
     raise newException(ValueError, "can't create proxy of the correct type!")
   if location.thread.isNil or location.agent.isNil:
-    return nil
+    raise newException(KeyError, "could not find agent")
 
   let key: ProxyCacheKey = (location.thread, location.agent)
   if key in proxyCache:
     let cached = proxyCache[key]
     if not cached.isNil:
-      return cast[AgentProxy[T]](cached)
+      echo "Registry:cached: ", name, " ref: ", $cached.unsafeWeakRef()
+      return AgentProxy[T](cached)
 
   let ct = getCurrentSigilThread()
+  var remoteRouter: AgentProxy[T]
 
-  result = AgentProxy[T](
-    remote: location.agent,
-    remoteThread: location.thread,
-    inbox: newChan[ThreadSignal](1_000),
-  )
-
-  var remoteProxy = AgentProxy[T](
-    remote: location.agent,
-    remoteThread: ct,
-    inbox: newChan[ThreadSignal](1_000),
-  )
-
-  result.lock.initLock()
-  remoteProxy.lock.initLock()
-
-  result.proxyTwin = remoteProxy.unsafeWeakRef().toKind(AgentProxyShared)
-  remoteProxy.proxyTwin = result.unsafeWeakRef().toKind(AgentProxyShared)
-
-  when defined(sigilsDebug):
-    let aid = $location.agent
-    result.debugName = "localProxy::" & aid
-    remoteProxy.debugName = "remoteProxy::" & aid
+  result.initProxy(location.agent, location.thread, isRemote = false)
+  remoteRouter.initProxy(location.agent, ct, isRemote = true)
+  bindProxies(result, remoteRouter)
 
   # Ensure the remote proxy is kept alive until it is wired on the remote thread.
-  remoteProxy.addSubscription(AnySigilName, result, localSlot)
+  remoteRouter.addSubscription(AnySigilName, result, localSlot)
 
-  let remoteProxyRef = remoteProxy.unsafeWeakRef().toKind(AgentProxyShared)
-  location.thread.send(ThreadSignal(kind: Move, item: move remoteProxy))
-  location.thread.send(ThreadSignal(kind: AddSubscription,
-                                    src: location.agent,
-                                    name: AnySigilName,
-                                    subTgt: remoteProxyRef.toKind(Agent),
-                                    subProc: remoteSlot))
+  let remoteRouterRef = remoteRouter.unsafeWeakRef().toKind(AgentProxyShared)
+  location.thread.send(ThreadSignal(kind: Move, item: move remoteRouter))
+  let sub = ThreadSub(src: location.agent,
+                      name: AnySigilName,
+                      tgt: remoteRouterRef.toKind(Agent),
+                      fn: remoteSlot)
+  location.thread.send(ThreadSignal(kind: AddSub, add: sub))
 
-  proxyCache[key] = AgentProxyShared(result)
+  if cache:
+    echo "Registry:cache: ", $result.unsafeWeakRef()
+    proxyCache[key] = AgentProxyShared(result)
 
-proc lookupAgentProxy*[T](name: SigilName, tp: typeof[T]): AgentProxy[T] =
+proc lookupAgentProxy*[T](name: SigilName, tp: typeof[T]): AgentProxy[T] {.gcsafe.} =
   withLock regLock:
-    if name notin registry:
-      return nil
-    else:
-      return lookupAgentProxyImpl(registry[name], tp)
+    {.cast(gcsafe).}:
+      if name notin registry:
+        raise newException(KeyError, "could not find agent proxy: " & $(name))
+      else:
+        return lookupAgentProxyImpl(name, registry[name], tp)
 
