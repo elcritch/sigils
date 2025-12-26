@@ -64,33 +64,25 @@ method hasSubscription*(
     result = procCall hasSubscription(Agent(obj), sig)
 
 method hasSubscription*(
-    obj: AgentActor, sig: SigilName, tgt: Agent | WeakRef[Agent]
-): bool {.gcsafe, raises: [].} =
-  let tgtRef = tgt.unsafeWeakRef().toKind(Agent)
+    obj: AgentActor, sig: SigilName, tgt: WeakRef[Agent]): bool {.gcsafe, raises: [].} =
   withLock obj.lock:
-    result = procCall hasSubscription(Agent(obj), sig, tgtRef)
+    result = procCall hasSubscription(Agent(obj), sig, tgt)
 
 method hasSubscription*(
-    obj: AgentActor, sig: SigilName, tgt: Agent | WeakRef[Agent],
-        slot: AgentProc
+    obj: AgentActor, sig: SigilName, tgt: WeakRef[Agent], slot: AgentProc
 ): bool {.gcsafe, raises: [].} =
-  let tgtRef = tgt.unsafeWeakRef().toKind(Agent)
   withLock obj.lock:
-    result = procCall hasSubscription(Agent(obj), sig, tgtRef, slot)
+    result = procCall hasSubscription(Agent(obj), sig, tgt, slot)
 
 method addSubscription*(
-    obj: AgentActor, sig: SigilName, tgt: Agent | WeakRef[Agent],
-        slot: AgentProc
+    obj: AgentActor, sig: SigilName, tgt: WeakRef[Agent], slot: AgentProc
 ) {.gcsafe, raises: [].} =
-  let tgtRef = tgt.unsafeWeakRef().toKind(Agent)
   withLock obj.lock:
-    procCall addSubscription(Agent(obj), sig, tgtRef, slot)
+    procCall addSubscription(Agent(obj), sig, tgt, slot)
 
 method delSubscription*(
-    self: AgentActor, sig: SigilName, tgt: Agent | WeakRef[Agent],
-        slot: AgentProc
+    self: AgentActor, sig: SigilName, tgt: WeakRef[Agent], slot: AgentProc
 ) {.gcsafe, raises: [].} =
-  let tgtRef = tgt.unsafeWeakRef().toKind(Agent)
   withLock self.lock:
-    procCall delSubscription(Agent(self), sig, tgtRef, slot)
+    procCall delSubscription(Agent(self), sig, tgt, slot)
 
