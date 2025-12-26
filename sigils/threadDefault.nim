@@ -53,7 +53,7 @@ method setTimer*(
 proc newSigilThread*(): ptr SigilThreadDefault =
   result = cast[ptr SigilThreadDefault](allocShared0(sizeof(SigilThreadDefault)))
   result[] = SigilThreadDefault() # important!
-  result[].agent = ThreadAgent()
+  result[].agent = SigilThreadAgent()
   result[].inputs = newSigilChan()
   result[].signaledLock.initLock()
   result[].threadId.store(-1, Relaxed)

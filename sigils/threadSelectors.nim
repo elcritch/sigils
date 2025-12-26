@@ -71,7 +71,7 @@ proc newSigilSelectorThread*(): ptr SigilSelectorThread =
       SigilSelectorThread)))
   result[] = SigilSelectorThread() # important!
   result[].sel = newSelector[SigilThreadEvent]()
-  result[].agent = ThreadAgent()
+  result[].agent = SigilThreadAgent()
   result[].signaledLock.initLock()
   result[].timerLock.initLock()
   result[].inputs = newSigilChan()

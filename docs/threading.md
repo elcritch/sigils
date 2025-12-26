@@ -32,7 +32,7 @@ Signals travel back the same way. When an agent running on a worker thread emits
   - `signaled: HashSet[WeakRef[AgentRemote]]` set of per-proxy mailboxes to drain.
   - `signaledLock: Lock` protects `signaled`.
   - `references: Table[WeakRef[Agent], Agent]` ownership table of agents moved onto this thread.
-  - `agent: ThreadAgent` a local agent for thread lifecycle signals (e.g., `started`).
+  - `agent: SigilThreadAgent` a local agent for thread lifecycle signals (e.g., `started`).
   - `exceptionHandler` invoked by `runForever()` if a slot raises.
   - `running: Atomic[bool]`, `threadId: Atomic[int]`.
 

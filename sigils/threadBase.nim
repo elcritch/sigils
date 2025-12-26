@@ -71,7 +71,7 @@ type
   AgentRemote* = ref object of Agent
     inbox*: Chan[ThreadSignal]
 
-  ThreadAgent* = ref object of Agent
+  SigilThreadAgent* = ref object of Agent
 
   SigilThread* = object of RootObj
     threadId*: Atomic[int]
@@ -80,7 +80,7 @@ type
     signaled*: HashSet[WeakRef[AgentRemote]]
 
     references*: Table[WeakRef[Agent], Agent]
-    agent*: ThreadAgent
+    agent*: SigilThreadAgent
     exceptionHandler*: proc(e: ref Exception) {.gcsafe, nimcall.}
     when defined(sigilsDebug):
       debugName*: string
@@ -91,7 +91,7 @@ type
 
 proc timeout*(timer: SigilTimer) {.signal.}
 
-proc started*(tp: ThreadAgent) {.signal.}
+proc started*(tp: SigilThreadAgent) {.signal.}
 
 proc getThreadId*(thread: SigilThread): int =
   addr(thread.threadId)[].load(Relaxed)
