@@ -92,5 +92,5 @@ method delSubscription*(
 ) {.gcsafe, raises: [].} =
   let tgtRef = tgt.unsafeWeakRef().toKind(Agent)
   withLock self.lock:
-    delSubscriptionImpl(Agent(self), sig, tgtRef, slot)
+    procCall delSubscription(Agent(self), sig, tgtRef, slot)
 
