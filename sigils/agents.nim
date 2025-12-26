@@ -215,21 +215,20 @@ template hasSubscription*(obj: Agent, sig: SigilName, tgt: Agent, slot: AgentPro
   hasSubscription(obj, sig, tgtRef, slot)
 
 method addSubscription*(
-    obj: Agent, sig: SigilName, tgt: Agent | WeakRef[Agent], slot: AgentProc
+    obj: Agent, sig: SigilName, tgt: WeakRef[Agent], slot: AgentProc
 ) {.base, gcsafe, raises: [].} =
-  let tgtRef = tgt.unsafeWeakRef().toKind(Agent)
   doAssert not obj.isNil(), "agent is nil!"
   assert slot != nil
 
   if not hasSubscription(obj, sig, tgt, slot):
-    obj.subcriptions.add((sig, Subscription(tgt: tgtRef, slot: slot)))
+    obj.subcriptions.add((sig, Subscription(tgt: tgt, slot: slot)))
     tgt[].listening.incl(obj.unsafeWeakRef().asAgent())
 
 template addSubscription*(
-    obj: Agent, sig: IndexableChars, tgt: Agent | WeakRef[Agent],
-        slot: AgentProc
+    obj: Agent, sig: IndexableChars, tgt: Agent | WeakRef[Agent], slot: AgentProc
 ): void =
-  addSubscription(obj, sig.toSigilName(), tgt, slot)
+  let tgtRef = tgt.unsafeWeakRef().toKind(Agent)
+  addSubscription(obj, sig.toSigilName(), tgtRef, slot)
 
 var printConnectionsSlotNames* = initTable[pointer, string]()
 
