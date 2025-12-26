@@ -69,6 +69,7 @@ type
   SigilChan* = Chan[ThreadSignal]
 
   AgentRemote* = ref object of Agent
+    lock*: Lock
     inbox*: Chan[ThreadSignal]
 
   SigilThreadAgent* = ref object of Agent

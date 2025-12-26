@@ -16,7 +16,6 @@ type
   AgentProxyShared* = ref object of AgentRemote
     remote*: WeakRef[Agent]
     proxyTwin*: WeakRef[AgentProxyShared]
-    lock*: Lock
     remoteThread*: SigilThreadPtr
 
   AgentProxy*[T] = ref object of AgentProxyShared
