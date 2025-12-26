@@ -361,8 +361,10 @@ proc fwdSlot[A: Agent; B: Agent; S: static string](self: Agent,
     params: SigilParams) {.nimcall.} =
   let agentSlot = callSlot(S, typeof(B))
   let req = SigilRequest(
-    kind: Request, origin: SigilId(-1), procName: signalName(signal),
-        params: params.duplicate()
+    kind: Request,
+    origin: SigilId(-1),
+    procName: signalName(signal),
+    params: params.duplicate()
   )
   var msg = ThreadSignal(kind: Call)
   msg.slot = agentSlot
