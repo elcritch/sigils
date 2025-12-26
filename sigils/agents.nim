@@ -220,7 +220,7 @@ method addSubscription*(
   doAssert not obj.isNil(), "agent is nil!"
   assert slot != nil
 
-  if not hasSubscription(obj, sig, tgt, slot):
+  if not procCall hasSubscription(obj, sig, tgt, slot):
     obj.subcriptions.add((sig, Subscription(tgt: tgt, slot: slot)))
     tgt[].listening.incl(obj.unsafeWeakRef().asAgent())
 

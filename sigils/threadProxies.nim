@@ -222,8 +222,7 @@ proc moveToThread*[T: Agent, R: SigilThread](
   # update my subcriptionsTable so agent uses the remote proxy to send events back
   var hasSubs = false
   for item in oldSubscribers:
-    localProxy.addSubscription(item.signal, item.subscription.tgt[],
-        item.subscription.slot)
+    localProxy.addSubscription(item.signal, item.subscription.tgt, item.subscription.slot)
     hasSubs = true
   agent[].addSubscription(AnySigilName, remoteRouter, remoteSlot)
 
