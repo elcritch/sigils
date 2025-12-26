@@ -105,18 +105,13 @@ method removeSubscriptionsFor*(
       $self.unsafeWeakRef()
   removeSubscriptionsForImpl(self, subscriber)
 
-template unregisterSubscriberImpl*(self: Agent, listener: WeakRef[Agent]) =
-  debugPrint "\tunregisterSubscriber: ", $listener, " from self: ",
-      self.unsafeWeakRef()
-  # debugPrint "\tlisterners:subscribed ", subscriber.tgt[].subscribed
-  assert listener in self.listening
-  self.listening.excl(listener)
-
 method unregisterSubscriber*(
     self: Agent, listener: WeakRef[Agent]
 ) {.base, gcsafe, raises: [].} =
+  debugPrint "\tunregisterSubscriber: ", $listener, " from self: ", self.unsafeWeakRef()
   debugPrint &"   unregisterSubscriber:agent: self: {$self.unsafeWeakRef()}"
-  unregisterSubscriberImpl(self, listener)
+  assert listener in self.listening
+  self.listening.excl(listener)
 
 template unsubscribeFrom*(self: WeakRef[Agent], listening: HashSet[WeakRef[Agent]]) =
   ## unsubscribe myself from agents I'm subscribed (listening) to
@@ -187,57 +182,42 @@ proc asAgent*[T: Agent](obj: WeakRef[T]): WeakRef[Agent] =
 proc asAgent*[T: Agent](obj: T): Agent =
   result = obj
 
-proc hasSubscriptionImpl*(obj: Agent, sig: SigilName): bool =
-  for idx in 0 ..< obj.subcriptions.len():
-    if obj.subcriptions[idx].signal == sig:
-      return true
-
-proc hasSubscriptionImpl*(obj: Agent, sig: SigilName, tgt: WeakRef[Agent]): bool =
-  for idx in 0 ..< obj.subcriptions.len():
-    if obj.subcriptions[idx].signal == sig and
-        obj.subcriptions[idx].subscription.tgt == tgt:
-      return true
-
-proc hasSubscriptionImpl*(obj: Agent, sig: SigilName, tgt: WeakRef[Agent],
-    slot: AgentProc): bool =
-  for idx in 0 ..< obj.subcriptions.len():
-    if obj.subcriptions[idx].signal == sig and
-        obj.subcriptions[idx].subscription.tgt == tgt and
-        obj.subcriptions[idx].subscription.slot == slot:
-      return true
-
 method hasSubscription*(
     obj: Agent, sig: SigilName
 ): bool {.base, gcsafe, raises: [].} =
-  result = hasSubscriptionImpl(obj, sig)
+  for idx in 0 ..< obj.subcriptions.len():
+    if obj.subcriptions[idx].signal == sig:
+      return true
 
 method hasSubscription*(
     obj: Agent, sig: SigilName, tgt: Agent | WeakRef[Agent]
 ): bool {.base, gcsafe, raises: [].} =
   let tgtRef = tgt.unsafeWeakRef().toKind(Agent)
-  result = hasSubscriptionImpl(obj, sig, tgtRef)
+  for idx in 0 ..< obj.subcriptions.len():
+    if obj.subcriptions[idx].signal == sig and
+        obj.subcriptions[idx].subscription.tgt == tgtRef:
+      return true
 
 method hasSubscription*(
     obj: Agent, sig: SigilName, tgt: Agent | WeakRef[Agent], slot: AgentProc
 ): bool {.base, gcsafe, raises: [].} =
   let tgtRef = tgt.unsafeWeakRef().toKind(Agent)
-  result = hasSubscriptionImpl(obj, sig, tgtRef, slot)
-
-proc addSubscriptionImpl*(
-    obj: Agent, sig: SigilName, tgt: WeakRef[Agent], slot: AgentProc
-): void =
-  doAssert not obj.isNil(), "agent is nil!"
-  assert slot != nil
-
-  if not hasSubscriptionImpl(obj, sig, tgt, slot):
-    obj.subcriptions.add((sig, Subscription(tgt: tgt, slot: slot)))
-    tgt[].listening.incl(obj.unsafeWeakRef().asAgent())
+  for idx in 0 ..< obj.subcriptions.len():
+    if obj.subcriptions[idx].signal == sig and
+        obj.subcriptions[idx].subscription.tgt == tgtRef and
+        obj.subcriptions[idx].subscription.slot == slot:
+      return true
 
 method addSubscription*(
     obj: Agent, sig: SigilName, tgt: Agent | WeakRef[Agent], slot: AgentProc
 ) {.base, gcsafe, raises: [].} =
   let tgtRef = tgt.unsafeWeakRef().toKind(Agent)
-  addSubscriptionImpl(obj, sig, tgtRef, slot)
+  doAssert not obj.isNil(), "agent is nil!"
+  assert slot != nil
+
+  if not hasSubscription(obj, sig, tgt, slot):
+    obj.subcriptions.add((sig, Subscription(tgt: tgtRef, slot: slot)))
+    tgt[].listening.incl(obj.unsafeWeakRef().asAgent())
 
 template addSubscription*(
     obj: Agent, sig: IndexableChars, tgt: Agent | WeakRef[Agent],
