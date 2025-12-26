@@ -1,6 +1,9 @@
+import std/locks
+
 import signals
 import slots
 import agents
+import actors
 
 when defined(sigilsDebug):
   from system/ansi_c import c_raise
@@ -58,6 +61,13 @@ template callSlotsImpl(obj: Agent, req: SigilRequest, subsIter: untyped) =
 
 method callSlots*(obj: Agent, req: SigilRequest) {.base, gcsafe.} =
   callSlotsImpl(obj, req, obj.getSubscriptions(req.procName))
+
+method callSlots*(obj: AgentActor, req: SigilRequest) {.gcsafe.} =
+  var subs: seq[Subscription]
+  withLock obj.lock:
+    for sub in obj.getSubscriptions(req.procName):
+      subs.add(sub)
+  callSlotsImpl(Agent(obj), req, subs.items)
 
 proc emit*(call: (Agent | WeakRef[Agent], SigilRequest)) =
   let (obj, req) = call

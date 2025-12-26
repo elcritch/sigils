@@ -9,13 +9,13 @@ import threading/atomics
 
 import isolateutils
 import agents
-import actor
+import actors
 import core
 
 from system/ansi_c import c_raise
 
 export smartptrs, isolation, channels
-export actor
+export actors
 export isolateutils
 
 const SigilTimerRepeat* = -1

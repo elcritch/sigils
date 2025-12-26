@@ -2,7 +2,6 @@ import std/locks
 import threading/channels
 
 import agents
-import core
 
 type
   ThreadSignalKind* {.pure.} = enum
@@ -41,6 +40,7 @@ type
 
   SigilChan* = Chan[ThreadSignal]
 
+type
   AgentActor* = ref object of Agent
     inbox*: SigilChan
     lock*: Lock
@@ -93,11 +93,4 @@ method delSubscription*(
   let tgtRef = tgt.unsafeWeakRef().toKind(Agent)
   withLock self.lock:
     delSubscriptionImpl(Agent(self), sig, tgtRef, slot)
-
-method callSlots*(obj: AgentActor, req: SigilRequest) {.gcsafe.} =
-  var subs: seq[Subscription]
-  withLock obj.lock:
-    for sub in obj.getSubscriptions(req.procName):
-      subs.add(sub)
-  callSlotsImpl(Agent(obj), req, subs.items)
 
