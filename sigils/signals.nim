@@ -31,9 +31,9 @@ proc splitNamesImpl(slot: NimNode): Option[(NimNode, NimNode)] =
   # echo "splitNamesImpl:res: ", result.repr
 
 macro signalType*(s: untyped): auto =
-  ## gets the type of the signal without 
+  ## gets the type of the signal without
   ## the Agent proc type
-  ## 
+  ##
   let p = s.getTypeInst
   # echo "\nsignalType: ", p.treeRepr
   # echo "signalType: ", p.repr
@@ -82,9 +82,9 @@ template connect*[T](
     acceptVoidSlot: static bool = false,
 ): void =
   ## sets up `b` to recieve events from `a`. Both `a` and `b`
-  ## must subtype `Agent`. The `signal` must be a signal proc, 
+  ## must subtype `Agent`. The `signal` must be a signal proc,
   ## while `slot` must be a slot proc.
-  ## 
+  ##
   runnableExamples:
     type
       Updater* = ref object of Agent
@@ -134,7 +134,7 @@ template connected*(
     signal: typed,
     b: Agent,
 ): bool =
-  let sn = signalName(signal).toSigilName() 
+  let sn = signalName(signal).toSigilName()
   if a.hasSubscription(sn, b):
     true
   else:
@@ -147,7 +147,7 @@ template connected*(
     slots: untyped,
 ): bool =
   let agentSlot = `slots`(typeof(b))
-  let sn = signalName(signal).toSigilName() 
+  let sn = signalName(signal).toSigilName()
   if a.hasSubscription(sn, b, agentSlot):
     true
   else:

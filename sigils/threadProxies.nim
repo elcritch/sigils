@@ -13,7 +13,7 @@ import threadBase
 from system/ansi_c import c_raise
 
 type
-  AgentProxyShared* = ref object of AgentRemote
+  AgentProxyShared* = ref object of AgentActor
     remote*: WeakRef[Agent]
     proxyTwin*: WeakRef[AgentProxyShared]
     remoteThread*: SigilThreadPtr
@@ -22,10 +22,10 @@ type
 
 proc `=destroy`*(obj: var typeof(AgentProxyShared()[])) =
   when defined(sigilsWeakRefPointer):
-    let agent = WeakRef[AgentRemote](pt: cast[pointer](addr obj))
+    let agent = WeakRef[AgentActor](pt: cast[pointer](addr obj))
   else:
     let pt: WeakRef[pointer] = WeakRef[pointer](pt: cast[pointer](addr obj))
-    let agent = cast[WeakRef[AgentRemote]](pt)
+    let agent = cast[WeakRef[AgentActor]](pt)
   debugPrint "PROXY Destroy: ", cast[AgentProxyShared](addr(obj)).unsafeWeakRef()
   `=destroy`(toAgentObj(cast[AgentProxyShared](addr obj)))
 
@@ -65,7 +65,7 @@ method hasConnections*(proxy: AgentProxyShared): bool {.gcsafe, raises: [].} =
 method callMethod*(
     proxy: AgentProxyShared, req: SigilRequest, slot: AgentProc
 ): SigilResponse {.gcsafe, effectsOf: slot.} =
-  ## Route's an rpc request. 
+  ## Route's an rpc request.
   debugPrint "callMethod: proxy: ",
     $proxy.unsafeWeakRef().asAgent(),
     " refcount: ",
@@ -93,7 +93,7 @@ method callMethod*(
       withLock proxy.lock:
         if not proxy.proxyTwin.isNil:
           withLock proxy.remoteThread[].signaledLock:
-            proxy.remoteThread[].signaled.incl(proxy.proxyTwin.toKind(AgentRemote))
+            proxy.remoteThread[].signaled.incl(proxy.proxyTwin.toKind(AgentActor))
           proxy.proxyTwin[].inbox.send(msg)
           debugQueuePrint "queue:proxy inbox size: ",
             $proxy.proxyTwin[].inbox.peek(),
@@ -101,7 +101,7 @@ method callMethod*(
       proxy.remoteThread.send(ThreadSignal(kind: Trigger))
   elif slot == localSlot:
     debugPrint "\t proxy:callMethod:localSlot: "
-    callSlots(proxy, req)
+    proxy.callSlots(req)
   else:
     when defined(sigilsAllRemoteSlotsDeprecated):
       # Note: the method where we only use localSlot and remoteSlot sort of works
@@ -126,26 +126,24 @@ method callMethod*(
             $proxy.proxyTwin[].inbox.peek(),
             " proxy: ", $proxy.proxyTwin
           withLock proxy.remoteThread[].signaledLock:
-            proxy.remoteThread[].signaled.incl(proxy.proxyTwin.toKind(AgentRemote))
+            proxy.remoteThread[].signaled.incl(proxy.proxyTwin.toKind(AgentActor))
         proxy.remoteThread.send(ThreadSignal(kind: Trigger))
 
 method removeSubscriptionsFor*(
     self: AgentProxyShared, subscriber: WeakRef[Agent]
 ) {.gcsafe, raises: [].} =
   debugPrint "   removeSubscriptionsFor:proxy: self:id: ", $self.unsafeWeakRef()
-  withLock self.lock:
-    # block:
-    debugPrint "   removeSubscriptionsFor:proxy:ready: self:id: ", $self.unsafeWeakRef()
-    removeSubscriptionsForImpl(self, subscriber)
+  debugPrint "   removeSubscriptionsFor:proxy:ready: self:id: ",
+      $self.unsafeWeakRef()
+  procCall removeSubscriptionsFor(AgentActor(self), subscriber)
 
 method unregisterSubscriber*(
     self: AgentProxyShared, listener: WeakRef[Agent]
 ) {.gcsafe, raises: [].} =
   debugPrint "   unregisterSubscriber:proxy: self:id: ", $self.unsafeWeakRef()
-  withLock self.lock:
-    # block:
-    debugPrint "   unregisterSubscriber:proxy:ready: self:id: ", $self.unsafeWeakRef()
-    unregisterSubscriberImpl(self, listener)
+  debugPrint "   unregisterSubscriber:proxy:ready: self:id: ",
+      $self.unsafeWeakRef()
+  procCall unregisterSubscriber(AgentActor(self), listener)
 
 proc initProxy*[T](proxy: var AgentProxy[T],
                   agent: WeakRef[Agent],
@@ -173,7 +171,8 @@ iterator findSubscribedTo(
 ): tuple[signal: SigilName, subscription: Subscription] =
   for item in other[].subcriptions.mitems():
     if item.subscription.tgt == agent:
-      yield (item.signal, Subscription(tgt: other, slot: item.subscription.slot))
+      yield (item.signal, Subscription(tgt: other,
+          slot: item.subscription.slot))
 
 proc moveToThread*[T: Agent, R: SigilThread](
     agentTy: var T, thread: ptr R, inbox = 1_000
@@ -219,13 +218,15 @@ proc moveToThread*[T: Agent, R: SigilThread](
       item.subscription.tgt[].addSubscription(item.signal, localProxy, remoteSlot)
       remoteRouter.addSubscription(item.signal, agentTy, item.subscription.slot)
     else:
-      item.subscription.tgt[].addSubscription(item.signal, localProxy, item.subscription.slot)
+      item.subscription.tgt[].addSubscription(item.signal, localProxy,
+          item.subscription.slot)
     listenSubs = true
 
   # update my subcriptionsTable so agent uses the remote proxy to send events back
   var hasSubs = false
   for item in oldSubscribers:
-    localProxy.addSubscription(item.signal, item.subscription.tgt[], item.subscription.slot)
+    localProxy.addSubscription(item.signal, item.subscription.tgt[],
+        item.subscription.slot)
     hasSubs = true
   agent[].addSubscription(AnySigilName, remoteRouter, remoteSlot)
 
@@ -242,7 +243,7 @@ template connectThreaded*[T, U, S](
     acceptVoidSlot: static bool = false,
 ): void =
   ## connects `AgentProxy[T]` to remote signals
-  ## 
+  ##
   checkSignalTypes(T(), signal, U(), slot, acceptVoidSlot)
   let localProxy = Agent(proxyTy)
   localProxy.addSubscription(signalName(signal), b, slot)
@@ -255,7 +256,7 @@ template connectThreaded*[T, S](
     acceptVoidSlot: static bool = false,
 ): void =
   ## connects `AgentProxy[T]` to remote signals
-  ## 
+  ##
   checkSignalTypes(T(), signal, b, slot, acceptVoidSlot)
   let localProxy = Agent(remoteRouter)
   localProxy.addSubscription(signalName(signal), b, slot)
@@ -268,14 +269,15 @@ template connectThreaded*[T, S](
     acceptVoidSlot: static bool = false,
 ): void =
   ## connects `AgentProxy[T]` to remote signals
-  ## 
+  ##
   checkSignalTypes(a, signal, T(), slot, acceptVoidSlot)
   assert not localProxy.proxyTwin.isNil
   assert not localProxy.remote.isNil
   when defined(sigilsAllRemoteSlotsDeprecated):
     a.addSubscription(signalName(signal), localProxy, remoteSlot)
     withLock localProxy.proxyTwin[].lock:
-      localProxy.proxyTwin[].addSubscription(signalName(signal), localProxy.remote[], slot)
+      localProxy.proxyTwin[].addSubscription(signalName(signal),
+          localProxy.remote[], slot)
   else:
     a.addSubscription(signalName(signal), localProxy, slot)
 
@@ -287,7 +289,7 @@ template connectThreaded*[T](
     acceptVoidSlot: static bool = false,
 ): void =
   ## connects `AgentProxy[T]` to remote signals
-  ## 
+  ##
   checkSignalThreadSafety(SignalTypes.`signal`(typeof(a)))
   assert not localProxy.proxyTwin.isNil
   assert not localProxy.remote.isNil
@@ -296,7 +298,8 @@ template connectThreaded*[T](
   when defined(sigilsAllRemoteSlotsDeprecated):
     a.addSubscription(signalName(signal), localProxy, remoteSlot)
     withLock localProxy.proxyTwin[].lock:
-      localProxy.proxyTwin[].addSubscription(signalName(signal), localProxy.remote[], agentSlot)
+      localProxy.proxyTwin[].addSubscription(signalName(signal),
+          localProxy.remote[], agentSlot)
   else:
     a.addSubscription(signalName(signal), localProxy, agentSlot)
 
@@ -308,7 +311,7 @@ template connectThreaded*[T](
     acceptVoidSlot: static bool = false,
 ): void =
   ## connects `AgentProxy[T]` to remote signals
-  ## 
+  ##
   checkSignalThreadSafety(SignalTypes.`signal`(typeof(thr.agent)))
   let agentSlot = `slot`(T)
   checkSignalTypes(thr.agent, signal, T(), agentSlot, acceptVoidSlot)
@@ -322,17 +325,19 @@ macro callCode(s: static string): untyped =
   ## calls a code to get the signal type using a static string
   result = parseStmt(s)
 
-proc fwdSlotTy[A: Agent; B: Agent; S: static string](self: Agent, params: SigilParams) {.nimcall.} =
-    let agentSlot = callCode(S)
-    let req = SigilRequest(
-      kind: Request, origin: SigilId(-1), procName: signalName(signal), params: params.duplicate()
-    )
-    var msg = ThreadSignal(kind: Call)
-    msg.slot = agentSlot
-    msg.req = req
-    msg.tgt = self.unsafeWeakRef().asAgent()
-    let ct = getCurrentSigilThread()
-    ct.send(msg)
+proc fwdSlotTy[A: Agent; B: Agent; S: static string](self: Agent,
+    params: SigilParams) {.nimcall.} =
+  let agentSlot = callCode(S)
+  let req = SigilRequest(
+    kind: Request, origin: SigilId(-1), procName: signalName(signal),
+        params: params.duplicate()
+  )
+  var msg = ThreadSignal(kind: Call)
+  msg.slot = agentSlot
+  msg.req = req
+  msg.tgt = self.unsafeWeakRef().asAgent()
+  let ct = getCurrentSigilThread()
+  ct.send(msg)
 
 template connectQueued*[T](
     a: Agent,
@@ -355,17 +360,19 @@ macro callSlot(s: static string, a: typed): untyped =
     `id`(`a`)
   echo "callSlot:result: ", result.repr
 
-proc fwdSlot[A: Agent; B: Agent; S: static string](self: Agent, params: SigilParams) {.nimcall.} =
-    let agentSlot = callSlot(S, typeof(B))
-    let req = SigilRequest(
-      kind: Request, origin: SigilId(-1), procName: signalName(signal), params: params.duplicate()
-    )
-    var msg = ThreadSignal(kind: Call)
-    msg.slot = agentSlot
-    msg.req = req
-    msg.tgt = self.unsafeWeakRef().asAgent()
-    let ct = getCurrentSigilThread()
-    ct.send(msg)
+proc fwdSlot[A: Agent; B: Agent; S: static string](self: Agent,
+    params: SigilParams) {.nimcall.} =
+  let agentSlot = callSlot(S, typeof(B))
+  let req = SigilRequest(
+    kind: Request, origin: SigilId(-1), procName: signalName(signal),
+        params: params.duplicate()
+  )
+  var msg = ThreadSignal(kind: Call)
+  msg.slot = agentSlot
+  msg.req = req
+  msg.tgt = self.unsafeWeakRef().asAgent()
+  let ct = getCurrentSigilThread()
+  ct.send(msg)
 
 template connectQueued*(
     a: Agent,

@@ -63,7 +63,8 @@ proc registerGlobalAgent*[T](
           proxy.proxyTwin[].proxyTwin.pt = nil
       proxy.proxyTwin.pt = nil
 
-proc removeGlobalName*[T](name: SigilName, proxy: AgentProxy[T]): bool {.gcsafe.} =
+proc removeGlobalName*[T](name: SigilName, proxy: AgentProxy[
+    T]): bool {.gcsafe.} =
   withLock regLock:
     {.cast(gcsafe).}:
       if name in registry:
@@ -82,7 +83,8 @@ proc lookupGlobalName*(name: SigilName): Option[AgentLocation] {.gcsafe.} =
       if name in registry:
         result = some registry[name]
 
-proc lookupAgentProxyImpl[T](name: SigilName, location: AgentLocation, tp: typeof[T], cache = true): AgentProxy[T] =
+proc lookupAgentProxyImpl[T](name: SigilName, location: AgentLocation,
+    tp: typeof[T], cache = true): AgentProxy[T] =
   if getTypeId(T) != location.typeId:
     raise newException(ValueError, "can't create proxy of the correct type!")
   if location.thread.isNil or location.agent.isNil:

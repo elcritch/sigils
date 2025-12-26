@@ -16,11 +16,12 @@ type
   SigilThreadDefault* = object of SigilThread
     inputs*: SigilChan
     thr*: Thread[ptr SigilThreadDefault]
-  
+
   SigilThreadDefaultPtr* = ptr SigilThreadDefault
-  
+
 method send*(
-    thread: SigilThreadDefaultPtr, msg: sink ThreadSignal, blocking: BlockingKinds
+    thread: SigilThreadDefaultPtr, msg: sink ThreadSignal,
+        blocking: BlockingKinds
 ) {.gcsafe.} =
   var msg = isolateRuntime(msg)
   case blocking
@@ -36,7 +37,8 @@ method send*(
       " thread: ", $getThreadId(thread.toSigilThread()[])
 
 method recv*(
-    thread: SigilThreadDefaultPtr, msg: var ThreadSignal, blocking: BlockingKinds
+    thread: SigilThreadDefaultPtr, msg: var ThreadSignal,
+        blocking: BlockingKinds
 ): bool {.gcsafe.} =
   case blocking
   of Blocking:
@@ -51,7 +53,8 @@ method setTimer*(
   raise newException(AssertionDefect, "not implemented for this thread type!")
 
 proc newSigilThread*(): ptr SigilThreadDefault =
-  result = cast[ptr SigilThreadDefault](allocShared0(sizeof(SigilThreadDefault)))
+  result = cast[ptr SigilThreadDefault](allocShared0(sizeof(
+      SigilThreadDefault)))
   result[] = SigilThreadDefault() # important!
   result[].agent = SigilThreadAgent()
   result[].inputs = newSigilChan()
