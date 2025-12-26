@@ -232,7 +232,8 @@ suite "threaded agent slots":
     check globalLastInnerCDestroyed.load == 2020
 
   test "agent connect b->a then moveToThread then destroy proxy":
-    debugPrintQuiet = false
+    when defined(sigilsDebugPrint):
+      debugPrintQuiet = false
 
     let ct = getCurrentSigilThread()
     var a = SomeAction.new()

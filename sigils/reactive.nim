@@ -20,7 +20,7 @@ type
   Sigil*[T] = ref object of SigilBase
     ## Core *reactive* data type for doing reactive style programming
     ## akin to RXJS, React useState, Svelte, etc.
-    ## 
+    ##
     ## This builds on the core signals and slots but provides a
     ## higher level API for working with propagating values.
     val: T
@@ -29,7 +29,7 @@ type
     effects: HashSet[SigilEffect]
 
 proc `$`*(s: SigilBase): string =
-  result = "Sigil" 
+  result = "Sigil"
   result &= $s.attrs
 
 proc `$`*[T](s: Sigil[T]): string =
@@ -98,10 +98,10 @@ var enableSigilBinding* {.compileTime.}: seq[bool] = @[false]
 
 template getInternalSigilIdent*(): untyped =
   ## overridable template to provide the ident
-  ## that `{}` uses to look for the current 
+  ## that `{}` uses to look for the current
   ## scoped to operate on – if one exists in
   ## this scope
-  ## 
+  ##
   ## for example `internalSigil` is used as the
   ## default identifier in `computed` block to
   ## connect dereferenced sigils to
@@ -125,7 +125,7 @@ template unBindSigilEvents*(blk: untyped): auto =
   static: discard enableSigilBinding.pop()
 
 template `{}`*[T](sigil: Sigil[T]): auto {.inject.} =
-  ## deferences a typed Sigil to get it's value 
+  ## deferences a typed Sigil to get it's value
   ## either from static sigils or computed sigils
   mixin getInternalSigilIdent
   when enableSigilBinding[^1]:
@@ -211,11 +211,11 @@ template effect*(blk: untyped) =
   ## Creates a new fSigilEfect that is lazily
   ## evaluated whenever `triggerEffects` is sent to
   ## the SigilEffectRegistry in scope.
-  ## 
+  ##
   ## The SigilEffectRegistry is gotten by
   ## `getSigilEffectsRegistry()` and can be overriden
   ## to provide a custom registry.
-  ## 
+  ##
   let res = SigilEffect()
   when defined(sigilsDebug):
     res.debugName = "EFF"

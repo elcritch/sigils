@@ -53,6 +53,7 @@ for n in [42, 137]:
   emit trigger.valueChanged(n)
   discard ct.poll() # workerA result
   discard ct.poll() # workerB result
+  echo "collector: ", collector.a, " ", collector.b, " n: ", n
   doAssert collector.a == n
   doAssert collector.b == n
 

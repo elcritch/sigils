@@ -27,14 +27,14 @@ type
     drain*: Atomic[bool]
     isReady*: bool
     thr*: Thread[ptr AsyncSigilThread]
-  
+
   AsyncSigilThreadPtr* = ptr AsyncSigilThread
 
 proc newSigilAsyncThread*(): ptr AsyncSigilThread =
   result = cast[ptr AsyncSigilThread](allocShared0(sizeof(AsyncSigilThread)))
   result[] = AsyncSigilThread() # important!
   result[].event = newAsyncEvent()
-  result[].agent = ThreadAgent()
+  result[].agent = SigilThreadAgent()
   result[].signaledLock.initLock()
   result[].inputs = newSigilChan()
   result[].running.store(true, Relaxed)
@@ -52,12 +52,15 @@ method send*(
     let sent = thread.inputs.trySend(msg)
     if not sent:
       raise newException(MessageQueueFullError, "could not send!")
+  debugQueuePrint "queue:thread inputs size: ", $thread.inputs.peek(),
+    " thread: ", $getThreadId(thread.toSigilThread()[])
   thread.event.trigger()
 
 method recv*(
     thread: AsyncSigilThreadPtr, msg: var ThreadSignal, blocking: BlockingKinds
 ): bool {.gcsafe.} =
-  debugPrint "threadRecv: ", thread.toSigilThread()[].getThreadId(), " blocking: ", blocking
+  debugPrint "threadRecv: ", thread.toSigilThread()[].getThreadId(),
+      " blocking: ", blocking
   case blocking
   of Blocking:
     msg = thread.inputs.recv()
@@ -77,7 +80,7 @@ method setTimer*(
       else:
         emit timer.timeout()
         return false
-    asyncdispatch.addTimer(timer.duration.inMilliseconds(), oneshot=false, cb)
+    asyncdispatch.addTimer(timer.duration.inMilliseconds(), oneshot = false, cb)
   else:
     proc cb(fd: AsyncFD): bool {.closure, gcsafe.} =
       if timer.count == 0 or thread.hasCancelTimer(timer):
@@ -86,9 +89,9 @@ method setTimer*(
       else:
         emit timer.timeout()
         timer.count.dec()
-        asyncdispatch.addTimer(timer.duration.inMilliseconds(), oneshot=true, cb)
+        asyncdispatch.addTimer(timer.duration.inMilliseconds(), oneshot = true, cb)
         return false
-    asyncdispatch.addTimer(timer.duration.inMilliseconds(), oneshot=true, cb)
+    asyncdispatch.addTimer(timer.duration.inMilliseconds(), oneshot = true, cb)
 
 proc setupThread*(thread: ptr AsyncSigilThread) =
   if thread[].isReady:
@@ -96,31 +99,32 @@ proc setupThread*(thread: ptr AsyncSigilThread) =
   thread[].isReady = true
 
   let cb = proc(fd: AsyncFD): bool {.closure, gcsafe.} =
-      var sig: ThreadSignal
-      while isRunning(thread) and thread.recv(sig, NonBlocking):
-        try:
-          thread.exec(sig)
-        except CatchableError as e:
-          if thread[].exceptionHandler.isNil:
-            raise e
-          else:
-            thread[].exceptionHandler(e)
-        except Exception as e:
-          if thread[].exceptionHandler.isNil:
-            raise e
-          else:
-            thread[].exceptionHandler(e)
-        except Defect as e:
-          if thread[].exceptionHandler.isNil:
-            raise e
-          else:
-            thread[].exceptionHandler(e)
+    var sig: ThreadSignal
+    while isRunning(thread) and thread.recv(sig, NonBlocking):
+      try:
+        thread.exec(sig)
+      except CatchableError as e:
+        if thread[].exceptionHandler.isNil:
+          raise e
+        else:
+          thread[].exceptionHandler(e)
+      except Exception as e:
+        if thread[].exceptionHandler.isNil:
+          raise e
+        else:
+          thread[].exceptionHandler(e)
+      except Defect as e:
+        if thread[].exceptionHandler.isNil:
+          raise e
+        else:
+          thread[].exceptionHandler(e)
   thread[].event.addEvent(cb)
 
-method poll*(thread: AsyncSigilThreadPtr, blocking: BlockingKinds = Blocking): bool {.gcsafe, discardable.} =
+method poll*(thread: AsyncSigilThreadPtr,
+    blocking: BlockingKinds = Blocking): bool {.gcsafe, discardable.} =
   if not thread[].isReady:
     thread.setupThread()
-  
+
   case blocking
   of Blocking:
     asyncdispatch.poll()
@@ -158,7 +162,8 @@ proc start*(thread: ptr AsyncSigilThread) =
     thread[].exceptionHandler = defaultExceptionHandler
   createThread(thread[].thr, runAsyncThread, thread)
 
-proc stop*(thread: ptr AsyncSigilThread, immediate: bool = false, drain: bool = false) =
+proc stop*(thread: ptr AsyncSigilThread, immediate: bool = false,
+    drain: bool = false) =
   thread[].running.store(false, Relaxed)
   thread[].drain.store(drain, Relaxed)
   if immediate:

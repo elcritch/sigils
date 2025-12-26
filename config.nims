@@ -18,3 +18,7 @@ task testTsan, "Compile and run all tests in tests/":
   putEnv("TSAN_OPTIONS", "suppressions=tests/tsan.ignore")
   exec fmt"nim c -r tests/tmultiThreads.nim"
 
+# begin Nimble config (version 2)
+when withDir(thisDir(), system.fileExists("nimble.paths")):
+  include "nimble.paths"
+# end Nimble config

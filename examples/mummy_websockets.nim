@@ -80,7 +80,7 @@ proc runHeartbeat*(self: HeartBeats) {.slot.} =
 
 proc start*(self: HeartBeats) {.slot.} =
   echo "Starting heartbeat!"
-  self.timer = newSigilTimer(initDuration(seconds = 1))
+  self.timer = newSigilTimer(initDuration(milliseconds = 100))
   connect(self.timer, timeout, self, runHeartbeat)
   connect(self, doHeartbeat, self, sendBucket)
   self.timer.start()

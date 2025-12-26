@@ -9,11 +9,13 @@ import threading/atomics
 
 import isolateutils
 import agents
+import actors
 import core
 
 from system/ansi_c import c_raise
 
 export smartptrs, isolation, channels
+export actors
 export isolateutils
 
 const SigilTimerRepeat* = -1
@@ -32,55 +34,16 @@ type
     Blocking
     NonBlocking
 
-  ThreadSignalKind* {.pure.} = enum
-    Call
-    Move
-    AddSub
-    DelSub
-    Trigger
-    Deref
-    Exit
-
-  ThreadSignal* = object
-    case kind*: ThreadSignalKind
-    of Call:
-      slot*: AgentProc
-      req*: SigilRequest
-      tgt*: WeakRef[Agent]
-    of Move:
-      item*: Agent
-    of AddSub:
-      add*: ThreadSub
-    of DelSub:
-      del*: ThreadSub
-    of Trigger:
-      discard
-    of Deref:
-      deref*: WeakRef[Agent]
-    of Exit:
-      discard
-
-  ThreadSub* = object
-    src*: WeakRef[Agent]
-    name*: SigilName
-    tgt*: WeakRef[Agent]
-    fn*: AgentProc
-
-  SigilChan* = Chan[ThreadSignal]
-
-  AgentRemote* = ref object of Agent
-    inbox*: Chan[ThreadSignal]
-
-  ThreadAgent* = ref object of Agent
+  SigilThreadAgent* = ref object of Agent
 
   SigilThread* = object of RootObj
     threadId*: Atomic[int]
 
     signaledLock*: Lock
-    signaled*: HashSet[WeakRef[AgentRemote]]
+    signaled*: HashSet[WeakRef[AgentActor]]
 
     references*: Table[WeakRef[Agent], Agent]
-    agent*: ThreadAgent
+    agent*: SigilThreadAgent
     exceptionHandler*: proc(e: ref Exception) {.gcsafe, nimcall.}
     when defined(sigilsDebug):
       debugName*: string
@@ -91,7 +54,7 @@ type
 
 proc timeout*(timer: SigilTimer) {.signal.}
 
-proc started*(tp: ThreadAgent) {.signal.}
+proc started*(tp: SigilThreadAgent) {.signal.}
 
 proc getThreadId*(thread: SigilThread): int =
   addr(thread.threadId)[].load(Relaxed)
@@ -114,7 +77,8 @@ proc newSigilChan*(): SigilChan =
   result = newChan[ThreadSignal](1_000)
 
 method send*(
-    thread: SigilThreadPtr, msg: sink ThreadSignal, blocking: BlockingKinds = Blocking
+    thread: SigilThreadPtr, msg: sink ThreadSignal,
+        blocking: BlockingKinds = Blocking
 ) {.base, gcsafe.} =
   raise newException(AssertionDefect, "this should never be called!")
 
@@ -189,7 +153,7 @@ proc exec*(thread: SigilThreadPtr, sig: ThreadSignal) {.gcsafe.} =
                                             " del: " & $sig.del.src &
                                             " to " & $sig.del.tgt)
     if sig.del.src in thread.references and sig.del.tgt in thread.references:
-      sig.del.src[].delSubscription(sig.del.name, sig.del.tgt[], sig.del.fn)
+      sig.del.src[].delSubscription(sig.del.name, sig.del.tgt, sig.del.fn)
     else:
       raise newException(UnableToSubscribe, "unable to subscribe to missing" &
                                             " src: " & $sig.del.src &
@@ -201,7 +165,7 @@ proc exec*(thread: SigilThreadPtr, sig: ThreadSignal) {.gcsafe.} =
       debugPrint "\t threadExec:run:deref: ", $sig.deref.unsafeWeakRef()
       thread.references.del(sig.deref)
     withLock thread.signaledLock:
-      thread.signaled.excl(cast[WeakRef[AgentRemote]](sig.deref))
+      thread.signaled.excl(cast[WeakRef[AgentActor]](sig.deref))
     thread.gcCollectReferences()
   of Call:
     debugPrint "\t threadExec:call: ", $sig.tgt[].getSigilId()
@@ -223,7 +187,7 @@ proc exec*(thread: SigilThreadPtr, sig: ThreadSignal) {.gcsafe.} =
       $sig.tgt[].getSigilId(), " rc: ", $sig.tgt[].unsafeGcCount()
   of Trigger:
     debugPrint "Triggering"
-    var signaled: HashSet[WeakRef[AgentRemote]]
+    var signaled: HashSet[WeakRef[AgentActor]]
     withLock thread.signaledLock:
       signaled = move thread.signaled
     {.cast(gcsafe).}:

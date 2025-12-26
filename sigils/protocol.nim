@@ -131,7 +131,8 @@ proc rpcUnpack*[T](obj: var T, ss: SigilParams) =
     assert not ss.buf.isNil
     obj = ss.buf.getWrapped(T)
 
-proc wrapResponse*(id: SigilId, resp: SigilParams, kind = Response): SigilResponse =
+proc wrapResponse*(id: SigilId, resp: SigilParams,
+    kind = Response): SigilResponse =
   # echo "WRAP RESP: ", id, " kind: ", kind
   result.kind = kind
   result.id = id.int

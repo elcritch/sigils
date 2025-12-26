@@ -8,11 +8,11 @@ import threading/atomics
 
 import protocol
 import weakrefs
+import debugs
 
 when (NimMajor, NimMinor, NimPatch) < (2, 2, 0):
-  {.passc:"-fpermissive".}
-  {.passl:"-fpermissive".}
-
+  {.passc: "-fpermissive".}
+  {.passl: "-fpermissive".}
 
 when defined(nimscript):
   import std/json
@@ -35,55 +35,7 @@ export protocol
 
 import std/[terminal, strutils, strformat, sequtils]
 export strformat
-
-var
-  pcolors* = [fgRed, fgYellow, fgMagenta, fgCyan]
-  pcnt*: int = 0
-  pidx* {.threadVar.}: int
-  plock: Lock
-  debugPrintQuiet* = false
-
-plock.initLock()
-
-proc debugPrintImpl*(msgs: varargs[string, `$`]) {.raises: [].} =
-  {.cast(gcsafe).}:
-    try:
-      # withLock plock:
-      block:
-        let
-          tid = getThreadId()
-          color =
-            if pidx == 0:
-              fgBlue
-            else:
-              pcolors[pidx mod pcolors.len()]
-        var msg = ""
-        for m in msgs:
-          msg &= m
-        stdout.styledWriteLine color, msg, {styleBright}, &" [th: {$tid}]"
-        stdout.flushFile()
-    except IOError:
-      discard
-
-template debugPrint*(msgs: varargs[untyped]) =
-  when defined(sigilsDebugPrint):
-    if not debugPrintQuiet:
-      debugPrintImpl(msgs)
-
-proc brightPrint*(color: ForegroundColor, msg, value: string, msg2 = "", value2 = "") =
-  if not debugPrintQuiet:
-    stdout.styledWriteLine color,
-      msg,
-      {styleBright, styleItalic},
-      value,
-      resetStyle,
-      color,
-      msg2,
-      {styleBright, styleItalic},
-      value2
-
-proc brightPrint*(msg, value: string, msg2 = "", value2 = "") =
-  brightPrint(fgGreen, msg, value, msg2, value2)
+export debugs
 
 type
   AgentObj = object of RootObj
@@ -139,7 +91,7 @@ proc `$`*[T: Agent](obj: WeakRef[T]): string =
   result &= ")"
 
 template removeSubscriptionsForImpl*(self: Agent, subscriber: WeakRef[Agent]) =
-  ## Route's an rpc request. 
+  ## Route's an rpc request.
   var toDel: seq[int] = newSeq[int](self.subcriptions.len())
   for idx in countdown(self.subcriptions.len() - 1, 0):
     debugPrint "   removeSubscriptionsFor subs sig: ", $self.subcriptions[idx].signal
@@ -147,34 +99,33 @@ template removeSubscriptionsForImpl*(self: Agent, subscriber: WeakRef[Agent]) =
       self.subcriptions.delete(idx..idx)
 
 method removeSubscriptionsFor*(
-    self: Agent, subscriber: WeakRef[Agent], slot: AgentProc
+    self: Agent, subscriber: WeakRef[Agent]
 ) {.base, gcsafe, raises: [].} =
-  debugPrint "   removeSubscriptionsFor:agent: ", " self:id: ", $self.unsafeWeakRef()
+  debugPrint "   removeSubscriptionsFor:agent: ", " self:id: ",
+      $self.unsafeWeakRef()
   removeSubscriptionsForImpl(self, subscriber)
-
-template unregisterSubscriberImpl*(self: Agent, listener: WeakRef[Agent]) =
-  debugPrint "\tunregisterSubscriber: ", $listener, " from self: ", self.unsafeWeakRef()
-  # debugPrint "\tlisterners:subscribed ", subscriber.tgt[].subscribed
-  assert listener in self.listening
-  self.listening.excl(listener)
 
 method unregisterSubscriber*(
     self: Agent, listener: WeakRef[Agent]
 ) {.base, gcsafe, raises: [].} =
+  debugPrint "\tunregisterSubscriber: ", $listener, " from self: ", self.unsafeWeakRef()
   debugPrint &"   unregisterSubscriber:agent: self: {$self.unsafeWeakRef()}"
-  unregisterSubscriberImpl(self, listener)
+  assert listener in self.listening
+  self.listening.excl(listener)
 
 template unsubscribeFrom*(self: WeakRef[Agent], listening: HashSet[WeakRef[Agent]]) =
   ## unsubscribe myself from agents I'm subscribed (listening) to
   debugPrint "   unsubscribeFrom:cnt: ", $listening.len(), " self: {$self}"
   for agent in listening:
-    agent[].removeSubscriptionsFor(self, nil)
+    agent[].removeSubscriptionsFor(self)
 
 template removeSubscriptions*(
-    agent: WeakRef[Agent], subcriptions: seq[tuple[signal: SigilName, subscription: Subscription]]
+    agent: WeakRef[Agent], subcriptions: seq[tuple[signal: SigilName,
+        subscription: Subscription]]
 ) =
   ## remove myself from agents listening to me
-  var tgts: HashSet[WeakRef[Agent]] = initHashSet[WeakRef[Agent]](subcriptions.len())
+  var tgts: HashSet[WeakRef[Agent]] = initHashSet[WeakRef[Agent]](
+      subcriptions.len())
   for idx in 0 ..< subcriptions.len():
     tgts.incl(subcriptions[idx].subscription.tgt)
 
@@ -231,52 +182,63 @@ proc asAgent*[T: Agent](obj: WeakRef[T]): WeakRef[Agent] =
 proc asAgent*[T: Agent](obj: T): Agent =
   result = obj
 
-proc hasSubscription*(obj: Agent, sig: SigilName): bool =
+method hasSubscription*(
+    obj: Agent, sig: SigilName
+): bool {.base, gcsafe, raises: [].} =
   for idx in 0 ..< obj.subcriptions.len():
     if obj.subcriptions[idx].signal == sig:
       return true
 
-proc hasSubscription*(obj: Agent, sig: SigilName, tgt: Agent | WeakRef[Agent]): bool =
-  let tgt = tgt.unsafeWeakRef().toKind(Agent)
+method hasSubscription*(
+    obj: Agent, sig: SigilName, tgt: WeakRef[Agent]
+): bool {.base, gcsafe, raises: [].} =
   for idx in 0 ..< obj.subcriptions.len():
     if obj.subcriptions[idx].signal == sig and
         obj.subcriptions[idx].subscription.tgt == tgt:
       return true
 
-proc hasSubscription*(obj: Agent, sig: SigilName, tgt: Agent | WeakRef[Agent], slot: AgentProc): bool =
-  let tgt = tgt.unsafeWeakRef().toKind(Agent)
+template hasSubscription*(obj: Agent, sig: SigilName, tgt: Agent): bool =
+  let tgtRef = tgt.unsafeWeakRef().toKind(Agent)
+  hasSubscription(obj, sig, tgtRef)
+
+method hasSubscription*(
+    obj: Agent, sig: SigilName, tgt: WeakRef[Agent], slot: AgentProc
+): bool {.base, gcsafe, raises: [].} =
   for idx in 0 ..< obj.subcriptions.len():
     if obj.subcriptions[idx].signal == sig and
         obj.subcriptions[idx].subscription.tgt == tgt and
         obj.subcriptions[idx].subscription.slot == slot:
       return true
 
-proc addSubscription*(
-    obj: Agent, sig: SigilName, tgt: Agent | WeakRef[Agent], slot: AgentProc
-): void =
+template hasSubscription*(obj: Agent, sig: SigilName, tgt: Agent, slot: AgentProc): bool =
+  let tgtRef = tgt.unsafeWeakRef().toKind(Agent)
+  hasSubscription(obj, sig, tgtRef, slot)
+
+method addSubscription*(
+    obj: Agent, sig: SigilName, tgt: WeakRef[Agent], slot: AgentProc
+) {.base, gcsafe, raises: [].} =
   doAssert not obj.isNil(), "agent is nil!"
   assert slot != nil
 
-  if not obj.hasSubscription(sig, tgt, slot):
-    obj.subcriptions.add((sig, Subscription(tgt: tgt.unsafeWeakRef().asAgent(), slot: slot)))
-    tgt.listening.incl(obj.unsafeWeakRef().asAgent())
+  if not procCall hasSubscription(obj, sig, tgt, slot):
+    obj.subcriptions.add((sig, Subscription(tgt: tgt, slot: slot)))
+    tgt[].listening.incl(obj.unsafeWeakRef().asAgent())
 
 template addSubscription*(
     obj: Agent, sig: IndexableChars, tgt: Agent | WeakRef[Agent], slot: AgentProc
 ): void =
-  addSubscription(obj, sig.toSigilName(), tgt, slot)
+  let tgtRef = tgt.unsafeWeakRef().toKind(Agent)
+  addSubscription(obj, sig.toSigilName(), tgtRef, slot)
 
 var printConnectionsSlotNames* = initTable[pointer, string]()
 
-proc delSubscription*(
-    self: Agent, sig: SigilName, tgt: Agent | WeakRef[Agent], slot: AgentProc
-): void =
-
-  let tgt = tgt.unsafeWeakRef().toKind(Agent)
+method delSubscription*(
+    self: Agent, sig: SigilName, tgt: WeakRef[Agent], slot: AgentProc
+) {.base, gcsafe, raises: [].} =
 
   var
-   subsFound: int
-   subsDeleted: int
+    subsFound: int
+    subsDeleted: int
 
   for idx in countdown(self.subcriptions.len() - 1, 0):
     if self.subcriptions[idx].signal == sig and
@@ -289,29 +251,39 @@ proc delSubscription*(
   if subsFound == subsDeleted:
     tgt[].listening.excl(self.unsafeWeakRef())
 
+
 template delSubscription*(
-    obj: Agent, sig: IndexableChars, tgt: Agent | WeakRef[Agent], slot: AgentProc
+    obj: Agent, sig: IndexableChars, tgt: WeakRef[Agent], slot: AgentProc
 ): void =
   delSubscription(obj, sig.toSigilName(), tgt, slot)
 
+template delSubscription*(
+    obj: Agent, sig: IndexableChars, tgt: Agent, slot: AgentProc
+): void =
+  let tgtRef = tgt.unsafeWeakRef().toKind(Agent)
+  delSubscription(obj, sig.toSigilName(), tgtRef, slot)
+
 proc printConnections*(agent: Agent) =
-  withLock plock:
-    if agent.isNil:
-      brightPrint fgBlue, "connections for Agent: ", "nil"
-      return
-    when defined(sigilsDebug):
-      if agent[].freedByThread != 0:
-        brightPrint fgBlue,
-          "connections for Agent: ",
-          $agent.unsafeWeakRef(),
-          " freedByThread: ",
-          $agent[].freedByThread
+  when defined(sigilsDebugPrint):
+    withLock plock:
+      if agent.isNil:
+        brightPrint fgBlue, "connections for Agent: ", "nil"
         return
-    brightPrint fgBlue, "connections for Agent: ", $agent.unsafeWeakRef()
-    brightPrint fgMagenta, "\t subscribers:", ""
-    for item in agent.subcriptions:
-      let sname = printConnectionsSlotNames.getOrDefault(item.subscription.slot, item.subscription.slot.repr)
-      brightPrint fgGreen, "\t\t:", $item.signal, ": => ", $item.subscription.tgt & " slot: " & $sname
-    brightPrint fgMagenta, "\t listening:", ""
-    for listening in agent.listening:
-      brightPrint fgRed, "\t\t listen: ", $listening
+      when defined(sigilsDebug):
+        if agent[].freedByThread != 0:
+          brightPrint fgBlue,
+            "connections for Agent: ",
+            $agent.unsafeWeakRef(),
+            " freedByThread: ",
+            $agent[].freedByThread
+          return
+      brightPrint fgBlue, "connections for Agent: ", $agent.unsafeWeakRef()
+      brightPrint fgMagenta, "\t subscribers:", ""
+      for item in agent.subcriptions:
+        let sname = printConnectionsSlotNames.getOrDefault(item.subscription.slot,
+            item.subscription.slot.repr)
+        brightPrint fgGreen, "\t\t:", $item.signal, ": => ",
+            $item.subscription.tgt & " slot: " & $sname
+      brightPrint fgMagenta, "\t listening:", ""
+      for listening in agent.listening:
+        brightPrint fgRed, "\t\t listen: ", $listening

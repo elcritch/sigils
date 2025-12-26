@@ -1,6 +1,9 @@
+import std/locks
+
 import signals
 import slots
 import agents
+import actors
 
 when defined(sigilsDebug):
   from system/ansi_c import c_raise
@@ -10,14 +13,14 @@ export signals, slots, agents
 method callMethod*(
     ctx: Agent, req: SigilRequest, slot: AgentProc
 ): SigilResponse {.base, gcsafe, effectsOf: slot.} =
-  ## Route's an rpc request. 
+  ## Route a sigil request.
   debugPrint "callMethod: normal: ",
     $ctx.unsafeWeakRef().asAgent(),
     " slot: ",
     repr(slot)
 
   if slot.isNil:
-    let msg = $req.procName & " is not a registered RPC method."
+    let msg = $req.procName & " is not a registered sigil method."
     let err = SigilError(code: METHOD_NOT_FOUND, msg: msg)
     result = wrapResponseError(req.origin, err)
   else:
@@ -30,9 +33,9 @@ from system/ansi_c import c_raise
 
 type AgentSlotError* = object of CatchableError
 
-proc callSlots*(obj: Agent | WeakRef[Agent], req: SigilRequest) {.gcsafe.} =
-  {.cast(gcsafe).}:
-    for sub in obj.getSubscriptions(req.procName):
+template callSlotsImpl(obj: Agent, req: SigilRequest, subsIter: untyped) =
+  for sub in subsIter:
+    {.cast(gcsafe).}:
       when defined(sigilsDebug):
         if sub.tgt[].freedByThread != 0:
           debugPrint "exec:call:thread: ", $getThreadId()
@@ -56,6 +59,19 @@ proc callSlots*(obj: Agent | WeakRef[Agent], req: SigilRequest) {.gcsafe.} =
         else:
           discard
 
+method callSlots*(obj: Agent, req: SigilRequest) {.base, gcsafe.} =
+  callSlotsImpl(obj, req, obj.getSubscriptions(req.procName))
+
+method callSlots*(obj: AgentActor, req: SigilRequest) {.gcsafe.} =
+  var subs: seq[Subscription]
+  withLock obj.lock:
+    for sub in obj.getSubscriptions(req.procName):
+      subs.add(sub)
+  callSlotsImpl(Agent(obj), req, subs.items)
+
 proc emit*(call: (Agent | WeakRef[Agent], SigilRequest)) =
   let (obj, req) = call
-  callSlots(obj, req)
+  when obj is WeakRef[Agent]:
+    obj[].callSlots(req)
+  else:
+    obj.callSlots(req)

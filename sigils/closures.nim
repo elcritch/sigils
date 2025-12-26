@@ -59,7 +59,8 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
   fnCall2.add(env)
 
   result = quote:
-    let `fnSlot`: AgentProc = proc(context: Agent, params: SigilParams) {.nimcall.} =
+    let `fnSlot`: AgentProc = proc(context: Agent,
+        params: SigilParams) {.nimcall.} =
       let self = ClosureAgent[`fnSig`](context)
       if self == nil:
         raise newException(ConversionError, "bad cast")
@@ -78,7 +79,7 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
 
 template connectTo*(a: Agent, signal: typed, blk: typed): ClosureAgent =
   ## creates an anonymous agent and slot that calls the given closure
-  ## when the `signal` event is emitted. 
+  ## when the `signal` event is emitted.
 
   closureTyp(blk)
 

@@ -16,23 +16,29 @@ type
   SigilThreadDefault* = object of SigilThread
     inputs*: SigilChan
     thr*: Thread[ptr SigilThreadDefault]
-  
+
   SigilThreadDefaultPtr* = ptr SigilThreadDefault
-  
+
 method send*(
-    thread: SigilThreadDefaultPtr, msg: sink ThreadSignal, blocking: BlockingKinds
+    thread: SigilThreadDefaultPtr, msg: sink ThreadSignal,
+        blocking: BlockingKinds
 ) {.gcsafe.} =
   var msg = isolateRuntime(msg)
   case blocking
   of Blocking:
     thread.inputs.send(msg)
+    debugQueuePrint "queue:thread inputs size: ", $thread.inputs.peek(),
+      " thread: ", $getThreadId(thread.toSigilThread()[])
   of NonBlocking:
     let sent = thread.inputs.trySend(msg)
     if not sent:
       raise newException(MessageQueueFullError, "could not send!")
+    debugQueuePrint "queue:thread inputs size: ", $thread.inputs.peek(),
+      " thread: ", $getThreadId(thread.toSigilThread()[])
 
 method recv*(
-    thread: SigilThreadDefaultPtr, msg: var ThreadSignal, blocking: BlockingKinds
+    thread: SigilThreadDefaultPtr, msg: var ThreadSignal,
+        blocking: BlockingKinds
 ): bool {.gcsafe.} =
   case blocking
   of Blocking:
@@ -47,9 +53,10 @@ method setTimer*(
   raise newException(AssertionDefect, "not implemented for this thread type!")
 
 proc newSigilThread*(): ptr SigilThreadDefault =
-  result = cast[ptr SigilThreadDefault](allocShared0(sizeof(SigilThreadDefault)))
+  result = cast[ptr SigilThreadDefault](allocShared0(sizeof(
+      SigilThreadDefault)))
   result[] = SigilThreadDefault() # important!
-  result[].agent = ThreadAgent()
+  result[].agent = SigilThreadAgent()
   result[].inputs = newSigilChan()
   result[].signaledLock.initLock()
   result[].threadId.store(-1, Relaxed)

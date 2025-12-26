@@ -10,7 +10,8 @@ proc checkThreadSafety[T, V](field: T, parent: V) =
     if not checkThreadSafety(v, sig):
       {.
         error:
-          "Signal type with ref's aren't thread safe! Signal type: " & $(typeof(sig)) &
+          "Signal type with ref's aren't thread safe! Signal type: " & $(typeof(
+              sig)) &
           ". Use `Isolate[" & $(typeof(v)) & "]` to use it."
       .}
   elif T is tuple or T is object:
@@ -50,7 +51,8 @@ proc verifyUnique[T, V](field: T, parent: V) =
   else:
     discard
 
-proc isolateRuntime*[T](item: sink T): Isolated[T] {.raises: [IsolationError].} =
+proc isolateRuntime*[T](item: sink T): Isolated[T] {.raises: [
+    IsolationError].} =
   ## Isolates a ref type or type with ref's and ensure that
   ## each ref is unique. This allows safely isolating it.
   when compiles(isolate(item)):
