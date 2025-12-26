@@ -26,10 +26,14 @@ method send*(
   case blocking
   of Blocking:
     thread.inputs.send(msg)
+    debugQueuePrint "queue:thread inputs size: ", $thread.inputs.peek(),
+      " thread: ", $getThreadId(thread.toSigilThread()[])
   of NonBlocking:
     let sent = thread.inputs.trySend(msg)
     if not sent:
       raise newException(MessageQueueFullError, "could not send!")
+    debugQueuePrint "queue:thread inputs size: ", $thread.inputs.peek(),
+      " thread: ", $getThreadId(thread.toSigilThread()[])
 
 method recv*(
     thread: SigilThreadDefaultPtr, msg: var ThreadSignal, blocking: BlockingKinds

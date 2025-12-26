@@ -52,6 +52,8 @@ method send*(
     let sent = thread.inputs.trySend(msg)
     if not sent:
       raise newException(MessageQueueFullError, "could not send!")
+  debugQueuePrint "queue:thread inputs size: ", $thread.inputs.peek(),
+    " thread: ", $getThreadId(thread.toSigilThread()[])
   thread.event.trigger()
 
 method recv*(

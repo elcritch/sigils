@@ -70,6 +70,11 @@ template debugPrint*(msgs: varargs[untyped]) =
     if not debugPrintQuiet:
       debugPrintImpl(msgs)
 
+template debugQueuePrint*(msgs: varargs[untyped]) =
+  when defined(sigilsDebugQueue):
+    if not debugPrintQuiet:
+      debugPrintImpl(msgs)
+
 proc brightPrint*(color: ForegroundColor, msg, value: string, msg2 = "", value2 = "") =
   if not debugPrintQuiet:
     stdout.styledWriteLine color,

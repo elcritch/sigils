@@ -96,6 +96,9 @@ method callMethod*(
           withLock proxy.remoteThread[].signaledLock:
             proxy.remoteThread[].signaled.incl(proxy.proxyTwin.toKind(AgentRemote))
           proxy.proxyTwin[].inbox.send(msg)
+          debugQueuePrint "queue:proxy inbox size: ",
+            $proxy.proxyTwin[].inbox.peek(),
+            " proxy: ", $proxy.proxyTwin
       proxy.remoteThread.send(ThreadSignal(kind: Trigger))
   elif slot == localSlot:
     debugPrint "\t proxy:callMethod:localSlot: "
@@ -120,6 +123,9 @@ method callMethod*(
         debugPrint "\t callMethod:agentProxy:proxyTwin: ", proxy.proxyTwin
         withLock proxy.lock:
           proxy.proxyTwin[].inbox.send(msg)
+          debugQueuePrint "queue:proxy inbox size: ",
+            $proxy.proxyTwin[].inbox.peek(),
+            " proxy: ", $proxy.proxyTwin
           withLock proxy.remoteThread[].signaledLock:
             proxy.remoteThread[].signaled.incl(proxy.proxyTwin.toKind(AgentRemote))
         proxy.remoteThread.send(ThreadSignal(kind: Trigger))
@@ -376,4 +382,3 @@ template connectQueued*(
   let ct = getCurrentSigilThread()
   let fs: AgentProc = fwdSlot[a, b, astToStr(slot)]
   a.addSubscription(signalName(signal), b, fs)
-
