@@ -190,23 +190,29 @@ method hasSubscription*(
       return true
 
 method hasSubscription*(
-    obj: Agent, sig: SigilName, tgt: Agent | WeakRef[Agent]
+    obj: Agent, sig: SigilName, tgt: WeakRef[Agent]
 ): bool {.base, gcsafe, raises: [].} =
-  let tgtRef = tgt.unsafeWeakRef().toKind(Agent)
   for idx in 0 ..< obj.subcriptions.len():
     if obj.subcriptions[idx].signal == sig and
-        obj.subcriptions[idx].subscription.tgt == tgtRef:
+        obj.subcriptions[idx].subscription.tgt == tgt:
       return true
 
-method hasSubscription*(
-    obj: Agent, sig: SigilName, tgt: Agent | WeakRef[Agent], slot: AgentProc
-): bool {.base, gcsafe, raises: [].} =
+template hasSubscription*(obj: Agent, sig: SigilName, tgt: Agent): bool =
   let tgtRef = tgt.unsafeWeakRef().toKind(Agent)
+  hasSubscription(obj, sig, tgtRef)
+
+method hasSubscription*(
+    obj: Agent, sig: SigilName, tgt: WeakRef[Agent], slot: AgentProc
+): bool {.base, gcsafe, raises: [].} =
   for idx in 0 ..< obj.subcriptions.len():
     if obj.subcriptions[idx].signal == sig and
-        obj.subcriptions[idx].subscription.tgt == tgtRef and
+        obj.subcriptions[idx].subscription.tgt == tgt and
         obj.subcriptions[idx].subscription.slot == slot:
       return true
+
+template hasSubscription*(obj: Agent, sig: SigilName, tgt: Agent, slot: AgentProc): bool =
+  let tgtRef = tgt.unsafeWeakRef().toKind(Agent)
+  hasSubscription(obj, sig, tgtRef, slot)
 
 method addSubscription*(
     obj: Agent, sig: SigilName, tgt: Agent | WeakRef[Agent], slot: AgentProc
