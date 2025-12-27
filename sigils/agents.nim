@@ -25,13 +25,7 @@ elif defined(useJsonSerde):
 else:
   import svariant
 
-export sets
-export options
-export svariant
-
-export IndexableChars
-export weakrefs
-export protocol
+export sets, options, svariant, IndexableChars, weakrefs, protocol
 
 import std/[terminal, strutils, strformat, sequtils]
 export strformat
@@ -90,7 +84,11 @@ proc `$`*[T: Agent](obj: WeakRef[T]): string =
     result &= obj.toPtr().repr
   result &= ")"
 
-template removeSubscriptionsForImpl*(self: Agent, subscriber: WeakRef[Agent]) =
+method removeSubscriptionsFor*(
+    self: Agent, subscriber: WeakRef[Agent]
+) {.base, gcsafe, raises: [].} =
+  debugPrint "   removeSubscriptionsFor:agent: ", " self:id: ",
+      $self.unsafeWeakRef()
   ## Route's an rpc request.
   var toDel: seq[int] = newSeq[int](self.subcriptions.len())
   for idx in countdown(self.subcriptions.len() - 1, 0):
@@ -98,17 +96,11 @@ template removeSubscriptionsForImpl*(self: Agent, subscriber: WeakRef[Agent]) =
     if self.subcriptions[idx].subscription.tgt == subscriber:
       self.subcriptions.delete(idx..idx)
 
-method removeSubscriptionsFor*(
-    self: Agent, subscriber: WeakRef[Agent]
-) {.base, gcsafe, raises: [].} =
-  debugPrint "   removeSubscriptionsFor:agent: ", " self:id: ",
-      $self.unsafeWeakRef()
-  removeSubscriptionsForImpl(self, subscriber)
-
 method unregisterSubscriber*(
     self: Agent, listener: WeakRef[Agent]
 ) {.base, gcsafe, raises: [].} =
-  debugPrint "\tunregisterSubscriber: ", $listener, " from self: ", self.unsafeWeakRef()
+  debugPrint "\tunregisterSubscriber: ", $listener, " from self: ",
+      self.unsafeWeakRef()
   debugPrint &"   unregisterSubscriber:agent: self: {$self.unsafeWeakRef()}"
   assert listener in self.listening
   self.listening.excl(listener)
@@ -171,7 +163,8 @@ iterator getSubscriptions*(obj: Agent, sig: SigilName): var Subscription =
     if item.signal == sig or item.signal == AnySigilName:
       yield item.subscription
 
-iterator getSubscriptions*(obj: WeakRef[Agent], sig: SigilName): var Subscription =
+iterator getSubscriptions*(obj: WeakRef[Agent],
+                           sig: SigilName): var Subscription =
   for item in obj[].subcriptions.mitems():
     if item.signal == sig or item.signal == AnySigilName:
       yield item.subscription
@@ -210,9 +203,18 @@ method hasSubscription*(
         obj.subcriptions[idx].subscription.slot == slot:
       return true
 
-template hasSubscription*(obj: Agent, sig: SigilName, tgt: Agent, slot: AgentProc): bool =
+template hasSubscription*(obj: Agent,
+                          sig: SigilName,
+                          tgt: Agent,
+                          slot: AgentProc): bool =
   let tgtRef = tgt.unsafeWeakRef().toKind(Agent)
   hasSubscription(obj, sig, tgtRef, slot)
+
+method addListener*(obj: Agent, tgt: WeakRef[Agent]) {.base, gcsafe, raises: [].} =
+  obj.listening.incl(tgt)
+
+method delListener*(obj: Agent, tgt: WeakRef[Agent]) {.base, gcsafe, raises: [].} =
+  obj.listening.excl(tgt)
 
 method addSubscription*(
     obj: Agent, sig: SigilName, tgt: WeakRef[Agent], slot: AgentProc
@@ -222,10 +224,13 @@ method addSubscription*(
 
   if not procCall hasSubscription(obj, sig, tgt, slot):
     obj.subcriptions.add((sig, Subscription(tgt: tgt, slot: slot)))
-    tgt[].listening.incl(obj.unsafeWeakRef().asAgent())
+    tgt[].addListener(obj.unsafeWeakRef().asAgent())
 
 template addSubscription*(
-    obj: Agent, sig: IndexableChars, tgt: Agent | WeakRef[Agent], slot: AgentProc
+    obj: Agent,
+    sig: IndexableChars,
+    tgt: Agent | WeakRef[Agent],
+    slot: AgentProc
 ): void =
   let tgtRef = tgt.unsafeWeakRef().toKind(Agent)
   addSubscription(obj, sig.toSigilName(), tgtRef, slot)
@@ -249,7 +254,7 @@ method delSubscription*(
         self.subcriptions.delete(idx..idx)
 
   if subsFound == subsDeleted:
-    tgt[].listening.excl(self.unsafeWeakRef())
+    tgt[].delListener(self.unsafeWeakRef().asAgent())
 
 
 template delSubscription*(
@@ -280,8 +285,8 @@ proc printConnections*(agent: Agent) =
       brightPrint fgBlue, "connections for Agent: ", $agent.unsafeWeakRef()
       brightPrint fgMagenta, "\t subscribers:", ""
       for item in agent.subcriptions:
-        let sname = printConnectionsSlotNames.getOrDefault(item.subscription.slot,
-            item.subscription.slot.repr)
+        let sname = printConnectionsSlotNames.getOrDefault(
+            item.subscription.slot, item.subscription.slot.repr)
         brightPrint fgGreen, "\t\t:", $item.signal, ": => ",
             $item.subscription.tgt & " slot: " & $sname
       brightPrint fgMagenta, "\t listening:", ""

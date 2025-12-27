@@ -29,7 +29,7 @@ Signals travel back the same way. When an agent running on a worker thread emits
 ## Core Types
 
 - `SigilThread` (threadBase): Common scheduler/state shared by all thread implementations. Holds:
-  - `signaled: HashSet[WeakRef[AgentRemote]]` set of per-proxy mailboxes to drain.
+  - `signaled: HashSet[WeakRef[AgentActor]]` set of inboxes to drain.
   - `signaledLock: Lock` protects `signaled`.
   - `references: Table[WeakRef[Agent], Agent]` ownership table of agents moved onto this thread.
   - `agent: SigilThreadAgent` a local agent for thread lifecycle signals (e.g., `started`).
@@ -51,27 +51,26 @@ Signals travel back the same way. When an agent running on a worker thread emits
   - `Deref(deref)` — drop a reference previously `Move`-ed to this thread and prune dead `references`.
   - `Exit` — stop the scheduler loop.
 
-- `AgentRemote` (threadBase): A mailbox-capable agent base with `inbox: Chan[ThreadSignal]`. Proxies extend this to implement per-proxy mailboxes.
+- `AgentActor` (actors): Mailbox-capable agent base with `inbox: Chan[ThreadSignal]` and a lock for thread-safe subscription updates.
 
-- `AgentProxy[T]`/`AgentProxyShared` (threadProxies): Twin proxies mediating cross-thread communication.
-  - `remote: WeakRef[Agent]` — the real agent (owned by the destination thread after a move).
-  - `proxyTwin: WeakRef[AgentProxyShared]` — the opposite-side proxy.
-  - `remoteThread: SigilThreadPtr` — scheduler for the thread that owns `proxyTwin`.
-  - `lock: Lock` — protects proxy twin access and local proxy state.
+- `AgentProxy[T]`/`AgentProxyShared` (threadProxies): A single local proxy that mediates cross-thread communication.
+  - `remote: WeakRef[AgentActor]` — the real agent (owned by the destination thread after a move).
+  - `remoteThread: SigilThreadPtr` — scheduler for the thread that owns `remote`.
+  - `homeThread: SigilThreadPtr` — scheduler for the thread that owns the proxy.
+  - `forwarded: HashSet[SigilName]` — signals currently forwarded from `remote` to the proxy.
 
 ## Moving Agents Across Threads
 
 `moveToThread(agent, thread)` (threadProxies):
 
 - Preconditions: `agent` must be unique (`isUniqueRef`) to prevent sharing GC refs across threads.
-- Creates two proxies:
+- Creates a single proxy:
   - `localProxy` — lives on the current thread; used by local code to talk to the remote agent.
-  - `remoteRouter` — lives on the destination thread; used to forward events back to the local side.
 - Rewrites subscriptions:
   - Outbound (agent listening to others): rebinds listeners so the local proxy receives those signals and forwards across threads.
-  - Inbound (others listening to agent): rebinds so callers attach to `localProxy`; the remote agent publishes to `remoteRouter`, which forwards back.
+  - Inbound (others listening to agent): rebinds callers to `localProxy`; the proxy arranges direct forwarding by adding thread-safe subscriptions on the remote agent using `localSlot`.
 - Ownership transfer:
-  - Sends `Move(agent)` and `Move(remoteRouter)` to the destination thread so they are owned (and managed) by that thread's `references` table.
+  - Sends `Move(agent)` to the destination thread so it is owned (and managed) by that thread's `references` table.
 - Returns `localProxy` to the caller; the original `agent` variable is moved (becomes `nil`).
 
 The tests demonstrate this flow, e.g.:
@@ -83,11 +82,11 @@ The tests demonstrate this flow, e.g.:
 
 Two paths deliver work on the destination thread:
 
-1) Per-proxy mailbox path (dominant path)
-- The sender enqueues a `Call` into `proxyTwin.inbox` (the twin on the destination thread).
-- The sender marks the twin as signaled in `remoteThread.signaled` under `signaledLock`.
+1) Per-actor mailbox path (dominant path)
+- The sender enqueues a `Call` into the target `AgentActor.inbox` on the destination thread.
+- The sender marks that target as signaled in `remoteThread.signaled` under `signaledLock`.
 - The sender posts `Trigger` to `remoteThread` (via `remoteThread.send(ThreadSignal(kind: Trigger))`).
-- The scheduler handles `Trigger` by moving `signaled` into a local set, then for each signaled proxy drains its `inbox` with `tryRecv` and invokes `tgt.callMethod(req, slot)`.
+- The scheduler handles `Trigger` by moving `signaled` into a local set, then for each signaled actor drains its `inbox` with `tryRecv` and invokes `tgt.callMethod(req, slot)`.
 
 2) Direct control path
 - `Move`, `Deref`, and `Exit` are sent to the destination thread via `thread.send(...)` and handled immediately.
@@ -97,24 +96,23 @@ All cross-thread messages are isolated (`isolateRuntime`) before enqueueing to e
 
 ## Proxy Call Semantics
 
-`AgentProxyShared.callMethod(req, slot)` routes calls based on `slot` sentinal values:
+`AgentProxyShared.callMethod(req, slot)` routes calls based on the current thread and `slot` sentinel values:
 
-- `slot == remoteSlot` — event forwarding from the remote agent back to the local side.
-  - Wraps as `Call(localSlot, req, tgt = proxyTwin)` and enqueues into `proxyTwin.inbox` on the other thread with `Trigger`.
+- If invoked off the proxy's `homeThread` (i.e. called from the remote thread):
+  - Enqueues `Call(slot, req, tgt = proxy)` into the proxy's inbox, signals the home thread, and posts `Trigger`.
 
-- `slot == localSlot` — local delivery on the receiving side.
+- `slot == localSlot` (and `remoteSlot` for legacy callers) — local delivery on the receiving side.
   - Executes `callSlots(self, req)` to fan out to local subscribers.
 
 - Otherwise — regular slot call bound for the remote agent.
-  - Wraps as `Call(slot, req, tgt = proxy.remote)`, enqueues into `proxyTwin.inbox` (on remote), and `Trigger`s the remote thread.
+  - Wraps as `Call(slot, req, tgt = proxy.remote)`, enqueues into the remote agent inbox, and `Trigger`s the remote thread.
 
 **Note**:
-  The "local" proxy holds the slots to be called both remotely and on incoming signals.
-  This is so that the remote router only knows to send and trigger but the local proxies
-  handle which slots and subscriptions get called. This means we don't need to lock
-  the remote router to add/del subscriptions.
+  The local proxy owns the subscription list and forwards specific signals by installing
+  direct subscriptions on the remote agent (thread-safe via `AgentActor`'s lock). This
+  removes the need for a separate remote router or wildcard `AnySigilName`.
 
-Locks are used to safely access `proxyTwin` and to coordinate with the destination thread's `signaled` set.
+Locks are used to safely access proxy state and to coordinate with the destination thread's `signaled` set.
 
 ## Thread Loop and Lifecycle
 
@@ -140,7 +138,7 @@ Because it uses `SigilThread.send(...)` under the hood, the queued `ThreadSignal
 
 - Agents have a destructor (`destroyAgent`) that removes them from all subscriptions and listeners. Debug builds assert destruction happens on the owning thread (`freedByThread` checks).
 - Proxies break cycles on destruction:
-  - `AgentProxyShared.=destroy` clears the opposite twin's link under `lock`, removes it from the remote thread's `signaled`, and posts a `Deref` to drop the remote reference.
+  - `AgentProxyShared.=destroy` removes the proxy from the home thread's `signaled` set and posts a `Deref` to the remote thread to drop any remaining references.
   - Destroys local `lock` and `remoteThread` refs last.
 - The destination thread periodically cleans `references` via `gcCollectReferences()` (after `Deref`), removing entries for agents that have no connections.
 
@@ -160,15 +158,15 @@ Patterns illustrated by the tests:
 
 ## Thread Safety Notes
 
-- Ownership: After `moveToThread`, the destination thread exclusively owns the moved agent (and its `remoteRouter`) via `references`. Do not retain or use the original agent ref on the source thread.
+- Ownership: After `moveToThread`, the destination thread exclusively owns the moved agent via `references`. Do not retain or use the original agent ref on the source thread.
 - Isolation: Cross-thread `ThreadSignal`s are passed through `isolateRuntime(...)` before enqueueing. If the payload contains non-unique `ref`s, `isolateRuntime` raises `IsolationError` to prevent unsafe sharing.
 - Signal params: Cross-thread signal parameter types must be thread-safe (no `ref` fields). The `connectThreaded` helpers use `checkSignalThreadSafety` for common patterns; use `Isolate[T]` for heap payloads you need to transfer.
 - No shared GC refs: The code defends against sharing by requiring unique refs before move and by using `WeakRef` identifiers for cross-thread targeting.
 - Synchronization:
   - `signaled` guarded by `signaledLock`.
-  - Proxy internals guarded by `lock` when accessing `proxyTwin` and scheduling signals.
+  - Proxy internals guarded by `lock` when accessing proxy state and scheduling signals.
   - Atomic fields (`running`, `threadId`) avoid data races.
-- Backpressure: `newChan[ThreadSignal](1_000)` for per-proxy inbox and thread inputs. Non-blocking send (`trySend`) raises `MessageQueueFullError` when full.
+- Backpressure: `newChan[ThreadSignal](1_000)` for per-actor inbox and thread inputs. Non-blocking send (`trySend`) raises `MessageQueueFullError` when full.
 
 ## Async Safety Notes
 
@@ -221,15 +219,15 @@ The following Mermaid flowcharts illustrate the key event flows.
 flowchart LR
   subgraph ST[Source Thread]
     direction TB
-    Caller[User emits signal on Remote Proxy];
+    Caller[User emits signal on Local Proxy];
 
     Caller --emit --> LP;
 
     subgraph LP[Local AgentProxy]
       direction TB
       FWD[Local Proxy Forwards Signal];
-      Enqueue[Enqueue Call into Twin's Inbox];
-      Mark[Mark Twin as signaled under lock];
+      Enqueue[Enqueue Call into Remote Agent Inbox];
+      Mark[Mark Remote Agent as signaled under lock];
       Trigger[Send Trigger Msg to RT's Inputs Channel];
 
       FWD --> Enqueue --> Mark --> Trigger;
@@ -238,22 +236,21 @@ flowchart LR
 
   subgraph RT[Remote Thread]
     RX[Polling Inputs Channel fa:fa-spinner];
-    Triggered[Move Messages to Remote Proxy];
-    Twin[Remote Proxy Handles Call];
+    Triggered[Move Messages to Target Actor];
+    Remote[Remote Agent Handles Call];
     Deliver[Call Method on Agent];
-    RX --> Triggered --> Twin --> Deliver;
+    RX --> Triggered --> Remote --> Deliver;
     subgraph RS[Remote Signal]
       direction TB;
       Back[Agent emits return signal?];
-      Back -- Yes --> WrapBack[Wrap via remoteSlot to localSlot for other side];
-      WrapBack --> EnqueueBack[Enqueue to other side inbox and Trigger];
+      Back -- Yes --> WrapBack[Target is Local Proxy with localSlot];
+      WrapBack --> EnqueueBack[Enqueue to Local Proxy inbox and Trigger Home Thread];
       Back -- No --> Done[Done];
     end
     Deliver --> Back;
   end
 
-  ST e0@==>|Queue Message
-            Remote Proxy| RT;
+  ST e0@==>|Queue Message Remote Agent| RT;
   ST e1@==>|Trigger Message| RT;
   e1@{ animate: true }
 
@@ -265,11 +262,9 @@ flowchart LR
 flowchart TD
   subgraph ST[Source Thread]
     Dtor[Local proxy destructor];
-    TwinLock[Lock and clear proxyTwin link];
-    Unsig[Remove proxyTwin from remote.signaled under lock];
+    Unsig[Remove proxy from home.signaled under lock];
     SendDeref[Send Deref to remote inputs];
-    Dtor --> TwinLock;
-    TwinLock --> Unsig;
+    Dtor --> Unsig;
     Unsig --> SendDeref;
   end
 

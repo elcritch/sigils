@@ -13,12 +13,12 @@ import std/strutils
 
 
 type
-  SomeTrigger* = ref object of Agent
+  SomeTrigger* = ref object of AgentActor
 
-  Counter* = ref object of Agent
+  Counter* = ref object of AgentActor
     value: int
 
-  SomeTarget* = ref object of Agent
+  SomeTarget* = ref object of AgentActor
     value: int
 
 proc valueChanged*(tp: SomeTrigger, val: int) {.signal.}
@@ -38,7 +38,8 @@ proc completed*(self: SomeTarget, final: int) {.slot.} =
   self.value = final
 
 proc valuePrint*(tp: SomeTrigger, val: int) {.slot.} =
-  echo "print tp: ", $tp.unsafeWeakRef(), " value: ", val, " (th: ", getThreadId(), ")"
+  echo "print tp: ", $tp.unsafeWeakRef(), " value: ", val, " (th: ",
+      getThreadId(), ")"
 
 var threadA = newSigilThread()
 var threadB = newSigilThread()
@@ -177,7 +178,8 @@ suite "threaded agent slots":
       echo "REMOTE RUN!"
       let localCounterProxy = lookupAgentProxy(sn"globalCounter", Counter)
       if localCounterProxy != nil:
-        echo "connecting: ", self.unsafeWeakRef(), " to: ", localCounterProxy.remote, " th: ", " (th: ", getThreadId(), ")"
+        echo "connecting: ", self.unsafeWeakRef(), " to: ",
+            localCounterProxy.remote, " th: ", " (th: ", getThreadId(), ")"
         connectThreaded(self, valueChanged, localCounterProxy, setValue(Counter))
         threadBRemoteReady.store 1
       else:
@@ -232,4 +234,3 @@ suite "threaded agent slots":
       if threadCRemoteReady.load() == 3: break
 
     check threadCRemoteReady.load() == 3
-

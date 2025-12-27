@@ -76,6 +76,10 @@ proc `=destroy`*(thread: var SigilThread) =
 proc newSigilChan*(): SigilChan =
   result = newChan[ThreadSignal](1_000)
 
+proc signal*(thread: SigilThreadPtr, obj: WeakRef[AgentActor]) =
+  withLock thread.signaledLock:
+    thread.signaled.incl(obj)
+
 method send*(
     thread: SigilThreadPtr, msg: sink ThreadSignal,
         blocking: BlockingKinds = Blocking

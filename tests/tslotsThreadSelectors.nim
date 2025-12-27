@@ -3,13 +3,13 @@ import sigils
 import sigils/threadSelectors
 
 type
-  SomeAction* = ref object of Agent
+  SomeAction* = ref object of AgentActor
     value: int
 
-  Counter* = ref object of Agent
+  Counter* = ref object of AgentActor
     value: int
 
-  DataWatcher* = ref object of Agent
+  DataWatcher* = ref object of AgentActor
     hits: int
 
 proc valueChanged*(tp: SomeAction, val: int) {.signal.}

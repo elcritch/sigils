@@ -1,6 +1,7 @@
 import std/terminal
+import std/locks
 
-when defined(sigilsDebugPrint):
+when defined(sigilsDebugPrint) or defined(sigilsDebugQueue):
   var
     pcolors* = [fgRed, fgYellow, fgMagenta, fgCyan]
     pcnt*: int = 0

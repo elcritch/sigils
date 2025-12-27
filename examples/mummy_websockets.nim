@@ -16,7 +16,7 @@ import ../sigils/[threads, threadSelectors, registry]
 
 const
   workerThreads* = 4 # The number of threads handling incoming HTTP requests and websocket messages.
-  port* = 8123 # The HTTP port to listen on.
+  port* = 8123                                   # The HTTP port to listen on.
   heartbeatMessage* = """{"type":"heartbeat"}""" # The JSON heartbeat message.
 
 var
@@ -47,7 +47,8 @@ proc removeWebsocket*(ws: WebSocket) {.gcsafe.} =
 ## ====================== HeartBeat ====================== ##
 const HbBuckets = 30
 type
-  HeartBeats {.acyclic.} = ref object of Agent
+  HeartBeats {.acyclic.} = ref object of AgentActor
+    count: uint
     buckets: array[HbBuckets, HashSet[WebSocket]]
     timer: SigilTimer
 
@@ -75,7 +76,8 @@ proc sendBucket*(self: HeartBeats, bucket: int) {.slot.} =
     emit self.doHeartbeat(bucket + 1)
 
 proc runHeartbeat*(self: HeartBeats) {.slot.} =
-  echo "Run heartbeat...", " (th: ", getThreadId(), ")"
+  echo "Run heartbeat... ", self.count, " (th: ", getThreadId(), ")"
+  inc self.count
   self.sendBucket(0)
 
 proc start*(self: HeartBeats) {.slot.} =
@@ -93,13 +95,14 @@ proc lookupHeartbeat(): AgentProxy[Heartbeats] =
 
 ## ====================== Channels ====================== ##
 type
-  Channel = ref object of Agent
+  Channel = ref object of AgentActor
     name: string
     clients: HashSet[WebSocket]
     thr: SigilSelectorThreadPtr
 
 proc joining*(channel: AgentProxy[Channel], websocket: WebSocket) {.signal.}
-proc error*(channel: AgentProxy[Channel], websocket: WebSocket, message: Message) {.signal.}
+proc error*(channel: AgentProxy[Channel], websocket: WebSocket,
+    message: Message) {.signal.}
 proc leaving*(channel: AgentProxy[Channel], websocket: WebSocket) {.signal.}
 
 proc publish*(channel: AgentProxy[Channel], message: Message) {.signal.}
@@ -141,7 +144,8 @@ template withChannel(ws: WebSocket, blk: untyped) =
     `blk`
 
 
-proc websocketHandler(websocket: WebSocket, event: WebSocketEvent, message: Message) {.gcsafe.} =
+proc websocketHandler(websocket: WebSocket, event: WebSocketEvent,
+    message: Message) {.gcsafe.} =
   startLocalThreadDefault()
 
   case event:
@@ -200,7 +204,8 @@ proc main() =
 
   var router: Router
   router.get("/*", upgradeHandler)
-  let wsHandler = proc(ws: WebSocket, event: WebSocketEvent, message: Message) {.closure, gcsafe.} =
+  let wsHandler = proc(ws: WebSocket, event: WebSocketEvent,
+      message: Message) {.closure, gcsafe.} =
     websocketHandler(ws, event, message)
 
   let server = newServer(
