@@ -92,6 +92,10 @@ method addListener*(obj: AgentActor, tgt: WeakRef[Agent]) {.gcsafe, raises: [].}
   withLock obj.lock:
     obj.listening.incl(tgt)
 
+method delListener*(obj: AgentActor, tgt: WeakRef[Agent]) {.gcsafe, raises: [].} =
+  withLock obj.lock:
+    obj.listening.excl(tgt)
+
 method addSubscription*(
     obj: AgentActor, sig: SigilName, tgt: WeakRef[Agent], slot: AgentProc
 ) {.gcsafe, raises: [].} =
@@ -126,10 +130,11 @@ method delSubscription*(
           self.subcriptions.delete(idx)
 
   if subsFound == subsDeleted and not tgt.isNil:
-    if tgt[] of AgentActor:
-      let tgtActor = cast[AgentActor](tgt[])
-      tgtActor.ensureActorReady()
-      withLock tgtActor.lock:
-        tgtActor.listening.excl(self.unsafeWeakRef().asAgent())
-    else:
-      tgt[].listening.excl(self.unsafeWeakRef().asAgent())
+    tgt[].delListener(self.unsafeWeakRef().asAgent())
+    #if tgt[] of AgentActor:
+    #  let tgtActor = cast[AgentActor](tgt[])
+    #  tgtActor.ensureActorReady()
+    #  withLock tgtActor.lock:
+    #    tgtActor.listening.excl(self.unsafeWeakRef().asAgent())
+    #else:
+    #  tgt[].listening.excl(self.unsafeWeakRef().asAgent())

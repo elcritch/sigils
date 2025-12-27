@@ -217,6 +217,9 @@ template hasSubscription*(obj: Agent, sig: SigilName, tgt: Agent, slot: AgentPro
 method addListener*(obj: Agent, tgt: WeakRef[Agent]) {.base, gcsafe, raises: [].} =
   obj.listening.incl(tgt)
 
+method delListener*(obj: Agent, tgt: WeakRef[Agent]) {.base, gcsafe, raises: [].} =
+  obj.listening.excl(tgt)
+
 method addSubscription*(
     obj: Agent, sig: SigilName, tgt: WeakRef[Agent], slot: AgentProc
 ) {.base, gcsafe, raises: [].} =
