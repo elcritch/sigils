@@ -66,18 +66,20 @@ proc hasAnySigil(proxy: AgentProxyShared): bool {.gcsafe, raises: [].} =
 
 proc syncForwarded(proxy: AgentProxyShared) {.gcsafe, raises: [].}
 
-proc removeForwarded(proxy: AgentProxyShared, sig: SigilName) {.gcsafe,
-    raises: [].} =
+template removeForwarded(proxy: AgentProxyShared, sigs: untyped) =
   withLock proxy.lock:
-    if sig notin proxy.forwarded:
-      return
-    if proxy.hasLocalSignal(sig):
-      return
-    proxy.forwarded.excl(sig)
-  if proxy.forwardingReady and not proxy.remote.isNil:
-    proxy.remote[].delSubscription(sig, proxy.unsafeWeakRef().asAgent(), localSlot)
-  if sig == AnySigilName:
-    proxy.syncForwarded()
+    for sig in sigs:
+      if sig notin proxy.forwarded:
+        continue
+      if proxy.hasLocalSignal(sig):
+        continue
+      proxy.forwarded.excl(sig)
+  let proxyRef = proxy.unsafeWeakRef().asAgent()
+  for sig in sigs:
+    if proxy.forwardingReady and not proxy.remote.isNil:
+      proxy.remote[].delSubscription(sig, proxyRef, localSlot)
+    if sig == AnySigilName:
+      proxy.syncForwarded()
 
 proc ensureForwarded(proxy: AgentProxyShared, sig: SigilName) {.gcsafe,
     raises: [].} =
@@ -92,8 +94,7 @@ proc ensureForwarded(proxy: AgentProxyShared, sig: SigilName) {.gcsafe,
       for name in proxy.forwarded:
         if name != AnySigilName:
           others.add(name)
-    for name in others:
-      proxy.removeForwarded(name)
+    proxy.removeForwarded(others)
   withLock proxy.lock:
     if sig in proxy.forwarded:
       return
@@ -123,7 +124,7 @@ method delSubscription*(
     self: AgentProxyShared, sig: SigilName, tgt: WeakRef[Agent], slot: AgentProc
 ) {.gcsafe, raises: [].} =
   procCall delSubscription(AgentActor(self), sig, tgt, slot)
-  self.removeForwarded(sig)
+  self.removeForwarded([sig])
 
 method callMethod*(
     proxy: AgentProxyShared, req: SigilRequest, slot: AgentProc
@@ -180,8 +181,7 @@ method removeSubscriptionsFor*(
     for item in self.subcriptions:
       sigs.incl(item.signal)
     procCall removeSubscriptionsFor(Agent(self), subscriber)
-  for sig in sigs:
-    self.removeForwarded(sig)
+  self.removeForwarded(sigs)
 
 method unregisterSubscriber*(
     self: AgentProxyShared, listener: WeakRef[Agent]
