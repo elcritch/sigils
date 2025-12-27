@@ -116,15 +116,13 @@ method hasConnections*(proxy: AgentProxyShared): bool {.gcsafe, raises: [].} =
 method addSubscription*(
     obj: AgentProxyShared, sig: SigilName, tgt: WeakRef[Agent], slot: AgentProc
 ) {.gcsafe, raises: [].} =
-  withLock obj.lock:
-    procCall addSubscription(Agent(obj), sig, tgt, slot)
+  procCall addSubscription(AgentActor(obj), sig, tgt, slot)
   obj.ensureForwarded(sig)
 
 method delSubscription*(
     self: AgentProxyShared, sig: SigilName, tgt: WeakRef[Agent], slot: AgentProc
 ) {.gcsafe, raises: [].} =
-  withLock self.lock:
-    procCall delSubscription(Agent(self), sig, tgt, slot)
+  procCall delSubscription(AgentActor(self), sig, tgt, slot)
   self.removeForwarded(sig)
 
 method callMethod*(

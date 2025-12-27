@@ -88,6 +88,10 @@ method hasSubscription*(
   withLock obj.lock:
     result = procCall hasSubscription(Agent(obj), sig, tgt, slot)
 
+method addListener*(obj: AgentActor, tgt: WeakRef[Agent]) {.gcsafe, raises: [].} =
+  withLock obj.lock:
+    obj.listening.incl(tgt)
+
 method addSubscription*(
     obj: AgentActor, sig: SigilName, tgt: WeakRef[Agent], slot: AgentProc
 ) {.gcsafe, raises: [].} =
@@ -101,14 +105,8 @@ method addSubscription*(
       obj.subcriptions.add((sig, Subscription(tgt: tgt, slot: slot)))
       added = true
 
-  if added and not tgt.isNil:
-    if tgt[] of AgentActor:
-      let tgtActor = AgentActor(tgt[])
-      tgtActor.ensureActorReady()
-      withLock tgtActor.lock:
-        tgtActor.listening.incl(obj.unsafeWeakRef().asAgent())
-    else:
-      tgt[].listening.incl(obj.unsafeWeakRef().asAgent())
+  if added:
+    tgt[].addListener(obj.unsafeWeakRef().asAgent())
 
 method delSubscription*(
     self: AgentActor, sig: SigilName, tgt: WeakRef[Agent], slot: AgentProc
