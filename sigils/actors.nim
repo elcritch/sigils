@@ -44,45 +44,94 @@ type
   AgentActor* = ref object of Agent
     inbox*: SigilChan
     lock*: Lock
+    ready*: bool
+
+proc ensureActorReady*(self: AgentActor, inbox = 1_000) =
+  ## Lazily initialize AgentActor synchronization/storage.
+  if not self.ready:
+    self.inbox = newChan[ThreadSignal](inbox)
+    self.lock.initLock()
+    self.ready = true
 
 method removeSubscriptionsFor*(
     self: AgentActor, subscriber: WeakRef[Agent]
 ) {.gcsafe, raises: [].} =
+  self.ensureActorReady()
   withLock self.lock:
     procCall removeSubscriptionsFor(Agent(self), subscriber)
 
 method unregisterSubscriber*(
     self: AgentActor, listener: WeakRef[Agent]
 ) {.gcsafe, raises: [].} =
+  self.ensureActorReady()
   withLock self.lock:
     procCall unregisterSubscriber(Agent(self), listener)
 
 method hasSubscription*(
     obj: AgentActor, sig: SigilName
 ): bool {.gcsafe, raises: [].} =
+  obj.ensureActorReady()
   withLock obj.lock:
     result = procCall hasSubscription(Agent(obj), sig)
 
 method hasSubscription*(
-    obj: AgentActor, sig: SigilName, tgt: WeakRef[Agent]): bool {.gcsafe, raises: [].} =
+    obj: AgentActor, sig: SigilName, tgt: WeakRef[Agent]): bool {.gcsafe,
+        raises: [].} =
+  obj.ensureActorReady()
   withLock obj.lock:
     result = procCall hasSubscription(Agent(obj), sig, tgt)
 
 method hasSubscription*(
     obj: AgentActor, sig: SigilName, tgt: WeakRef[Agent], slot: AgentProc
 ): bool {.gcsafe, raises: [].} =
+  obj.ensureActorReady()
   withLock obj.lock:
     result = procCall hasSubscription(Agent(obj), sig, tgt, slot)
 
 method addSubscription*(
     obj: AgentActor, sig: SigilName, tgt: WeakRef[Agent], slot: AgentProc
 ) {.gcsafe, raises: [].} =
+  obj.ensureActorReady()
+  doAssert not obj.isNil(), "agent is nil!"
+  assert slot != nil
+
+  var added = false
   withLock obj.lock:
-    procCall addSubscription(Agent(obj), sig, tgt, slot)
+    if not procCall hasSubscription(Agent(obj), sig, tgt, slot):
+      obj.subcriptions.add((sig, Subscription(tgt: tgt, slot: slot)))
+      added = true
+
+  if added and not tgt.isNil:
+    if tgt[] of AgentActor:
+      let tgtActor = cast[AgentActor](tgt[])
+      tgtActor.ensureActorReady()
+      withLock tgtActor.lock:
+        tgtActor.listening.incl(obj.unsafeWeakRef().asAgent())
+    else:
+      tgt[].listening.incl(obj.unsafeWeakRef().asAgent())
 
 method delSubscription*(
     self: AgentActor, sig: SigilName, tgt: WeakRef[Agent], slot: AgentProc
 ) {.gcsafe, raises: [].} =
-  withLock self.lock:
-    procCall delSubscription(Agent(self), sig, tgt, slot)
+  self.ensureActorReady()
+  var
+    subsFound: int
+    subsDeleted: int
 
+  withLock self.lock:
+    for idx in countdown(self.subcriptions.len() - 1, 0):
+      if self.subcriptions[idx].signal == sig and
+          self.subcriptions[idx].subscription.tgt == tgt:
+        subsFound.inc()
+        if slot == nil or self.subcriptions[idx].subscription.slot == slot:
+          subsDeleted.inc()
+          self.subcriptions.delete(idx)
+
+  if subsFound == subsDeleted and not tgt.isNil:
+    if tgt[] of AgentActor:
+      let tgtActor = cast[AgentActor](tgt[])
+      tgtActor.ensureActorReady()
+      withLock tgtActor.lock:
+        tgtActor.listening.excl(self.unsafeWeakRef().asAgent())
+    else:
+      tgt[].listening.excl(self.unsafeWeakRef().asAgent())

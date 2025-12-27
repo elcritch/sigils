@@ -63,6 +63,7 @@ method callSlots*(obj: Agent, req: SigilRequest) {.base, gcsafe.} =
   callSlotsImpl(obj, req, obj.getSubscriptions(req.procName))
 
 method callSlots*(obj: AgentActor, req: SigilRequest) {.gcsafe.} =
+  obj.ensureActorReady()
   var subs: seq[Subscription]
   withLock obj.lock:
     for sub in obj.getSubscriptions(req.procName):

@@ -34,6 +34,13 @@ proc `=destroy`*(obj: var typeof(AgentProxyShared()[])) =
     withLock obj.homeThread[].signaledLock:
       obj.homeThread[].signaled.excl(agent)
 
+  try:
+    if not obj.remoteThread.isNil:
+      obj.remoteThread.send(ThreadSignal(kind: Deref,
+          deref: agent.toKind(Agent)))
+  except Exception:
+    echo "error sending deref message for proxy"
+
   `=destroy`(obj.remoteThread)
   `=destroy`(obj.homeThread)
   `=destroy`(obj.forwarded)
@@ -48,15 +55,19 @@ proc remoteSlot*(context: Agent, params: SigilParams) {.nimcall.} =
 proc localSlot*(context: Agent, params: SigilParams) {.nimcall.} =
   raise newException(AssertionDefect, "this should never be called!")
 
-proc hasLocalSignal*(proxy: AgentProxyShared, sig: SigilName): bool =
+proc hasLocalSignal*(proxy: AgentProxyShared, sig: SigilName): bool {.gcsafe,
+    raises: [].} =
   for item in proxy.subcriptions:
     if item.signal == sig:
       return true
 
-proc hasAnySigil(proxy: AgentProxyShared): bool =
+proc hasAnySigil(proxy: AgentProxyShared): bool {.gcsafe, raises: [].} =
   proxy.hasLocalSignal(AnySigilName)
 
-proc removeForwarded(proxy: AgentProxyShared, sig: SigilName) =
+proc syncForwarded(proxy: AgentProxyShared) {.gcsafe, raises: [].}
+
+proc removeForwarded(proxy: AgentProxyShared, sig: SigilName) {.gcsafe,
+    raises: [].} =
   withLock proxy.lock:
     if sig notin proxy.forwarded:
       return
@@ -68,7 +79,8 @@ proc removeForwarded(proxy: AgentProxyShared, sig: SigilName) =
   if sig == AnySigilName:
     proxy.syncForwarded()
 
-proc ensureForwarded(proxy: AgentProxyShared, sig: SigilName) =
+proc ensureForwarded(proxy: AgentProxyShared, sig: SigilName) {.gcsafe,
+    raises: [].} =
   if not proxy.forwardingReady:
     return
   if sig != AnySigilName and proxy.hasAnySigil():
@@ -89,7 +101,7 @@ proc ensureForwarded(proxy: AgentProxyShared, sig: SigilName) =
   if not proxy.remote.isNil:
     proxy.remote[].addSubscription(sig, proxy, localSlot)
 
-proc syncForwarded(proxy: AgentProxyShared) =
+proc syncForwarded(proxy: AgentProxyShared) {.gcsafe, raises: [].} =
   var signals: HashSet[SigilName] = initHashSet[SigilName]()
   withLock proxy.lock:
     for item in proxy.subcriptions:
@@ -224,6 +236,7 @@ proc moveToThread*[T: AgentActor, R: SigilThread](
     )
   var
     agent = agentTy.unsafeWeakRef.toKind(AgentActor)
+  let agentRef = agent.toKind(Agent)
 
   var
     localProxy: AgentProxy[T]
@@ -236,11 +249,11 @@ proc moveToThread*[T: AgentActor, R: SigilThread](
     oldListeningSubs: seq[tuple[signal: SigilName, subscription: Subscription]]
 
   for listener in agent[].listening:
-    for item in listener.findSubscribedTo(agent[].unsafeWeakRef()):
+    for item in listener.findSubscribedTo(agentRef):
       oldListeningSubs.add(item)
 
-  agent.unsubscribeFrom(agent[].listening)
-  agent.removeSubscriptions(agent[].subcriptions)
+  agentRef.unsubscribeFrom(agent[].listening)
+  agentRef.removeSubscriptions(agent[].subcriptions)
   agent[].listening.clear()
   agent[].subcriptions.setLen(0)
 
