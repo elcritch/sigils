@@ -62,6 +62,8 @@ proc toBucketId*(websocket: WebSocket): int =
 proc addClient*(self: HeartBeats, ws: WebSocket) {.slot.} =
   echo "add heartbeat client"
   self.buckets[ws.toBucketId()].incl(ws)
+  echo "ping: ", ws
+  ws.send(heartbeatMessage)
 
 proc removeClient*(self: HeartBeats, ws: WebSocket) {.slot.} =
   echo "remove heartbeat client"

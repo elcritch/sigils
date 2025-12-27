@@ -189,7 +189,7 @@ proc closeClient(client: var WebSocketClient) =
   close(client.socket)
 
 proc runClient(id: int) =
-  echo "Running client..."
+  echo "Running client... ", id
   let port = 8123
   var client = connectWebSocket("127.0.0.1", port, testChannel)
 
