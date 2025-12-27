@@ -25,13 +25,7 @@ elif defined(useJsonSerde):
 else:
   import svariant
 
-export sets
-export options
-export svariant
-
-export IndexableChars
-export weakrefs
-export protocol
+export sets, options, svariant, IndexableChars, weakrefs, protocol
 
 import std/[terminal, strutils, strformat, sequtils]
 export strformat
