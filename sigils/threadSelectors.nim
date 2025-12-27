@@ -111,8 +111,9 @@ method setTimer*(
 ) {.gcsafe.} =
   ## Schedule a timer on this selector-backed thread using selector timers.
   let durMs = max(timer.duration.inMilliseconds(), 1)
+  let oneshot = (not timer.isRepeat()) and timer.count <= 1
   withLock thread.timerLock:
-    discard thread.sel.registerTimer(durMs.int, true, timer)
+    discard thread.sel.registerTimer(durMs.int, oneshot, timer)
 
 proc pumpTimers(thread: SigilSelectorThreadPtr, timeoutMs: int) {.gcsafe.} =
   ## Wait up to timeoutMs and deliver any due timers via selector events.
@@ -130,19 +131,18 @@ proc pumpTimers(thread: SigilSelectorThreadPtr, timeoutMs: int) {.gcsafe.} =
     if ev of SigilTimer:
       let tt = SigilTimer(ev)
       if thread.hasCancelTimer(tt):
+        withLock thread.timerLock:
+          thread.sel.unregister(k.fd)
         thread.removeTimer(tt)
         continue
       emit tt.timeout()
 
-      # Reschedule if needed
-      let dur = max(tt.duration.inMilliseconds(), 1).int
-      if tt.isRepeat():
-        discard thread.sel.registerTimer(dur, true, tt)
-      else:
+      if not tt.isRepeat():
         if tt.count > 0:
           tt.count.dec()
-        if tt.count != 0: # schedule again while count remains
-          discard thread.sel.registerTimer(dur, true, tt)
+        if tt.count == 0:
+          withLock thread.timerLock:
+            thread.sel.unregister(k.fd)
     elif ev of SigilSocketEvent:
       let dr = SigilSocketEvent(ev)
       # Only emit when the descriptor is readable.
