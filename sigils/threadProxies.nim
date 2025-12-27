@@ -148,8 +148,7 @@ method callMethod*(
       discard
     else:
       proxy.inbox.send(msg)
-      withLock proxy.homeThread[].signaledLock:
-        proxy.homeThread[].signaled.incl(proxy.unsafeWeakRef().toKind(AgentActor))
+      proxy.homeThread.signal(proxy.unsafeWeakRef().toKind(AgentActor))
       proxy.homeThread.send(ThreadSignal(kind: Trigger))
     return
 
@@ -167,8 +166,7 @@ method callMethod*(
       discard
     else:
       proxy.remote[].inbox.send(msg)
-      withLock proxy.remoteThread[].signaledLock:
-        proxy.remoteThread[].signaled.incl(proxy.remote)
+      proxy.remoteThread.signal(proxy.remote)
       proxy.remoteThread.send(ThreadSignal(kind: Trigger))
 
 method removeSubscriptionsFor*(

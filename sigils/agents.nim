@@ -84,20 +84,16 @@ proc `$`*[T: Agent](obj: WeakRef[T]): string =
     result &= obj.toPtr().repr
   result &= ")"
 
-template removeSubscriptionsForImpl*(self: Agent, subscriber: WeakRef[Agent]) =
+method removeSubscriptionsFor*(
+    self: Agent, subscriber: WeakRef[Agent]
+) {.base, gcsafe, raises: [].} =
+  debugPrint "   removeSubscriptionsFor:agent: ", " self:id: ", $self.unsafeWeakRef()
   ## Route's an rpc request.
   var toDel: seq[int] = newSeq[int](self.subcriptions.len())
   for idx in countdown(self.subcriptions.len() - 1, 0):
     debugPrint "   removeSubscriptionsFor subs sig: ", $self.subcriptions[idx].signal
     if self.subcriptions[idx].subscription.tgt == subscriber:
       self.subcriptions.delete(idx..idx)
-
-method removeSubscriptionsFor*(
-    self: Agent, subscriber: WeakRef[Agent]
-) {.base, gcsafe, raises: [].} =
-  debugPrint "   removeSubscriptionsFor:agent: ", " self:id: ",
-      $self.unsafeWeakRef()
-  removeSubscriptionsForImpl(self, subscriber)
 
 method unregisterSubscriber*(
     self: Agent, listener: WeakRef[Agent]
