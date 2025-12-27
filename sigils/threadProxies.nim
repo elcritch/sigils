@@ -61,11 +61,6 @@ proc hasLocalSignal*(proxy: AgentProxyShared, sig: SigilName): bool {.gcsafe,
     if item.signal == sig:
       return true
 
-proc hasAnySigil(proxy: AgentProxyShared): bool {.gcsafe, raises: [].} =
-  proxy.hasLocalSignal(AnySigilName)
-
-proc syncForwarded(proxy: AgentProxyShared) {.gcsafe, raises: [].}
-
 template removeForwarded(proxy: AgentProxyShared, sigs: untyped) =
   withLock proxy.lock:
     for sig in sigs:
@@ -78,37 +73,17 @@ template removeForwarded(proxy: AgentProxyShared, sigs: untyped) =
   for sig in sigs:
     if proxy.forwardingReady and not proxy.remote.isNil:
       proxy.remote[].delSubscription(sig, proxyRef, localSlot)
-    if sig == AnySigilName:
-      proxy.syncForwarded()
 
 proc ensureForwarded(proxy: AgentProxyShared, sig: SigilName) {.gcsafe,
     raises: [].} =
   if not proxy.forwardingReady:
     return
-  if sig != AnySigilName and proxy.hasAnySigil():
-    proxy.ensureForwarded(AnySigilName)
-    return
-  if sig == AnySigilName:
-    var others: seq[SigilName]
-    withLock proxy.lock:
-      for name in proxy.forwarded:
-        if name != AnySigilName:
-          others.add(name)
-    proxy.removeForwarded(others)
   withLock proxy.lock:
     if sig in proxy.forwarded:
       return
     proxy.forwarded.incl(sig)
   if not proxy.remote.isNil:
     proxy.remote[].addSubscription(sig, proxy, localSlot)
-
-proc syncForwarded(proxy: AgentProxyShared) {.gcsafe, raises: [].} =
-  var signals: HashSet[SigilName] = initHashSet[SigilName]()
-  withLock proxy.lock:
-    for item in proxy.subcriptions:
-      signals.incl(item.signal)
-  for sig in signals:
-    proxy.ensureForwarded(sig)
 
 method hasConnections*(proxy: AgentProxyShared): bool {.gcsafe, raises: [].} =
   withLock proxy.lock:

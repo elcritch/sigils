@@ -87,7 +87,8 @@ proc `$`*[T: Agent](obj: WeakRef[T]): string =
 method removeSubscriptionsFor*(
     self: Agent, subscriber: WeakRef[Agent]
 ) {.base, gcsafe, raises: [].} =
-  debugPrint "   removeSubscriptionsFor:agent: ", " self:id: ", $self.unsafeWeakRef()
+  debugPrint "   removeSubscriptionsFor:agent: ", " self:id: ",
+      $self.unsafeWeakRef()
   ## Route's an rpc request.
   var toDel: seq[int] = newSeq[int](self.subcriptions.len())
   for idx in countdown(self.subcriptions.len() - 1, 0):
@@ -98,7 +99,8 @@ method removeSubscriptionsFor*(
 method unregisterSubscriber*(
     self: Agent, listener: WeakRef[Agent]
 ) {.base, gcsafe, raises: [].} =
-  debugPrint "\tunregisterSubscriber: ", $listener, " from self: ", self.unsafeWeakRef()
+  debugPrint "\tunregisterSubscriber: ", $listener, " from self: ",
+      self.unsafeWeakRef()
   debugPrint &"   unregisterSubscriber:agent: self: {$self.unsafeWeakRef()}"
   assert listener in self.listening
   self.listening.excl(listener)
@@ -161,7 +163,8 @@ iterator getSubscriptions*(obj: Agent, sig: SigilName): var Subscription =
     if item.signal == sig or item.signal == AnySigilName:
       yield item.subscription
 
-iterator getSubscriptions*(obj: WeakRef[Agent], sig: SigilName): var Subscription =
+iterator getSubscriptions*(obj: WeakRef[Agent],
+                           sig: SigilName): var Subscription =
   for item in obj[].subcriptions.mitems():
     if item.signal == sig or item.signal == AnySigilName:
       yield item.subscription
@@ -200,7 +203,10 @@ method hasSubscription*(
         obj.subcriptions[idx].subscription.slot == slot:
       return true
 
-template hasSubscription*(obj: Agent, sig: SigilName, tgt: Agent, slot: AgentProc): bool =
+template hasSubscription*(obj: Agent,
+                          sig: SigilName,
+                          tgt: Agent,
+                          slot: AgentProc): bool =
   let tgtRef = tgt.unsafeWeakRef().toKind(Agent)
   hasSubscription(obj, sig, tgtRef, slot)
 
@@ -221,7 +227,10 @@ method addSubscription*(
     tgt[].addListener(obj.unsafeWeakRef().asAgent())
 
 template addSubscription*(
-    obj: Agent, sig: IndexableChars, tgt: Agent | WeakRef[Agent], slot: AgentProc
+    obj: Agent,
+    sig: IndexableChars,
+    tgt: Agent | WeakRef[Agent],
+    slot: AgentProc
 ): void =
   let tgtRef = tgt.unsafeWeakRef().toKind(Agent)
   addSubscription(obj, sig.toSigilName(), tgtRef, slot)
@@ -276,8 +285,8 @@ proc printConnections*(agent: Agent) =
       brightPrint fgBlue, "connections for Agent: ", $agent.unsafeWeakRef()
       brightPrint fgMagenta, "\t subscribers:", ""
       for item in agent.subcriptions:
-        let sname = printConnectionsSlotNames.getOrDefault(item.subscription.slot,
-            item.subscription.slot.repr)
+        let sname = printConnectionsSlotNames.getOrDefault(
+            item.subscription.slot, item.subscription.slot.repr)
         brightPrint fgGreen, "\t\t:", $item.signal, ": => ",
             $item.subscription.tgt & " slot: " & $sname
       brightPrint fgMagenta, "\t listening:", ""
