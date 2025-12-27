@@ -103,7 +103,7 @@ method addSubscription*(
 
   if added and not tgt.isNil:
     if tgt[] of AgentActor:
-      let tgtActor = cast[AgentActor](tgt[])
+      let tgtActor = AgentActor(tgt[])
       tgtActor.ensureActorReady()
       withLock tgtActor.lock:
         tgtActor.listening.incl(obj.unsafeWeakRef().asAgent())
