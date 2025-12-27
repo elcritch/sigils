@@ -121,13 +121,5 @@ method delSubscription*(
     subsDeleted: int
 
   withLock self.lock:
-    for idx in countdown(self.subcriptions.len() - 1, 0):
-      if self.subcriptions[idx].signal == sig and
-          self.subcriptions[idx].subscription.tgt == tgt:
-        subsFound.inc()
-        if slot == nil or self.subcriptions[idx].subscription.slot == slot:
-          subsDeleted.inc()
-          self.subcriptions.delete(idx)
+    procCall delSubscription(Agent(self), sig, tgt, slot)
 
-  if subsFound == subsDeleted and not tgt.isNil:
-    tgt[].delListener(self.unsafeWeakRef().asAgent())

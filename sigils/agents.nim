@@ -255,7 +255,7 @@ method delSubscription*(
         self.subcriptions.delete(idx..idx)
 
   if subsFound == subsDeleted:
-    tgt[].listening.excl(self.unsafeWeakRef())
+    tgt[].delListener(self.unsafeWeakRef().asAgent())
 
 
 template delSubscription*(
