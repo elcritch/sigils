@@ -72,13 +72,11 @@ proc sendBucket*(self: HeartBeats, bucket: int) {.slot.} =
     echo "ping: ", websocket
     websocket.send(heartbeatMessage)
 
-  if bucket < self.buckets.len() - 1:
-    emit self.doHeartbeat(bucket + 1)
-
 proc runHeartbeat*(self: HeartBeats) {.slot.} =
   echo "Run heartbeat... ", self.count, " (th: ", getThreadId(), ")"
   inc self.count
-  self.sendBucket(0)
+  for bucket in 0..<self.buckets.len():
+    emit self.doHeartbeat(bucket)
 
 proc start*(self: HeartBeats) {.slot.} =
   echo "Starting heartbeat!"
