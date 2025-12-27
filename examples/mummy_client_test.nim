@@ -1,4 +1,4 @@
-import mummy, std/[base64, net, random, sha1, strformat, strutils]
+import mummy, std/[base64, net, parseopt, random, sha1, strformat, strutils]
 #import ./mummy_websockets
 const
   heartbeatMessage* = """{"type":"heartbeat"}""" # The JSON heartbeat message.
@@ -153,7 +153,8 @@ proc readFrame*(client: var WebSocketClient, timeoutMs = 5000): WebSocketFrame =
     payload: payload
   )
 
-proc sendFrame*(client: var WebSocketClient, opcode: WsOpcode, payload: string = "") =
+proc sendFrame*(client: var WebSocketClient, opcode: WsOpcode,
+    payload: string = "") =
   var header = newString(0)
   header.add(char(0x80 or ord(opcode)))
 
@@ -187,7 +188,8 @@ proc closeClient(client: var WebSocketClient) =
     discard
   close(client.socket)
 
-proc runClient() =
+proc runClient(id: int) =
+  echo "Running client..."
   let port = 8123
   var client = connectWebSocket("127.0.0.1", port, testChannel)
 
@@ -205,18 +207,55 @@ proc runClient() =
 
   closeClient(client)
 
+proc usage() =
+  echo "Usage: mummy_client_test [--connections N | --connections=N | -n N]"
+  echo "  --connections, -n  Number of sequential connections to run (default: 1)"
+  echo "  --help, -h         Show this help"
+
+proc parseConnections(): int =
+  var connections = 1
+  var pendingValue = false
+  var parser = initOptParser()
+  for kind, key, val in parser.getopt():
+    case kind
+    of cmdLongOption, cmdShortOption:
+      if pendingValue:
+        raise newException(ValueError, "Missing value for --connections")
+      case key
+      of "connections", "n":
+        if val.len > 0:
+          connections = parseInt(val)
+        else:
+          pendingValue = true
+      of "help", "h":
+        usage()
+        quit(0)
+      else:
+        raise newException(ValueError, "Unknown option: " & key)
+    of cmdArgument:
+      if pendingValue:
+        connections = parseInt(key)
+        pendingValue = false
+      else:
+        raise newException(ValueError, "Unexpected argument: " & key)
+    of cmdEnd:
+      discard
+  if pendingValue:
+    raise newException(ValueError, "Missing value for --connections")
+  if connections < 1:
+    raise newException(ValueError, "Connections must be >= 1")
+  result = connections
+
 proc main() =
   randomize()
-  runClient()
-  #var runtime = newServerRuntime()
-  #var clientThread: Thread[ptr ServerRuntime]
-  #createThread(clientThread, runClient, addr runtime)
-  #runtime.server.serve(Port(port))
-  #joinThread(clientThread)
-  #runtime.shutdown()
-  GC_fullCollect()
+  let connections = parseConnections()
+  for i in 0 ..< connections:
+    runClient(i)
 
-  echo "WebSocket server responded with heartbeats and pong successfully"
+  if connections == 1:
+    echo "WebSocket server responded with heartbeats and pong successfully"
+  else:
+    echo fmt"WebSocket server responded with heartbeats and pong successfully ({connections} connections)"
 
 when isMainModule:
   main()
