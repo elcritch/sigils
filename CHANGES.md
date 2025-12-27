@@ -1,3 +1,4 @@
+- `v0.19.0` - improve threadSelectors timer handling and io exhaustion; improve registry
 - `v0.19.0` - refactor threading and proxy design! may break some code but simplifies proxies
 - `v0.18.0` - breaking change: connect no longer supports proxies - use connectThreaded!
 - `v0.12.1` - refine forward-declared slot support; add test `tests/tslotsFwdDecl.nim`, format touched files, and bump version.
