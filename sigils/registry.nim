@@ -5,11 +5,16 @@ import ./agents
 import ./threads
 import ./svariant
 
+type ProxyCloneSignal = object
+  signal*: SigilName
+  slot*: AgentProc
+
 type AgentLocation* = object
   thread*: SigilThreadPtr
   agent*: WeakRef[AgentActor]
   typeId*: TypeId
   isProxy*: bool
+  cloneSignals*: seq[ProxyCloneSignal]
 
 var registry: Table[SigilName, AgentLocation]
 var regLock: Lock
@@ -25,16 +30,40 @@ type SetupProxyParams = object
 proc keepAlive(context: Agent, params: SigilParams) {.nimcall.} =
   raise newException(AssertionDefect, "this should never be called!")
 
+proc collectProxyCloneSignals[T](proxy: AgentProxy[T]): seq[ProxyCloneSignal] =
+  let proxyRef = proxy.unsafeWeakRef().asAgent()
+  withLock proxy.lock:
+    for item in proxy.subcriptions:
+      # Only clone self-targeted subscriptions (proxy -> proxy).
+      if item.subscription.tgt == proxyRef:
+        result.add(ProxyCloneSignal(signal: item.signal,
+            slot: item.subscription.slot))
+
+proc applyProxyCloneSignals[T](proxy: AgentProxy[T],
+    clones: seq[ProxyCloneSignal]) {.gcsafe.} =
+  if clones.len == 0:
+    return
+  let proxyRef = proxy.unsafeWeakRef().asAgent()
+  for item in clones:
+    proxy.addSubscription(item.signal, proxyRef, item.slot)
+
 proc registerGlobalNameImpl[T](
-    name: SigilName, proxy: AgentProxy[T], override = false
+    name: SigilName,
+    proxy: AgentProxy[T],
+    override = false,
+    cloneSignals = false,
 ) {.gcsafe.} =
   {.cast(gcsafe).}:
     if not override and name in registry:
       raise newException(ValueError, "Name already registered! Name: " & $name)
+    let clones =
+      if cloneSignals: collectProxyCloneSignals(proxy)
+      else: @[]
     registry[name] = AgentLocation(
       thread: proxy.remoteThread,
       agent: proxy.remote,
       typeId: getTypeId(T),
+      cloneSignals: clones,
     )
     let sub = ThreadSub(src: proxy.remote.toKind(Agent),
                         name: sn"sigils:registryKeepAlive",
@@ -43,19 +72,27 @@ proc registerGlobalNameImpl[T](
     proxy.remoteThread.send(ThreadSignal(kind: AddSub, add: sub))
 
 proc registerGlobalName*[T](
-    name: SigilName, proxy: AgentProxy[T], override = false
+    name: SigilName,
+    proxy: AgentProxy[T],
+    override = false,
+    cloneSignals = false,
 ) {.gcsafe.} =
   withLock regLock:
     {.cast(gcsafe).}:
-      registerGlobalNameImpl(name, proxy, override)
+      registerGlobalNameImpl(name, proxy, override, cloneSignals)
 
 proc registerGlobalAgent*[T: AgentActor](
-    name: SigilName, thread: SigilThreadPtr, agent: var T, override = false
+    name: SigilName,
+    thread: SigilThreadPtr,
+    agent: var T,
+    override = false,
+    cloneSignals = false,
 ) {.gcsafe.} =
   withLock regLock:
     {.cast(gcsafe).}:
       let proxy = agent.moveToThread(thread)
-      registerGlobalNameImpl(name, proxy, override = override)
+      registerGlobalNameImpl(name, proxy, override = override,
+          cloneSignals = cloneSignals)
 
 proc removeGlobalName*[T](name: SigilName, proxy: AgentProxy[
     T]): bool {.gcsafe.} =
@@ -89,9 +126,12 @@ proc lookupAgentProxyImpl[T](name: SigilName, location: AgentLocation,
     let cached = proxyCache[key]
     if not cached.isNil:
       echo "Registry:cached: ", name, " ref: ", $cached.unsafeWeakRef()
-      return AgentProxy[T](cached)
+      result = AgentProxy[T](cached)
+      result.applyProxyCloneSignals(location.cloneSignals)
+      return result
 
   result.initProxy(location.agent, location.thread)
+  result.applyProxyCloneSignals(location.cloneSignals)
 
   if cache:
     echo "Registry:cache: ", $result.unsafeWeakRef()

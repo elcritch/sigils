@@ -90,8 +90,6 @@ proc start*(self: HeartBeats) {.slot.} =
 proc lookupHeartbeat(): AgentProxy[Heartbeats] =
   result = lookupAgentProxy(sn"HeartBeats", HeartBeats)
   echo "connect heartbeat proxy... "
-  connectThreaded(result, doAdd, result, addClient)
-  connectThreaded(result, doRemove, result, removeClient)
 
 ## ====================== Channels ====================== ##
 type
@@ -128,12 +126,13 @@ proc findChannelOrCreate*(name: string): AgentProxy[Channel] {.gcsafe.} =
     let thr = newSigilSelectorThread()
     thr.start()
     var channel = Channel(name: name, thr: thr)
-    registerGlobalName(cn, channel.moveToThread(thr))
+    let channelProxy = channel.moveToThread(thr)
+    connectThreaded(channelProxy, joining, channelProxy, joined)
+    connectThreaded(channelProxy, leaving, channelProxy, left)
+    registerGlobalName(cn, channelProxy, cloneSignals = true)
 
   result = lookupAgentProxy(cn, Channel)
   doAssert result != nil
-  connectThreaded(result, joining, result, joined)
-  connectThreaded(result, leaving, result, left)
 
 template withChannel(ws: WebSocket, blk: untyped) =
   let name = ws.findChannelName()
@@ -198,8 +197,10 @@ proc main() =
 
   var hbs = HeartBeats()
   let hbsProxy = hbs.moveToThread(heartbeatThr)
+  connectThreaded(hbsProxy, doAdd, hbsProxy, addClient)
+  connectThreaded(hbsProxy, doRemove, hbsProxy, removeClient)
   connectThreaded(heartbeatThr, started, hbsProxy, start)
-  registerGlobalName(sn"HeartBeats", hbsProxy)
+  registerGlobalName(sn"HeartBeats", hbsProxy, cloneSignals = true)
   heartbeatThr.start()
 
   var router: Router
