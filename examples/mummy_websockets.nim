@@ -48,6 +48,7 @@ proc removeWebsocket*(ws: WebSocket) {.gcsafe.} =
 const HbBuckets = 30
 type
   HeartBeats {.acyclic.} = ref object of AgentActor
+    count: uint
     buckets: array[HbBuckets, HashSet[WebSocket]]
     timer: SigilTimer
 
@@ -75,7 +76,8 @@ proc sendBucket*(self: HeartBeats, bucket: int) {.slot.} =
     emit self.doHeartbeat(bucket + 1)
 
 proc runHeartbeat*(self: HeartBeats) {.slot.} =
-  echo "Run heartbeat...", " (th: ", getThreadId(), ")"
+  echo "Run heartbeat... ", self.count, " (th: ", getThreadId(), ")"
+  inc self.count
   self.sendBucket(0)
 
 proc start*(self: HeartBeats) {.slot.} =
