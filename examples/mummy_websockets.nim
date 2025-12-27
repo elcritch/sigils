@@ -62,6 +62,8 @@ proc toBucketId*(websocket: WebSocket): int =
 proc addClient*(self: HeartBeats, ws: WebSocket) {.slot.} =
   echo "add heartbeat client"
   self.buckets[ws.toBucketId()].incl(ws)
+  echo "ping: ", ws
+  ws.send(heartbeatMessage)
 
 proc removeClient*(self: HeartBeats, ws: WebSocket) {.slot.} =
   echo "remove heartbeat client"
@@ -72,13 +74,11 @@ proc sendBucket*(self: HeartBeats, bucket: int) {.slot.} =
     echo "ping: ", websocket
     websocket.send(heartbeatMessage)
 
-  if bucket < self.buckets.len() - 1:
-    emit self.doHeartbeat(bucket + 1)
-
 proc runHeartbeat*(self: HeartBeats) {.slot.} =
   echo "Run heartbeat... ", self.count, " (th: ", getThreadId(), ")"
   inc self.count
-  self.sendBucket(0)
+  for bucket in 0..<self.buckets.len():
+    emit self.doHeartbeat(bucket)
 
 proc start*(self: HeartBeats) {.slot.} =
   echo "Starting heartbeat!"
@@ -86,12 +86,6 @@ proc start*(self: HeartBeats) {.slot.} =
   connect(self.timer, timeout, self, runHeartbeat)
   connect(self, doHeartbeat, self, sendBucket)
   self.timer.start()
-
-proc lookupHeartbeat(): AgentProxy[Heartbeats] =
-  result = lookupAgentProxy(sn"HeartBeats", HeartBeats)
-  echo "connect heartbeat proxy... "
-  connectThreaded(result, doAdd, result, addClient)
-  connectThreaded(result, doRemove, result, removeClient)
 
 ## ====================== Channels ====================== ##
 type
@@ -122,18 +116,21 @@ proc send*(self: Channel, message: Message) {.slot.} =
   for websocket in self.clients:
     websocket.send(message.data, message.kind)
 
+proc createChannelAgent(name: string) =
+  let cn = name.toSigName()
+  let thr = newSigilSelectorThread()
+  thr.start()
+  var channel = Channel(name: name, thr: thr)
+  let channelProxy = channel.moveToThread(thr)
+  connectThreaded(channelProxy, joining, channelProxy, joined)
+  connectThreaded(channelProxy, leaving, channelProxy, left)
+  registerGlobalName(cn, channelProxy, cloneSignals = true)
+
 proc findChannelOrCreate*(name: string): AgentProxy[Channel] {.gcsafe.} =
   let cn = name.toSigName()
   if not lookupGlobalName(cn).isSome:
-    let thr = newSigilSelectorThread()
-    thr.start()
-    var channel = Channel(name: name, thr: thr)
-    registerGlobalName(cn, channel.moveToThread(thr))
-
+    createChannelAgent(name)
   result = lookupAgentProxy(cn, Channel)
-  doAssert result != nil
-  connectThreaded(result, joining, result, joined)
-  connectThreaded(result, leaving, result, left)
 
 template withChannel(ws: WebSocket, blk: untyped) =
   let name = ws.findChannelName()
@@ -151,7 +148,7 @@ proc websocketHandler(websocket: WebSocket, event: WebSocketEvent,
   case event:
   of OpenEvent:
     echo "OpenEvent: ", message
-    let heartbeats = lookupHeartbeat()
+    let heartbeats = lookupAgentProxy(sn"HeartBeats", HeartBeats)
     if heartbeats != nil:
       emit heartbeats.doAdd(websocket)
 
@@ -174,7 +171,7 @@ proc websocketHandler(websocket: WebSocket, event: WebSocketEvent,
     echo "CloseEvent: ", message
     withChannel(websocket):
       emit channel.leaving(websocket)
-    let hb = lookupHeartbeat()
+    let hb = lookupAgentProxy(sn"HeartBeats", HeartBeats)
     emit hb.doRemove(websocket)
 
 proc upgradeHandler(request: Request) {.gcsafe.} =
@@ -198,8 +195,10 @@ proc main() =
 
   var hbs = HeartBeats()
   let hbsProxy = hbs.moveToThread(heartbeatThr)
+  connectThreaded(hbsProxy, doAdd, hbsProxy, addClient)
+  connectThreaded(hbsProxy, doRemove, hbsProxy, removeClient)
   connectThreaded(heartbeatThr, started, hbsProxy, start)
-  registerGlobalName(sn"HeartBeats", hbsProxy)
+  registerGlobalName(sn"HeartBeats", hbsProxy, cloneSignals = true)
   heartbeatThr.start()
 
   var router: Router
