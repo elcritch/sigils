@@ -5,13 +5,15 @@ A [signal and slots library](https://en.wikipedia.org/wiki/Signals_and_slots) im
 > Signals and slots is a language construct introduced in Qt for communication between objects which makes it easy to implement the observer pattern while avoiding boilerplate code. The concept is that GUI widgets, and other objects, can send signals containing event information which can be received by other objects using special member functions known as slots. This is similar to C/C++ function pointers, but the signal/slot system ensures the type-correctness of callback arguments.
 > - Wikipedia
 
-Note that this implementation shares many or most of the limitations you'd see in Qt's implementation. Sigils currently only has basic multi-threading, but I hope to expand support over time.
+Note that this implementation shares many or most of the limitations you'd see in Qt's implementation. Sigils also includes a message-passing threading model; see `docs/threading.md` for the detailed architecture and safety notes.
 
 ## Basics
 
-Only objects inheriting from `Agent` can recieve signals. Slots must take an `Agent` object as the first argument. The rest of the arguments must match that of the `signal` you wish to connect a slot to.
+Only objects inheriting from `Agent` can receive signals. Slots must take an `Agent` object as the first argument. The rest of the arguments must match that of the `signal` you wish to connect a slot to.
 
-You need to wrap procs with a `slot` to setup the proc to support recieving signals. The proc can still be used as a normal function though. Signals use the proc syntax but don't have a implementation. They just provide the type checking and naming for the signal.
+For threaded usage, prefer `AgentActor` (it extends `Agent` with a mailbox and lock for thread-safe subscription updates). `AgentActor` is required by `moveToThread` and by the proxy-based cross-thread APIs.
+
+You need to wrap procs with a `slot` to set up the proc to support receiving signals. The proc can still be used as a normal function though. Signals use the proc syntax but don't have a implementation. They just provide the type checking and naming for the signal.
 
 Connecting signals and slots is accomplished using `connect`. Note that `connect` is idempotent, meaning that you can call it on the same objects the multiple times without ill effect.
 
@@ -54,7 +56,7 @@ doAssert c.value == 137
 
 ## Alternative Connect for Slots
 
-Sometimes the Nim compiler can't determine the which slot you want to use just by the types passed into the `connect` template. Othertimes you may want to specify a parent type's slot. 
+Sometimes the Nim compiler can't determine the which slot you want to use just by the types passed into the `connect` template. Other times you may want to specify a parent type's slot. 
 
 The `{.slot.}` pragma generates some helper procs for these scenarios to allow you to ensure the specific slot passed to `connect`. These helpers procs take the type of their agent (the target) as the first argument. It looks like this:
 
@@ -80,36 +82,54 @@ test "signal / slot types":
 
 ## Threads
 
-Sigils 0.9+ can now do threaded signals!
+Sigils uses a message-passing model: agents are owned by one thread at a time, and cross-thread work is delivered via per-thread schedulers. To move an agent to another thread, it must be an `AgentActor` and you must use `moveToThread`, which returns an `AgentProxy[T]`. Use `connectThreaded(...)` for cross-thread wiring (since v0.18.0, `connect` does not accept proxies). If you expect inbound forwarded events on the local thread, you must `poll()`/`pollAll()` that thread's scheduler.
 
-**Note**: v0.16.0 changed threads module's `connect` to `connectThreaded` to be more explicit.
+`moveToThread` transfers ownership; the agent must be unique (`isUniqueRef`) and the original reference should not be used after the move. Cross-thread signal params must be thread-safe (no shared `ref` fields); use `Isolate[T]` when you need to transfer heap payloads.
+
+Thread implementations:
+- `newSigilThread()` / `SigilThreadDefault`: blocking worker thread (message loop).
+- `newSigilSelectorThread()` / `SigilSelectorThread`: selector-backed thread with timers and fd events.
+- `AsyncSigilThread` (import `sigils/threadAsyncs`): integrates with `asyncdispatch`.
 
 ```nim
-test "agent connect then moveToThread and run":
-  var
-    a = SomeAction.new()
+import sigils
+import sigils/threads
 
-  block:
-    echo "sigil object thread connect change"
-    var
-      b = Counter.new()
-      c = SomeAction.new()
-    echo "thread runner!", " (th: ", getThreadId(), ")"
-    let thread = newSigilThread()
-    thread.start()
-    startLocalThread()
+type
+  Counter = ref object of AgentActor
+    value: int
+  Sink = ref object of AgentActor
+    seen: int
 
-    connect(a, valueChanged, b, setValue)
-    connect(b, updated, c, SomeAction.completed())
+proc valueChanged(self: Counter, value: int) {.signal.}
 
-    let bp: AgentProxy[Counter] = b.moveToThread(thread)
-    echo "obj bp: ", bp.getSigilId()
+proc setValue(self: Counter, value: int) {.slot.} =
+  self.value = value
+  emit self.valueChanged(value)
 
-    # Note: `connectThreaded` can be used with proxies
-    emit a.valueChanged(314)
-    let ct = getCurrentSigilThread()
-    ct[].poll() # we need to either `poll` or do `runForever` similar to async
-    check c.value == 314
+proc record(self: Sink, value: int) {.slot.} =
+  self.seen = value
+
+var
+  src = Counter()
+  dst = Counter()
+  sink = Sink()
+
+let worker = newSigilThread()
+worker.start()
+startLocalThreadDefault()
+
+let proxy: AgentProxy[Counter] = dst.moveToThread(worker)
+
+connectThreaded(src, valueChanged, proxy, setValue)  # local -> remote
+connectThreaded(proxy, valueChanged, sink, record)   # remote -> local
+
+emit src.valueChanged(42)
+
+let ct = getCurrentSigilThread()
+discard ct.pollAll() # deliver forwarded events to local thread
+
+doAssert sink.seen == 42
 ```
 
 ## Closures
@@ -191,10 +211,10 @@ This example sends one signal to two different agents living on two different th
 import sigils, sigils/threads
 
 type
-  Trigger = ref object of Agent
-  Worker = ref object of Agent
+  Trigger = ref object of AgentActor
+  Worker = ref object of AgentActor
     value: int
-  Collector = ref object of Agent
+  Collector = ref object of AgentActor
     a: int
     b: int
 
@@ -247,4 +267,3 @@ setRunning(threadB, false)
 threadA.join()
 threadB.join()
 ```
-
