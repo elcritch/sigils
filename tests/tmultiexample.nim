@@ -1,12 +1,12 @@
 import sigils, sigils/threads
 
 type
-  Trigger = ref object of Agent
+  Trigger = ref object of AgentActor
 
-  Worker = ref object of Agent
+  Worker = ref object of AgentActor
     value: int
 
-  Collector = ref object of Agent
+  Collector = ref object of AgentActor
     a: int
     b: int
 

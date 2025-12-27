@@ -3,10 +3,10 @@ import sigils
 import sigils/threadAsyncs
 
 type
-  SomeAction* = ref object of Agent
+  SomeAction* = ref object of AgentActor
     value: int
 
-  Counter* = ref object of Agent
+  Counter* = ref object of AgentActor
     value: int
 
 proc valueChanged*(tp: SomeAction, val: int) {.signal.}

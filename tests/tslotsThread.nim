@@ -11,11 +11,11 @@ import std/terminal
 import std/strutils
 
 type
-  SomeAction* = ref object of Agent
+  SomeAction* = ref object of AgentActor
     value: int
     obj: InnerA
 
-  Counter* = ref object of Agent
+  Counter* = ref object of AgentActor
     value: int
     obj: InnerC
 
@@ -45,7 +45,7 @@ proc updated*(tp: Counter, final: int) {.signal.}
 
 proc setValue*(self: Counter, value: int) {.slot.} =
   # echo "setValue! ", value, " id: ", self.getSigilId().int, " (th: ", getThreadId(), ")"
-  # echo "setValue! self:refcount: ", self.unsafeGcCount() 
+  # echo "setValue! self:refcount: ", self.unsafeGcCount()
   if self.value != value:
     self.value = value
   # echo "setValue:subcriptionsTable: ", self.subcriptionsTable.pairs().toSeq.mapIt(it[1].mapIt(cast[pointer](it.tgt.getSigilId()).repr))
@@ -196,22 +196,18 @@ suite "threaded agent slots":
       brightPrint "obj bp: ", $bp.unsafeWeakRef()
       printConnections(a)
       printConnections(bp)
-      printConnections(bp.proxyTwin[])
       printConnections(bp.remote[])
       let
         subLocalProxy = Subscription(
           tgt: bp.unsafeWeakRef().asAgent(), slot: setValueGlobal(Counter)
         )
-        remoteRouter = bp.proxyTwin
         subs = a.getSubscriptions(sigName"valueChanged").toSeq()
       doAssert subs.len() >= 1
       #check subs[0] == subLocalProxy
       check bp.listening.contains(a.unsafeWeakRef().asAgent())
       check bp.subcriptions.len() == 0
 
-      #check remoteRouter[].subcriptions.len() == 1
-      check remoteRouter[].listening.len() == 1
-      check bp[].remote[].subcriptions.len() == 1
+      check bp[].remote[].subcriptions.len() == 0
       #check bp[].remote[].listening.len() == 1
 
       emit a.valueChanged(568)
@@ -266,7 +262,6 @@ suite "threaded agent slots":
 
       printConnections(a)
       printConnections(bp)
-      printConnections(bp.proxyTwin[])
       printConnections(bp.getRemote()[])
 
       # printConnections(thread[])
@@ -275,14 +270,11 @@ suite "threaded agent slots":
         subLocalProxy = Subscription(
           tgt: bp.unsafeWeakRef().asAgent(), slot: setValueGlobal(Counter)
         )
-        remoteRouter = bp.proxyTwin
       check a.subcriptions.len() == 0
       check a.listening.len() == 1
       check bp.subcriptions.len() == 1
-      check bp.listening.len() == 0
+      check bp.listening.len() == 1
 
-      check remoteRouter[].subcriptions.len() == 0
-      check remoteRouter[].listening.len() == 1
       check bp[].remote[].subcriptions.len() == 1
       check bp[].remote[].listening.len() == 1 # listening to thread
 
