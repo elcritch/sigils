@@ -125,7 +125,6 @@ proc lookupAgentProxyImpl[T](name: SigilName, location: AgentLocation,
   if key in proxyCache:
     let cached = proxyCache[key]
     if not cached.isNil:
-      echo "Registry:cached: ", name, " ref: ", $cached.unsafeWeakRef()
       result = AgentProxy[T](cached)
       result.applyProxyCloneSignals(location.cloneSignals)
       return result
@@ -134,7 +133,6 @@ proc lookupAgentProxyImpl[T](name: SigilName, location: AgentLocation,
   result.applyProxyCloneSignals(location.cloneSignals)
 
   if cache:
-    echo "Registry:cache: ", $result.unsafeWeakRef()
     proxyCache[key] = AgentProxyShared(result)
 
 proc lookupAgentProxy*[T](name: SigilName, tp: typeof[T]): AgentProxy[T] {.gcsafe.} =

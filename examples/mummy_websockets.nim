@@ -127,10 +127,10 @@ proc createChannelAgent(name: string) =
   registerGlobalName(cn, channelProxy, cloneSignals = true)
 
 proc findChannelOrCreate*(name: string): AgentProxy[Channel] {.gcsafe.} =
-  result = lookupAgentProxy(name.toSigName(), Channel)
-  if result == nil:
+  let cn = name.toSigName()
+  if not lookupGlobalName(cn).isSome:
     createChannelAgent(name)
-    result = lookupAgentProxy(name.toSigName(), Channel)
+  result = lookupAgentProxy(cn, Channel)
 
 template withChannel(ws: WebSocket, blk: untyped) =
   let name = ws.findChannelName()
