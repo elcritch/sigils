@@ -87,10 +87,6 @@ proc start*(self: HeartBeats) {.slot.} =
   connect(self, doHeartbeat, self, sendBucket)
   self.timer.start()
 
-proc lookupHeartbeat(): AgentProxy[Heartbeats] =
-  result = lookupAgentProxy(sn"HeartBeats", HeartBeats)
-  echo "connect heartbeat proxy... "
-
 ## ====================== Channels ====================== ##
 type
   Channel = ref object of AgentActor
@@ -120,19 +116,21 @@ proc send*(self: Channel, message: Message) {.slot.} =
   for websocket in self.clients:
     websocket.send(message.data, message.kind)
 
-proc findChannelOrCreate*(name: string): AgentProxy[Channel] {.gcsafe.} =
+proc createChannelAgent(name: string) =
   let cn = name.toSigName()
-  if not lookupGlobalName(cn).isSome:
-    let thr = newSigilSelectorThread()
-    thr.start()
-    var channel = Channel(name: name, thr: thr)
-    let channelProxy = channel.moveToThread(thr)
-    connectThreaded(channelProxy, joining, channelProxy, joined)
-    connectThreaded(channelProxy, leaving, channelProxy, left)
-    registerGlobalName(cn, channelProxy, cloneSignals = true)
+  let thr = newSigilSelectorThread()
+  thr.start()
+  var channel = Channel(name: name, thr: thr)
+  let channelProxy = channel.moveToThread(thr)
+  connectThreaded(channelProxy, joining, channelProxy, joined)
+  connectThreaded(channelProxy, leaving, channelProxy, left)
+  registerGlobalName(cn, channelProxy, cloneSignals = true)
 
-  result = lookupAgentProxy(cn, Channel)
-  doAssert result != nil
+proc findChannelOrCreate*(name: string): AgentProxy[Channel] {.gcsafe.} =
+  result = lookupAgentProxy(name.toSigName(), Channel)
+  if result == nil:
+    createChannelAgent(name)
+    result = lookupAgentProxy(name.toSigName(), Channel)
 
 template withChannel(ws: WebSocket, blk: untyped) =
   let name = ws.findChannelName()
@@ -150,7 +148,7 @@ proc websocketHandler(websocket: WebSocket, event: WebSocketEvent,
   case event:
   of OpenEvent:
     echo "OpenEvent: ", message
-    let heartbeats = lookupHeartbeat()
+    let heartbeats = lookupAgentProxy(sn"HeartBeats", HeartBeats)
     if heartbeats != nil:
       emit heartbeats.doAdd(websocket)
 
@@ -173,7 +171,7 @@ proc websocketHandler(websocket: WebSocket, event: WebSocketEvent,
     echo "CloseEvent: ", message
     withChannel(websocket):
       emit channel.leaving(websocket)
-    let hb = lookupHeartbeat()
+    let hb = lookupAgentProxy(sn"HeartBeats", HeartBeats)
     emit hb.doRemove(websocket)
 
 proc upgradeHandler(request: Request) {.gcsafe.} =
