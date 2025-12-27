@@ -131,10 +131,3 @@ method delSubscription*(
 
   if subsFound == subsDeleted and not tgt.isNil:
     tgt[].delListener(self.unsafeWeakRef().asAgent())
-    #if tgt[] of AgentActor:
-    #  let tgtActor = cast[AgentActor](tgt[])
-    #  tgtActor.ensureActorReady()
-    #  withLock tgtActor.lock:
-    #    tgtActor.listening.excl(self.unsafeWeakRef().asAgent())
-    #else:
-    #  tgt[].listening.excl(self.unsafeWeakRef().asAgent())
