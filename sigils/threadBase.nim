@@ -198,7 +198,7 @@ proc exec*(thread: SigilThreadPtr, sig: ThreadSignal) {.gcsafe.} =
       for signaled in signaled:
         debugPrint "triggering: ", signaled
         var sig: ThreadSignal
-        debugPrint "triggering:inbox: ", signaled[].inbox.repr
+        debugPrint "triggering:inbox size: ", $signaled[].inbox.peek()
         while signaled[].inbox.tryRecv(sig):
           debugPrint "\t threadExec:tgt: ", $sig.tgt, " rc: ", $sig.tgt[].unsafeGcCount()
           let res = sig.tgt[].callMethod(sig.req, sig.slot)
