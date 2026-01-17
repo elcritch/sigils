@@ -270,7 +270,6 @@ template delSubscription*(
 
 proc printConnections*(agent: Agent) =
   when defined(sigilsDebugPrint):
-    withLock plock:
       if agent.isNil:
         brightPrint fgBlue, "connections for Agent: ", "nil"
         return

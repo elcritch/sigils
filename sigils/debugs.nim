@@ -1,5 +1,6 @@
 import std/terminal
 import std/locks
+import std/strformat
 
 when defined(sigilsDebugPrint) or defined(sigilsDebugQueue):
   var
