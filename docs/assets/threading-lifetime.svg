@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="390" viewBox="0 0 960 390" role="img" aria-labelledby="life-title life-desc">
+  <title id="life-title">Move and Deref lifetime flow</title>
+  <desc id="life-desc">Move stores the strong ref in references. Deref asks the owning scheduler to remove a known reference or clean stale scheduler state. The pool defers release if the actor is currently running.</desc>
+  <defs>
+    <marker id="arrow-life" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#333"/>
+    </marker>
+    <style>
+      .box { fill: #f8fafc; stroke: #334155; stroke-width: 2; }
+      .node { fill: #e0f2fe; stroke: #0369a1; stroke-width: 2; }
+      .proxy { fill: #ecfccb; stroke: #4d7c0f; stroke-width: 2; }
+      .store { fill: #fff7ed; stroke: #c2410c; stroke-width: 2; }
+      .warn { fill: #fee2e2; stroke: #b91c1c; stroke-width: 2; }
+      .ok { fill: #dcfce7; stroke: #15803d; stroke-width: 2; }
+      .text { font: 14px sans-serif; fill: #111827; }
+      .small { font: 12px sans-serif; fill: #374151; }
+      .label { font: 700 16px sans-serif; fill: #111827; }
+      .line { stroke: #333; stroke-width: 2; fill: none; marker-end: url(#arrow-life); }
+      .dash { stroke: #64748b; stroke-width: 2; stroke-dasharray: 7 5; fill: none; marker-end: url(#arrow-life); }
+    </style>
+  </defs>
+
+  <rect class="box" x="35" y="45" width="355" height="285" rx="10"/>
+  <text class="label" x="60" y="78">Proxy side</text>
+  <rect class="proxy" x="80" y="115" width="230" height="52" rx="8"/>
+  <text class="text" x="128" y="146">AgentProxy destroyed</text>
+  <rect class="node" x="80" y="210" width="230" height="52" rx="8"/>
+  <text class="text" x="113" y="240">send Deref(identity)</text>
+
+  <rect class="box" x="560" y="45" width="355" height="285" rx="10"/>
+  <text class="label" x="585" y="78">Owning scheduler</text>
+  <rect class="store" x="605" y="104" width="245" height="60" rx="8"/>
+  <text class="text" x="654" y="130">references table</text>
+  <text class="small" x="640" y="149">strong refs for moved agents</text>
+  <rect class="warn" x="605" y="190" width="110" height="58" rx="8"/>
+  <text class="text" x="631" y="214">running?</text>
+  <text class="small" x="623" y="232">pool only</text>
+  <rect class="ok" x="740" y="190" width="110" height="58" rx="8"/>
+  <text class="text" x="764" y="214">release</text>
+  <text class="small" x="756" y="232">when idle</text>
+
+  <path class="line" d="M 195 167 L 195 210"/>
+  <path class="line" d="M 310 236 C 425 236 500 134 605 134"/>
+  <path class="line" d="M 728 164 L 660 190"/>
+  <path class="line" d="M 715 219 L 740 219"/>
+  <path class="dash" d="M 660 248 C 680 292 765 292 795 248"/>
+  <text class="small" x="652" y="292">if running: mark closing, release after slot returns</text>
+</svg>
