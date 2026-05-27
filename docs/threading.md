@@ -1,280 +1,387 @@
-# Sigils Threading Architecture
+# Sigils Threading
 
-This document explains the threading architecture implemented in `sigils/threadBase.nim`, `sigils/threadDefault.nim`, and `sigils/threadProxies.nim` (re-exported via `sigils/threads.nim`), with examples from `tests/tslotsThread.nim`. It focuses on how agents are moved across threads, how calls and signals travel safely between threads, and the key safety guarantees and caveats.
+Sigils uses message passing to keep agent state owned by one scheduler at a
+time. A moved agent is not shared between threads. The original ref is moved
+into the destination scheduler, and the caller keeps an `AgentProxy[T]` that
+knows how to send work to the real agent.
 
-At a high level, Sigils follows a "don't share, communicate" approach to concurrency. Each thread is treated as the exclusive owner of the agents it runs: an agent's internal state is meant to be read and written by only one thread. Instead of letting multiple threads call into the same object directly (which would require locks around every access), Sigils keeps agent code single-threaded and uses message passing to request work from other threads.
+That design gives the important safety rule:
 
-The key operation is a move. Moving an agent to another thread is an ownership transfer: after the move, the destination thread is the only place where the real agent lives and executes. The source thread should behave as if it no longer has the agent at all. What it keeps is a small local stand-in whose job is to forward method calls and signals across threads. This is similar in spirit to moving an object to another process and then talking to it through a handle.
+> Agent methods run on the scheduler that owns the real agent. Other threads
+> talk to that agent through messages and proxies.
 
-Communication is built around inboxes (message queues). When code on one thread wants something to happen on another thread, it packages the request as a message and puts it into the destination thread's inbox. The destination thread runs a simple loop: it repeatedly takes messages out of its inbox and executes them one at a time. Because all requests are handled serially on the owning thread, the agent doesn't need internal locking to stay consistent.
+This document focuses on the core mechanics: `AgentProxy`, `Move`, `Deref`,
+per-agent inboxes, and the lifetime rules that keep cross-thread calls safe.
 
-Signals travel back the same way. When an agent running on a worker thread emits a signal that has listeners on a different thread, that signal becomes a message placed into the other thread's inbox. Importantly, the receiving thread must periodically drain its own inbox to deliver those callbacks. If you forget to pump the inbox on the receiving side, cross-thread signals won't be observed even though they were queued.
+## The Main Pieces
 
-## Overview
+- `AgentActor` is an agent with a mailbox (`inbox`) and a lock around its
+  subscription lists.
+- `SigilThread` is the scheduler base type. It owns moved agents in
+  `references: Table[WeakRef[Agent], Agent]`.
+- `SigilThreadDefault` is the normal one-worker scheduler. It receives
+  `ThreadSignal`s on `inputs` and executes them serially in `runForever()`.
+- `SigilThreadPool` is a cooperative worker pool. It is still a `SigilThread`,
+  but it leases one actor at a time so one actor is never run by two workers at
+  once.
+- `AgentProxy[T]` is the local handle returned by `moveToThread`. It has:
+  `remote`, `remoteThread`, `homeThread`, and a local subscription list.
+- `ThreadSignal` is the scheduler message type. The important variants are
+  `Move`, `Call`, `Trigger`, `Deref`, `AddSub`, `DelSub`, and `Exit`.
 
-- Sigils uses a message-passing model to keep agent logic thread-confined while enabling cross-thread signaling.
-- Agents can be **moved** to a worker thread; callers interact with them through a local proxy that forwards requests.
-- Cross-thread work is executed by a per-thread scheduler that processes messages serially.
-- Worker threads run the scheduler loop automatically; threads without a built-in loop must periodically poll to process forwarded events.
-- Cleanup is synchronized: moved agents are owned by the destination thread, and proxies send dereference messages so the destination thread can release remote state.
-- Subscriptions and slots are configured on the local proxy.
+The thread-local current scheduler is available through
+`getCurrentSigilThread()`. Worker threads set this automatically. A main thread
+that receives callbacks from workers must poll its local scheduler with
+`poll()` or `pollAll()`.
 
-## Mental Model
+## Ownership Model
 
-- Every participating OS thread has a thread-local `SigilThread` (`getCurrentSigilThread()` in `sigils/threadBase.nim`).
-- A `SigilThread` executes messages serially; there is no parallel execution within a single `SigilThread`.
-- `SigilThreadDefault.start()` spawns a worker that calls `runForever()` and blocks in `poll()`.
-- If your current thread needs to receive events from other threads, you must pump its scheduler by calling `poll()`/`pollAll()` periodically.
+Moving an agent is a transfer of the strong ref. After `moveToThread`, caller
+code should treat the original variable as gone and use only the returned proxy.
 
-## Core Types
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 330" role="img" aria-labelledby="move-title move-desc">
+  <title id="move-title">Move transfers ownership and leaves a proxy behind</title>
+  <desc id="move-desc">Before move, the source thread owns an agent. After Move, the destination scheduler owns the agent in references, and source code uses an AgentProxy.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#333"/>
+    </marker>
+    <style>
+      .box { fill: #f8fafc; stroke: #334155; stroke-width: 2; rx: 10; }
+      .agent { fill: #e0f2fe; stroke: #0369a1; stroke-width: 2; rx: 8; }
+      .proxy { fill: #ecfccb; stroke: #4d7c0f; stroke-width: 2; rx: 8; }
+      .store { fill: #fff7ed; stroke: #c2410c; stroke-width: 2; rx: 8; }
+      .text { font: 15px sans-serif; fill: #111827; }
+      .small { font: 13px sans-serif; fill: #374151; }
+      .label { font: 700 16px sans-serif; fill: #111827; }
+      .line { stroke: #333; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+      .dash { stroke: #64748b; stroke-width: 2; stroke-dasharray: 7 5; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
 
-- `SigilThread` (threadBase): Common scheduler/state shared by all thread implementations. Holds:
-  - `signaled: HashSet[WeakRef[AgentActor]]` set of inboxes to drain.
-  - `signaledLock: Lock` protects `signaled`.
-  - `references: Table[WeakRef[Agent], Agent]` ownership table of agents moved onto this thread.
-  - `agent: SigilThreadAgent` a local agent for thread lifecycle signals (e.g., `started`).
-  - `exceptionHandler` invoked by `runForever()` if a slot raises.
-  - `running: Atomic[bool]`, `threadId: Atomic[int]`.
+  <rect class="box" x="35" y="45" width="340" height="235"/>
+  <text class="label" x="60" y="78">Source thread</text>
+  <rect class="agent" x="83" y="115" width="190" height="55"/>
+  <text class="text" x="111" y="149">Counter agent</text>
+  <text class="small" x="83" y="205">Before move: source owns the ref</text>
 
-- `SigilThreadDefault` (threadDefault): Default blocking worker thread implementation. Adds:
-  - `inputs: Chan[ThreadSignal]` main control channel for `Move`/`Deref`/`Trigger`/`Call`/`Exit`.
-  - `thr: Thread[ptr SigilThreadDefault]` OS thread handle.
+  <rect class="box" x="545" y="45" width="340" height="235"/>
+  <text class="label" x="570" y="78">Destination scheduler</text>
+  <rect class="store" x="592" y="107" width="230" height="82"/>
+  <text class="text" x="625" y="136">references table</text>
+  <text class="small" x="620" y="164">WeakRef[Agent] -&gt; Agent</text>
 
-- Thread-local access (threadBase):
-  - `localSigilThread {.threadVar.}` stores the current scheduler pointer.
-  - `getCurrentSigilThread()` lazily initializes it by calling `startSigilThreadProc` (defaults to `startLocalThreadDefault()` from `sigils/threadDefault.nim`).
+  <path class="line" d="M 275 143 C 365 143 445 143 592 143"/>
+  <text class="text" x="414" y="125">Move(agent)</text>
 
-- `ThreadSignal` (threadBase): Control and invocation messages routed to threads.
-  - `Call(slot, req, tgt)` — invoke `slot` on `tgt` with `req`.
-  - `Move(item)` — move an `Agent` (or proxy) to the thread; stored in `references`.
-  - `Trigger` — instructs the scheduler to drain signaled proxy inboxes.
-  - `Deref(deref)` — drop a reference previously `Move`-ed to this thread and prune dead `references`.
-  - `Exit` — stop the scheduler loop.
+  <rect class="proxy" x="83" y="215" width="190" height="42"/>
+  <text class="text" x="128" y="242">AgentProxy</text>
+  <path class="dash" d="M 273 236 C 410 260 520 220 592 178"/>
+  <text class="small" x="385" y="266">proxy.remote + proxy.remoteThread</text>
+</svg>
 
-- `AgentActor` (actors): Mailbox-capable agent base with `inbox: Chan[ThreadSignal]` and a lock for thread-safe subscription updates.
+The move is implemented by `moveToThread(agent, thread)`:
 
-- `AgentProxy[T]`/`AgentProxyShared` (threadProxies): A single local proxy that mediates cross-thread communication.
-  - `remote: WeakRef[AgentActor]` — the real agent (owned by the destination thread after a move).
-  - `remoteThread: SigilThreadPtr` — scheduler for the thread that owns `remote`.
-  - `homeThread: SigilThreadPtr` — scheduler for the thread that owns the proxy.
-  - `forwarded: HashSet[SigilName]` — signals currently forwarded from `remote` to the proxy.
+1. It requires the agent ref to be unique. If the ref is still shared,
+   `moveToThread` raises instead of creating a cross-thread GC alias.
+2. It creates an `AgentProxy[T]` on the current thread.
+3. It rewrites subscriptions so local callers target the proxy and remote
+   signals can be forwarded back to local listeners.
+4. It sends `ThreadSignal(kind: Move, item: move agent)` to the destination.
+5. The destination scheduler stores the moved strong ref in `references`.
 
-## Moving Agents Across Threads
+The proxy keeps only weak identity for the real agent. The scheduler owns the
+strong ref.
 
-`moveToThread(agent, thread)` (threadProxies):
+## How A Proxy Sends A Call
 
-- Preconditions: `agent` must be unique (`isUniqueRef`) to prevent sharing GC refs across threads.
-- Creates a single proxy:
-  - `localProxy` — lives on the current thread; used by local code to talk to the remote agent.
-- Rewrites subscriptions:
-  - Outbound (agent listening to others): rebinds listeners so the local proxy receives those signals and forwards across threads.
-  - Inbound (others listening to agent): rebinds callers to `localProxy`; the proxy arranges direct forwarding by adding thread-safe subscriptions on the remote agent using `localSlot`.
-- Ownership transfer:
-  - Sends `Move(agent)` to the destination thread so it is owned (and managed) by that thread's `references` table.
-- Returns `localProxy` to the caller; the original `agent` variable is moved (becomes `nil`).
+A proxy does not call the real agent directly. It packages the slot call as a
+`ThreadSignal(Call)`, puts it in the target actor inbox, and asks the remote
+scheduler to make that actor ready.
 
-The tests demonstrate this flow, e.g.:
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 390" role="img" aria-labelledby="call-title call-desc">
+  <title id="call-title">Local proxy sends a call to a remote agent</title>
+  <desc id="call-desc">A local signal reaches AgentProxy. The proxy enqueues a Call into the remote actor inbox and marks the actor ready. The owning scheduler executes the slot.</desc>
+  <defs>
+    <marker id="arrow-call" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#333"/>
+    </marker>
+    <style>
+      .box { fill: #f8fafc; stroke: #334155; stroke-width: 2; rx: 10; }
+      .node { fill: #e0f2fe; stroke: #0369a1; stroke-width: 2; rx: 8; }
+      .proxy { fill: #ecfccb; stroke: #4d7c0f; stroke-width: 2; rx: 8; }
+      .queue { fill: #fef9c3; stroke: #a16207; stroke-width: 2; rx: 8; }
+      .run { fill: #fae8ff; stroke: #a21caf; stroke-width: 2; rx: 8; }
+      .text { font: 14px sans-serif; fill: #111827; }
+      .small { font: 12px sans-serif; fill: #374151; }
+      .label { font: 700 16px sans-serif; fill: #111827; }
+      .line { stroke: #333; stroke-width: 2; fill: none; marker-end: url(#arrow-call); }
+    </style>
+  </defs>
 
-- `let bp: AgentProxy[Counter] = b.moveToThread(thread)`
-- Subsequent `connect(...)` calls attach to `bp` (local proxy) while execution runs on `thread`.
+  <rect class="box" x="30" y="40" width="380" height="290"/>
+  <text class="label" x="55" y="72">Home thread</text>
+  <rect class="node" x="70" y="105" width="130" height="48"/>
+  <text class="text" x="102" y="134">emit signal</text>
+  <rect class="proxy" x="245" y="105" width="130" height="48"/>
+  <text class="text" x="276" y="134">AgentProxy</text>
+  <rect class="queue" x="148" y="218" width="170" height="58"/>
+  <text class="text" x="178" y="243">Call message</text>
+  <text class="small" x="174" y="262">slot + request + tgt</text>
 
-## Message Flow and Scheduling
+  <rect class="box" x="560" y="40" width="380" height="290"/>
+  <text class="label" x="585" y="72">Owning scheduler</text>
+  <rect class="queue" x="605" y="105" width="155" height="58"/>
+  <text class="text" x="643" y="130">actor inbox</text>
+  <text class="small" x="642" y="149">Chan[ThreadSignal]</text>
+  <rect class="run" x="790" y="105" width="115" height="58"/>
+  <text class="text" x="816" y="139">markReady</text>
+  <rect class="node" x="682" y="230" width="150" height="55"/>
+  <text class="text" x="712" y="255">real agent</text>
+  <text class="small" x="711" y="274">callMethod(slot)</text>
 
-Two paths deliver work on the destination thread:
+  <path class="line" d="M 200 129 L 245 129"/>
+  <path class="line" d="M 310 153 L 250 218"/>
+  <path class="line" d="M 318 247 C 420 247 505 134 605 134"/>
+  <path class="line" d="M 760 134 L 790 134"/>
+  <path class="line" d="M 848 163 C 845 215 815 230 782 230"/>
+  <path class="line" d="M 682 243 C 590 230 570 170 605 151"/>
 
-1) Per-actor mailbox path (dominant path)
-- The sender enqueues a `Call` into the target `AgentActor.inbox` on the destination thread.
-- The sender marks that target as signaled in `remoteThread.signaled` under `signaledLock`.
-- The sender posts `Trigger` to `remoteThread` (via `remoteThread.send(ThreadSignal(kind: Trigger))`).
-- The scheduler handles `Trigger` by moving `signaled` into a local set, then for each signaled actor drains its `inbox` with `tryRecv` and invokes `tgt.callMethod(req, slot)`.
+  <text class="small" x="420" y="225">enqueue isolated Call</text>
+  <text class="small" x="782" y="202">scheduler leases actor</text>
+</svg>
 
-2) Direct control path
-- `Move`, `Deref`, and `Exit` are sent to the destination thread via `thread.send(...)` and handled immediately.
-- `Call` is also supported as a direct `ThreadSignal(Call)` on a thread's input channel (used by `connectQueued`), though proxy code primarily uses per-proxy inbox + `Trigger`.
+For `SigilThreadDefault`, `markReady` records the actor in `signaled` and
+sends `Trigger`. When the scheduler receives `Trigger`, it drains each signaled
+actor inbox and runs the calls serially.
 
-All cross-thread messages are isolated (`isolateRuntime`) before enqueueing to ensure thread-safe transfer of data.
+For `SigilThreadPool`, `markReady` puts the actor identity in the pool ready
+queue. A worker leases that actor, runs one call, releases the lease, and
+requeues the actor if more inbox work is waiting. That is what allows many
+actors to run in parallel while preserving single-actor serialization.
 
-## Proxy Call Semantics
+## Signals Back To The Home Thread
 
-`AgentProxyShared.callMethod(req, slot)` routes calls based on the current thread and `slot` sentinel values:
+Remote-to-local delivery uses the same proxy in the opposite direction. When a
+remote agent emits a signal that has local subscribers, the remote agent's
+subscription points at the proxy with the sentinel `localSlot`. Calling that
+proxy from the remote scheduler means "send this back to the proxy's home
+thread."
 
-- If invoked off the proxy's `homeThread` (i.e. called from the remote thread):
-  - Enqueues `Call(slot, req, tgt = proxy)` into the proxy's inbox, signals the home thread, and posts `Trigger`.
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 360" role="img" aria-labelledby="return-title return-desc">
+  <title id="return-title">Remote signal returns through the proxy home thread</title>
+  <desc id="return-desc">A remote agent emits a signal. The proxy detects that the current scheduler is not its home thread and queues the callback into the proxy inbox on the home scheduler.</desc>
+  <defs>
+    <marker id="arrow-return" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#333"/>
+    </marker>
+    <style>
+      .box { fill: #f8fafc; stroke: #334155; stroke-width: 2; rx: 10; }
+      .agent { fill: #e0f2fe; stroke: #0369a1; stroke-width: 2; rx: 8; }
+      .proxy { fill: #ecfccb; stroke: #4d7c0f; stroke-width: 2; rx: 8; }
+      .queue { fill: #fef9c3; stroke: #a16207; stroke-width: 2; rx: 8; }
+      .text { font: 14px sans-serif; fill: #111827; }
+      .small { font: 12px sans-serif; fill: #374151; }
+      .label { font: 700 16px sans-serif; fill: #111827; }
+      .line { stroke: #333; stroke-width: 2; fill: none; marker-end: url(#arrow-return); }
+    </style>
+  </defs>
 
-- `slot == localSlot` (and `remoteSlot` for legacy callers) — local delivery on the receiving side.
-  - Executes `callSlots(self, req)` to fan out to local subscribers.
+  <rect class="box" x="40" y="50" width="365" height="245"/>
+  <text class="label" x="65" y="82">Remote scheduler</text>
+  <rect class="agent" x="90" y="118" width="145" height="55"/>
+  <text class="text" x="124" y="150">real agent</text>
+  <rect class="proxy" x="255" y="118" width="115" height="55"/>
+  <text class="text" x="286" y="150">proxy</text>
+  <text class="small" x="249" y="199">slot == localSlot</text>
 
-- Otherwise — regular slot call bound for the remote agent.
-  - Wraps as `Call(slot, req, tgt = proxy.remote)`, enqueues into the remote agent inbox, and `Trigger`s the remote thread.
+  <rect class="box" x="575" y="50" width="365" height="245"/>
+  <text class="label" x="600" y="82">Home thread</text>
+  <rect class="queue" x="620" y="118" width="150" height="55"/>
+  <text class="text" x="661" y="142">proxy inbox</text>
+  <text class="small" x="646" y="160">queued callback</text>
+  <rect class="agent" x="800" y="118" width="105" height="55"/>
+  <text class="text" x="828" y="150">listener</text>
+  <text class="small" x="625" y="226">main/event thread must poll</text>
 
-**Note**:
-  The local proxy owns the subscription list and forwards specific signals by installing
-  direct subscriptions on the remote agent (thread-safe via `AgentActor`'s lock). This
-  removes the need for a separate remote router or wildcard `AnySigilName`.
+  <path class="line" d="M 235 145 L 255 145"/>
+  <path class="line" d="M 370 145 C 455 145 535 145 620 145"/>
+  <path class="line" d="M 770 145 L 800 145"/>
+  <text class="small" x="422" y="126">enqueue Call to homeThread</text>
+</svg>
 
-Locks are used to safely access proxy state and to coordinate with the destination thread's `signaled` set.
+This is why local threads need a scheduler too. If the home thread is a UI or
+main thread, call `getCurrentSigilThread().pollAll()` at appropriate points to
+deliver callbacks.
 
-## Thread Loop and Lifecycle
+## Lifetime And Cleanup
 
-- `runForever(thread)` loops while `running` is true, calling `poll()` to receive and execute one `ThreadSignal` at a time (catching exceptions via `exceptionHandler` if set).
-- `Trigger` drains signaled proxy inboxes.
-- `Move` takes ownership of agents/proxies (store in `references`).
-- `Deref` removes owned references and clears any `signaled` entries for that proxy.
-- `Exit` sets `running = false` to end the loop.
+The scheduler's `references` table is the strong owner for moved agents. Cross
+thread queues and proxies should carry weak identities and isolated request
+payloads, not long-lived strong refs.
 
-Helpers:
-- `newSigilThread()` allocates/initializes a `SigilThreadDefault`.
-- `start()/join()/peek()` manage the worker OS thread.
-- `setRunning(false)` (or sending `Exit`) stops `runForever()` for a thread.
-- `startLocalThreadDefault()` and `getCurrentSigilThread()` manage a thread-local `SigilThread` for the current (often main) thread; `getCurrentSigilThread()` is lazy and will call `startSigilThreadProc` if needed.
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 390" role="img" aria-labelledby="life-title life-desc">
+  <title id="life-title">Move and Deref lifetime flow</title>
+  <desc id="life-desc">Move stores the strong ref in references. Deref asks the owning scheduler to remove a known reference or clean stale scheduler state. The pool defers release if the actor is currently running.</desc>
+  <defs>
+    <marker id="arrow-life" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#333"/>
+    </marker>
+    <style>
+      .box { fill: #f8fafc; stroke: #334155; stroke-width: 2; rx: 10; }
+      .node { fill: #e0f2fe; stroke: #0369a1; stroke-width: 2; rx: 8; }
+      .proxy { fill: #ecfccb; stroke: #4d7c0f; stroke-width: 2; rx: 8; }
+      .store { fill: #fff7ed; stroke: #c2410c; stroke-width: 2; rx: 8; }
+      .warn { fill: #fee2e2; stroke: #b91c1c; stroke-width: 2; rx: 8; }
+      .ok { fill: #dcfce7; stroke: #15803d; stroke-width: 2; rx: 8; }
+      .text { font: 14px sans-serif; fill: #111827; }
+      .small { font: 12px sans-serif; fill: #374151; }
+      .label { font: 700 16px sans-serif; fill: #111827; }
+      .line { stroke: #333; stroke-width: 2; fill: none; marker-end: url(#arrow-life); }
+      .dash { stroke: #64748b; stroke-width: 2; stroke-dasharray: 7 5; fill: none; marker-end: url(#arrow-life); }
+    </style>
+  </defs>
 
-## Queued Calls (Same Thread)
+  <rect class="box" x="35" y="45" width="355" height="285"/>
+  <text class="label" x="60" y="78">Proxy side</text>
+  <rect class="proxy" x="80" y="115" width="230" height="52"/>
+  <text class="text" x="128" y="146">AgentProxy destroyed</text>
+  <rect class="node" x="80" y="210" width="230" height="52"/>
+  <text class="text" x="113" y="240">send Deref(identity)</text>
 
-`connectQueued(...)` routes a signal to a slot by enqueueing a `ThreadSignal(Call)` onto the current thread's `SigilThread` instead of calling inline. The slot runs the next time you `poll()`/`pollAll()` that thread.
+  <rect class="box" x="560" y="45" width="355" height="285"/>
+  <text class="label" x="585" y="78">Owning scheduler</text>
+  <rect class="store" x="605" y="104" width="245" height="60"/>
+  <text class="text" x="654" y="130">references table</text>
+  <text class="small" x="640" y="149">strong refs for moved agents</text>
+  <rect class="warn" x="605" y="190" width="110" height="58"/>
+  <text class="text" x="631" y="214">running?</text>
+  <text class="small" x="623" y="232">pool only</text>
+  <rect class="ok" x="740" y="190" width="110" height="58"/>
+  <text class="text" x="764" y="214">release</text>
+  <text class="small" x="756" y="232">when idle</text>
 
-Because it uses `SigilThread.send(...)` under the hood, the queued `ThreadSignal` is still passed through `isolateRuntime(...)` before it is enqueued.
+  <path class="line" d="M 195 167 L 195 210"/>
+  <path class="line" d="M 310 236 C 425 236 500 134 605 134"/>
+  <path class="line" d="M 728 164 L 660 190"/>
+  <path class="line" d="M 715 219 L 740 219"/>
+  <path class="dash" d="M 660 248 C 680 292 765 292 795 248"/>
+  <text class="small" x="652" y="292">if running: mark closing, release after slot returns</text>
+</svg>
 
-## Destruction and Cleanup
+`Deref` is a scheduler message, not a direct free from another thread. Its
+meaning is:
 
-- Agents have a destructor (`destroyAgent`) that removes them from all subscriptions and listeners. Debug builds assert destruction happens on the owning thread (`freedByThread` checks).
-- Proxies break cycles on destruction:
-  - `AgentProxyShared.=destroy` removes the proxy from the home thread's `signaled` set and posts a `Deref` to the remote thread to drop any remaining references.
-  - Destroys local `lock` and `remoteThread` refs last.
-- The destination thread periodically cleans `references` via `gcCollectReferences()` (after `Deref`), removing entries for agents that have no connections.
+- If the scheduler owns a strong ref for that identity, remove it from
+  `references`.
+- Clear stale readiness/signaled state for that identity.
+- Run cleanup that prunes owned agents which no longer have connections.
+- In `SigilThreadPool`, if the actor is currently leased by a worker, mark it
+  `closing` and release the strong ref only after the slot returns.
 
-## Using From Tests (tslotsThread.nim)
+That last point is important. A worker must never run a slot through a weak ref
+after the scheduler has released the strong owner. The pool separates logical
+close (`closing = true`) from physical release (`references.del(...)`) so
+`Deref` cannot free a currently executing actor.
 
-Patterns illustrated by the tests:
+Global registration is another lifetime case. The registry installs a
+keep-alive subscription with `AddSub` and removes it with `DelSub`. That keeps a
+registered remote agent alive even if a local proxy is short-lived.
 
-- Direct cross-thread emit via a `WeakRef`: build a request in a background thread and deliver it back to main via a channel, then `emit resp` on the main thread.
-- Moving and connecting:
-  - Move `Counter` to a worker thread, hold `AgentProxy[Counter]` locally.
-  - `connectThreaded(a, valueChanged, bp, setValue)` wires signal `a.valueChanged` to the remote `bp.setValue()`; the handler runs on the worker thread.
-  - `connectThreaded(bp, updated, a, SomeAction.completed())` wires the remote signal back to a local slot (and demonstrates that the local thread must be polled).
-  - Use `getCurrentSigilThread().poll()` or `pollAll()` on the local thread to process inbound forwarded events.
-- Thread lifecycle signals:
-  - `connectThreaded(thread, started, bp, ticker)` to run a remote slot when the worker thread starts (emitted by `thread[].agent.started()` in `runForever()`).
-- Assertions about subscription topology are used to verify that proxies have the expected inbound/outbound connections after `moveToThread`.
+## Subscription Rewriting
 
-## Thread Safety Notes
+`moveToThread` also rewrites existing connections so later signal delivery goes
+through the proxy:
 
-- Ownership: After `moveToThread`, the destination thread exclusively owns the moved agent via `references`. Do not retain or use the original agent ref on the source thread.
-- Isolation: Cross-thread `ThreadSignal`s are passed through `isolateRuntime(...)` before enqueueing. If the payload contains non-unique `ref`s, `isolateRuntime` raises `IsolationError` to prevent unsafe sharing.
-- Signal params: Cross-thread signal parameter types must be thread-safe (no `ref` fields). The `connectThreaded` helpers use `checkSignalThreadSafety` for common patterns; use `Isolate[T]` for heap payloads you need to transfer.
-- No shared GC refs: The code defends against sharing by requiring unique refs before move and by using `WeakRef` identifiers for cross-thread targeting.
-- Synchronization:
-  - `signaled` guarded by `signaledLock`.
-  - Proxy internals guarded by `lock` when accessing proxy state and scheduling signals.
-  - Atomic fields (`running`, `threadId`) avoid data races.
-- Backpressure: `newChan[ThreadSignal](1_000)` for per-actor inbox and thread inputs. Non-blocking send (`trySend`) raises `MessageQueueFullError` when full.
+- If other agents listened to the moved agent, they now listen to the local
+  proxy.
+- If the moved agent listened to other local agents, those local agents now call
+  the proxy, which forwards to the remote agent.
+- When local code subscribes to a signal on the proxy, the proxy ensures the
+  remote agent has a forwarding subscription back to the proxy using
+  `localSlot`.
 
-## Async Safety Notes
+The proxy's local subscription list is therefore the stable API surface. Users
+connect to the proxy; the proxy arranges the cross-thread forwarding details.
 
-- The base API documented here is thread-centric. For integration with `asyncdispatch`, use the async variant in `sigils/threadAsyncs.nim` (`AsyncSigilThread`) (not currently re-exported by `sigils/threads.nim`, so import it directly). It:
-  - Uses an `AsyncEvent` callback to drain signals during the event loop.
-  - Triggers the event on every send/recv to schedule work.
-  - Implements `setTimer` via `asyncdispatch.addTimer` (timers are not implemented by `SigilThreadDefault`).
-- To make `getCurrentSigilThread()` create an async scheduler for the current thread, call `setStartSigilThreadProc(startLocalThreadDispatch)` (or call `startLocalThreadDispatch()` manually).
+## Default Thread vs Thread Pool
 
-## Gotchas and Best Practices
+Both schedulers implement the same `SigilThread` API, so `moveToThread` and
+`AgentProxy` work with either one.
 
-- Always check uniqueness before moving (`moveToThread` enforces this and raises on violation).
-- After moving, update all connections through the returned `AgentProxy[T]`; direct references to the old agent are invalid on the source thread.
-- Use `connectThreaded(...)` when wiring signals across threads; it validates thread-safety and routes through the proxy correctly.
-- Poll the local thread (`poll`/`pollAll`) when expecting inbound events forwarded from a worker thread.
-- Consider setting a custom `exceptionHandler` on threads used in tests or long-running services to surface handler exceptions clearly.
-- In debug builds, heed `freedByThread` assertions; they catch cross-thread destruction misuse.
+`SigilThreadDefault`:
 
-## Minimal Example
+- One OS thread owns all moved agents for that scheduler.
+- `Trigger` drains every signaled actor inbox serially.
+- It is simple and predictable: no two slots on that scheduler run at once.
+
+`SigilThreadPool`:
+
+- Several OS workers share one scheduler state and one ownership table.
+- The ready queue contains actor identities, not individual calls.
+- A worker leases one actor, executes one call, releases it, and requeues the
+  actor if more work exists.
+- The same actor is never leased by two workers at the same time.
+- Different actors can run on different workers in parallel.
+
+## Practical Example
 
 ```nim
 import sigils
 import sigils/threads
 
-let t = newSigilThread()
-t.start()
+let worker = newSigilThread()
+worker.start()
 
-let ct = getCurrentSigilThread() # ensure local scheduler exists
+let home = getCurrentSigilThread()
 
-var src = SomeAction.new()
-var dst = Counter.new()
-let p: AgentProxy[Counter] = dst.moveToThread(t)
+var source = SomeAction.new()
+var counter = Counter.new()
+let counterProxy = counter.moveToThread(worker)
 
-connectThreaded(src, valueChanged, p, setValue)
-connectThreaded(p, updated, src, SomeAction.completed()) # optional: remote -> local flow
+connectThreaded(source, valueChanged, counterProxy, setValue)
+connectThreaded(counterProxy, updated, source, SomeAction.completed())
 
-emit src.valueChanged(42)
-discard ct.pollAll()  # drain local forwarded events
+emit source.valueChanged(42)
+
+# Required if this thread receives callbacks from the worker.
+discard home.pollAll()
+
+worker.setRunning(false)
+worker.join()
 ```
 
-This schedules `Counter.setValue` on `t` and keeps all cross-thread traffic safe through the proxy and thread scheduler.
+After `moveToThread`, use `counterProxy` for all cross-thread connections. Do
+not keep using the moved `counter` ref on the source thread.
 
-## Diagrams
+## Safety Checklist
 
-The following Mermaid flowcharts illustrate the key event flows.
+- Move only unique refs. `moveToThread` enforces this with `isUniqueRef`.
+- Treat the returned `AgentProxy[T]` as the handle to the remote agent.
+- Use `connectThreaded` for cross-thread signals and slots.
+- Keep signal payloads thread-safe. Cross-thread `ThreadSignal`s are isolated
+  with `isolateRuntime`.
+- Poll the home scheduler when it needs to receive callbacks.
+- Stop and join worker schedulers in tests and short-lived programs.
+- Use the registry keep-alive helpers when a remote agent must outlive one local
+  proxy.
 
-### Call: local to remote via AgentProxy
+## Things To Avoid
 
-```mermaid
-flowchart LR
-  subgraph ST[Source Thread]
-    direction TB
-    Caller[User emits signal on Local Proxy];
+- Do not call methods on the moved agent ref after `moveToThread`.
+- Do not store strong moved-agent refs in worker-local queues. Queue weak actor
+  identities and let the scheduler's `references` table own the agent.
+- Do not assume `Deref` is an immediate cross-thread destructor. It is a
+  scheduler request and may be deferred until a running slot finishes.
+- Do not forget to pump the home thread when expecting remote-to-local signals.
 
-    Caller --emit --> LP;
+## Related Files
 
-    subgraph LP[Local AgentProxy]
-      direction TB
-      FWD[Local Proxy Forwards Signal];
-      Enqueue[Enqueue Call into Remote Agent Inbox];
-      Mark[Mark Remote Agent as signaled under lock];
-      Trigger[Send Trigger Msg to RT's Inputs Channel];
-
-      FWD --> Enqueue --> Mark --> Trigger;
-    end
-  end
-
-  subgraph RT[Remote Thread]
-    RX[Polling Inputs Channel fa:fa-spinner];
-    Triggered[Move Messages to Target Actor];
-    Remote[Remote Agent Handles Call];
-    Deliver[Call Method on Agent];
-    RX --> Triggered --> Remote --> Deliver;
-    subgraph RS[Remote Signal]
-      direction TB;
-      Back[Agent emits return signal?];
-      Back -- Yes --> WrapBack[Target is Local Proxy with localSlot];
-      WrapBack --> EnqueueBack[Enqueue to Local Proxy inbox and Trigger Home Thread];
-      Back -- No --> Done[Done];
-    end
-    Deliver --> Back;
-  end
-
-  ST e0@==>|Queue Message Remote Agent| RT;
-  ST e1@==>|Trigger Message| RT;
-  e1@{ animate: true }
-
-```
-
-### Deref: proxy and agent teardown
-
-```mermaid
-flowchart TD
-  subgraph ST[Source Thread]
-    Dtor[Local proxy destructor];
-    Unsig[Remove proxy from home.signaled under lock];
-    SendDeref[Send Deref to remote inputs];
-    Dtor --> Unsig;
-    Unsig --> SendDeref;
-  end
-
-  subgraph DT[Destination Thread]
-    RT2[Remote SigilThread];
-    ExecDeref[On Deref: remove from references and signaled];
-    GC[gcCollectReferences prune unconnected entries];
-  end
-
-  SendDeref --> RT2;
-  RT2 --> ExecDeref;
-  ExecDeref --> GC;
-```
+- `sigils/threadBase.nim`: scheduler base type, `ThreadSignal`, `Move`,
+  `Deref`, `markReady`, polling, and default execution logic.
+- `sigils/threadDefault.nim`: one-thread scheduler implementation.
+- `sigils/threadPool.nim`: cooperative worker pool scheduler.
+- `sigils/threadProxies.nim`: `AgentProxy`, `moveToThread`, and
+  `connectThreaded`.
+- `sigils/actors.nim`: `AgentActor` inbox and subscription locking.
+- `tests/tslotsThread.nim` and `tests/tthreadPool.nim`: examples and coverage.
