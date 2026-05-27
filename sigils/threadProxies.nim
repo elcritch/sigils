@@ -124,8 +124,7 @@ method callMethod*(
       discard
     else:
       proxy.inbox.send(msg)
-      proxy.homeThread.signal(proxy.unsafeWeakRef().toKind(AgentActor))
-      proxy.homeThread.send(ThreadSignal(kind: Trigger))
+      proxy.homeThread.markReady(proxy.unsafeWeakRef().toKind(AgentActor))
     return
 
   if slot == localSlot or slot == remoteSlot:
@@ -142,8 +141,7 @@ method callMethod*(
       discard
     else:
       proxy.remote[].inbox.send(msg)
-      proxy.remoteThread.signal(proxy.remote)
-      proxy.remoteThread.send(ThreadSignal(kind: Trigger))
+      proxy.remoteThread.markReady(proxy.remote)
 
 method removeSubscriptionsFor*(
     self: AgentProxyShared, subscriber: WeakRef[Agent]
