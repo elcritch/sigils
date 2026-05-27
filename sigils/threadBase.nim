@@ -86,6 +86,12 @@ method send*(
 ) {.base, gcsafe.} =
   raise newException(AssertionDefect, "this should never be called!")
 
+method markReady*(
+    thread: SigilThreadPtr, actor: WeakRef[AgentActor]
+) {.base, gcsafe.} =
+  thread.signal(actor)
+  thread.send(ThreadSignal(kind: Trigger))
+
 method recv*(
     thread: SigilThreadPtr, msg: var ThreadSignal, blocking: BlockingKinds
 ): bool {.base, gcsafe.} =

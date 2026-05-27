@@ -14,7 +14,13 @@ task test, "Compile and run all tests in tests/":
         echo fmt"[sigils] Running {path}"
         exec fmt"nim c -r {path}"
 
+proc runTsanTest(path: string) =
+  putEnv("TSAN_OPTIONS", "suppressions=tests/tsan.ignore")
+  exec fmt"nim c -d:tsan -r {path}"
+
 task testTsan, "Compile and run all tests in tests/":
   putEnv("TSAN_OPTIONS", "suppressions=tests/tsan.ignore")
   exec fmt"nim c -r tests/tmultiThreads.nim"
 
+task testThreadPoolTsan, "Compile and run thread pool tests with ThreadSanitizer":
+  runTsanTest("tests/tthreadPool.nim")

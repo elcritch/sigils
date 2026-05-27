@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="360" viewBox="0 0 980 360" role="img" aria-labelledby="return-title return-desc">
+  <title id="return-title">Remote signal returns through the proxy home thread</title>
+  <desc id="return-desc">A remote agent emits a signal. The proxy detects that the current scheduler is not its home thread and queues the callback into the proxy inbox on the home scheduler.</desc>
+  <defs>
+    <marker id="arrow-return" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#333"/>
+    </marker>
+    <style>
+      .box { fill: #f8fafc; stroke: #334155; stroke-width: 2; }
+      .agent { fill: #e0f2fe; stroke: #0369a1; stroke-width: 2; }
+      .proxy { fill: #ecfccb; stroke: #4d7c0f; stroke-width: 2; }
+      .queue { fill: #fef9c3; stroke: #a16207; stroke-width: 2; }
+      .text { font: 14px sans-serif; fill: #111827; }
+      .small { font: 12px sans-serif; fill: #374151; }
+      .label { font: 700 16px sans-serif; fill: #111827; }
+      .line { stroke: #333; stroke-width: 2; fill: none; marker-end: url(#arrow-return); }
+    </style>
+  </defs>
+
+  <rect class="box" x="40" y="50" width="365" height="245" rx="10"/>
+  <text class="label" x="65" y="82">Remote scheduler</text>
+  <rect class="agent" x="90" y="118" width="145" height="55" rx="8"/>
+  <text class="text" x="124" y="150">real agent</text>
+  <rect class="proxy" x="255" y="118" width="115" height="55" rx="8"/>
+  <text class="text" x="286" y="150">proxy</text>
+  <text class="small" x="249" y="199">slot == localSlot</text>
+
+  <rect class="box" x="575" y="50" width="365" height="245" rx="10"/>
+  <text class="label" x="600" y="82">Home thread</text>
+  <rect class="queue" x="620" y="118" width="150" height="55" rx="8"/>
+  <text class="text" x="661" y="142">proxy inbox</text>
+  <text class="small" x="646" y="160">queued callback</text>
+  <rect class="agent" x="800" y="118" width="105" height="55" rx="8"/>
+  <text class="text" x="828" y="150">listener</text>
+  <text class="small" x="625" y="226">main/event thread must poll</text>
+
+  <path class="line" d="M 235 145 L 255 145"/>
+  <path class="line" d="M 370 145 C 455 145 535 145 620 145"/>
+  <path class="line" d="M 770 145 L 800 145"/>
+  <text class="small" x="422" y="126">enqueue Call to homeThread</text>
+</svg>
