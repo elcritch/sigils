@@ -82,7 +82,7 @@ proc selectorCallArgs(params: NimNode, firstArg: int, argsIdent: NimNode): seq[N
   for idx in firstArg ..< params.len:
     let arg = params[idx]
     for nameIdx in 0 ..< arg.len - 2:
-      result.add nnkBracketExpr.newTree(argsIdent, arg[nameIdx].copyNimTree())
+      result.add nnkDotExpr.newTree(argsIdent, arg[nameIdx].copyNimTree())
 
 macro selectorImpl(p: untyped): untyped =
   if p.kind != nnkMethodDef:

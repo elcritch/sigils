@@ -8,8 +8,20 @@ type
 
   TextController = ref object of DynamicAgent
     parsed: int
+    lastCommand: string
+
+  View = ref object of DynamicAgent
+    name: string
+    x, y, width, height: int
+
+  Window = ref object of DynamicAgent
+    focused: bool
 
 method parseInteger(text: string): int {.selector.}
+method validateText(text: string): bool {.selector.}
+method canPerformCommand(command: string): bool {.selector.}
+method hitTest(x, y: int): string {.selector.}
+method isFirstResponder(): bool {.selector.}
 
 method parseField(self: TextField, text: string): int {.selector.} =
   parseInt(text)
@@ -21,12 +33,42 @@ method parseController(self: TextController, text: string): int {.selector.} =
 method parseDouble(self: TextField, text: string): int {.selector.} =
   parseInt(text) * 2
 
+method validateRequired(self: TextController, text: string): bool {.selector.} =
+  text.strip.len > 0
+
+method validateDigitsOnly(self: TextField, text: string): bool {.selector.} =
+  text.len > 0 and text.allCharsInSet({'0' .. '9'})
+
+method controllerCommand(self: TextController,
+    command: string): bool {.selector.} =
+  result = command in ["submit:", "cancel:"]
+  if result:
+    self.lastCommand = command
+
+method viewHitTest(self: View, x, y: int): string {.selector.} =
+  if x >= self.x and y >= self.y and
+      x < self.x + self.width and y < self.y + self.height:
+    result = self.name
+
+method windowFirstResponder(self: Window): bool {.selector.} =
+  self.focused
+
 proc incrementNextResult(
     self: DynamicAgent, invocation: var Invocation, next: DynamicMethod
 ) =
   check not next.isNil
   next(self, invocation)
   invocation.setResult(invocation.resultAs(int) + 1)
+
+proc trimTextBeforeValidation(
+    self: DynamicAgent, invocation: var Invocation, next: DynamicMethod
+) =
+  check not next.isNil
+  let text = invocation.argsAs(string).strip
+  var normalized = initInvocation(invocation.selector, text)
+  next(self, normalized)
+  check normalized.handled
+  invocation.setResult(normalized.resultAs(bool))
 
 suite "dynamic selectors":
   test "local method handles a typed selector":
@@ -76,3 +118,76 @@ suite "dynamic selectors":
 
     check not old.isNil
     check field.perform(parseInteger, "9").get() == 18
+
+  test "text field can delegate validation to a controller":
+    let
+      field = TextField(text: "")
+      controller = TextController()
+
+    field.setNextResponder(controller)
+    check controller.addMethod(validateText, validateRequired)
+
+    check field.respondsTo(validateText)
+    check field.perform(validateText, field.text).get() == false
+    check field.perform(validateText, "customer@example.com").get() == true
+
+  test "local validation overrides delegated GUI policy":
+    let
+      field = TextField()
+      controller = TextController()
+
+    field.setNextResponder(controller)
+    check controller.addMethod(validateText, validateRequired)
+    check field.addMethod(validateText, validateDigitsOnly)
+
+    check field.perform(validateText, "abc").get() == false
+    check field.perform(validateText, "1234").get() == true
+
+  test "validation wrapper can normalize text before calling next method":
+    let field = TextField()
+
+    discard field.addMethod(validateText, validateDigitsOnly)
+
+    check field.perform(validateText, " 42 ").get() == false
+
+    let token = field.pushMethod(validateText, trimTextBeforeValidation)
+    check field.perform(validateText, " 42 ").get() == true
+    check token.popMethod()
+    check field.perform(validateText, " 42 ").get() == false
+
+  test "menu command walks the GUI responder chain":
+    let
+      button = TextField(text: "Save")
+      toolbar = View(name: "toolbar")
+      window = Window()
+      controller = TextController()
+
+    button.setNextResponder(toolbar)
+    toolbar.setNextResponder(window)
+    window.setNextResponder(controller)
+
+    check controller.addMethod(canPerformCommand, controllerCommand)
+
+    check button.respondsTo(canPerformCommand)
+    check button.perform(canPerformCommand, "submit:").get() == true
+    check controller.lastCommand == "submit:"
+    check button.perform(canPerformCommand, "delete:").get() == false
+
+    window.clearNextResponder()
+    check not button.respondsTo(canPerformCommand)
+    check button.perform(canPerformCommand, "submit:").isNone
+
+  test "view hit testing uses named tuple selector arguments":
+    let view = View(name: "content", x: 10, y: 20, width: 80, height: 40)
+
+    check view.addMethod(hitTest, viewHitTest)
+    check view.perform(hitTest, (x: 10, y: 20)).get() == "content"
+    check view.perform(hitTest, (x: 89, y: 59)).get() == "content"
+    check view.perform(hitTest, (x: 90, y: 59)).get() == ""
+    check view.perform(hitTest, (x: 9, y: 20)).get() == ""
+
+  test "window first responder query uses a zero argument selector":
+    let window = Window(focused: true)
+
+    check window.addMethod(isFirstResponder, windowFirstResponder)
+    check window.perform(isFirstResponder, ()).get() == true
