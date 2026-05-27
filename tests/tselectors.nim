@@ -82,6 +82,7 @@ suite "dynamic selectors":
     check value == 21
 
     check field.perform(parseInteger, "34").get() == 34
+    check field.parseInteger(field.text) == 21
 
   test "unhandled selector forwards through responder chain":
     let
@@ -97,6 +98,7 @@ suite "dynamic selectors":
     check field.perform(parseInteger, field.text, value)
     check value == 13
     check controller.parsed == 13
+    check field.parseInteger(field.text) == 13
 
   test "pushMethod swizzles and restores selector behavior":
     let field = TextField()
@@ -106,6 +108,7 @@ suite "dynamic selectors":
     let token = field.pushMethod(parseInteger, incrementNextResult)
 
     check field.perform(parseInteger, "7").get() == 8
+    check field.parseInteger("7") == 8
     check token.popMethod()
     check field.perform(parseInteger, "7").get() == 7
 
@@ -118,6 +121,13 @@ suite "dynamic selectors":
 
     check not old.isNil
     check field.perform(parseInteger, "9").get() == 18
+    check field.parseInteger("9") == 18
+
+  test "direct selector send raises when unhandled":
+    let field = TextField(text: "21")
+
+    expect UnhandledSelectorError:
+      discard field.parseInteger(field.text)
 
   test "text field can delegate validation to a controller":
     let
@@ -130,6 +140,7 @@ suite "dynamic selectors":
     check field.respondsTo(validateText)
     check field.perform(validateText, field.text).get() == false
     check field.perform(validateText, "customer@example.com").get() == true
+    check field.validateText("customer@example.com") == true
 
   test "local validation overrides delegated GUI policy":
     let
@@ -142,6 +153,7 @@ suite "dynamic selectors":
 
     check field.perform(validateText, "abc").get() == false
     check field.perform(validateText, "1234").get() == true
+    check field.validateText("1234") == true
 
   test "validation wrapper can normalize text before calling next method":
     let field = TextField()
@@ -152,6 +164,7 @@ suite "dynamic selectors":
 
     let token = field.pushMethod(validateText, trimTextBeforeValidation)
     check field.perform(validateText, " 42 ").get() == true
+    check field.validateText(" 42 ") == true
     check token.popMethod()
     check field.perform(validateText, " 42 ").get() == false
 
@@ -170,18 +183,22 @@ suite "dynamic selectors":
 
     check button.respondsTo(canPerformCommand)
     check button.perform(canPerformCommand, "submit:").get() == true
+    check button.canPerformCommand("submit:") == true
     check controller.lastCommand == "submit:"
     check button.perform(canPerformCommand, "delete:").get() == false
 
     window.clearNextResponder()
     check not button.respondsTo(canPerformCommand)
     check button.perform(canPerformCommand, "submit:").isNone
+    expect UnhandledSelectorError:
+      discard button.canPerformCommand("submit:")
 
   test "view hit testing uses named tuple selector arguments":
     let view = View(name: "content", x: 10, y: 20, width: 80, height: 40)
 
     check view.addMethod(hitTest, viewHitTest)
     check view.perform(hitTest, (x: 10, y: 20)).get() == "content"
+    check view.hitTest(10, 20) == "content"
     check view.perform(hitTest, (x: 89, y: 59)).get() == "content"
     check view.perform(hitTest, (x: 90, y: 59)).get() == ""
     check view.perform(hitTest, (x: 9, y: 20)).get() == ""
@@ -191,3 +208,4 @@ suite "dynamic selectors":
 
     check window.addMethod(isFirstResponder, windowFirstResponder)
     check window.perform(isFirstResponder, ()).get() == true
+    check window.isFirstResponder() == true

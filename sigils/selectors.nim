@@ -10,6 +10,11 @@ type
     ## A typed runtime method name.
     name*: SigilName
 
+  SelectorDefaultArg = object
+
+  UnhandledSelectorError* = object of CatchableError
+    ## Raised by required selector sends when no responder handles the selector.
+
   Invocation* = object
     ## Runtime call context passed through dynamic selector dispatch.
     selector*: SigilName
@@ -49,6 +54,9 @@ proc selector*[A, R](name: string): Selector[A, R] =
 proc selectorName*[A, R](selector: Selector[A, R]): SigilName =
   selector.name
 
+template selectorDefaultArg(): SelectorDefaultArg =
+  SelectorDefaultArg()
+
 proc selectorIdentName(node: NimNode): string =
   if node.kind == nnkPostfix and node.len == 2 and node[0].eqIdent("*"):
     result = node[1].strVal
@@ -84,6 +92,49 @@ proc selectorCallArgs(params: NimNode, firstArg: int, argsIdent: NimNode): seq[N
     for nameIdx in 0 ..< arg.len - 2:
       result.add nnkDotExpr.newTree(argsIdent, arg[nameIdx].copyNimTree())
 
+proc selectorDirectArgs(params: NimNode, firstArg: int): NimNode =
+  if params.len == firstArg:
+    return nnkTupleConstr.newTree()
+  if params.len == firstArg + 1 and params[firstArg].kind == nnkIdentDefs and
+      params[firstArg].len == 3:
+    return params[firstArg][0].copyNimTree()
+
+  result = nnkTupleConstr.newTree()
+  for idx in firstArg ..< params.len:
+    let arg = params[idx]
+    for nameIdx in 0 ..< arg.len - 2:
+      let name = arg[nameIdx].copyNimTree()
+      result.add nnkExprColonExpr.newTree(name, name)
+
+proc selectorDirectParams(params: NimNode, firstArg: int,
+    selfIdent: NimNode): NimNode =
+  let defaultArg = newCall(bindSym"selectorDefaultArg")
+  result = nnkFormalParams.newTree(ident"untyped")
+  result.add newIdentDefs(
+    selfIdent,
+    ident"untyped",
+    defaultArg,
+  )
+
+  for idx in firstArg ..< params.len:
+    let arg = params[idx]
+    if arg.kind != nnkIdentDefs:
+      error("selector arguments must be named parameters", arg)
+    for nameIdx in 0 ..< arg.len - 2:
+      result.add newIdentDefs(
+        arg[nameIdx].copyNimTree(),
+        ident"untyped",
+        defaultArg.copyNimTree(),
+      )
+
+proc selectorDirectCallArgs(params: NimNode, firstArg: int,
+    selfIdent: NimNode): seq[NimNode] =
+  result.add selfIdent
+  for idx in firstArg ..< params.len:
+    let arg = params[idx]
+    for nameIdx in 0 ..< arg.len - 2:
+      result.add arg[nameIdx].copyNimTree()
+
 macro selectorImpl(p: untyped): untyped =
   if p.kind != nnkMethodDef:
     error("selector pragma can only be used on a method", p)
@@ -100,11 +151,49 @@ macro selectorImpl(p: untyped): untyped =
   if p[6].kind == nnkEmpty:
     let
       selectorProc = p[0].copyNimTree()
+      selectorValueProc = genSym(nskTemplate, selectorIdentName(p[0]) & "Selector")
+      directProc = genSym(nskProc, selectorIdentName(p[0]) & "Send")
       argsType = selectorArgsType(params, 1)
+      dynSelf = genSym(nskParam, "self")
+      directParams = params.copyNimTree()
+      directSelf = genSym(nskParam, "self")
+      directArgs = selectorDirectArgs(params, 1)
+      publicParams = selectorDirectParams(params, 1, dynSelf)
+      directCall = nnkCall.newTree(directProc)
+      selectorValue = newCall(selectorValueProc)
 
-    result = quote do:
-      template `selectorProc`(): untyped =
+    directParams.insert(
+      1,
+      newIdentDefs(directSelf, bindSym"DynamicAgent"),
+    )
+    for arg in selectorDirectCallArgs(params, 1, dynSelf):
+      directCall.add arg
+
+    let directBody =
+      if retType.kind == nnkTupleTy and retType.len == 0:
+        quote do:
+          discard `directSelf`.send(`selectorValue`, `directArgs`)
+      else:
+        quote do:
+          result = `directSelf`.send(`selectorValue`, `directArgs`)
+
+    let selectorValueDef = quote do:
+      template `selectorValueProc`(): untyped =
         initSelector[`argsType`, `retType`](`selectorName`)
+
+    let directDef = quote do:
+      proc `directProc`() =
+        `directBody`
+    directDef[3] = directParams
+
+    let selectorDef = quote do:
+      template `selectorProc`(): untyped =
+        when `dynSelf` is SelectorDefaultArg:
+          `selectorValue`
+        else:
+          `directCall`
+    selectorDef[3] = publicParams
+    result = newStmtList(selectorValueDef, directDef, selectorDef)
   else:
     if params.len < 2:
       error("selector method implementations must take a receiver", params)
@@ -227,6 +316,16 @@ proc perform*[A, R](
   var value: R
   if obj.perform(selector, ensureMove args, value):
     result = some(value)
+
+proc raiseUnhandledSelector(selector: SigilName) =
+  raise newException(UnhandledSelectorError, "unhandled selector: " & $selector)
+
+proc send*[A, R](
+    obj: DynamicAgent, selector: Selector[A, R], args: sink A
+): R =
+  ## Perform a required selector send and raise if no responder handles it.
+  if not obj.perform(selector, ensureMove args, result):
+    raiseUnhandledSelector(selector.name)
 
 proc toDynamicMethod*[T: DynamicAgent, A, R](
     fn: proc(self: T, args: A): R {.closure.}
