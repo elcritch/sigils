@@ -18,10 +18,16 @@ type
     focused: bool
 
 method parseInteger(text: string): int {.selector.}
-method validateText(text: string): bool {.selector.}
 method canPerformCommand(command: string): bool {.selector.}
 method hitTest(x, y: int): string {.selector.}
 method isFirstResponder(): bool {.selector.}
+
+protocol TextFieldDelegate:
+  required:
+    method validateText(text: string): bool
+  optional:
+    method textDidCommit(text: string)
+    method placeholderText(): string
 
 method parseField(self: TextField, text: string): int {.selector.} =
   parseInt(text)
@@ -129,6 +135,28 @@ suite "dynamic selectors":
     expect UnhandledSelectorError:
       discard field.parseInteger(field.text)
 
+  test "protocol macro declares selectors and runtime requirements":
+    let controller = TextController()
+
+    check TextFieldDelegate.requirements.len == 3
+    check TextFieldDelegate.requirements[0].required
+    check not TextFieldDelegate.requirements[1].required
+    check not controller.canConformTo(TextFieldDelegate)
+    check not controller.conformsTo(TextFieldDelegate)
+
+    expect ProtocolConformanceError:
+      discard controller.adopt(TextFieldDelegate)
+
+    check controller.addMethod(validateText, validateRequired)
+    check controller.canConformTo(TextFieldDelegate)
+    check controller.conformsTo(TextFieldDelegate)
+    check not controller.hasAdopted(TextFieldDelegate)
+    check controller.adopt(TextFieldDelegate)
+    check controller.hasAdopted(TextFieldDelegate)
+
+    expect UnhandledSelectorError:
+      discard controller.placeholderText()
+
   test "text field can delegate validation to a controller":
     let
       field = TextField(text: "")
@@ -137,6 +165,7 @@ suite "dynamic selectors":
     field.setNextResponder(controller)
     check controller.addMethod(validateText, validateRequired)
 
+    check field.canConformTo(TextFieldDelegate)
     check field.respondsTo(validateText)
     check field.perform(validateText, field.text).get() == false
     check field.perform(validateText, "customer@example.com").get() == true

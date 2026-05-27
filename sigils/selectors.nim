@@ -10,10 +10,24 @@ type
     ## A typed runtime method name.
     name*: SigilName
 
+  ProtocolRequirement* = object
+    ## A selector requirement declared by a dynamic protocol.
+    selector*: SigilName
+    signature*: string
+    required*: bool
+
+  SigilProtocol* = object
+    ## A named runtime contract made of required and optional selectors.
+    name*: SigilName
+    requirements*: seq[ProtocolRequirement]
+
   SelectorDefaultArg = object
 
   UnhandledSelectorError* = object of CatchableError
     ## Raised by required selector sends when no responder handles the selector.
+
+  ProtocolConformanceError* = object of CatchableError
+    ## Raised when explicitly adopting a protocol whose required selectors are missing.
 
   Invocation* = object
     ## Runtime call context passed through dynamic selector dispatch.
@@ -25,6 +39,7 @@ type
   DynamicAgent* = ref object of Agent
     methods: Table[SigilName, seq[DynamicMethod]]
     nextResponder: WeakRef[DynamicAgent]
+    adoptedProtocols: seq[SigilName]
 
   DynamicMethod* = proc(
     self: DynamicAgent, invocation: var Invocation
@@ -53,6 +68,31 @@ proc selector*[A, R](name: string): Selector[A, R] =
 
 proc selectorName*[A, R](selector: Selector[A, R]): SigilName =
   selector.name
+
+proc requirement*[A, R](
+    selector: Selector[A, R], required = true, signature = ""
+): ProtocolRequirement =
+  result = ProtocolRequirement(
+    selector: selector.name,
+    signature: signature,
+    required: required,
+  )
+
+proc initProtocol*(
+    name: static string, requirements: openArray[ProtocolRequirement]
+): SigilProtocol =
+  result = SigilProtocol(
+    name: toSigilName(name),
+    requirements: @requirements,
+  )
+
+proc initProtocol*(
+    name: string, requirements: openArray[ProtocolRequirement]
+): SigilProtocol =
+  result = SigilProtocol(
+    name: toSigilName(name),
+    requirements: @requirements,
+  )
 
 template selectorDefaultArg(): SelectorDefaultArg =
   SelectorDefaultArg()
@@ -134,6 +174,56 @@ proc selectorDirectCallArgs(params: NimNode, firstArg: int,
     let arg = params[idx]
     for nameIdx in 0 ..< arg.len - 2:
       result.add arg[nameIdx].copyNimTree()
+
+proc selectorPragma(node: NimNode): NimNode =
+  result = node.copyNimTree()
+  if result[4].kind == nnkEmpty:
+    result[4] = nnkPragma.newTree(ident"selector")
+  else:
+    result[4].add ident"selector"
+
+macro protocol*(name: untyped, body: untyped): untyped =
+  let protocolName = newStrLitNode(selectorIdentName(name))
+  var
+    selectorDecls: seq[NimNode]
+    reqs: seq[NimNode]
+
+  for section in body:
+    if section.kind != nnkCall or section.len != 2:
+      error("protocol sections must be required: or optional:", section)
+
+    var isRequired = false
+    if section[0].eqIdent("required"):
+      isRequired = true
+    elif not section[0].eqIdent("optional"):
+      error("protocol sections must be required: or optional:", section[0])
+
+    for item in section[1]:
+      if item.kind != nnkMethodDef:
+        error("protocol requirements must be method declarations", item)
+      if item[6].kind != nnkEmpty:
+        error("protocol requirements cannot have implementations", item)
+
+      selectorDecls.add selectorPragma(item)
+      reqs.add newCall(
+        bindSym"requirement",
+        item[0].copyNimTree(),
+        newLit(isRequired),
+        newLit(item.repr),
+      )
+
+  result = newStmtList()
+  for selectorDecl in selectorDecls:
+    result.add selectorDecl
+
+  result.add newLetStmt(
+    name.copyNimTree(),
+    newCall(
+      bindSym"initProtocol",
+      protocolName,
+      nnkBracket.newTree(reqs),
+    ),
+  )
 
 macro selectorImpl(p: untyped): untyped =
   if p.kind != nnkMethodDef:
@@ -285,6 +375,44 @@ proc respondsTo*(obj: DynamicAgent, selector: SigilName): bool =
 
 proc respondsTo*[A, R](obj: DynamicAgent, selector: Selector[A, R]): bool =
   obj.respondsTo(selector.name)
+
+proc missingRequirements*(obj: DynamicAgent, protocol: SigilProtocol): seq[
+    ProtocolRequirement] =
+  ## Return required protocol selectors that this object cannot currently handle.
+  for req in protocol.requirements:
+    if req.required and not obj.respondsTo(req.selector):
+      result.add req
+
+proc canConformTo*(obj: DynamicAgent, protocol: SigilProtocol): bool =
+  ## Check structural conformance against required protocol selectors.
+  obj.missingRequirements(protocol).len == 0
+
+proc hasAdopted*(obj: DynamicAgent, protocol: SigilProtocol): bool =
+  ## Check whether this object explicitly adopted the protocol.
+  if obj.isNil:
+    return false
+  protocol.name in obj.adoptedProtocols
+
+proc raiseProtocolConformanceError(obj: DynamicAgent, protocol: SigilProtocol) =
+  let missing = obj.missingRequirements(protocol)
+  var message = "cannot adopt protocol " & $protocol.name
+  if missing.len > 0:
+    message.add "; missing required selector: " & $missing[0].selector
+  raise newException(ProtocolConformanceError, message)
+
+proc adopt*(obj: DynamicAgent, protocol: SigilProtocol): bool {.discardable.} =
+  ## Explicitly record protocol conformance after checking required selectors.
+  if obj.isNil:
+    raiseProtocolConformanceError(obj, protocol)
+  if not obj.canConformTo(protocol):
+    raiseProtocolConformanceError(obj, protocol)
+  if protocol.name notin obj.adoptedProtocols:
+    obj.adoptedProtocols.add protocol.name
+  result = true
+
+proc conformsTo*(obj: DynamicAgent, protocol: SigilProtocol): bool =
+  ## Check explicit adoption first, then structural conformance.
+  obj.hasAdopted(protocol) or obj.canConformTo(protocol)
 
 proc dispatch*(obj: DynamicAgent, invocation: var Invocation): bool =
   ## Try to handle an invocation locally, then through the responder chain.
