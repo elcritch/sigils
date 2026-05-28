@@ -895,6 +895,44 @@ proc replaceMethods*(
   ## Replace methods from a reusable protocol implementation, then adopt its protocol.
   obj.replaceMethods(implementation.protocol, implementation.methods)
 
+proc withProto*[T: DynamicAgent](obj: T): T {.discardable.} =
+  ## Replace methods with the default protocol implementation and return the object.
+  discard obj.replaceMethods(T.proto())
+  result = obj
+
+proc objectConstructorArg(arg: NimNode): NimNode =
+  if arg.kind == nnkExprEqExpr:
+    result = nnkExprColonExpr.newTree(
+      arg[0].copyNimTree(),
+      arg[1].copyNimTree(),
+    )
+  else:
+    result = arg.copyNimTree()
+
+macro newProto*(typ: typedesc, args: varargs[untyped]): untyped =
+  ## Create a ref object, install its default protocol implementation, and return it.
+  let
+    receiverType = typ.copyNimTree()
+    newCall = nnkCall.newTree(nnkDotExpr.newTree(
+      receiverType.copyNimTree(),
+      ident"new",
+    ))
+    objectCtor = nnkObjConstr.newTree(receiverType.copyNimTree())
+    obj = genSym(nskLet, "obj")
+
+  for arg in args:
+    newCall.add arg.copyNimTree()
+    objectCtor.add objectConstructorArg(arg)
+
+  result = quote do:
+    block:
+      let `obj` =
+        when compiles(`newCall`):
+          `newCall`
+        else:
+          `objectCtor`
+      `obj`.withProto()
+
 proc pushMethod*[A, R](
     obj: DynamicAgent,
     selector: Selector[A, R],

@@ -19,11 +19,18 @@ type
 
   ExportedThing = ref object of DynamicAgent
     value: int
+    builtWithNew: bool
+
+  PlainThing = ref object of DynamicAgent
+    value: int
 
 method parseInteger(text: string): int {.selector.}
 method canPerformCommand(command: string): bool {.selector.}
 method hitTest(x, y: int): string {.selector.}
 method isFirstResponder(): bool {.selector.}
+
+proc new(_: typedesc[ExportedThing], value: int): ExportedThing =
+  ExportedThing(value: value + 1, builtWithNew: true)
 
 protocol TextFieldDelegate:
   method validateText(text: string): bool
@@ -64,6 +71,10 @@ protocol DefaultTextField of TextFieldDelegate:
 
 protocol ExportedThingProtocol from ExportedThing:
   method exportedValue*(self: ExportedThing): int =
+    self.value
+
+protocol PlainThingProtocol from PlainThing:
+  method plainValue*(self: PlainThing): int =
     self.value
 
 method viewHitTest(self: View, x, y: int): string {.selector.} =
@@ -217,13 +228,25 @@ suite "dynamic selectors":
     controller.textDidCommit("named")
     check controller.lastCommand == "named"
 
-  test "combined protocol block creates a proto proc":
-    let thing = ExportedThing(value: 42)
+  test "withProto installs a generated default protocol":
+    let thing = ExportedThing(value: 42).withProto
 
-    discard thing.replaceMethods(ExportedThing.proto())
-
+    check not thing.builtWithNew
     check thing.hasAdopted(ExportedThingProtocol)
     check thing.exportedValue == 42
+
+  test "newProto prefers a typedesc new overload":
+    let thing = ExportedThing.newProto(value = 41)
+
+    check thing.builtWithNew
+    check thing.hasAdopted(ExportedThingProtocol)
+    check thing.exportedValue == 42
+
+  test "newProto falls back to ref object construction":
+    let thing = PlainThing.newProto(value = 42)
+
+    check thing.hasAdopted(PlainThingProtocol)
+    check thing.plainValue == 42
 
   test "implement block creates a reusable protocol implementation":
     let
