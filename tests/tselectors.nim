@@ -170,11 +170,46 @@ suite "dynamic selectors":
     check field.validateText("123")
     check not field.validateText("abc")
 
+  test "method lookup exposes local method stacks":
+    let
+      field = TextField()
+      selector = parseInteger
+
+    check field.localMethod(selector).isNil
+    check field.methodFor(selector).isNil
+    check field.methodStack(selector).len == 0
+
+    check field.addMethod(parseInteger, parseField)
+    check not field.localMethod(selector).isNil
+    check not field.methodFor(selector.name).isNil
+    check field.methodStack(selector).len == 1
+
+    let token = field.pushMethod(parseInteger, incrementNextResult)
+    check field.methodStack(selector).len == 2
+    check token.popMethod()
+    check field.methodStack(selector).len == 1
+
   test "direct selector send raises when unhandled":
     let field = TextField(text: "21")
 
     expect UnhandledSelectorError:
       discard field.parseInteger(field.text)
+
+  test "optional sends return handled state":
+    let field = TextField()
+
+    check field.trySend(parseInteger, "7").isNone
+    check not field.sendIfHandled(parseInteger, "7")
+
+    check field.addMethod(parseInteger, parseField)
+    check field.trySend(parseInteger, "7").get() == 7
+    check field.sendIfHandled(parseInteger, "7")
+
+    let window = Window(focused: true)
+    check window.trySend(isFirstResponder).isNone
+    check window.addMethod(isFirstResponder, windowFirstResponder)
+    check window.trySend(isFirstResponder).get()
+    check window.sendIfHandled(isFirstResponder)
 
   test "protocol macro declares selectors and runtime requirements":
     let controller = TextController()
@@ -227,6 +262,15 @@ suite "dynamic selectors":
     check not controller.validateText("")
     controller.textDidCommit("named")
     check controller.lastCommand == "named"
+
+  test "withProtocol installs a named implementation variant":
+    let controller = TextController().withProtocol(DefaultTextField)
+
+    check controller.hasAdopted(TextFieldDelegate)
+    check controller.validateText("value")
+    check not controller.validateText("")
+    controller.textDidCommit("variant")
+    check controller.lastCommand == "variant"
 
   test "withProto installs a generated default protocol":
     let thing = ExportedThing(value: 42).withProto
@@ -296,6 +340,30 @@ suite "dynamic selectors":
 
     check not controller.respondsTo(textDidCommit)
     check not controller.hasAdopted(TextFieldDelegate)
+
+  test "remove methods uninstalls selectors and protocol adoption":
+    let field = TextField()
+
+    check field.addMethod(parseInteger, parseField)
+    check not field.removeMethod(parseInteger).isNil
+    check field.localMethod(parseInteger).isNil
+    check not field.respondsTo(parseInteger)
+
+    let controller = TextController()
+    discard controller.replaceMethods(TextFieldDelegate, [
+      validateText => validateRequired,
+      textDidCommit => controllerCommit,
+    ])
+
+    check controller.hasAdopted(TextFieldDelegate)
+    let removed = controller.removeMethods(TextFieldDelegate)
+    check removed.len == 3
+    check not removed[0].isNil
+    check not removed[1].isNil
+    check removed[2].isNil
+    check not controller.hasAdopted(TextFieldDelegate)
+    check not controller.respondsTo(validateText)
+    check not controller.respondsTo(textDidCommit)
 
   test "text field can delegate validation to a controller":
     let

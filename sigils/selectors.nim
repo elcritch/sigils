@@ -641,13 +641,44 @@ proc setResult*[R](invocation: var Invocation, value: sink R) =
 proc resultAs*[R](invocation: Invocation, _: typedesc[R]): R =
   rpcUnpack(result, invocation.result)
 
-proc localMethod(obj: DynamicAgent, selector: SigilName): DynamicMethod =
+proc localMethod*(obj: DynamicAgent, selector: SigilName): DynamicMethod =
+  ## Return the top local method for a selector, if one is installed.
+  if obj.isNil:
+    return nil
   if selector notin obj.methods:
     return nil
   let stack = obj.methods[selector]
   if stack.len == 0:
     return nil
   result = stack[^1]
+
+proc localMethod*[A, R](
+    obj: DynamicAgent, selector: Selector[A, R]
+): DynamicMethod =
+  ## Return the top local method for a typed selector, if one is installed.
+  obj.localMethod(selector.name)
+
+proc methodFor*(obj: DynamicAgent, selector: SigilName): DynamicMethod =
+  ## Return the top local method for a selector, if one is installed.
+  obj.localMethod(selector)
+
+proc methodFor*[A, R](
+    obj: DynamicAgent, selector: Selector[A, R]
+): DynamicMethod =
+  ## Return the top local method for a typed selector, if one is installed.
+  obj.localMethod(selector)
+
+proc methodStack*(obj: DynamicAgent, selector: SigilName): seq[DynamicMethod] =
+  ## Return the local method stack for a selector.
+  if obj.isNil or selector notin obj.methods:
+    return @[]
+  obj.methods[selector]
+
+proc methodStack*[A, R](
+    obj: DynamicAgent, selector: Selector[A, R]
+): seq[DynamicMethod] =
+  ## Return the local method stack for a typed selector.
+  obj.methodStack(selector.name)
 
 proc setNextResponder*(obj, responder: DynamicAgent) =
   ## Set the object that receives unhandled selector invocations.
@@ -750,6 +781,15 @@ proc adopt*(obj: DynamicAgent, protocol: SigilProtocol): bool {.discardable.} =
     obj.adoptedProtocols.add protocol.name
   result = true
 
+proc unadopt*(obj: DynamicAgent, protocol: SigilProtocol): bool {.discardable.} =
+  ## Remove explicit protocol adoption, if present.
+  if obj.isNil:
+    return false
+  for idx, name in obj.adoptedProtocols:
+    if name == protocol.name:
+      obj.adoptedProtocols.delete(idx)
+      return true
+
 proc conformsTo*(obj: DynamicAgent, protocol: SigilProtocol): bool =
   ## Check explicit adoption first, then structural conformance.
   obj.hasAdopted(protocol) or obj.canConformTo(protocol)
@@ -784,6 +824,28 @@ proc perform*[A, R](
   var value: R
   if obj.perform(selector, ensureMove args, value):
     result = some(value)
+
+proc trySend*[A, R](
+    obj: DynamicAgent, selector: Selector[A, R], args: sink A
+): Option[R] =
+  ## Perform an optional selector send.
+  obj.perform(selector, ensureMove args)
+
+proc trySend*[R](obj: DynamicAgent, selector: Selector[tuple[], R]): Option[R] =
+  ## Perform an optional zero-argument selector send.
+  obj.perform(selector, ())
+
+proc sendIfHandled*[A, R](
+    obj: DynamicAgent, selector: Selector[A, R], args: sink A
+): bool =
+  ## Perform an optional selector send and return whether it was handled.
+  var value: R
+  obj.perform(selector, ensureMove args, value)
+
+proc sendIfHandled*[R](obj: DynamicAgent, selector: Selector[tuple[], R]): bool =
+  ## Perform an optional zero-argument selector send and return whether it was handled.
+  var value: R
+  obj.perform(selector, (), value)
 
 proc raiseUnhandledSelector(selector: SigilName) =
   raise newException(UnhandledSelectorError, "unhandled selector: " & $selector)
@@ -859,6 +921,26 @@ proc replaceMethods*(
   for binding in methods:
     obj.methods[binding.selector] = @[binding.implementation]
 
+proc removeMethod*(obj: DynamicAgent, selector: SigilName): DynamicMethod {.
+    discardable.} =
+  ## Remove local methods for a selector and return the previous top method.
+  result = obj.localMethod(selector)
+  if not obj.isNil and selector in obj.methods:
+    obj.methods.del(selector)
+
+proc removeMethod*[A, R](
+    obj: DynamicAgent, selector: Selector[A, R]
+): DynamicMethod {.discardable.} =
+  ## Remove local methods for a typed selector and return the previous top method.
+  obj.removeMethod(selector.name)
+
+proc removeMethods*(
+    obj: DynamicAgent, methods: openArray[SelectorMethod]
+): seq[DynamicMethod] {.discardable.} =
+  ## Remove local methods for a method batch and return the previous top methods.
+  for binding in methods:
+    result.add obj.removeMethod(binding.selector)
+
 proc addMethods*(
     obj: DynamicAgent,
     protocol: SigilProtocol,
@@ -895,10 +977,36 @@ proc replaceMethods*(
   ## Replace methods from a reusable protocol implementation, then adopt its protocol.
   obj.replaceMethods(implementation.protocol, implementation.methods)
 
+proc removeMethods*(
+    obj: DynamicAgent, protocol: SigilProtocol
+): seq[DynamicMethod] {.discardable.} =
+  ## Remove local methods for a protocol's selectors, then remove explicit adoption.
+  for requirement in protocol.requirements:
+    result.add obj.removeMethod(requirement.selector)
+  discard obj.unadopt(protocol)
+
+proc removeMethods*(
+    obj: DynamicAgent, implementation: ProtocolImplementation
+): seq[DynamicMethod] {.discardable.} =
+  ## Remove local methods from a reusable protocol implementation.
+  result = obj.removeMethods(implementation.methods)
+  discard obj.unadopt(implementation.protocol)
+
+proc withProtocol*[T: DynamicAgent](
+    obj: T, implementation: ProtocolImplementation
+): T {.discardable.} =
+  ## Replace methods from a protocol implementation and return the object.
+  discard obj.replaceMethods(implementation)
+  result = obj
+
+proc withProtocol*[T: DynamicAgent, P](obj: T, _: typedesc[
+    P]): T {.discardable.} =
+  ## Replace methods from a named protocol implementation and return the object.
+  result = obj.withProtocol(P.init())
+
 proc withProto*[T: DynamicAgent](obj: T): T {.discardable.} =
   ## Replace methods with the default protocol implementation and return the object.
-  discard obj.replaceMethods(T.proto())
-  result = obj
+  result = obj.withProtocol(T.proto())
 
 proc objectConstructorArg(arg: NimNode): NimNode =
   if arg.kind == nnkExprEqExpr:
