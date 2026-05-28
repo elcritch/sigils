@@ -575,16 +575,23 @@ proc implementMethodBinding(item: NimNode): tuple[defs: seq[NimNode],
   result.binding = newCall(bindSym"selectorMethod", selectorName, dynProc)
 
 proc implementBlock(
-    protocol: NimNode, body: NimNode, receiver: NimNode = nil
+    protocol: NimNode,
+    body: NimNode,
+    receiver: NimNode = nil,
+    allowProperties = false,
 ): NimNode =
   var
     defs: seq[NimNode]
     bindings: seq[NimNode]
 
   for item in body:
-    let binding = implementMethodBinding(item)
-    defs.add binding.defs
-    bindings.add binding.binding
+    if item.protocolPropertyMethods().len > 0:
+      if not allowProperties:
+        error("protocol implementations must contain method declarations", item)
+    else:
+      let binding = implementMethodBinding(item)
+      defs.add binding.defs
+      bindings.add binding.binding
 
   let methods = nnkBracket.newTree(bindings)
   let value =
@@ -648,6 +655,7 @@ proc validateProtocolReceiver(item: NimNode, receiver: NimNode) =
 proc addProtocolRequirement(
     selectorDecls: var seq[NimNode],
     reqs: var seq[NimNode],
+    selectors: var seq[string],
     item: NimNode,
     firstArg: int,
     required: bool,
@@ -655,11 +663,16 @@ proc addProtocolRequirement(
   if item.kind != nnkMethodDef:
     error("protocol requirements must be method declarations", item)
 
+  let selectorName = selectorIdentName(item[0])
+  if selectorName in selectors:
+    return
+  selectors.add selectorName
+
   let requirementMethod = protocolRequirementMethod(item, firstArg)
   selectorDecls.add selectorPragma(requirementMethod)
   reqs.add newCall(
     bindSym"requirement",
-    ident(selectorIdentName(item[0])),
+    ident(selectorName),
     newLit(required),
     newLit(requirementMethod.repr),
   )
@@ -675,19 +688,18 @@ proc protocolDeclaration(
   var
     selectorDecls: seq[NimNode]
     reqs: seq[NimNode]
+    selectors: seq[string]
 
   for section in body:
     let propertyDecls = section.protocolPropertyMethods()
     if propertyDecls.len > 0:
-      if not receiver.isNil:
-        error("property declarations are only supported in protocol requirements",
-            section)
       for propertyDecl in propertyDecls:
         addProtocolRequirement(
           selectorDecls,
           reqs,
+          selectors,
           propertyDecl,
-          firstArg,
+          1,
           not propertyDecl.methodIsOptional,
         )
     elif section.kind == nnkMethodDef:
@@ -699,6 +711,7 @@ proc protocolDeclaration(
       addProtocolRequirement(
         selectorDecls,
         reqs,
+        selectors,
         section,
         firstArg,
         not section.methodIsOptional,
@@ -732,7 +745,7 @@ proc implementProtocolForReceiver(
 ): NimNode =
   let
     protocolDecl = protocolDeclaration(protocol, body, 2, receiver)
-    implementation = implementBlock(protocol, body)
+    implementation = implementBlock(protocol, body, allowProperties = true)
     receiverType = receiver.copyNimTree()
 
   result = quote do:

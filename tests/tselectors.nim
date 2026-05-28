@@ -43,6 +43,15 @@ protocol StrictTextFieldDelegate includes TextFieldDelegate:
 protocol TitledProtocol:
   property title -> string
 
+protocol CaptionedViewProtocol from View:
+  property caption -> string
+
+  method caption(self: View): string =
+    self.name
+
+  method setCaption(self: View, value: string) =
+    self.name = value
+
 method parseField(self: TextField, text: string): int {.selector.} =
   parseInt(text)
 
@@ -336,6 +345,17 @@ suite "dynamic selectors":
     view.setTitle("new")
     check view.title() == "new"
     check view.hasAdopted(TitledProtocol)
+
+  test "default implementation protocols accept property declarations":
+    let view = View(name: "old").withProto
+
+    check CaptionedViewProtocol.requirements.len == 2
+    check CaptionedViewProtocol.hasRequirement(caption)
+    check CaptionedViewProtocol.hasRequirement(setCaption)
+    check view.hasAdopted(CaptionedViewProtocol)
+    check view.caption() == "old"
+    view.setCaption("new")
+    check view.caption() == "new"
 
   test "replaceMethods can install and adopt a protocol":
     let controller = TextController()
