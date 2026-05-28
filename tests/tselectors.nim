@@ -17,6 +17,9 @@ type
   Window = ref object of DynamicAgent
     focused: bool
 
+  ExportedThing = ref object of DynamicAgent
+    value: int
+
 method parseInteger(text: string): int {.selector.}
 method canPerformCommand(command: string): bool {.selector.}
 method hitTest(x, y: int): string {.selector.}
@@ -28,6 +31,10 @@ protocol TextFieldDelegate:
   optional:
     method textDidCommit(text: string)
     method placeholderText(): string
+
+protocol ExportedThingProtocol:
+  required:
+    method exportedValue*(): int
 
 method parseField(self: TextField, text: string): int {.selector.} =
   parseInt(text)
@@ -60,6 +67,10 @@ protocol DefaultTextField of TextFieldDelegate:
 
   method textDidCommit(self: TextController, text: string) =
     self.lastCommand = text
+
+protocol DefaultExportedThing of ExportedThingProtocol:
+  method exportedValue(self: ExportedThing): int =
+    self.value
 
 method viewHitTest(self: View, x, y: int): string {.selector.} =
   if x >= self.x and y >= self.y and
@@ -211,6 +222,14 @@ suite "dynamic selectors":
     check not controller.validateText("")
     controller.textDidCommit("named")
     check controller.lastCommand == "named"
+
+  test "exported protocol methods generate exported selector sends":
+    let thing = ExportedThing(value: 42)
+
+    discard thing.replaceMethods(DefaultExportedThing.init())
+
+    check thing.hasAdopted(ExportedThingProtocol)
+    check thing.exportedValue == 42
 
   test "implement block creates a reusable protocol implementation":
     let

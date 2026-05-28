@@ -269,13 +269,20 @@ macro selectorImpl(p: untyped): untyped =
         `directBody`
     directDef[3] = directParams
 
-    let selectorDef = quote do:
-      template `selectorProc`(): untyped =
-        when `dynSelf` is SelectorDefaultArg:
-          `selectorValue`
-        else:
-          `directCall`
-    selectorDef[3] = publicParams
+    let selectorBody = quote do:
+      when `dynSelf` is SelectorDefaultArg:
+        `selectorValue`
+      else:
+        `directCall`
+    let selectorDef = nnkTemplateDef.newTree(
+      selectorProc,
+      newEmptyNode(),
+      newEmptyNode(),
+      publicParams,
+      newEmptyNode(),
+      newEmptyNode(),
+      selectorBody,
+    )
     result = newStmtList(selectorValueDef, directDef, selectorDef)
   else:
     if params.len < 2:
@@ -486,7 +493,7 @@ macro protocol*(name: untyped, body: untyped): untyped =
       selectorDecls.add selectorPragma(item)
       reqs.add newCall(
         bindSym"requirement",
-        item[0].copyNimTree(),
+        ident(selectorIdentName(item[0])),
         newLit(isRequired),
         newLit(item.repr),
       )
