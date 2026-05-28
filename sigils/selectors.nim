@@ -548,6 +548,12 @@ proc setNextResponder*(obj, responder: DynamicAgent) =
   ## Set the object that receives unhandled selector invocations.
   obj.nextResponder = responder.unsafeWeakRef()
 
+proc nextResponder*(obj: DynamicAgent): DynamicAgent =
+  ## Return the object that receives unhandled selector invocations.
+  if obj.isNil or obj.nextResponder.isNil:
+    return nil
+  obj.nextResponder[]
+
 proc clearNextResponder*(obj: DynamicAgent) =
   obj.nextResponder = WeakRef[DynamicAgent]()
 
