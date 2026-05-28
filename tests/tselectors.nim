@@ -51,6 +51,16 @@ method controllerCommand(self: TextController,
   if result:
     self.lastCommand = command
 
+method controllerCommit(self: TextController, text: string) {.selector.} =
+  self.lastCommand = text
+
+implement DefaultTextField of TextFieldDelegate:
+  method validateText(self: TextController, text: string): bool =
+    text.strip.len > 0
+
+  method textDidCommit(self: TextController, text: string) =
+    self.lastCommand = text
+
 method viewHitTest(self: View, x, y: int): string {.selector.} =
   if x >= self.x and y >= self.y and
       x < self.x + self.width and y < self.y + self.height:
@@ -129,6 +139,21 @@ suite "dynamic selectors":
     check field.perform(parseInteger, "9").get() == 18
     check field.parseInteger("9") == 18
 
+  test "replaceMethods installs selector bindings in one batch":
+    let field = TextField()
+
+    let old = field.replaceMethods([
+      parseInteger => parseField,
+      validateText => validateDigitsOnly,
+    ])
+
+    check old.len == 2
+    check old[0].isNil
+    check old[1].isNil
+    check field.parseInteger("9") == 9
+    check field.validateText("123")
+    check not field.validateText("abc")
+
   test "direct selector send raises when unhandled":
     let field = TextField(text: "21")
 
@@ -156,6 +181,85 @@ suite "dynamic selectors":
 
     expect UnhandledSelectorError:
       discard controller.placeholderText()
+
+  test "replaceMethods can install and adopt a protocol":
+    let controller = TextController()
+
+    let old = controller.replaceMethods(TextFieldDelegate, [
+      validateText => validateRequired,
+      textDidCommit => controllerCommit,
+    ])
+
+    check old.len == 2
+    check old[0].isNil
+    check old[1].isNil
+    check controller.hasAdopted(TextFieldDelegate)
+    check controller.validateText("customer@example.com")
+    controller.textDidCommit("saved")
+    check controller.lastCommand == "saved"
+
+  test "named implement block creates a typedesc init proc":
+    let controller = TextController()
+
+    let old = controller.replaceMethods(DefaultTextField.init())
+
+    check old.len == 2
+    check old[0].isNil
+    check old[1].isNil
+    check controller.hasAdopted(TextFieldDelegate)
+    check controller.validateText("value")
+    check not controller.validateText("")
+    controller.textDidCommit("named")
+    check controller.lastCommand == "named"
+
+  test "implement block creates a reusable protocol implementation":
+    let
+      controller = TextController()
+      delegateImpl = implement(TextFieldDelegate):
+        method validateText(self: TextController, text: string): bool =
+          text.strip.len > 0
+
+        method textDidCommit(self: TextController, text: string) =
+          self.lastCommand = text
+
+    let old = controller.replaceMethods(delegateImpl)
+
+    check old.len == 2
+    check old[0].isNil
+    check old[1].isNil
+    check controller.hasAdopted(TextFieldDelegate)
+    check controller.validateText("value")
+    controller.textDidCommit("committed")
+    check controller.lastCommand == "committed"
+
+  test "implement block can install directly on an object":
+    let controller = TextController()
+
+    let old = controller.implement(TextFieldDelegate):
+      method validateText(self: TextController, text: string): bool =
+        text.strip.len > 0
+
+      method textDidCommit(self: TextController, text: string) =
+        self.lastCommand = text
+
+    check old.len == 2
+    check old[0].isNil
+    check old[1].isNil
+    check controller.hasAdopted(TextFieldDelegate)
+    check not controller.validateText("")
+    controller.textDidCommit("direct")
+    check controller.lastCommand == "direct"
+
+  test "protocol method batch must satisfy required selectors":
+    let controller = TextController()
+
+    expect ProtocolConformanceError:
+      discard controller.replaceMethods(TextFieldDelegate, [
+        textDidCommit => controllerCommit,
+      ])
+
+    check not controller.respondsTo(textDidCommit)
+    check not controller.hasAdopted(TextFieldDelegate)
 
   test "text field can delegate validation to a controller":
     let

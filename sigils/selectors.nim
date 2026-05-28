@@ -16,10 +16,20 @@ type
     signature*: string
     required*: bool
 
+  SelectorMethod* = object
+    ## A selector paired with a dynamic implementation for batch installs.
+    selector*: SigilName
+    implementation*: DynamicMethod
+
   SigilProtocol* = object
     ## A named runtime contract made of required and optional selectors.
     name*: SigilName
     requirements*: seq[ProtocolRequirement]
+
+  ProtocolImplementation* = object
+    ## A protocol paired with dynamic methods implementing its selectors.
+    protocol*: SigilProtocol
+    methods*: seq[SelectorMethod]
 
   SelectorDefaultArg = object
 
@@ -78,6 +88,24 @@ proc requirement*[A, R](
     required: required,
   )
 
+proc initSelectorMethod*[A, R](
+    selector: Selector[A, R], implementation: DynamicMethod
+): SelectorMethod =
+  result = SelectorMethod(
+    selector: selector.name,
+    implementation: implementation,
+  )
+
+proc selectorMethod*[A, R](
+    selector: Selector[A, R], implementation: DynamicMethod
+): SelectorMethod =
+  initSelectorMethod(selector, implementation)
+
+proc `=>`*[A, R](
+    selector: Selector[A, R], implementation: DynamicMethod
+): SelectorMethod =
+  initSelectorMethod(selector, implementation)
+
 proc initProtocol*(
     name: static string, requirements: openArray[ProtocolRequirement]
 ): SigilProtocol =
@@ -92,6 +120,14 @@ proc initProtocol*(
   result = SigilProtocol(
     name: toSigilName(name),
     requirements: @requirements,
+  )
+
+proc initProtocolImplementation*(
+    protocol: SigilProtocol, methods: openArray[SelectorMethod]
+): ProtocolImplementation =
+  result = ProtocolImplementation(
+    protocol: protocol,
+    methods: @methods,
   )
 
 template selectorDefaultArg(): SelectorDefaultArg =
@@ -312,6 +348,27 @@ macro selectorImpl(p: untyped): untyped =
         `body`
     implDef[3] = implParams
 
+    let dispatchBody =
+      if argsType.kind == nnkTupleTy and argsType.len == 0:
+        if retType.kind == nnkTupleTy and retType.len == 0:
+          quote do:
+            `implProc`(`receiverName`)
+            `invocation`.setResult(())
+        else:
+          quote do:
+            `invocation`.setResult(`implProc`(`receiverName`))
+      elif retType.kind == nnkTupleTy and retType.len == 0:
+        quote do:
+          var `argsIdent`: `argsType`
+          rpcUnpack(`argsIdent`, `invocation`.params)
+          `call`
+          `invocation`.setResult(())
+      else:
+        quote do:
+          var `argsIdent`: `argsType`
+          rpcUnpack(`argsIdent`, `invocation`.params)
+          `invocation`.setResult(`call`)
+
     result = newStmtList()
     result.add implDef
     result.add quote do:
@@ -321,15 +378,140 @@ macro selectorImpl(p: untyped): untyped =
         let `receiverName` = `receiverType`(`dynSelf`)
         if `receiverName` == nil:
           raise newException(ConversionError, "bad cast")
-        when `argsType` is tuple[]:
-          `invocation`.setResult(`implProc`(`receiverName`))
-        else:
-          var `argsIdent`: `argsType`
-          rpcUnpack(`argsIdent`, `invocation`.params)
-          `invocation`.setResult(`call`)
+        `dispatchBody`
 
 template selector*(p: untyped): untyped =
   selectorImpl(p)
+
+proc implementMethodBinding(item: NimNode): tuple[defs: seq[NimNode],
+    binding: NimNode] =
+  if item.kind != nnkMethodDef:
+    error("protocol implementations must contain method declarations", item)
+  if item[6].kind == nnkEmpty:
+    error("protocol implementation methods must have implementations", item)
+
+  let params = item[3]
+  if params.len < 2:
+    error("protocol implementation methods must take a receiver", params)
+  if params[1].kind != nnkIdentDefs or params[1].len != 3:
+    error("protocol implementation receiver must be a single named parameter",
+        params[1])
+
+  let
+    selectorName = ident(selectorIdentName(item[0]))
+    implProc = genSym(nskProc, selectorIdentName(item[0]) & "Impl")
+    dynProc = genSym(nskProc, selectorIdentName(item[0]) & "Dynamic")
+    implParams = params.copyNimTree()
+    retType =
+      if params[0].kind == nnkEmpty:
+        nnkTupleTy.newTree()
+      else:
+        params[0].copyNimTree()
+    body = item[6].copyNimTree()
+    receiverName = params[1][0].copyNimTree()
+    receiverType = params[1][1].copyNimTree()
+    argsType = selectorArgsType(params, 2)
+    argsIdent = genSym(nskVar, "args")
+    dynSelf = genSym(nskParam, "self")
+    invocation = genSym(nskParam, "invocation")
+    call = nnkCall.newTree(implProc)
+
+  call.add receiverName
+  for arg in selectorCallArgs(params, 2, argsIdent):
+    call.add arg
+
+  let implDef = quote do:
+    proc `implProc`() =
+      `body`
+  implDef[3] = implParams
+
+  let dispatchBody =
+    if argsType.kind == nnkTupleTy and argsType.len == 0:
+      if retType.kind == nnkTupleTy and retType.len == 0:
+        quote do:
+          `implProc`(`receiverName`)
+          `invocation`.setResult(())
+      else:
+        quote do:
+          `invocation`.setResult(`implProc`(`receiverName`))
+    elif retType.kind == nnkTupleTy and retType.len == 0:
+      quote do:
+        var `argsIdent`: `argsType`
+        rpcUnpack(`argsIdent`, `invocation`.params)
+        `call`
+        `invocation`.setResult(())
+    else:
+      quote do:
+        var `argsIdent`: `argsType`
+        rpcUnpack(`argsIdent`, `invocation`.params)
+        `invocation`.setResult(`call`)
+
+  let dynDef = quote do:
+    proc `dynProc`(`dynSelf`: DynamicAgent, `invocation`: var Invocation) =
+      if `dynSelf` == nil:
+        raise newException(ValueError, "bad value")
+      let `receiverName` = `receiverType`(`dynSelf`)
+      if `receiverName` == nil:
+        raise newException(ConversionError, "bad cast")
+      `dispatchBody`
+
+  result.defs = @[implDef, dynDef]
+  result.binding = newCall(bindSym"selectorMethod", selectorName, dynProc)
+
+proc implementBlock(
+    protocol: NimNode, body: NimNode, receiver: NimNode = nil
+): NimNode =
+  var
+    defs: seq[NimNode]
+    bindings: seq[NimNode]
+
+  for item in body:
+    let binding = implementMethodBinding(item)
+    defs.add binding.defs
+    bindings.add binding.binding
+
+  let methods = nnkBracket.newTree(bindings)
+  let value =
+    if receiver.isNil:
+      newCall(bindSym"initProtocolImplementation", protocol.copyNimTree(), methods)
+    else:
+      newCall(
+        nnkDotExpr.newTree(receiver.copyNimTree(), ident"replaceMethods"),
+        protocol.copyNimTree(),
+        methods,
+      )
+
+  let stmts = newStmtList()
+  for item in defs:
+    stmts.add item
+  stmts.add value
+
+  result = nnkBlockStmt.newTree(newEmptyNode(), stmts)
+
+proc implementVariant(variant: NimNode, protocol: NimNode,
+    body: NimNode): NimNode =
+  let
+    variantType = variant.copyNimTree()
+    variantTypeUse = ident(selectorIdentName(variant))
+    implementation = implementBlock(protocol, body)
+  result = quote do:
+    type `variantType` = object
+
+    proc init*(_: typedesc[`variantTypeUse`]): ProtocolImplementation =
+      `implementation`
+
+macro implement*(protocol: untyped, body: untyped): untyped =
+  ## Build a reusable protocol implementation from selector method bodies.
+  if protocol.kind == nnkInfix and protocol.len == 3 and protocol[0].eqIdent("of"):
+    return implementVariant(protocol[1], protocol[2], body)
+  if protocol.kind == nnkCall and protocol.len == 2:
+    error("named protocol implementations use: implement Variant of Protocol:", protocol)
+
+  implementBlock(protocol, body)
+
+macro implement*(receiver: untyped, protocol: untyped, body: untyped): untyped =
+  ## Replace methods on a receiver with a protocol implementation block.
+  implementBlock(protocol, body, receiver)
 
 proc initInvocation*[A](
     selector: SigilName, args: sink A
@@ -383,9 +565,48 @@ proc missingRequirements*(obj: DynamicAgent, protocol: SigilProtocol): seq[
     if req.required and not obj.respondsTo(req.selector):
       result.add req
 
+proc containsMethod(methods: openArray[SelectorMethod],
+    selector: SigilName): bool =
+  for binding in methods:
+    if binding.selector == selector:
+      return true
+
+proc missingRequirements*(
+    protocol: SigilProtocol, methods: openArray[SelectorMethod]
+): seq[ProtocolRequirement] =
+  ## Return required protocol selectors that are not in a method batch.
+  for req in protocol.requirements:
+    if req.required and not methods.containsMethod(req.selector):
+      result.add req
+
+proc missingRequirements*(
+    obj: DynamicAgent,
+    protocol: SigilProtocol,
+    methods: openArray[SelectorMethod],
+): seq[ProtocolRequirement] =
+  ## Return required selectors not handled by an object or a planned method batch.
+  for req in protocol.requirements:
+    if req.required and not methods.containsMethod(req.selector) and
+        not obj.respondsTo(req.selector):
+      result.add req
+
 proc canConformTo*(obj: DynamicAgent, protocol: SigilProtocol): bool =
   ## Check structural conformance against required protocol selectors.
   obj.missingRequirements(protocol).len == 0
+
+proc canConformTo*(
+    obj: DynamicAgent,
+    protocol: SigilProtocol,
+    methods: openArray[SelectorMethod],
+): bool =
+  ## Check conformance after applying a planned method batch.
+  obj.missingRequirements(protocol, methods).len == 0
+
+proc canImplement*(
+    protocol: SigilProtocol, methods: openArray[SelectorMethod]
+): bool =
+  ## Check whether a method batch contains every required protocol selector.
+  protocol.missingRequirements(methods).len == 0
 
 proc hasAdopted*(obj: DynamicAgent, protocol: SigilProtocol): bool =
   ## Check whether this object explicitly adopted the protocol.
@@ -393,12 +614,16 @@ proc hasAdopted*(obj: DynamicAgent, protocol: SigilProtocol): bool =
     return false
   protocol.name in obj.adoptedProtocols
 
-proc raiseProtocolConformanceError(obj: DynamicAgent, protocol: SigilProtocol) =
-  let missing = obj.missingRequirements(protocol)
+proc raiseProtocolConformanceError(
+    protocol: SigilProtocol, missing: openArray[ProtocolRequirement]
+) =
   var message = "cannot adopt protocol " & $protocol.name
   if missing.len > 0:
     message.add "; missing required selector: " & $missing[0].selector
   raise newException(ProtocolConformanceError, message)
+
+proc raiseProtocolConformanceError(obj: DynamicAgent, protocol: SigilProtocol) =
+  raiseProtocolConformanceError(protocol, obj.missingRequirements(protocol))
 
 proc adopt*(obj: DynamicAgent, protocol: SigilProtocol): bool {.discardable.} =
   ## Explicitly record protocol conformance after checking required selectors.
@@ -490,6 +715,17 @@ proc addMethod*[A, R](
   obj.methods[selector.name] = @[fn]
   result = true
 
+proc addMethods*(obj: DynamicAgent, methods: openArray[SelectorMethod]): bool {.
+    discardable.} =
+  ## Add methods only when none of their selectors already have local handlers.
+  for binding in methods:
+    if binding.selector in obj.methods and obj.methods[binding.selector].len > 0:
+      return false
+
+  for binding in methods:
+    obj.methods[binding.selector] = @[binding.implementation]
+  result = true
+
 proc replaceMethod*[A, R](
     obj: DynamicAgent,
     selector: Selector[A, R],
@@ -498,6 +734,51 @@ proc replaceMethod*[A, R](
   ## Replace the local implementation and return the previous top method, if any.
   result = obj.localMethod(selector.name)
   obj.methods[selector.name] = @[fn]
+
+proc replaceMethods*(
+    obj: DynamicAgent, methods: openArray[SelectorMethod]
+): seq[DynamicMethod] {.discardable.} =
+  ## Replace local implementations and return the previous top methods.
+  for binding in methods:
+    result.add obj.localMethod(binding.selector)
+  for binding in methods:
+    obj.methods[binding.selector] = @[binding.implementation]
+
+proc addMethods*(
+    obj: DynamicAgent,
+    protocol: SigilProtocol,
+    methods: openArray[SelectorMethod],
+): bool {.discardable.} =
+  ## Add methods, then explicitly adopt a protocol satisfied by the result.
+  if not obj.canConformTo(protocol, methods):
+    raiseProtocolConformanceError(protocol, obj.missingRequirements(protocol, methods))
+  if not obj.addMethods(methods):
+    return false
+  discard obj.adopt(protocol)
+  result = true
+
+proc replaceMethods*(
+    obj: DynamicAgent,
+    protocol: SigilProtocol,
+    methods: openArray[SelectorMethod],
+): seq[DynamicMethod] {.discardable.} =
+  ## Replace methods, then explicitly adopt a protocol satisfied by the result.
+  if not obj.canConformTo(protocol, methods):
+    raiseProtocolConformanceError(protocol, obj.missingRequirements(protocol, methods))
+  result = obj.replaceMethods(methods)
+  discard obj.adopt(protocol)
+
+proc addMethods*(
+    obj: DynamicAgent, implementation: ProtocolImplementation
+): bool {.discardable.} =
+  ## Add a reusable protocol implementation, then adopt its protocol.
+  obj.addMethods(implementation.protocol, implementation.methods)
+
+proc replaceMethods*(
+    obj: DynamicAgent, implementation: ProtocolImplementation
+): seq[DynamicMethod] {.discardable.} =
+  ## Replace methods from a reusable protocol implementation, then adopt its protocol.
+  obj.replaceMethods(implementation.protocol, implementation.methods)
 
 proc pushMethod*[A, R](
     obj: DynamicAgent,
