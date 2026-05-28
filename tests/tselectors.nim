@@ -26,15 +26,9 @@ method hitTest(x, y: int): string {.selector.}
 method isFirstResponder(): bool {.selector.}
 
 protocol TextFieldDelegate:
-  required:
-    method validateText(text: string): bool
-  optional:
-    method textDidCommit(text: string)
-    method placeholderText(): string
-
-protocol ExportedThingProtocol:
-  required:
-    method exportedValue*(): int
+  method validateText(text: string): bool
+  method textDidCommit(text: string) {.optional.}
+  method placeholderText(): string {.optional.}
 
 method parseField(self: TextField, text: string): int {.selector.} =
   parseInt(text)
@@ -68,8 +62,8 @@ protocol DefaultTextField of TextFieldDelegate:
   method textDidCommit(self: TextController, text: string) =
     self.lastCommand = text
 
-protocol DefaultExportedThing of ExportedThingProtocol:
-  method exportedValue(self: ExportedThing): int =
+protocol ExportedThingProtocol from ExportedThing:
+  method exportedValue*(self: ExportedThing): int =
     self.value
 
 method viewHitTest(self: View, x, y: int): string {.selector.} =
@@ -223,10 +217,10 @@ suite "dynamic selectors":
     controller.textDidCommit("named")
     check controller.lastCommand == "named"
 
-  test "exported protocol methods generate exported selector sends":
+  test "combined protocol block creates a proto proc":
     let thing = ExportedThing(value: 42)
 
-    discard thing.replaceMethods(DefaultExportedThing.init())
+    discard thing.replaceMethods(ExportedThing.proto())
 
     check thing.hasAdopted(ExportedThingProtocol)
     check thing.exportedValue == 42

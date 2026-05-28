@@ -139,6 +139,32 @@ proc selectorIdentName(node: NimNode): string =
   else:
     result = node.strVal
 
+proc hasPragma(node: NimNode, name: string): bool =
+  if node.kind != nnkPragma:
+    return false
+  for item in node:
+    if item.kind == nnkIdent and item.eqIdent(name):
+      return true
+
+proc stripPragma(node: NimNode, name: string): NimNode =
+  result = node.copyNimTree()
+  if result.kind != nnkPragma:
+    return
+
+  let pragmas = nnkPragma.newTree()
+  for item in result:
+    if item.kind == nnkIdent and item.eqIdent(name):
+      continue
+    pragmas.add item
+
+  if pragmas.len == 0:
+    result = newEmptyNode()
+  else:
+    result = pragmas
+
+proc methodIsOptional(node: NimNode): bool =
+  node.kind == nnkMethodDef and node[4].hasPragma("optional")
+
 proc selectorArgsType(params: NimNode, firstArg: int): NimNode =
   if params.len == firstArg:
     return nnkTupleTy.newTree()
@@ -213,6 +239,7 @@ proc selectorDirectCallArgs(params: NimNode, firstArg: int,
 
 proc selectorPragma(node: NimNode): NimNode =
   result = node.copyNimTree()
+  result[4] = result[4].stripPragma("optional")
   if result[4].kind == nnkEmpty:
     result[4] = nnkPragma.newTree(ident"selector")
   else:
@@ -464,39 +491,78 @@ proc implementVariant(variant: NimNode, protocol: NimNode,
     proc init*(_: typedesc[`variantTypeUse`]): ProtocolImplementation =
       `implementation`
 
-macro protocol*(name: untyped, body: untyped): untyped =
-  ## Declare a protocol or a named implementation variant for a protocol.
-  if name.kind == nnkInfix and name.len == 3 and name[0].eqIdent("of"):
-    return implementVariant(name[1], name[2], body)
+proc protocolRequirementMethod(item: NimNode, firstArg: int): NimNode =
+  result = item.copyNimTree()
+  let params = item[3]
+  if params.len < firstArg:
+    error("protocol implementation methods must take a receiver", params)
 
+  if firstArg > 1:
+    if params[1].kind != nnkIdentDefs or params[1].len != 3:
+      error("protocol implementation receiver must be a single named parameter",
+          params[1])
+
+    let requirementParams = nnkFormalParams.newTree(params[0].copyNimTree())
+    for idx in firstArg ..< params.len:
+      requirementParams.add params[idx].copyNimTree()
+    result[3] = requirementParams
+
+  result[4] = result[4].stripPragma("optional")
+  result[6] = newEmptyNode()
+
+proc validateProtocolReceiver(item: NimNode, receiver: NimNode) =
+  let params = item[3]
+  if params.len < 2:
+    error("protocol implementation methods must take a receiver", params)
+  if params[1].kind != nnkIdentDefs or params[1].len != 3:
+    error("protocol implementation receiver must be a single named parameter",
+        params[1])
+  if params[1][1].repr != receiver.repr:
+    error("protocol implementation receiver must be " & receiver.repr, params[1][1])
+
+proc addProtocolRequirement(
+    selectorDecls: var seq[NimNode],
+    reqs: var seq[NimNode],
+    item: NimNode,
+    firstArg: int,
+    required: bool,
+) =
+  if item.kind != nnkMethodDef:
+    error("protocol requirements must be method declarations", item)
+
+  let requirementMethod = protocolRequirementMethod(item, firstArg)
+  selectorDecls.add selectorPragma(requirementMethod)
+  reqs.add newCall(
+    bindSym"requirement",
+    ident(selectorIdentName(item[0])),
+    newLit(required),
+    newLit(requirementMethod.repr),
+  )
+
+proc protocolDeclaration(
+    name: NimNode, body: NimNode, firstArg = 1, receiver: NimNode = nil
+): NimNode =
   let protocolName = newStrLitNode(selectorIdentName(name))
   var
     selectorDecls: seq[NimNode]
     reqs: seq[NimNode]
 
   for section in body:
-    if section.kind != nnkCall or section.len != 2:
-      error("protocol sections must be required: or optional:", section)
+    if section.kind == nnkMethodDef:
+      if not receiver.isNil:
+        validateProtocolReceiver(section, receiver)
+      elif section[6].kind != nnkEmpty:
+        error("protocol requirements cannot have implementations", section)
 
-    var isRequired = false
-    if section[0].eqIdent("required"):
-      isRequired = true
-    elif not section[0].eqIdent("optional"):
-      error("protocol sections must be required: or optional:", section[0])
-
-    for item in section[1]:
-      if item.kind != nnkMethodDef:
-        error("protocol requirements must be method declarations", item)
-      if item[6].kind != nnkEmpty:
-        error("protocol requirements cannot have implementations", item)
-
-      selectorDecls.add selectorPragma(item)
-      reqs.add newCall(
-        bindSym"requirement",
-        ident(selectorIdentName(item[0])),
-        newLit(isRequired),
-        newLit(item.repr),
+      addProtocolRequirement(
+        selectorDecls,
+        reqs,
+        section,
+        firstArg,
+        not section.methodIsOptional,
       )
+    else:
+      error("protocol bodies must contain method declarations", section)
 
   result = newStmtList()
   for selectorDecl in selectorDecls:
@@ -510,6 +576,38 @@ macro protocol*(name: untyped, body: untyped): untyped =
       nnkBracket.newTree(reqs),
     ),
   )
+
+proc implementProtocolForReceiver(
+    protocol: NimNode, receiver: NimNode, body: NimNode
+): NimNode =
+  let
+    protocolDecl = protocolDeclaration(protocol, body, 2, receiver)
+    implementation = implementBlock(protocol, body)
+    receiverType = receiver.copyNimTree()
+
+  result = quote do:
+    `protocolDecl`
+
+    proc proto*(_: typedesc[`receiverType`]): ProtocolImplementation =
+      `implementation`
+
+macro protocol*(name: untyped, body: untyped): untyped =
+  ## Declare a protocol or a named implementation variant for a protocol.
+  if name.kind == nnkInfix and name.len == 3 and name[0].eqIdent("of"):
+    return implementVariant(name[1], name[2], body)
+  if name.kind == nnkInfix and name.len == 3 and name[0].eqIdent("from"):
+    return implementProtocolForReceiver(name[1], name[2], body)
+  if name.kind == nnkCommand and name.len == 2 and
+      name[1].kind == nnkCommand and name[1].len == 2 and
+      name[1][0].kind == nnkAccQuoted and
+      name[1][0].len == 1 and name[1][0][0].eqIdent("for"):
+    return implementProtocolForReceiver(name[0], name[1][1], body)
+
+  protocolDeclaration(name, body)
+
+macro protocol*(name: untyped, receiver: untyped, body: untyped): untyped =
+  ## Declare a protocol and its default implementation for a receiver type.
+  implementProtocolForReceiver(name, receiver, body)
 
 macro implement*(protocol: untyped, body: untyped): untyped =
   ## Build a reusable protocol implementation from selector method bodies.
