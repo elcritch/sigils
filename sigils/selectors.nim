@@ -1,4 +1,4 @@
-import std/[macros, options, tables]
+import std/[macros, options, strutils, tables]
 
 import agents
 
@@ -46,10 +46,25 @@ type
     result*: SigilParams
     handled*: bool
 
+  ForwardingTarget* = proc(
+    self: DynamicAgent, selector: SigilName
+  ): DynamicAgent {.closure.}
+
+  ForwardInvocation* = proc(
+    self: DynamicAgent, invocation: var Invocation
+  ): bool {.closure.}
+
+  ResolveMethod* = proc(
+    self: DynamicAgent, selector: SigilName
+  ): bool {.closure.}
+
   DynamicAgent* = ref object of Agent
     methods: Table[SigilName, seq[DynamicMethod]]
     nextResponder: WeakRef[DynamicAgent]
     adoptedProtocols: seq[SigilName]
+    forwardingTargetHandler: ForwardingTarget
+    forwardInvocationHandler: ForwardInvocation
+    resolveMethodHandler: ResolveMethod
 
   DynamicMethod* = proc(
     self: DynamicAgent, invocation: var Invocation
@@ -122,6 +137,46 @@ proc initProtocol*(
     requirements: @requirements,
   )
 
+proc containsRequirement(
+    requirements: openArray[ProtocolRequirement], selector: SigilName
+): bool =
+  for req in requirements:
+    if req.selector == selector:
+      return true
+
+proc composeRequirements*(
+    protocols: openArray[SigilProtocol],
+    requirements: openArray[ProtocolRequirement],
+): seq[ProtocolRequirement] =
+  ## Merge inherited and local protocol requirements, keeping the first occurrence.
+  for protocol in protocols:
+    for req in protocol.requirements:
+      if not result.containsRequirement(req.selector):
+        result.add req
+  for req in requirements:
+    if not result.containsRequirement(req.selector):
+      result.add req
+
+proc initProtocol*(
+    name: static string,
+    protocols: openArray[SigilProtocol],
+    requirements: openArray[ProtocolRequirement],
+): SigilProtocol =
+  result = SigilProtocol(
+    name: toSigilName(name),
+    requirements: composeRequirements(protocols, requirements),
+  )
+
+proc initProtocol*(
+    name: string,
+    protocols: openArray[SigilProtocol],
+    requirements: openArray[ProtocolRequirement],
+): SigilProtocol =
+  result = SigilProtocol(
+    name: toSigilName(name),
+    requirements: composeRequirements(protocols, requirements),
+  )
+
 proc initProtocolImplementation*(
     protocol: SigilProtocol, methods: openArray[SelectorMethod]
 ): ProtocolImplementation =
@@ -136,8 +191,69 @@ template selectorDefaultArg(): SelectorDefaultArg =
 proc selectorIdentName(node: NimNode): string =
   if node.kind == nnkPostfix and node.len == 2 and node[0].eqIdent("*"):
     result = node[1].strVal
+  elif node.kind in {nnkStrLit .. nnkTripleStrLit}:
+    let value = node.strVal
+    if value.len > 0 and value[^1] == '*':
+      result = value[0 .. ^2]
+    else:
+      result = value
   else:
     result = node.strVal
+
+proc selectorIdent(name: string, exported: bool): NimNode =
+  if exported:
+    result = nnkPostfix.newTree(ident"*", ident(name))
+  else:
+    result = ident(name)
+
+proc setterIdentName(name: string): string =
+  if name.len == 0:
+    return "set"
+  result = "set" & name
+  result[3] = result[3].toUpperAscii
+
+proc propertyMethod(
+    name: NimNode, valueType: NimNode, setter = false
+): NimNode =
+  let
+    propertyName = selectorIdentName(name)
+    methodName =
+      if setter:
+        selectorIdent(setterIdentName(propertyName), true)
+      else:
+        selectorIdent(propertyName, true)
+    params =
+      if setter:
+        nnkFormalParams.newTree(
+          newEmptyNode(),
+          newIdentDefs(ident"value", valueType.copyNimTree()),
+        )
+      else:
+        nnkFormalParams.newTree(valueType.copyNimTree())
+
+  result = nnkMethodDef.newTree(
+    methodName,
+    newEmptyNode(),
+    newEmptyNode(),
+    params,
+    newEmptyNode(),
+    newEmptyNode(),
+    newEmptyNode(),
+  )
+
+proc propertyMethods(name: NimNode, valueType: NimNode): seq[NimNode] =
+  result.add propertyMethod(name, valueType)
+  result.add propertyMethod(name, valueType, setter = true)
+
+proc protocolPropertyMethods(item: NimNode): seq[NimNode] =
+  if item.kind != nnkCommand or item.len < 2 or not item[0].eqIdent("property"):
+    return
+
+  if item.len == 2 and item[1].kind == nnkInfix and item[1].len == 3 and
+      item[1][0].eqIdent("->"):
+    return propertyMethods(item[1][1], item[1][2])
+
+  error("property declarations use: property name -> Type", item)
 
 proc hasPragma(node: NimNode, name: string): bool =
   if node.kind != nnkPragma:
@@ -374,6 +490,15 @@ macro selectorImpl(p: untyped): untyped =
 template selector*(p: untyped): untyped =
   selectorImpl(p)
 
+macro property*(spec: untyped): untyped =
+  ## Declare getter and setter selectors for a property.
+  if spec.kind != nnkInfix or spec.len != 3 or not spec[0].eqIdent("->"):
+    error("property declarations use: property name -> Type", spec)
+
+  result = newStmtList()
+  for item in propertyMethods(spec[1], spec[2]):
+    result.add selectorPragma(item)
+
 proc implementMethodBinding(item: NimNode): tuple[defs: seq[NimNode],
     binding: NimNode] =
   if item.kind != nnkMethodDef:
@@ -540,7 +665,11 @@ proc addProtocolRequirement(
   )
 
 proc protocolDeclaration(
-    name: NimNode, body: NimNode, firstArg = 1, receiver: NimNode = nil
+    name: NimNode,
+    body: NimNode,
+    firstArg = 1,
+    receiver: NimNode = nil,
+    inherited: openArray[NimNode] = [],
 ): NimNode =
   let protocolName = newStrLitNode(selectorIdentName(name))
   var
@@ -548,7 +677,20 @@ proc protocolDeclaration(
     reqs: seq[NimNode]
 
   for section in body:
-    if section.kind == nnkMethodDef:
+    let propertyDecls = section.protocolPropertyMethods()
+    if propertyDecls.len > 0:
+      if not receiver.isNil:
+        error("property declarations are only supported in protocol requirements",
+            section)
+      for propertyDecl in propertyDecls:
+        addProtocolRequirement(
+          selectorDecls,
+          reqs,
+          propertyDecl,
+          firstArg,
+          not propertyDecl.methodIsOptional,
+        )
+    elif section.kind == nnkMethodDef:
       if not receiver.isNil:
         validateProtocolReceiver(section, receiver)
       elif section[6].kind != nnkEmpty:
@@ -568,14 +710,22 @@ proc protocolDeclaration(
   for selectorDecl in selectorDecls:
     result.add selectorDecl
 
-  result.add newLetStmt(
-    name.copyNimTree(),
-    newCall(
-      bindSym"initProtocol",
-      protocolName,
-      nnkBracket.newTree(reqs),
-    ),
-  )
+  let protocolCall =
+    if inherited.len == 0:
+      newCall(
+        bindSym"initProtocol",
+        protocolName,
+        nnkBracket.newTree(reqs),
+      )
+    else:
+      newCall(
+        bindSym"initProtocol",
+        protocolName,
+        nnkBracket.newTree(inherited),
+        nnkBracket.newTree(reqs),
+      )
+
+  result.add newLetStmt(name.copyNimTree(), protocolCall)
 
 proc implementProtocolForReceiver(
     protocol: NimNode, receiver: NimNode, body: NimNode
@@ -591,12 +741,25 @@ proc implementProtocolForReceiver(
     proc proto*(_: typedesc[`receiverType`]): ProtocolImplementation =
       `implementation`
 
+proc protocolIncludes(name: NimNode): tuple[matched: bool, protocol: NimNode,
+    inherited: seq[NimNode]] =
+  if name.kind == nnkCommand and name.len == 2 and
+      name[1].kind == nnkCommand and name[1].len == 2 and
+      name[1][0].eqIdent("includes"):
+    result.matched = true
+    result.protocol = name[0]
+    result.inherited.add name[1][1]
+
 macro protocol*(name: untyped, body: untyped): untyped =
   ## Declare a protocol or a named implementation variant for a protocol.
   if name.kind == nnkInfix and name.len == 3 and name[0].eqIdent("of"):
     return implementVariant(name[1], name[2], body)
   if name.kind == nnkInfix and name.len == 3 and name[0].eqIdent("from"):
     return implementProtocolForReceiver(name[1], name[2], body)
+  let includes = protocolIncludes(name)
+  if includes.matched:
+    return protocolDeclaration(includes.protocol, body,
+        inherited = includes.inherited)
   if name.kind == nnkCommand and name.len == 2 and
       name[1].kind == nnkCommand and name[1].len == 2 and
       name[1][0].kind == nnkAccQuoted and
@@ -693,16 +856,97 @@ proc nextResponder*(obj: DynamicAgent): DynamicAgent =
 proc clearNextResponder*(obj: DynamicAgent) =
   obj.nextResponder = WeakRef[DynamicAgent]()
 
+proc setForwardingTarget*(obj: DynamicAgent, handler: ForwardingTarget) =
+  ## Set a handler that can choose a target for unhandled selectors.
+  obj.forwardingTargetHandler = handler
+
+proc clearForwardingTarget*(obj: DynamicAgent) =
+  ## Clear the forwarding target handler.
+  obj.forwardingTargetHandler = nil
+
+proc setForwardInvocation*(obj: DynamicAgent, handler: ForwardInvocation) =
+  ## Set a final invocation forwarding handler for unhandled selectors.
+  obj.forwardInvocationHandler = handler
+
+proc clearForwardInvocation*(obj: DynamicAgent) =
+  ## Clear the final invocation forwarding handler.
+  obj.forwardInvocationHandler = nil
+
+proc setResolveMethod*(obj: DynamicAgent, handler: ResolveMethod) =
+  ## Set a handler that may lazily install a method for a selector.
+  obj.resolveMethodHandler = handler
+
+proc clearResolveMethod*(obj: DynamicAgent) =
+  ## Clear the method resolution handler.
+  obj.resolveMethodHandler = nil
+
 proc respondsTo*(obj: DynamicAgent, selector: SigilName): bool =
   if obj.isNil:
     return false
   if not obj.localMethod(selector).isNil:
     return true
+  if not obj.forwardingTargetHandler.isNil:
+    let target = obj.forwardingTargetHandler(obj, selector)
+    if not target.isNil and target != obj and target.respondsTo(selector):
+      return true
   if not obj.nextResponder.isNil:
     return obj.nextResponder[].respondsTo(selector)
 
 proc respondsTo*[A, R](obj: DynamicAgent, selector: Selector[A, R]): bool =
   obj.respondsTo(selector.name)
+
+proc requiredRequirements*(protocol: SigilProtocol): seq[ProtocolRequirement] =
+  ## Return the required requirements for a protocol.
+  for req in protocol.requirements:
+    if req.required:
+      result.add req
+
+proc optionalRequirements*(protocol: SigilProtocol): seq[ProtocolRequirement] =
+  ## Return the optional requirements for a protocol.
+  for req in protocol.requirements:
+    if not req.required:
+      result.add req
+
+proc selectors*(protocol: SigilProtocol): seq[SigilName] =
+  ## Return all selector names declared by a protocol.
+  for req in protocol.requirements:
+    result.add req.selector
+
+proc requiredSelectors*(protocol: SigilProtocol): seq[SigilName] =
+  ## Return required selector names declared by a protocol.
+  for req in protocol.requirements:
+    if req.required:
+      result.add req.selector
+
+proc optionalSelectors*(protocol: SigilProtocol): seq[SigilName] =
+  ## Return optional selector names declared by a protocol.
+  for req in protocol.requirements:
+    if not req.required:
+      result.add req.selector
+
+proc requirement*(
+    protocol: SigilProtocol, selector: SigilName
+): Option[ProtocolRequirement] =
+  ## Return the protocol requirement for a selector, if present.
+  for req in protocol.requirements:
+    if req.selector == selector:
+      return some(req)
+
+proc requirement*[A, R](
+    protocol: SigilProtocol, selector: Selector[A, R]
+): Option[ProtocolRequirement] =
+  ## Return the protocol requirement for a typed selector, if present.
+  protocol.requirement(selector.name)
+
+proc hasRequirement*(protocol: SigilProtocol, selector: SigilName): bool =
+  ## Check whether a protocol declares a selector.
+  protocol.requirement(selector).isSome
+
+proc hasRequirement*[A, R](
+    protocol: SigilProtocol, selector: Selector[A, R]
+): bool =
+  ## Check whether a protocol declares a typed selector.
+  protocol.hasRequirement(selector.name)
 
 proc missingRequirements*(obj: DynamicAgent, protocol: SigilProtocol): seq[
     ProtocolRequirement] =
@@ -760,6 +1004,12 @@ proc hasAdopted*(obj: DynamicAgent, protocol: SigilProtocol): bool =
     return false
   protocol.name in obj.adoptedProtocols
 
+proc adoptedProtocols*(obj: DynamicAgent): seq[SigilName] =
+  ## Return protocol names explicitly adopted by this object.
+  if obj.isNil:
+    return @[]
+  obj.adoptedProtocols
+
 proc raiseProtocolConformanceError(
     protocol: SigilProtocol, missing: openArray[ProtocolRequirement]
 ) =
@@ -799,13 +1049,27 @@ proc dispatch*(obj: DynamicAgent, invocation: var Invocation): bool =
   if obj.isNil:
     return false
 
-  let fn = obj.localMethod(invocation.selector)
+  var fn = obj.localMethod(invocation.selector)
+  if fn.isNil and not obj.resolveMethodHandler.isNil and
+      obj.resolveMethodHandler(obj, invocation.selector):
+    fn = obj.localMethod(invocation.selector)
+
   if not fn.isNil:
     fn(obj, invocation)
-    return invocation.handled
+    if invocation.handled:
+      return true
+
+  if not obj.forwardingTargetHandler.isNil:
+    let target = obj.forwardingTargetHandler(obj, invocation.selector)
+    if not target.isNil and target != obj and target.dispatch(invocation):
+      return true
 
   if not obj.nextResponder.isNil:
-    return obj.nextResponder[].dispatch(invocation)
+    if obj.nextResponder[].dispatch(invocation):
+      return true
+
+  if not obj.forwardInvocationHandler.isNil:
+    return obj.forwardInvocationHandler(obj, invocation)
 
 proc perform*[A, R](
     obj: DynamicAgent,

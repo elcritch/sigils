@@ -37,6 +37,12 @@ protocol TextFieldDelegate:
   method textDidCommit(text: string) {.optional.}
   method placeholderText(): string {.optional.}
 
+protocol StrictTextFieldDelegate includes TextFieldDelegate:
+  method selectionRange(): string
+
+protocol TitledProtocol:
+  property title -> string
+
 method parseField(self: TextField, text: string): int {.selector.} =
   parseInt(text)
 
@@ -61,6 +67,15 @@ method controllerCommand(self: TextController,
 
 method controllerCommit(self: TextController, text: string) {.selector.} =
   self.lastCommand = text
+
+method controllerSelectionRange(self: TextController): string {.selector.} =
+  $self.parsed
+
+method viewTitle(self: View): string {.selector.} =
+  self.name
+
+method viewSetTitle(self: View, value: string) {.selector.} =
+  self.name = value
 
 protocol DefaultTextField of TextFieldDelegate:
   method validateText(self: TextController, text: string): bool =
@@ -131,6 +146,53 @@ suite "dynamic selectors":
     check value == 13
     check controller.parsed == 13
     check field.parseInteger(field.text) == 13
+
+  test "forwarding target handles unhandled selectors":
+    let
+      field = TextField(text: "17")
+      controller = TextController()
+      parseName = selectorName(parseInteger)
+
+    check controller.addMethod(parseInteger, parseController)
+    field.setForwardingTarget(proc(
+        self: DynamicAgent, selector: SigilName
+    ): DynamicAgent =
+      if selector == parseName:
+        result = controller
+    )
+
+    check field.respondsTo(parseInteger)
+    check field.parseInteger(field.text) == 17
+    check controller.parsed == 17
+
+  test "resolve method can lazily install a selector":
+    let
+      field = TextField(text: "19")
+      parseName = selectorName(parseInteger)
+
+    field.setResolveMethod(proc(self: DynamicAgent, selector: SigilName): bool =
+      if selector == parseName:
+        result = self.addMethod(parseInteger, parseField)
+    )
+
+    check field.methodStack(parseInteger).len == 0
+    check field.parseInteger(field.text) == 19
+    check field.methodStack(parseInteger).len == 1
+
+  test "forward invocation can handle a selector directly":
+    let
+      field = TextField(text: "23")
+      parseName = selectorName(parseInteger)
+
+    field.setForwardInvocation(proc(
+        self: DynamicAgent, invocation: var Invocation
+    ): bool =
+      if invocation.selector == parseName:
+        invocation.setResult(parseInt(invocation.argsAs(string)) + 1)
+        result = true
+    )
+
+    check field.parseInteger(field.text) == 24
 
   test "pushMethod swizzles and restores selector behavior":
     let field = TextField()
@@ -232,6 +294,48 @@ suite "dynamic selectors":
 
     expect UnhandledSelectorError:
       discard controller.placeholderText()
+
+  test "protocol introspection splits required and optional requirements":
+    check TextFieldDelegate.requiredRequirements.len == 1
+    check TextFieldDelegate.optionalRequirements.len == 2
+    check TextFieldDelegate.requiredSelectors == @[selectorName(validateText)]
+    check selectorName(textDidCommit) in TextFieldDelegate.optionalSelectors
+    check TextFieldDelegate.hasRequirement(validateText)
+    check TextFieldDelegate.requirement(placeholderText).get().required == false
+    check selectorName(validateText) in TextFieldDelegate.selectors
+
+  test "protocol includes inherit requirements":
+    let controller = TextController()
+
+    check StrictTextFieldDelegate.requirements.len == 4
+    check StrictTextFieldDelegate.hasRequirement(validateText)
+    check StrictTextFieldDelegate.hasRequirement(selectionRange)
+    check selectorName(selectionRange) in
+        StrictTextFieldDelegate.requiredSelectors
+
+    check controller.addMethod(validateText, validateRequired)
+    check not controller.canConformTo(StrictTextFieldDelegate)
+    check controller.addMethod(selectionRange, controllerSelectionRange)
+    check controller.canConformTo(StrictTextFieldDelegate)
+    check controller.adopt(StrictTextFieldDelegate)
+    check StrictTextFieldDelegate.name in controller.adoptedProtocols
+
+  test "property declarations create getter and setter selectors":
+    let view = View(name: "old")
+
+    check TitledProtocol.requirements.len == 2
+    check TitledProtocol.hasRequirement(title)
+    check TitledProtocol.hasRequirement(setTitle)
+
+    discard view.replaceMethods(TitledProtocol, [
+      title => viewTitle,
+      setTitle => viewSetTitle,
+    ])
+
+    check view.title() == "old"
+    view.setTitle("new")
+    check view.title() == "new"
+    check view.hasAdopted(TitledProtocol)
 
   test "replaceMethods can install and adopt a protocol":
     let controller = TextController()
