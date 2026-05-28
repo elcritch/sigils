@@ -54,7 +54,7 @@ method controllerCommand(self: TextController,
 method controllerCommit(self: TextController, text: string) {.selector.} =
   self.lastCommand = text
 
-implement DefaultTextField of TextFieldDelegate:
+protocol DefaultTextField of TextFieldDelegate:
   method validateText(self: TextController, text: string): bool =
     text.strip.len > 0
 
@@ -198,7 +198,7 @@ suite "dynamic selectors":
     controller.textDidCommit("saved")
     check controller.lastCommand == "saved"
 
-  test "named implement block creates a typedesc init proc":
+  test "named protocol block creates a typedesc init proc":
     let controller = TextController()
 
     let old = controller.replaceMethods(DefaultTextField.init())

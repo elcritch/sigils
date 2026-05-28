@@ -218,49 +218,6 @@ proc selectorPragma(node: NimNode): NimNode =
   else:
     result[4].add ident"selector"
 
-macro protocol*(name: untyped, body: untyped): untyped =
-  let protocolName = newStrLitNode(selectorIdentName(name))
-  var
-    selectorDecls: seq[NimNode]
-    reqs: seq[NimNode]
-
-  for section in body:
-    if section.kind != nnkCall or section.len != 2:
-      error("protocol sections must be required: or optional:", section)
-
-    var isRequired = false
-    if section[0].eqIdent("required"):
-      isRequired = true
-    elif not section[0].eqIdent("optional"):
-      error("protocol sections must be required: or optional:", section[0])
-
-    for item in section[1]:
-      if item.kind != nnkMethodDef:
-        error("protocol requirements must be method declarations", item)
-      if item[6].kind != nnkEmpty:
-        error("protocol requirements cannot have implementations", item)
-
-      selectorDecls.add selectorPragma(item)
-      reqs.add newCall(
-        bindSym"requirement",
-        item[0].copyNimTree(),
-        newLit(isRequired),
-        newLit(item.repr),
-      )
-
-  result = newStmtList()
-  for selectorDecl in selectorDecls:
-    result.add selectorDecl
-
-  result.add newLetStmt(
-    name.copyNimTree(),
-    newCall(
-      bindSym"initProtocol",
-      protocolName,
-      nnkBracket.newTree(reqs),
-    ),
-  )
-
 macro selectorImpl(p: untyped): untyped =
   if p.kind != nnkMethodDef:
     error("selector pragma can only be used on a method", p)
@@ -500,12 +457,59 @@ proc implementVariant(variant: NimNode, protocol: NimNode,
     proc init*(_: typedesc[`variantTypeUse`]): ProtocolImplementation =
       `implementation`
 
+macro protocol*(name: untyped, body: untyped): untyped =
+  ## Declare a protocol or a named implementation variant for a protocol.
+  if name.kind == nnkInfix and name.len == 3 and name[0].eqIdent("of"):
+    return implementVariant(name[1], name[2], body)
+
+  let protocolName = newStrLitNode(selectorIdentName(name))
+  var
+    selectorDecls: seq[NimNode]
+    reqs: seq[NimNode]
+
+  for section in body:
+    if section.kind != nnkCall or section.len != 2:
+      error("protocol sections must be required: or optional:", section)
+
+    var isRequired = false
+    if section[0].eqIdent("required"):
+      isRequired = true
+    elif not section[0].eqIdent("optional"):
+      error("protocol sections must be required: or optional:", section[0])
+
+    for item in section[1]:
+      if item.kind != nnkMethodDef:
+        error("protocol requirements must be method declarations", item)
+      if item[6].kind != nnkEmpty:
+        error("protocol requirements cannot have implementations", item)
+
+      selectorDecls.add selectorPragma(item)
+      reqs.add newCall(
+        bindSym"requirement",
+        item[0].copyNimTree(),
+        newLit(isRequired),
+        newLit(item.repr),
+      )
+
+  result = newStmtList()
+  for selectorDecl in selectorDecls:
+    result.add selectorDecl
+
+  result.add newLetStmt(
+    name.copyNimTree(),
+    newCall(
+      bindSym"initProtocol",
+      protocolName,
+      nnkBracket.newTree(reqs),
+    ),
+  )
+
 macro implement*(protocol: untyped, body: untyped): untyped =
   ## Build a reusable protocol implementation from selector method bodies.
   if protocol.kind == nnkInfix and protocol.len == 3 and protocol[0].eqIdent("of"):
     return implementVariant(protocol[1], protocol[2], body)
   if protocol.kind == nnkCall and protocol.len == 2:
-    error("named protocol implementations use: implement Variant of Protocol:", protocol)
+    error("named protocol implementations use: protocol Variant of Protocol:", protocol)
 
   implementBlock(protocol, body)
 
