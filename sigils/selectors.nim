@@ -1084,6 +1084,29 @@ proc dispatch*(obj: DynamicAgent, invocation: var Invocation): bool =
   if not obj.forwardInvocationHandler.isNil:
     return obj.forwardInvocationHandler(obj, invocation)
 
+proc dispatchLocal*(obj: DynamicAgent, invocation: var Invocation): bool =
+  ## Try to handle an invocation without walking the responder chain.
+  if obj.isNil:
+    return false
+
+  var fn = obj.localMethod(invocation.selector)
+  if fn.isNil and not obj.resolveMethodHandler.isNil and
+      obj.resolveMethodHandler(obj, invocation.selector):
+    fn = obj.localMethod(invocation.selector)
+
+  if not fn.isNil:
+    fn(obj, invocation)
+    if invocation.handled:
+      return true
+
+  if not obj.forwardingTargetHandler.isNil:
+    let target = obj.forwardingTargetHandler(obj, invocation.selector)
+    if not target.isNil and target != obj and target.dispatchLocal(invocation):
+      return true
+
+  if not obj.forwardInvocationHandler.isNil:
+    return obj.forwardInvocationHandler(obj, invocation)
+
 proc perform*[A, R](
     obj: DynamicAgent,
     selector: Selector[A, R],
@@ -1095,11 +1118,29 @@ proc perform*[A, R](
   if result:
     rpcUnpack(value, invocation.result)
 
+proc performLocal*[A, R](
+    obj: DynamicAgent,
+    selector: Selector[A, R],
+    args: sink A,
+    value: var R,
+): bool =
+  var invocation = initInvocation(selector.name, ensureMove args)
+  result = obj.dispatchLocal(invocation)
+  if result:
+    rpcUnpack(value, invocation.result)
+
 proc perform*[A, R](
     obj: DynamicAgent, selector: Selector[A, R], args: sink A
 ): Option[R] =
   var value: R
   if obj.perform(selector, ensureMove args, value):
+    result = some(value)
+
+proc performLocal*[A, R](
+    obj: DynamicAgent, selector: Selector[A, R], args: sink A
+): Option[R] =
+  var value: R
+  if obj.performLocal(selector, ensureMove args, value):
     result = some(value)
 
 proc trySend*[A, R](
@@ -1112,6 +1153,16 @@ proc trySend*[R](obj: DynamicAgent, selector: Selector[tuple[], R]): Option[R] =
   ## Perform an optional zero-argument selector send.
   obj.perform(selector, ())
 
+proc trySendLocal*[A, R](
+    obj: DynamicAgent, selector: Selector[A, R], args: sink A
+): Option[R] =
+  ## Perform an optional selector send without walking the responder chain.
+  obj.performLocal(selector, ensureMove args)
+
+proc trySendLocal*[R](obj: DynamicAgent, selector: Selector[tuple[], R]): Option[R] =
+  ## Perform an optional zero-argument selector send without walking the responder chain.
+  obj.performLocal(selector, ())
+
 proc sendIfHandled*[A, R](
     obj: DynamicAgent, selector: Selector[A, R], args: sink A
 ): bool =
@@ -1123,6 +1174,20 @@ proc sendIfHandled*[R](obj: DynamicAgent, selector: Selector[tuple[], R]): bool 
   ## Perform an optional zero-argument selector send and return whether it was handled.
   var value: R
   obj.perform(selector, (), value)
+
+proc sendLocalIfHandled*[A, R](
+    obj: DynamicAgent, selector: Selector[A, R], args: sink A
+): bool =
+  ## Perform an optional selector send without walking the responder chain.
+  var value: R
+  obj.performLocal(selector, ensureMove args, value)
+
+proc sendLocalIfHandled*[R](
+    obj: DynamicAgent, selector: Selector[tuple[], R]
+): bool =
+  ## Perform an optional zero-argument selector send without walking the responder chain.
+  var value: R
+  obj.performLocal(selector, (), value)
 
 proc raiseUnhandledSelector(selector: SigilName) =
   raise newException(UnhandledSelectorError, "unhandled selector: " & $selector)

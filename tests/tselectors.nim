@@ -292,6 +292,78 @@ suite "dynamic selectors":
     check window.trySend(isFirstResponder).get()
     check window.sendIfHandled(isFirstResponder)
 
+  test "local optional sends do not walk responder chain":
+    let
+      field = TextField(text: "11")
+      controller = TextController()
+
+    field.setNextResponder(controller)
+    check controller.addMethod(parseInteger, parseController)
+
+    check field.trySendLocal(parseInteger, field.text).isNone
+    check not field.sendLocalIfHandled(parseInteger, field.text)
+    check controller.parsed == 0
+
+    check field.trySend(parseInteger, field.text).get() == 11
+    check controller.parsed == 11
+
+  test "local optional sends honor local selector hooks":
+    let
+      resolved = TextField(text: "13")
+      forwarded = TextField(text: "17")
+      controller = TextController()
+      invocationField = TextField(text: "19")
+      parseName = selectorName(parseInteger)
+
+    resolved.setResolveMethod(proc(self: DynamicAgent, selector: SigilName): bool =
+      if selector == parseName:
+        result = self.addMethod(parseInteger, parseField)
+    )
+
+    check resolved.trySendLocal(parseInteger, resolved.text).get() == 13
+
+    check controller.addMethod(parseInteger, parseController)
+    forwarded.setForwardingTarget(proc(
+        self: DynamicAgent, selector: SigilName
+    ): DynamicAgent =
+      if selector == parseName:
+        result = controller
+    )
+
+    check forwarded.trySendLocal(parseInteger, forwarded.text).get() == 17
+    check controller.parsed == 17
+
+    invocationField.setForwardInvocation(proc(
+        self: DynamicAgent, invocation: var Invocation
+    ): bool =
+      if invocation.selector == parseName:
+        invocation.setResult(parseInt(invocation.argsAs(string)) + 1)
+        result = true
+    )
+
+    check invocationField.trySendLocal(parseInteger, invocationField.text).get() == 20
+
+  test "local forwarding targets do not walk their responder chain":
+    let
+      field = TextField(text: "23")
+      forwardingTarget = TextController()
+      downstream = TextController()
+      parseName = selectorName(parseInteger)
+
+    forwardingTarget.setNextResponder(downstream)
+    check downstream.addMethod(parseInteger, parseController)
+    field.setForwardingTarget(proc(
+        self: DynamicAgent, selector: SigilName
+    ): DynamicAgent =
+      if selector == parseName:
+        result = forwardingTarget
+    )
+
+    check field.trySendLocal(parseInteger, field.text).isNone
+    check downstream.parsed == 0
+    check field.trySend(parseInteger, field.text).get() == 23
+    check downstream.parsed == 23
+
   test "first selector send preserves object payload":
     let controller = TextController()
     check controller.addMethod(payloadTotal, controllerPayloadTotal)
