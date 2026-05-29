@@ -113,8 +113,9 @@ proc rpcPack*[T](res: sink T): SigilParams =
   else:
     var requestCache {.global, threadvar.}: WVariant
     if requestCache.isNil:
-      requestCache = newWrapperVariant(res)
-    requestCache.resetTo(res)
+      requestCache = newWrapperVariant(ensureMove res)
+    else:
+      requestCache.resetTo(res)
     result = SigilParams(buf: requestCache)
 
 proc rpcUnpack*[T](obj: var T, ss: SigilParams) =

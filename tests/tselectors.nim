@@ -24,10 +24,15 @@ type
   PlainThing = ref object of DynamicAgent
     value: int
 
+  SelectorPayload = object
+    x: int
+    y: int
+
 method parseInteger(text: string): int {.selector.}
 method canPerformCommand(command: string): bool {.selector.}
 method hitTest(x, y: int): string {.selector.}
 method isFirstResponder(): bool {.selector.}
+method payloadTotal(payload: SelectorPayload): int {.selector.}
 
 proc new(_: typedesc[ExportedThing], value: int): ExportedThing =
   ExportedThing(value: value + 1, builtWithNew: true)
@@ -108,6 +113,11 @@ method viewHitTest(self: View, x, y: int): string {.selector.} =
 
 method windowFirstResponder(self: Window): bool {.selector.} =
   self.focused
+
+method controllerPayloadTotal(
+    self: TextController, payload: SelectorPayload
+): int {.selector.} =
+  payload.x + payload.y
 
 proc incrementNextResult(
     self: DynamicAgent, invocation: var Invocation, next: DynamicMethod
@@ -281,6 +291,11 @@ suite "dynamic selectors":
     check window.addMethod(isFirstResponder, windowFirstResponder)
     check window.trySend(isFirstResponder).get()
     check window.sendIfHandled(isFirstResponder)
+
+  test "first selector send preserves object payload":
+    let controller = TextController()
+    check controller.addMethod(payloadTotal, controllerPayloadTotal)
+    check controller.payloadTotal(SelectorPayload(x: 3, y: 4)) == 7
 
   test "protocol macro declares selectors and runtime requirements":
     let controller = TextController()
