@@ -1,5 +1,3 @@
-
-import std/streams
 include variant
 
 type
@@ -27,6 +25,7 @@ proc initWrapper*[T](val: sink T): WBuffer[T] =
   result.asPtr()[] = move val
 
 proc newWrapperVariant*[T](val: sink T): WVariant =
+  bind newVariant
   newVariant(initWrapper(val))
 
 proc getWrapped*(v: Variant, T: typedesc): T =
@@ -75,4 +74,3 @@ when isMainModule:
     let vx = newWrapperVariant(x)
     echo "=> vx: ", vx.getWrapped(int16)
     check x == vx.getWrapped(int16)
-
