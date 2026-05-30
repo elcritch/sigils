@@ -61,6 +61,7 @@ suite "agent closure slots":
       b = Counter(value: 100)
 
     let clsAgent = connectTo(a, valueChanged) do(val: int):
+      echo "CLOSURE!"
       b.value = val
 
     check not compiles(
