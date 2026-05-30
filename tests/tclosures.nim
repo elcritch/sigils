@@ -47,7 +47,8 @@ suite "agent closure slots":
       e = c1.rawEnv()
       p = c1.rawProc()
       cc = ClosureRunner[proc(a: int) {.nimcall.}](rawEnv: e, rawProc: p)
-    connect(a, valueChanged, cc, ClosureRunner[proc(a: int) {.nimcall.}].callClosure)
+    connect(a, valueChanged, cc, ClosureRunner[proc(
+        a: int) {.nimcall.}].callClosure)
 
     a.setValue(42)
 
@@ -70,4 +71,44 @@ suite "agent closure slots":
     echo "cc3: Type: ", $typeof(clsAgent)
     emit a.valueChanged(42)
     check b.value == 42
-    check clsAgent.typeof() is ClosureAgent[(int,)]
+    check clsAgent.typeof() is ClosureAgent[(int, )]
+
+  when not defined(sigilsNoClosureSlotEnv):
+    test "receiver-bound closure slot captures state and mutates target":
+      var
+        a = Counter()
+        b = Counter(value: 100)
+        offset = 10
+
+      let conn = connectTo(a, valueChanged, b) do(self: Counter, val: int):
+        self.value = val + offset
+
+      emit a.valueChanged(5)
+      check b.value == 15
+
+      check conn.disconnect()
+      check not conn.disconnect()
+
+      emit a.valueChanged(7)
+      check b.value == 15
+
+    test "receiver-bound closure slots keep separate environments":
+      var
+        a = Counter()
+        b = Counter()
+        first = 2
+        second = 3
+
+      let conn1 = connectTo(a, valueChanged, b) do(self: Counter, val: int):
+        self.value += val * first
+
+      let conn2 = connectTo(a, valueChanged, b) do(self: Counter, val: int):
+        self.avg += val * second
+
+      emit a.valueChanged(4)
+
+      check b.value == 8
+      check b.avg == 12
+
+      check conn1.disconnect()
+      check conn2.disconnect()

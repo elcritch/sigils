@@ -29,6 +29,20 @@ method callMethod*(
 
     result = SigilResponse(kind: Response, id: req.origin.int, result: res)
 
+when not defined(sigilsNoClosureSlotEnv):
+  method callMethod*(
+      ctx: Agent, req: SigilRequest, subscription: Subscription
+  ): SigilResponse {.base, gcsafe.} =
+    ## Route a sigil request through a static slot or an env-backed closure slot.
+    if subscription.envSlot.isNil:
+      {.cast(gcsafe).}:
+        result = ctx.callMethod(req, subscription.slot)
+    else:
+      {.cast(gcsafe).}:
+        subscription.envSlot(ctx, req.params, subscription.env)
+      let res = rpcPack(true)
+      result = SigilResponse(kind: Response, id: req.origin.int, result: res)
+
 from system/ansi_c import c_raise
 
 type AgentSlotError* = object of CatchableError
@@ -45,7 +59,10 @@ template callSlotsImpl(obj: Agent, req: SigilRequest, subsIter: untyped) =
           debugPrint "exec:call:obj:id: ", $obj.getSigilId()
           discard c_raise(11.cint)
         assert sub.tgt[].freedByThread == 0
-      var res: SigilResponse = sub.tgt[].callMethod(req, sub.slot)
+      when defined(sigilsNoClosureSlotEnv):
+        var res: SigilResponse = sub.tgt[].callMethod(req, sub.slot)
+      else:
+        var res: SigilResponse = sub.tgt[].callMethod(req, sub)
 
       when defined(nimscript) or defined(useJsonSerde):
         discard

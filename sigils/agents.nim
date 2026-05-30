@@ -43,12 +43,22 @@ type
 
   Agent* = ref object of AgentObj
 
+  # Procedure signature accepted as an RPC call by server.
+  AgentProc* = proc(context: Agent, params: SigilParams) {.nimcall.}
+
+  SlotEnv* = ref object of RootObj
+    ## Owned environment for receiver-bound closure slots.
+
+  EnvAgentProc* = proc(
+    context: Agent, params: SigilParams, env: SlotEnv
+  ) {.nimcall.}
+
   Subscription* = object
     tgt*: WeakRef[Agent]
     slot*: AgentProc
-
-  # Procedure signature accepted as an RPC call by server
-  AgentProc* = proc(context: Agent, params: SigilParams) {.nimcall.}
+    when not defined(sigilsNoClosureSlotEnv):
+      envSlot*: EnvAgentProc
+      env*: SlotEnv
 
   AgentProcTy*[S] = AgentProc
 
@@ -210,6 +220,28 @@ template hasSubscription*(obj: Agent,
   let tgtRef = tgt.unsafeWeakRef().toKind(Agent)
   hasSubscription(obj, sig, tgtRef, slot)
 
+proc hasCallable(subscription: Subscription): bool =
+  when defined(sigilsNoClosureSlotEnv):
+    not subscription.slot.isNil
+  else:
+    not subscription.slot.isNil or not subscription.envSlot.isNil
+
+proc sameHandler(a, b: Subscription): bool =
+  result = a.slot == b.slot
+  when not defined(sigilsNoClosureSlotEnv):
+    result = result and a.envSlot == b.envSlot and a.env == b.env
+
+proc sameSubscription(a, b: Subscription): bool =
+  a.tgt == b.tgt and sameHandler(a, b)
+
+method hasSubscription*(
+    obj: Agent, sig: SigilName, subscription: Subscription
+): bool {.base, gcsafe, raises: [].} =
+  for idx in 0 ..< obj.subcriptions.len():
+    if obj.subcriptions[idx].signal == sig and
+        obj.subcriptions[idx].subscription.sameSubscription(subscription):
+      return true
+
 method addListener*(obj: Agent, tgt: WeakRef[Agent]) {.base, gcsafe, raises: [].} =
   obj.listening.incl(tgt)
 
@@ -217,14 +249,19 @@ method delListener*(obj: Agent, tgt: WeakRef[Agent]) {.base, gcsafe, raises: [].
   obj.listening.excl(tgt)
 
 method addSubscription*(
-    obj: Agent, sig: SigilName, tgt: WeakRef[Agent], slot: AgentProc
+    obj: Agent, sig: SigilName, subscription: Subscription
 ) {.base, gcsafe, raises: [].} =
   doAssert not obj.isNil(), "agent is nil!"
-  assert slot != nil
+  assert subscription.hasCallable
 
-  if not procCall hasSubscription(obj, sig, tgt, slot):
-    obj.subcriptions.add((sig, Subscription(tgt: tgt, slot: slot)))
-    tgt[].addListener(obj.unsafeWeakRef().asAgent())
+  if not procCall hasSubscription(obj, sig, subscription):
+    obj.subcriptions.add((sig, subscription))
+    subscription.tgt[].addListener(obj.unsafeWeakRef().asAgent())
+
+method addSubscription*(
+    obj: Agent, sig: SigilName, tgt: WeakRef[Agent], slot: AgentProc
+) {.base, gcsafe, raises: [].} =
+  addSubscription(obj, sig, Subscription(tgt: tgt, slot: slot))
 
 template addSubscription*(
     obj: Agent,
@@ -256,6 +293,19 @@ method delSubscription*(
   if subsFound == subsDeleted:
     tgt[].delListener(self.unsafeWeakRef().asAgent())
 
+method delSubscription*(
+    self: Agent, sig: SigilName, subscription: Subscription
+) {.base, gcsafe, raises: [].} =
+  var deleted = false
+  for idx in countdown(self.subcriptions.len() - 1, 0):
+    if self.subcriptions[idx].signal == sig and
+        self.subcriptions[idx].subscription.sameSubscription(subscription):
+      deleted = true
+      self.subcriptions.delete(idx..idx)
+
+  if deleted and not procCall hasSubscription(self, sig, subscription.tgt):
+    subscription.tgt[].delListener(self.unsafeWeakRef().asAgent())
+
 
 template delSubscription*(
     obj: Agent, sig: IndexableChars, tgt: WeakRef[Agent], slot: AgentProc
@@ -270,24 +320,24 @@ template delSubscription*(
 
 proc printConnections*(agent: Agent) =
   when defined(sigilsDebugPrint):
-      if agent.isNil:
-        brightPrint fgBlue, "connections for Agent: ", "nil"
+    if agent.isNil:
+      brightPrint fgBlue, "connections for Agent: ", "nil"
+      return
+    when defined(sigilsDebug):
+      if agent[].freedByThread != 0:
+        brightPrint fgBlue,
+          "connections for Agent: ",
+          $agent.unsafeWeakRef(),
+          " freedByThread: ",
+          $agent[].freedByThread
         return
-      when defined(sigilsDebug):
-        if agent[].freedByThread != 0:
-          brightPrint fgBlue,
-            "connections for Agent: ",
-            $agent.unsafeWeakRef(),
-            " freedByThread: ",
-            $agent[].freedByThread
-          return
-      brightPrint fgBlue, "connections for Agent: ", $agent.unsafeWeakRef()
-      brightPrint fgMagenta, "\t subscribers:", ""
-      for item in agent.subcriptions:
-        let sname = printConnectionsSlotNames.getOrDefault(
-            item.subscription.slot, item.subscription.slot.repr)
-        brightPrint fgGreen, "\t\t:", $item.signal, ": => ",
-            $item.subscription.tgt & " slot: " & $sname
-      brightPrint fgMagenta, "\t listening:", ""
-      for listening in agent.listening:
-        brightPrint fgRed, "\t\t listen: ", $listening
+    brightPrint fgBlue, "connections for Agent: ", $agent.unsafeWeakRef()
+    brightPrint fgMagenta, "\t subscribers:", ""
+    for item in agent.subcriptions:
+      let sname = printConnectionsSlotNames.getOrDefault(
+          item.subscription.slot, item.subscription.slot.repr)
+      brightPrint fgGreen, "\t\t:", $item.signal, ": => ",
+          $item.subscription.tgt & " slot: " & $sname
+    brightPrint fgMagenta, "\t listening:", ""
+    for listening in agent.listening:
+      brightPrint fgRed, "\t\t listen: ", $listening

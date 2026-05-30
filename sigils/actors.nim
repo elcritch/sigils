@@ -88,6 +88,13 @@ method hasSubscription*(
   withLock obj.lock:
     result = procCall hasSubscription(Agent(obj), sig, tgt, slot)
 
+method hasSubscription*(
+    obj: AgentActor, sig: SigilName, subscription: Subscription
+): bool {.gcsafe, raises: [].} =
+  obj.ensureActorReady()
+  withLock obj.lock:
+    result = procCall hasSubscription(Agent(obj), sig, subscription)
+
 method addListener*(obj: AgentActor, tgt: WeakRef[Agent]) {.gcsafe, raises: [].} =
   withLock obj.lock:
     obj.listening.incl(tgt)
@@ -97,29 +104,40 @@ method delListener*(obj: AgentActor, tgt: WeakRef[Agent]) {.gcsafe, raises: [].}
     obj.listening.excl(tgt)
 
 method addSubscription*(
-    obj: AgentActor, sig: SigilName, tgt: WeakRef[Agent], slot: AgentProc
+    obj: AgentActor, sig: SigilName, subscription: Subscription
 ) {.gcsafe, raises: [].} =
   obj.ensureActorReady()
   doAssert not obj.isNil(), "agent is nil!"
-  assert slot != nil
+  when defined(sigilsNoClosureSlotEnv):
+    assert subscription.slot != nil
+  else:
+    assert subscription.slot != nil or subscription.envSlot != nil
 
   var added = false
   withLock obj.lock:
-    if not procCall hasSubscription(Agent(obj), sig, tgt, slot):
-      obj.subcriptions.add((sig, Subscription(tgt: tgt, slot: slot)))
+    if not procCall hasSubscription(Agent(obj), sig, subscription):
+      obj.subcriptions.add((sig, subscription))
       added = true
 
   if added:
-    tgt[].addListener(obj.unsafeWeakRef().asAgent())
+    subscription.tgt[].addListener(obj.unsafeWeakRef().asAgent())
+
+method addSubscription*(
+    obj: AgentActor, sig: SigilName, tgt: WeakRef[Agent], slot: AgentProc
+) {.gcsafe, raises: [].} =
+  addSubscription(obj, sig, Subscription(tgt: tgt, slot: slot))
 
 method delSubscription*(
     self: AgentActor, sig: SigilName, tgt: WeakRef[Agent], slot: AgentProc
 ) {.gcsafe, raises: [].} =
   self.ensureActorReady()
-  var
-    subsFound: int
-    subsDeleted: int
 
   withLock self.lock:
     procCall delSubscription(Agent(self), sig, tgt, slot)
 
+method delSubscription*(
+    self: AgentActor, sig: SigilName, subscription: Subscription
+) {.gcsafe, raises: [].} =
+  self.ensureActorReady()
+  withLock self.lock:
+    procCall delSubscription(Agent(self), sig, subscription)
