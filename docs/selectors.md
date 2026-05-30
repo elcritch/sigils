@@ -1,179 +1,221 @@
-I reviewed the current `Sigil` reactive layer and the lower signal/slot machinery. The short version: `Sigil` is a solid Svelte-like reactive primitive, but Cocoa-style customization wants a second layer: dynamic selector dispatch with return values, optional handling, forwarding, and replaceable behavior.
+# Selectors
 
-**Current Shape**
-`Sigil[T]` in [reactive.nim](/Volumes/projects/nims/sigils/sigils/reactive.nim:16) is a reactive value object over `Agent`. It has:
+Selectors are Sigils' dynamic dispatch layer. Use signals when you want to broadcast that something happened. Use selectors when you want to ask one object to perform named behavior and optionally return a value.
 
-- `val: T` as stored state.
-- `attrs` on `SigilBase` for `Dirty`, `Lazy`, `Changed`.
-- `fn: proc(arg: SigilBase)` for computed/effect behavior.
-- `change` as the core signal.
-- `{}` as read/deref syntax, which also auto-wires dependencies when binding is enabled.
-- `computed` and `computedNow` as lazy/eager derived values.
-- `effect` plus `SigilEffectRegistry` for delayed side effects.
+They are useful for delegate APIs, command routing, responder chains, hit testing, validation, parsing policies, and small runtime overrides.
 
-The signal/slot substrate is compile-time typed, but routed through runtime names and packed params:
+## Basic Use
 
-- Signals become `SigilRequest`s with `procName: SigilName` in [protocol.nim](/Volumes/projects/nims/sigils/sigils/protocol.nim:54).
-- Slots are generated `AgentProc`s by the `{.slot.}` macro in [slots.nim](/Volumes/projects/nims/sigils/sigils/slots.nim:111).
-- Subscriptions store `(signal: SigilName, slot: AgentProc)` in [agents.nim](/Volumes/projects/nims/sigils/sigils/agents.nim:36).
-- `callMethod` currently calls the already-known slot pointer, and only returns `METHOD_NOT_FOUND` when that slot is nil in [core.nim](/Volumes/projects/nims/sigils/sigils/core.nim:14).
-
-That is excellent for Qt-like events: “when this happens, notify these listeners.” It is weaker for Cocoa/Smalltalk-style UI behavior: “ask this object whether it can handle this selector, call it if present, maybe forward it, maybe replace the implementation, and return a value.”
-
-**Key Gap**
-Signals/slots are broadcast-oriented and mostly one-way. UI customization often needs request/response behavior.
-
-For example, parsing text to an integer is not naturally an event. It is a policy decision:
+Import `sigils` or `sigils/selectors`, then define objects that inherit from `DynamicAgent`.
 
 ```nim
-textField.parseText("123") -> Result[int, ParseError]
-```
+import std/[options, strutils]
+import sigils/selectors
 
-With pure signals, you can announce `textChanged`, but choosing who owns the parse result, how errors flow back, and how behavior is overridden becomes awkward.
-
-**Recommended Architecture**
-Keep Sigils as the state/reactivity core, and add a separate dynamic object layer beside signals/slots:
-
-1. `Sigil[T]` for state.
-2. Signals/slots for events and invalidation.
-3. Selectors/messages for customizable behavior with return values.
-4. Effects/render scheduler for UI updates.
-
-Something like:
-
-```nim
-type
-  Selector*[Args, Ret] = distinct SigilName
-
-  Invocation* = object
-    selector*: SigilName
-    params*: SigilParams
-    result*: SigilParams
-    handled*: bool
-
-  DynamicAgent* = ref object of Agent
-    methods: Table[SigilName, DynamicMethod]
-    nextResponder: WeakRef[DynamicAgent]
-```
-
-Then expose APIs in the Cocoa shape:
-
-```nim
-proc respondsTo*(obj: DynamicAgent; selector: SigilName): bool
-proc perform*[A, R](obj: DynamicAgent; selector: Selector[A, R]; args: A): Option[R]
-proc addMethod*(obj: DynamicAgent; selector: SigilName; fn: DynamicMethod)
-proc replaceMethod*(obj: DynamicAgent; selector: SigilName; fn: DynamicMethod): DynamicMethod
-proc forwardInvocation*(obj: DynamicAgent; inv: var Invocation): bool
-```
-
-The current `callMethod` path can support this cleanly by overriding `callMethod` for `DynamicAgent`: when `slot` is nil or a universal dynamic trampoline is used, look up `req.procName` in the dynamic method table.
-
-**Responder Chain**
-Cocoa’s `respondsToSelector:` and responder chain map well onto `Agent` identity.
-
-For UI:
-
-```nim
-TextField -> delegate -> controller -> window -> app
-```
-
-A text field could do:
-
-```nim
-if delegate.respondsTo(parseInteger):
-  value <- delegate.perform(parseInteger, text{})
-else:
-  value <- defaultParseInteger(text{})
-```
-
-This is more appropriate than making parsing a signal, because parsing has one expected answer.
-
-**Method Swizzling**
-I would not make raw pointer replacement the primary API. Safer model:
-
-```nim
-proc aroundMethod*(obj: DynamicAgent; selector: SigilName; wrapper: AroundMethod): SwizzleToken
-proc restore*(obj: DynamicAgent; token: SwizzleToken)
-```
-
-Where `AroundMethod` receives `next`:
-
-```nim
-type AroundMethod = proc(obj: DynamicAgent; inv: var Invocation; next: DynamicMethod)
-```
-
-That gives you method swizzling, but with a reversible token and a chain instead of destructive replacement. Example uses:
-
-- Log every call to `setText`.
-- Change parsing for one input field.
-- Wrap validation around a default implementation.
-- Temporarily override behavior during tests.
-
-**Input Box Example**
-For a modern UI, I would model an input field like this:
-
-```nim
 type
   TextField = ref object of DynamicAgent
-    text*: Sigil[string]
-    intValue*: Sigil[Option[int]]
-    parseError*: Sigil[Option[string]]
-    delegate*: WeakRef[DynamicAgent]
+    text: string
 
-selector parseInteger(text: string): Option[int]
+  TextController = ref object of DynamicAgent
+    parsed: int
 ```
 
-Events stay signals:
+Declare a selector with a method that has no receiver. This creates a typed selector value and a direct-send helper.
 
 ```nim
-proc textChanged*(field: TextField, text: string) {.signal.}
-proc editingCommitted*(field: TextField) {.signal.}
+method parseInteger(text: string): int {.selector.}
 ```
 
-Parsing becomes selector-based behavior:
+Implement selector behavior with a receiver. The implementation does not have to use the same Nim proc name as the selector. You bind it to a selector at runtime.
 
 ```nim
-proc updateParsedValue(field: TextField) =
-  let parsed =
-    if not field.delegate.isNil and field.delegate[].respondsTo(parseInteger):
-      field.delegate[].perform(parseInteger, field.text{})
-    else:
-      defaultParseInteger(field.text{})
+method parseField(self: TextField, text: string): int {.selector.} =
+  parseInt(text)
 
-  field.intValue <- parsed
+let field = TextField(text: "21")
+
+discard field.addMethod(parseInteger, parseField)
+
+doAssert field.respondsTo(parseInteger)
+doAssert field.perform(parseInteger, field.text).get() == 21
+doAssert field.parseInteger(field.text) == 21
 ```
 
-Changing behavior is then easy:
+`perform` returns an `Option[R]`. The direct-send form, such as `field.parseInteger("21")`, is for required sends and raises `UnhandledSelectorError` if no object handles the selector.
+
+## Optional Sends
+
+Use optional sends when it is valid for no object to handle the selector.
 
 ```nim
-field.addMethod(parseInteger):
-  if text == "":
-    none(int)
-  else:
-    parseInt(text).some
+let value = field.trySend(parseInteger, "34")
+if value.isSome:
+  echo value.get()
+
+if field.sendIfHandled(parseInteger, "55"):
+  echo "parsed"
 ```
 
-Or swizzle one field:
+The local variants, `performLocal`, `trySendLocal`, and `sendLocalIfHandled`, do not walk the responder chain. They still honor local method resolution and local forwarding hooks.
+
+## Responder Chains
+
+Selectors can walk from one object to the next until a responder handles the invocation.
 
 ```nim
-let token = field.aroundMethod(parseInteger) do (field, inv, next):
-  normalizeWhitespace(inv)
-  next(field, inv)
+method parseController(self: TextController, text: string): int {.selector.} =
+  self.parsed = parseInt(text)
+  self.parsed
+
+let
+  field = TextField(text: "13")
+  controller = TextController()
+
+field.setNextResponder(controller)
+discard controller.addMethod(parseInteger, parseController)
+
+doAssert field.respondsTo(parseInteger)
+doAssert field.parseInteger(field.text) == 13
+doAssert controller.parsed == 13
 ```
 
-**How This Compares**
-Qt mostly gives you typed event fanout: Sigils already does this well.
+This is the shape you want for UI-style behavior such as "can this command be performed?" A button can ask its view, window, and controller in order, and the first object with an answer handles it.
 
-Svelte gives you reactive state, derived values, and effects: `Sigil`, `computed`, and `effect` are already close.
+## Installing and Replacing Methods
 
-Cocoa/Objective-C adds dynamic object behavior: `respondsToSelector`, forwarding, swizzling, delegate protocols, associated objects. That is the missing layer, and it should be additive rather than replacing signals/slots.
+`DynamicAgent` stores methods per selector.
 
-**Best Direction**
-I would avoid trying to make signals/slots solve every UI customization problem. Use this split:
+```nim
+discard field.addMethod(parseInteger, parseField)
 
-- Signals: “something happened.”
-- Sigils: “state changed and derived state should update.”
-- Effects: “render/flush side effects.”
-- Selectors: “ask this object to perform behavior, maybe dynamically.”
+let old = field.replaceMethod(parseInteger, parseField)
+discard field.removeMethod(parseInteger)
+```
 
-That gives you a UI model that can feel like Svelte for state, Qt for events, and Cocoa for runtime behavior customization.
+Use `addMethod` when installing should fail if the object already has a local handler. Use `replaceMethod` when overriding is intentional. `removeMethod` removes all local methods for that selector.
+
+You can also install batches:
+
+```nim
+discard field.replaceMethods([
+  parseInteger => parseField,
+])
+```
+
+## Protocols
+
+Protocols group selectors into runtime contracts. Required selectors must be handled before an object can adopt the protocol. Optional selectors are recorded but do not block adoption.
+
+```nim
+protocol TextFieldDelegate:
+  method validateText(text: string): bool
+  method textDidCommit(text: string) {.optional.}
+
+method validateRequired(self: TextController, text: string): bool {.selector.} =
+  text.strip.len > 0
+
+method controllerCommit(self: TextController, text: string) {.selector.} =
+  discard
+
+let controller = TextController()
+
+discard controller.replaceMethods(TextFieldDelegate, [
+  validateText => validateRequired,
+  textDidCommit => controllerCommit,
+])
+
+doAssert controller.hasAdopted(TextFieldDelegate)
+doAssert controller.validateText("value")
+```
+
+Protocols support inheritance:
+
+```nim
+protocol StrictTextFieldDelegate includes TextFieldDelegate:
+  method selectionRange(): string
+```
+
+They also support property declarations. A property creates getter and setter selectors.
+
+```nim
+protocol TitledView:
+  property title -> string
+```
+
+That declares `title` and `setTitle`.
+
+## Default Implementations
+
+You can package a reusable protocol implementation and install it later.
+
+```nim
+protocol DefaultTextField of TextFieldDelegate:
+  method validateText(self: TextController, text: string): bool =
+    text.strip.len > 0
+
+  method textDidCommit(self: TextController, text: string) =
+    discard
+
+let controller = TextController().withProtocol(DefaultTextField)
+
+doAssert controller.hasAdopted(TextFieldDelegate)
+```
+
+For a default protocol attached to a receiver type, use `from` and then construct with `withProto` or `newProto`.
+
+```nim
+protocol ControllerInfo from TextController:
+  method controllerLabel(self: TextController): string =
+    $self.parsed
+
+let controller = TextController().withProto()
+doAssert controller.controllerLabel() == "0"
+```
+
+## Wrapping Behavior
+
+`pushMethod` adds a reversible wrapper around the current local method. This is useful for temporary overrides, logging, normalization, and tests.
+
+```nim
+proc trimBeforeValidation(
+  self: DynamicAgent,
+  invocation: var Invocation,
+  next: DynamicMethod,
+) =
+  if next.isNil:
+    return
+
+  let text = invocation.argsAs(string).strip
+  var normalized = initInvocation(invocation.selector, text)
+
+  next(self, normalized)
+  if normalized.handled:
+    invocation.setResult(normalized.resultAs(bool))
+
+method validateDigitsOnly(self: TextField, text: string): bool {.selector.} =
+  text.len > 0 and text.allCharsInSet({'0' .. '9'})
+
+discard field.replaceMethod(validateText, validateDigitsOnly)
+
+let token = field.pushMethod(validateText, trimBeforeValidation)
+doAssert field.validateText(" 42 ")
+discard token.popMethod()
+```
+
+The wrapper receives the previous method as `next`. `popMethod` only restores the stack if the token still points at the current top wrapper.
+
+## Forwarding Hooks
+
+For advanced dynamic behavior, a `DynamicAgent` can resolve or forward unhandled selectors:
+
+- `setResolveMethod` can lazily install a method before dispatch continues.
+- `setForwardingTarget` can choose another object for a selector.
+- `setForwardInvocation` can handle the final invocation directly.
+
+Prefer a normal method or responder chain first. Use forwarding hooks when the target really is dynamic.
+
+## How They Work
+
+A `Selector[A, R]` is a typed wrapper around a runtime `SigilName`. The `{.selector.}` macro turns an empty method declaration into a selector value plus a direct-send helper. When the method has a body, the macro wraps it as a `DynamicMethod` that unpacks invocation arguments and packs the result.
+
+Sending a selector builds an `Invocation` with packed params. Dispatch tries the local method stack, optional lazy resolution, a forwarding target, the next responder, and finally `forwardInvocation`. Required sends raise `UnhandledSelectorError` when nothing handles the invocation. Optional sends return `Option[R]` or a handled `bool`.
