@@ -31,6 +31,9 @@ import std/[terminal, strutils, strformat, sequtils]
 export strformat
 export debugs
 
+const sigilsSlotEnvDisabled* =
+  defined(sigilsNoSlotEnv) or defined(sigilsNoClosureSlotEnv)
+
 type
   AgentObj = object of RootObj
     subcriptions*: seq[tuple[signal: SigilName, subscription: Subscription]]
@@ -56,7 +59,7 @@ type
   Subscription* = object
     tgt*: WeakRef[Agent]
     slot*: AgentProc
-    when not defined(sigilsNoClosureSlotEnv):
+    when not sigilsSlotEnvDisabled:
       envSlot*: EnvAgentProc
       env*: SlotEnv
 
@@ -221,14 +224,14 @@ template hasSubscription*(obj: Agent,
   hasSubscription(obj, sig, tgtRef, slot)
 
 proc hasCallable(subscription: Subscription): bool =
-  when defined(sigilsNoClosureSlotEnv):
+  when sigilsSlotEnvDisabled:
     not subscription.slot.isNil
   else:
     not subscription.slot.isNil or not subscription.envSlot.isNil
 
 proc sameHandler(a, b: Subscription): bool =
   result = a.slot == b.slot
-  when not defined(sigilsNoClosureSlotEnv):
+  when not sigilsSlotEnvDisabled:
     result = result and a.envSlot == b.envSlot and a.env == b.env
 
 proc sameSubscription(a, b: Subscription): bool =

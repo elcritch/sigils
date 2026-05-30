@@ -29,7 +29,7 @@ method callMethod*(
 
     result = SigilResponse(kind: Response, id: req.origin.int, result: res)
 
-when not defined(sigilsNoClosureSlotEnv):
+when not sigilsSlotEnvDisabled:
   method callMethod*(
       ctx: Agent, req: SigilRequest, subscription: Subscription
   ): SigilResponse {.base, gcsafe.} =
@@ -59,7 +59,7 @@ template callSlotsImpl(obj: Agent, req: SigilRequest, subsIter: untyped) =
           debugPrint "exec:call:obj:id: ", $obj.getSigilId()
           discard c_raise(11.cint)
         assert sub.tgt[].freedByThread == 0
-      when defined(sigilsNoClosureSlotEnv):
+      when sigilsSlotEnvDisabled:
         var res: SigilResponse = sub.tgt[].callMethod(req, sub.slot)
       else:
         var res: SigilResponse = sub.tgt[].callMethod(req, sub)

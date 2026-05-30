@@ -236,6 +236,32 @@ suite "dynamic selectors":
     check field.perform(parseInteger, "9").get() == 18
     check field.parseInteger("9") == 18
 
+  test "selector closure methods capture state":
+    let field = TextField(text: "field")
+    var offset = 10
+
+    let old = field.replaceMethod(parseInteger) do(self: TextField,
+        text: string) -> int:
+      parseInt(text) + offset + self.text.len
+
+    check old.isNil
+    check field.parseInteger("7") == 22
+
+    offset = 2
+    check field.parseInteger("7") == 14
+
+  test "selector closure methods can return void":
+    let controller = TextController()
+    let prefix = "saved:"
+
+    let old = controller.replaceMethod(textDidCommit) do(self: TextController,
+        text: string):
+      self.lastCommand = prefix & text
+
+    check old.isNil
+    controller.textDidCommit("draft")
+    check controller.lastCommand == "saved:draft"
+
   test "replaceMethods installs selector bindings in one batch":
     let field = TextField()
 
@@ -269,6 +295,23 @@ suite "dynamic selectors":
     check field.methodStack(selector).len == 2
     check token.popMethod()
     check field.methodStack(selector).len == 1
+
+  test "pushMethod accepts a selector closure override":
+    let field = TextField()
+    var offset = 5
+
+    discard field.addMethod(parseInteger, parseField)
+
+    let token = field.pushMethod(parseInteger) do(self: TextField,
+        text: string) -> int:
+      parseInt(text) + offset
+
+    check field.parseInteger("7") == 12
+
+    offset = 1
+    check field.parseInteger("7") == 8
+    check token.popMethod()
+    check field.parseInteger("7") == 7
 
   test "direct selector send raises when unhandled":
     let field = TextField(text: "21")
@@ -315,7 +358,8 @@ suite "dynamic selectors":
       invocationField = TextField(text: "19")
       parseName = selectorName(parseInteger)
 
-    resolved.setResolveMethod(proc(self: DynamicAgent, selector: SigilName): bool =
+    resolved.setResolveMethod(proc(self: DynamicAgent,
+        selector: SigilName): bool =
       if selector == parseName:
         result = self.addMethod(parseInteger, parseField)
     )
@@ -459,6 +503,27 @@ suite "dynamic selectors":
     check controller.validateText("customer@example.com")
     controller.textDidCommit("saved")
     check controller.lastCommand == "saved"
+
+  test "protocol method batches accept selector closures":
+    let controller = TextController()
+    let minimum = 4
+
+    let old = controller.replaceMethods(TextFieldDelegate, [
+      selectorMethod(validateText) do(self: TextController,
+          text: string) -> bool:
+        text.strip.len >= minimum,
+      selectorMethod(textDidCommit) do(self: TextController, text: string):
+        self.lastCommand = "closed:" & text,
+    ])
+
+    check old.len == 2
+    check old[0].isNil
+    check old[1].isNil
+    check controller.hasAdopted(TextFieldDelegate)
+    check not controller.validateText("abc")
+    check controller.validateText("abcd")
+    controller.textDidCommit("done")
+    check controller.lastCommand == "closed:done"
 
   test "named protocol block creates a typedesc init proc":
     let controller = TextController()

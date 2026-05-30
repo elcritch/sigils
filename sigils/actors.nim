@@ -108,7 +108,7 @@ method addSubscription*(
 ) {.gcsafe, raises: [].} =
   obj.ensureActorReady()
   doAssert not obj.isNil(), "agent is nil!"
-  when defined(sigilsNoClosureSlotEnv):
+  when sigilsSlotEnvDisabled:
     assert subscription.slot != nil
   else:
     assert subscription.slot != nil or subscription.envSlot != nil

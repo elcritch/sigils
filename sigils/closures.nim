@@ -9,7 +9,7 @@ type ClosureAgent*[T] = ref object of Agent
   rawEnv: pointer
   rawProc: pointer
 
-when not defined(sigilsNoClosureSlotEnv):
+when not sigilsSlotEnvDisabled:
   type SlotConnection* = object
     source*: WeakRef[Agent]
     signal*: SigilName
@@ -103,7 +103,7 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
         let `c2` = cast[`fnSigCall2`](rawProc)
         `fnCall2`
 
-when not defined(sigilsNoClosureSlotEnv):
+when not sigilsSlotEnvDisabled:
   macro receiverClosureTyp(target: typed, blk: typed) =
     ## Figure out the signal type and receiver type from a receiver-bound closure.
     var
@@ -208,7 +208,7 @@ template connectTo*(a: Agent, signal: typed, blk: typed): ClosureAgent =
 
     agent
 
-when not defined(sigilsNoClosureSlotEnv):
+when not sigilsSlotEnvDisabled:
   template connectTo*(a: Agent, sigProc: typed, b: Agent,
       blk: typed): SlotConnection =
     ## Connect a signal to a closure that receives `b` as its slot receiver.

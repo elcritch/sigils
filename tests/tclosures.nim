@@ -74,7 +74,7 @@ suite "agent closure slots":
     check b.value == 42
     check clsAgent.typeof() is ClosureAgent[(int, )]
 
-  when not defined(sigilsNoClosureSlotEnv):
+  when not sigilsSlotEnvDisabled:
     test "receiver-bound closure slot captures state and mutates target":
       var
         a = Counter()
