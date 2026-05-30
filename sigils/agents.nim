@@ -31,8 +31,13 @@ import std/[terminal, strutils, strformat, sequtils]
 export strformat
 export debugs
 
-const sigilsSlotEnvDisabled* =
-  defined(sigilsNoSlotEnv) or defined(sigilsNoClosureSlotEnv)
+const
+  sigilsClosuresEnabled* = defined(sigilsClosures)
+  sigilsSlotEnvEnabled* =
+    sigilsClosuresEnabled or defined(sigilsSlotEnv)
+  sigilsSlotEnvDisabled* =
+    (not sigilsSlotEnvEnabled) or defined(sigilsNoSlotEnv) or
+    defined(sigilsNoClosureSlotEnv)
 
 type
   AgentObj = object of RootObj

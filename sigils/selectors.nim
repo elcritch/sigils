@@ -5,6 +5,9 @@ import agents
 export agents
 export options
 
+const sigilsSelectorClosuresEnabled* =
+  sigilsClosuresEnabled or defined(sigilsSelectorClosures)
+
 type
   Selector*[A, R] = object
     ## A typed runtime method name.
@@ -361,93 +364,95 @@ proc selectorPragma(node: NimNode): NimNode =
   else:
     result[4].add ident"selector"
 
-macro selectorClosureImpl(selector: typed, blk: typed): untyped =
-  ## Build a DynamicMethod from a typed receiver closure.
-  if blk.kind notin {
-    nnkLambda,
-    nnkDo,
-    nnkProcDef,
-    nnkMethodDef,
-    nnkFuncDef,
-  }:
-    return quote do:
-      DynamicMethod(`blk`)
+when sigilsSelectorClosuresEnabled:
+  macro selectorClosureImpl(selector: typed, blk: typed): untyped =
+    ## Build a DynamicMethod from a typed receiver closure.
+    if blk.kind notin {
+      nnkLambda,
+      nnkDo,
+      nnkProcDef,
+      nnkMethodDef,
+      nnkFuncDef,
+    }:
+      return quote do:
+        DynamicMethod(`blk`)
 
-  var closure = blk.copyNimTree()
-  let params = closure.params
+    var closure = blk.copyNimTree()
+    let params = closure.params
 
-  if params.len < 2:
-    error("selector closure methods must take a receiver", blk)
-  if params[1].kind != nnkIdentDefs or params[1].len != 3:
-    error("selector closure receiver must be a single named parameter", params[1])
-  if params[1][1].kind == nnkEmpty:
-    error("selector closure receiver must be typed", params[1])
+    if params.len < 2:
+      error("selector closure methods must take a receiver", blk)
+    if params[1].kind != nnkIdentDefs or params[1].len != 3:
+      error("selector closure receiver must be a single named parameter",
+          params[1])
+    if params[1][1].kind == nnkEmpty:
+      error("selector closure receiver must be typed", params[1])
 
-  let
-    retType =
-      if params[0].kind == nnkEmpty:
-        nnkTupleTy.newTree()
-      else:
-        params[0].copyNimTree()
-    receiverType = params[1][1].copyNimTree()
-    argsType = selectorArgsType(params, 2)
-    callback = genSym(nskLet, "selectorCallback")
-    dynMethod = genSym(nskLet, "selectorMethod")
-    selectorType = genSym(nskVar, "selectorType")
-    closureSelectorType = genSym(nskVar, "closureSelectorType")
-    dynSelf = genSym(nskParam, "self")
-    receiver = genSym(nskLet, "receiver")
-    invocation = genSym(nskParam, "invocation")
-    argsIdent = genSym(nskVar, "args")
-    call = nnkCall.newTree(callback)
+    let
+      retType =
+        if params[0].kind == nnkEmpty:
+          nnkTupleTy.newTree()
+        else:
+          params[0].copyNimTree()
+      receiverType = params[1][1].copyNimTree()
+      argsType = selectorArgsType(params, 2)
+      callback = genSym(nskLet, "selectorCallback")
+      dynMethod = genSym(nskLet, "selectorMethod")
+      selectorType = genSym(nskVar, "selectorType")
+      closureSelectorType = genSym(nskVar, "closureSelectorType")
+      dynSelf = genSym(nskParam, "self")
+      receiver = genSym(nskLet, "receiver")
+      invocation = genSym(nskParam, "invocation")
+      argsIdent = genSym(nskVar, "args")
+      call = nnkCall.newTree(callback)
 
-  call.add receiver
-  for arg in selectorCallArgs(params, 2, argsIdent):
-    call.add arg
+    call.add receiver
+    for arg in selectorCallArgs(params, 2, argsIdent):
+      call.add arg
 
-  let dispatchBody =
-    if argsType.kind == nnkTupleTy and argsType.len == 0:
-      if retType.kind == nnkTupleTy and retType.len == 0:
+    let dispatchBody =
+      if argsType.kind == nnkTupleTy and argsType.len == 0:
+        if retType.kind == nnkTupleTy and retType.len == 0:
+          quote do:
+            `call`
+            `invocation`.setResult(())
+        else:
+          quote do:
+            `invocation`.setResult(`call`)
+      elif retType.kind == nnkTupleTy and retType.len == 0:
         quote do:
+          var `argsIdent`: `argsType`
+          rpcUnpack(`argsIdent`, `invocation`.params)
           `call`
           `invocation`.setResult(())
       else:
         quote do:
+          var `argsIdent`: `argsType`
+          rpcUnpack(`argsIdent`, `invocation`.params)
           `invocation`.setResult(`call`)
-    elif retType.kind == nnkTupleTy and retType.len == 0:
-      quote do:
-        var `argsIdent`: `argsType`
-        rpcUnpack(`argsIdent`, `invocation`.params)
-        `call`
-        `invocation`.setResult(())
-    else:
-      quote do:
-        var `argsIdent`: `argsType`
-        rpcUnpack(`argsIdent`, `invocation`.params)
-        `invocation`.setResult(`call`)
 
-  result = quote do:
-    block:
-      let `callback` = `blk`
-      var `selectorType` {.used.}: typeof(`selector`)
-      var `closureSelectorType` {.used.}: Selector[`argsType`, `retType`]
+    result = quote do:
+      block:
+        let `callback` = `blk`
+        var `selectorType` {.used.}: typeof(`selector`)
+        var `closureSelectorType` {.used.}: Selector[`argsType`, `retType`]
 
-      when compiles(`selectorType` = `closureSelectorType`):
-        discard
-      else:
-        `selectorType` = `closureSelectorType`
+        when compiles(`selectorType` = `closureSelectorType`):
+          discard
+        else:
+          `selectorType` = `closureSelectorType`
 
-      let `dynMethod`: DynamicMethod = proc(
-          `dynSelf`: DynamicAgent, `invocation`: var Invocation
-      ) =
-        if `dynSelf` == nil:
-          raise newException(ValueError, "bad value")
-        let `receiver` = `receiverType`(`dynSelf`)
-        if `receiver` == nil:
-          raise newException(ConversionError, "bad cast")
-        `dispatchBody`
+        let `dynMethod`: DynamicMethod = proc(
+            `dynSelf`: DynamicAgent, `invocation`: var Invocation
+        ) =
+          if `dynSelf` == nil:
+            raise newException(ValueError, "bad value")
+          let `receiver` = `receiverType`(`dynSelf`)
+          if `receiver` == nil:
+            raise newException(ConversionError, "bad cast")
+          `dispatchBody`
 
-      `dynMethod`
+        `dynMethod`
 
 macro selectorImpl(p: untyped): untyped =
   if p.kind != nnkMethodDef:
@@ -1312,22 +1317,23 @@ proc toDynamicMethod*[T: DynamicAgent, A, R](
     let args = invocation.argsAs(A)
     invocation.setResult(fn(obj, args))
 
-template toDynamicMethod*[A, R](
-    selector: Selector[A, R], blk: typed
-): DynamicMethod =
-  ## Convert a typed receiver closure into a dynamic selector method.
-  selectorClosureImpl(selector, blk)
+when sigilsSelectorClosuresEnabled:
+  template toDynamicMethod*[A, R](
+      selector: Selector[A, R], blk: typed
+  ): DynamicMethod =
+    ## Convert a typed receiver closure into a dynamic selector method.
+    selectorClosureImpl(selector, blk)
 
-template selectorMethod*[A, R](
-    selector: Selector[A, R], blk: typed
-): SelectorMethod =
-  ## Pair a selector with a typed receiver closure for batch installs.
-  initSelectorMethod(selector, selector.toDynamicMethod(blk))
+  template selectorMethod*[A, R](
+      selector: Selector[A, R], blk: typed
+  ): SelectorMethod =
+    ## Pair a selector with a typed receiver closure for batch installs.
+    initSelectorMethod(selector, selector.toDynamicMethod(blk))
 
-template `=>`*[A, R](
-    selector: Selector[A, R], blk: typed
-): SelectorMethod =
-  selectorMethod(selector, blk)
+  template `=>`*[A, R](
+      selector: Selector[A, R], blk: typed
+  ): SelectorMethod =
+    selectorMethod(selector, blk)
 
 proc addMethod*[A, R](
     obj: DynamicAgent,
@@ -1340,13 +1346,14 @@ proc addMethod*[A, R](
   obj.methods[selector.name] = @[fn]
   result = true
 
-template addMethod*[A, R](
-    obj: DynamicAgent,
-    selector: Selector[A, R],
-    blk: typed,
-): bool =
-  ## Add a typed receiver closure as a selector method.
-  obj.addMethod(selector, selector.toDynamicMethod(blk))
+when sigilsSelectorClosuresEnabled:
+  template addMethod*[A, R](
+      obj: DynamicAgent,
+      selector: Selector[A, R],
+      blk: typed,
+  ): bool =
+    ## Add a typed receiver closure as a selector method.
+    obj.addMethod(selector, selector.toDynamicMethod(blk))
 
 proc addMethods*(obj: DynamicAgent, methods: openArray[SelectorMethod]): bool {.
     discardable.} =
@@ -1368,13 +1375,14 @@ proc replaceMethod*[A, R](
   result = obj.localMethod(selector.name)
   obj.methods[selector.name] = @[fn]
 
-template replaceMethod*[A, R](
-    obj: DynamicAgent,
-    selector: Selector[A, R],
-    blk: typed,
-): DynamicMethod =
-  ## Replace the local implementation with a typed receiver closure.
-  obj.replaceMethod(selector, selector.toDynamicMethod(blk))
+when sigilsSelectorClosuresEnabled:
+  template replaceMethod*[A, R](
+      obj: DynamicAgent,
+      selector: Selector[A, R],
+      blk: typed,
+  ): DynamicMethod =
+    ## Replace the local implementation with a typed receiver closure.
+    obj.replaceMethod(selector, selector.toDynamicMethod(blk))
 
 proc replaceMethods*(
     obj: DynamicAgent, methods: openArray[SelectorMethod]
@@ -1549,13 +1557,14 @@ proc pushMethod*[A, R](
     wrapper(self, invocation, next)
   result = obj.pushMethod(selector, wrapped)
 
-template pushMethod*[A, R](
-    obj: DynamicAgent,
-    selector: Selector[A, R],
-    blk: typed,
-): SwizzleToken =
-  ## Push a typed receiver closure as a reversible method override.
-  obj.pushMethod(selector, selector.toDynamicMethod(blk))
+when sigilsSelectorClosuresEnabled:
+  template pushMethod*[A, R](
+      obj: DynamicAgent,
+      selector: Selector[A, R],
+      blk: typed,
+  ): SwizzleToken =
+    ## Push a typed receiver closure as a reversible method override.
+    obj.pushMethod(selector, selector.toDynamicMethod(blk))
 
 proc popMethod*(token: SwizzleToken): bool =
   ## Restore a wrapper if it is still the current top method.
