@@ -94,11 +94,29 @@ discard field.removeMethod(parseInteger)
 
 Use `addMethod` when installing should fail if the object already has a local handler. Use `replaceMethod` when overriding is intentional. `removeMethod` removes all local methods for that selector.
 
+With `-d:sigilsClosures`, you can install a closure directly when behavior needs captured runtime state.
+
+```nim
+let bonus = 10
+let old = field.replaceMethod(parseInteger) do(self: TextField, text: string) -> int:
+  parseInt(text) + bonus
+```
+
 You can also install batches:
 
 ```nim
 discard field.replaceMethods([
   parseInteger => parseField,
+])
+```
+
+Closure methods work in batches too:
+
+```nim
+let minimum = 4
+discard controller.replaceMethods(TextFieldDelegate, [
+  selectorMethod(validateText) do(self: TextController, text: string) -> bool:
+    text.strip.len >= minimum,
 ])
 ```
 
@@ -204,6 +222,15 @@ discard token.popMethod()
 
 The wrapper receives the previous method as `next`. `popMethod` only restores the stack if the token still points at the current top wrapper.
 
+With `-d:sigilsClosures`, a temporary override that does not need `next` can push a closure method directly.
+
+```nim
+let token = field.pushMethod(parseInteger) do(self: TextField, text: string) -> int:
+  parseInt(text) + bonus
+
+discard token.popMethod()
+```
+
 ## Forwarding Hooks
 
 For advanced dynamic behavior, a `DynamicAgent` can resolve or forward unhandled selectors:
@@ -216,6 +243,6 @@ Prefer a normal method or responder chain first. Use forwarding hooks when the t
 
 ## How They Work
 
-A `Selector[A, R]` is a typed wrapper around a runtime `SigilName`. The `{.selector.}` macro turns an empty method declaration into a selector value plus a direct-send helper. When the method has a body, the macro wraps it as a `DynamicMethod` that unpacks invocation arguments and packs the result.
+A `Selector[A, R]` is a typed wrapper around a runtime `SigilName`. The `{.selector.}` macro turns an empty method declaration into a selector value plus a direct-send helper. When the method has a body, the macro wraps it as a `DynamicMethod` that unpacks invocation arguments and packs the result. With `-d:sigilsClosures`, closure installs use the same wrapper path, but store the user's closure in the generated `DynamicMethod` environment.
 
 Sending a selector builds an `Invocation` with packed params. Dispatch tries the local method stack, optional lazy resolution, a forwarding target, the next responder, and finally `forwardInvocation`. Required sends raise `UnhandledSelectorError` when nothing handles the invocation. Optional sends return `Option[R]` or a handled `bool`.

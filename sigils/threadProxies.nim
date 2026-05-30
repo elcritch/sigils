@@ -90,10 +90,21 @@ method hasConnections*(proxy: AgentProxyShared): bool {.gcsafe, raises: [].} =
     result = proxy.subcriptions.len() != 0 or proxy.listening.len() != 0
 
 method addSubscription*(
+    obj: AgentProxyShared, sig: SigilName, subscription: Subscription
+) {.gcsafe, raises: [].} =
+  procCall addSubscription(AgentActor(obj), sig, subscription)
+  obj.ensureForwarded(sig)
+
+method addSubscription*(
     obj: AgentProxyShared, sig: SigilName, tgt: WeakRef[Agent], slot: AgentProc
 ) {.gcsafe, raises: [].} =
-  procCall addSubscription(AgentActor(obj), sig, tgt, slot)
-  obj.ensureForwarded(sig)
+  obj.addSubscription(sig, Subscription(tgt: tgt, slot: slot))
+
+method delSubscription*(
+    self: AgentProxyShared, sig: SigilName, subscription: Subscription
+) {.gcsafe, raises: [].} =
+  procCall delSubscription(AgentActor(self), sig, subscription)
+  self.removeForwarded([sig])
 
 method delSubscription*(
     self: AgentProxyShared, sig: SigilName, tgt: WeakRef[Agent], slot: AgentProc
