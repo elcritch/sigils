@@ -79,6 +79,8 @@ type
   SignalTypes* = distinct object
   LocalSignalTypes* = distinct object
 
+type SubscriptionEntry* = tuple[signal: SigilName, subscription: Subscription]
+
 when defined(nimscript):
   proc getSigilId*(a: Agent): SigilId =
     a.debugId
@@ -181,16 +183,78 @@ proc hash*(a: Agent): Hash =
 method hasConnections*(self: Agent): bool {.base, gcsafe, raises: [].} =
   self.subcriptions.len() != 0 or self.listening.len() != 0
 
+func cmpSigilName(a, b: SigilName): int {.inline.} =
+  let minLen = min(a.len, b.len)
+  var idx = 0
+  while idx < minLen:
+    if a.data[idx] < b.data[idx]:
+      return -1
+    if a.data[idx] > b.data[idx]:
+      return 1
+    idx.inc()
+
+  if a.len < b.len:
+    -1
+  elif a.len > b.len:
+    1
+  else:
+    0
+
+proc lowerBoundSubscription(
+    subs: seq[SubscriptionEntry], sig: SigilName
+): int {.inline, gcsafe, raises: [].} =
+  var
+    lo = 0
+    hi = subs.len
+  while lo < hi:
+    let mid = (lo + hi) shr 1
+    if cmpSigilName(subs[mid].signal, sig) < 0:
+      lo = mid + 1
+    else:
+      hi = mid
+  lo
+
+proc upperBoundSubscription(
+    subs: seq[SubscriptionEntry], sig: SigilName
+): int {.inline, gcsafe, raises: [].} =
+  var
+    lo = 0
+    hi = subs.len
+  while lo < hi:
+    let mid = (lo + hi) shr 1
+    if cmpSigilName(subs[mid].signal, sig) <= 0:
+      lo = mid + 1
+    else:
+      hi = mid
+  lo
+
+iterator subscriptionsForSignal(
+    subs: var seq[SubscriptionEntry], sig: SigilName
+): var Subscription =
+  var idx = lowerBoundSubscription(subs, sig)
+  while idx < subs.len and subs[idx].signal == sig:
+    yield subs[idx].subscription
+    idx.inc()
+
 iterator getSubscriptions*(obj: Agent, sig: SigilName): var Subscription =
-  for item in obj.subcriptions.mitems():
-    if item.signal == sig or item.signal == AnySigilName:
-      yield item.subscription
+  if sig == AnySigilName:
+    for sub in subscriptionsForSignal(obj.subcriptions, sig):
+      yield sub
+  elif cmpSigilName(AnySigilName, sig) <= 0:
+    for sub in subscriptionsForSignal(obj.subcriptions, AnySigilName):
+      yield sub
+    for sub in subscriptionsForSignal(obj.subcriptions, sig):
+      yield sub
+  else:
+    for sub in subscriptionsForSignal(obj.subcriptions, sig):
+      yield sub
+    for sub in subscriptionsForSignal(obj.subcriptions, AnySigilName):
+      yield sub
 
 iterator getSubscriptions*(obj: WeakRef[Agent],
                            sig: SigilName): var Subscription =
-  for item in obj[].subcriptions.mitems():
-    if item.signal == sig or item.signal == AnySigilName:
-      yield item.subscription
+  for sub in obj[].getSubscriptions(sig):
+    yield sub
 
 proc asAgent*[T: Agent](obj: WeakRef[T]): WeakRef[Agent] =
   result = WeakRef[Agent](pt: obj.pt)
@@ -201,17 +265,17 @@ proc asAgent*[T: Agent](obj: T): Agent =
 method hasSubscription*(
     obj: Agent, sig: SigilName
 ): bool {.base, gcsafe, raises: [].} =
-  for idx in 0 ..< obj.subcriptions.len():
-    if obj.subcriptions[idx].signal == sig:
-      return true
+  let idx = lowerBoundSubscription(obj.subcriptions, sig)
+  idx < obj.subcriptions.len() and obj.subcriptions[idx].signal == sig
 
 method hasSubscription*(
     obj: Agent, sig: SigilName, tgt: WeakRef[Agent]
 ): bool {.base, gcsafe, raises: [].} =
-  for idx in 0 ..< obj.subcriptions.len():
-    if obj.subcriptions[idx].signal == sig and
-        obj.subcriptions[idx].subscription.tgt == tgt:
+  var idx = lowerBoundSubscription(obj.subcriptions, sig)
+  while idx < obj.subcriptions.len() and obj.subcriptions[idx].signal == sig:
+    if obj.subcriptions[idx].subscription.tgt == tgt:
       return true
+    idx.inc()
 
 template hasSubscription*(obj: Agent, sig: SigilName, tgt: Agent): bool =
   let tgtRef = tgt.unsafeWeakRef().toKind(Agent)
@@ -220,11 +284,12 @@ template hasSubscription*(obj: Agent, sig: SigilName, tgt: Agent): bool =
 method hasSubscription*(
     obj: Agent, sig: SigilName, tgt: WeakRef[Agent], slot: AgentProc
 ): bool {.base, gcsafe, raises: [].} =
-  for idx in 0 ..< obj.subcriptions.len():
-    if obj.subcriptions[idx].signal == sig and
-        obj.subcriptions[idx].subscription.tgt == tgt and
+  var idx = lowerBoundSubscription(obj.subcriptions, sig)
+  while idx < obj.subcriptions.len() and obj.subcriptions[idx].signal == sig:
+    if obj.subcriptions[idx].subscription.tgt == tgt and
         obj.subcriptions[idx].subscription.packedSlot == slot:
       return true
+    idx.inc()
 
 template hasSubscription*(obj: Agent,
                           sig: SigilName,
@@ -254,10 +319,22 @@ proc sameSubscription(a, b: Subscription): bool =
 method hasSubscription*(
     obj: Agent, sig: SigilName, subscription: Subscription
 ): bool {.base, gcsafe, raises: [].} =
-  for idx in 0 ..< obj.subcriptions.len():
-    if obj.subcriptions[idx].signal == sig and
-        obj.subcriptions[idx].subscription.sameSubscription(subscription):
+  var idx = lowerBoundSubscription(obj.subcriptions, sig)
+  while idx < obj.subcriptions.len() and obj.subcriptions[idx].signal == sig:
+    if obj.subcriptions[idx].subscription.sameSubscription(subscription):
       return true
+    idx.inc()
+
+proc addSubscriptionSorted*(
+    subs: var seq[SubscriptionEntry], sig: SigilName, subscription: Subscription
+): bool {.gcsafe, raises: [].} =
+  var idx = lowerBoundSubscription(subs, sig)
+  while idx < subs.len and subs[idx].signal == sig:
+    if subs[idx].subscription.sameSubscription(subscription):
+      return false
+    idx.inc()
+  subs.insert((sig, subscription), idx)
+  true
 
 method addListener*(obj: Agent, tgt: WeakRef[Agent]) {.base, gcsafe, raises: [].} =
   obj.listening.incl(tgt)
@@ -271,8 +348,7 @@ method addSubscription*(
   doAssert not obj.isNil(), "agent is nil!"
   assert subscription.hasCallable
 
-  if not procCall hasSubscription(obj, sig, subscription):
-    obj.subcriptions.add((sig, subscription))
+  if addSubscriptionSorted(obj.subcriptions, sig, subscription):
     subscription.tgt[].addListener(obj.unsafeWeakRef().asAgent())
 
 method addSubscription*(
@@ -332,7 +408,10 @@ method delSubscription*(
     subsFound: int
     subsDeleted: int
 
-  for idx in countdown(self.subcriptions.len() - 1, 0):
+  let first = lowerBoundSubscription(self.subcriptions, sig)
+  var idx = upperBoundSubscription(self.subcriptions, sig)
+  while idx > first:
+    idx.dec()
     if self.subcriptions[idx].signal == sig and
         self.subcriptions[idx].subscription.tgt == tgt:
       subsFound.inc()
@@ -347,7 +426,10 @@ method delSubscription*(
     self: Agent, sig: SigilName, subscription: Subscription
 ) {.base, gcsafe, raises: [].} =
   var deleted = false
-  for idx in countdown(self.subcriptions.len() - 1, 0):
+  let first = lowerBoundSubscription(self.subcriptions, sig)
+  var idx = upperBoundSubscription(self.subcriptions, sig)
+  while idx > first:
+    idx.dec()
     if self.subcriptions[idx].signal == sig and
         self.subcriptions[idx].subscription.sameSubscription(subscription):
       deleted = true

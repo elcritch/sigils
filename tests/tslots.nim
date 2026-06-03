@@ -78,7 +78,7 @@ when isMainModule:
         c {.used.} = Counter()
         d {.used.} = Counter()
         o {.used.} = Originator()
-      
+
       when defined(sigilsDebug):
         a.debugName = "A"
         b.debugName = "B"
@@ -90,11 +90,11 @@ when isMainModule:
       GC_fullCollect()
 
     test "signal / slot types":
-      check SignalTypes.avgChanged(Counter) is (float,)
-      check SignalTypes.valueChanged(Counter) is (int,)
+      check SignalTypes.avgChanged(Counter) is (float, )
+      check SignalTypes.valueChanged(Counter) is (int, )
       echo "someChange: ", SignalTypes.someChange(Counter).typeof.repr
       check SignalTypes.someChange(Counter) is tuple[]
-      check SignalTypes.setValue(Counter) is (int,)
+      check SignalTypes.setValue(Counter) is (int, )
 
     test "signal connect":
       echo "Counter.setValue: ", Counter.setValue().repr
@@ -186,6 +186,25 @@ when isMainModule:
 
       check c.avg == ts.ticks
 
+    test "subscription lookup finds sorted signal ranges":
+      connect(a, valueChanged, b, setValue)
+      connect(a, doTick, c, someTick)
+      connect(a, valueChanged, d, setValue)
+      a.addSubscription(
+        AnySigilName,
+        b.unsafeWeakRef().asAgent(),
+        setValue(Counter)
+      )
+
+      check a.subcriptions.len() == 4
+      check a.subcriptions[0].signal == AnySigilName
+      check a.subcriptions[1].signal == sigName"doTick"
+      check a.subcriptions[2].signal == sigName"valueChanged"
+      check a.subcriptions[3].signal == sigName"valueChanged"
+      check a.getSubscriptions(sigName"valueChanged").toSeq().len() == 3
+      check a.getSubscriptions(sigName"doTick").toSeq().len() == 2
+      check a.getSubscriptions(sigName"missing").toSeq().len() == 1
+
     test "test disconnect":
       connect(a, doTick, c, someTick)
       connect(a, doTick, c, someTickOther)
@@ -253,33 +272,33 @@ when isMainModule:
       # printConnections(c)
 
 suite "test destroys":
-    test "test multi connect disconnect with destroyed":
+  test "test multi connect disconnect with destroyed":
+    var
+      b = Counter()
+
+    block:
       var
-        b = Counter()
+        awd {.used.} = CounterWithDestroy()
 
-      block:
-        var
-          awd {.used.} = CounterWithDestroy()
+      when defined(sigilsDebug):
+        awd.debugName = "AWD"
+        b.debugName = "B"
+      connect(awd, valueChanged, b, setValue)
 
-        when defined(sigilsDebug):
-          awd.debugName = "AWD"
-          b.debugName = "B"
-        connect(awd, valueChanged, b, setValue)
+      check b.value == 0
 
-        check b.value == 0
+      awd.setValue(42)
+      check awd.value == 42
+      check b.value == 42
+      echo "TEST REFS: ",
+        " aref: ",
+        cast[pointer](awd).repr,
+        " 0x",
+        addr(awd[]).pointer.repr,
+        " agent: 0x",
+        addr(Agent(awd)).pointer.repr
+      check awd.unsafeWeakRef().toPtr == cast[pointer](awd)
+      check awd.unsafeWeakRef().toPtr == addr(awd[]).pointer
 
-        awd.setValue(42)
-        check awd.value == 42
-        check b.value == 42
-        echo "TEST REFS: ",
-          " aref: ",
-          cast[pointer](awd).repr,
-          " 0x",
-          addr(awd[]).pointer.repr,
-          " agent: 0x",
-          addr(Agent(awd)).pointer.repr
-        check awd.unsafeWeakRef().toPtr == cast[pointer](awd)
-        check awd.unsafeWeakRef().toPtr == addr(awd[]).pointer
-
-      check b.subcriptions.len() == 0
-      check b.listening.len() == 0
+    check b.subcriptions.len() == 0
+    check b.listening.len() == 0

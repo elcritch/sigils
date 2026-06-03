@@ -116,8 +116,7 @@ method addSubscription*(
 
   var added = false
   withLock obj.lock:
-    if not procCall hasSubscription(Agent(obj), sig, subscription):
-      obj.subcriptions.add((sig, subscription))
+    if addSubscriptionSorted(obj.subcriptions, sig, subscription):
       added = true
 
   if added:
