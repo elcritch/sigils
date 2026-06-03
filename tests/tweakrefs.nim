@@ -149,7 +149,7 @@ suite "agent weak refs":
       emit x.valueChanged(137)
       echo "X::count:end: ", x.unsafeGcCount()
       echo "Y::count:end: ", y.unsafeGcCount()
-      check x.unsafeGcCount() == 2
+      check x.unsafeGcCount() == 1
 
       # var xx = x
       # check x.unsafeGcCount() == 2

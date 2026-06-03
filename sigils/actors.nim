@@ -109,9 +109,10 @@ method addSubscription*(
   obj.ensureActorReady()
   doAssert not obj.isNil(), "agent is nil!"
   when sigilsSlotEnvDisabled:
-    assert subscription.slot != nil
+    assert subscription.packedSlot != nil or subscription.directSlot != nil
   else:
-    assert subscription.slot != nil or subscription.envSlot != nil
+    assert subscription.packedSlot != nil or subscription.directSlot != nil or
+      subscription.envSlot != nil
 
   var added = false
   withLock obj.lock:
@@ -125,7 +126,17 @@ method addSubscription*(
 method addSubscription*(
     obj: AgentActor, sig: SigilName, tgt: WeakRef[Agent], slot: AgentProc
 ) {.gcsafe, raises: [].} =
-  addSubscription(obj, sig, Subscription(tgt: tgt, slot: slot))
+  addSubscription(obj, sig, Subscription(tgt: tgt, packedSlot: slot))
+
+method addSubscription*(
+    obj: AgentActor,
+    sig: SigilName,
+    tgt: WeakRef[Agent],
+    slot: AgentProc,
+    directSlot: LocalAgentProc
+) {.gcsafe, raises: [].} =
+  addSubscription(obj, sig, Subscription(tgt: tgt, packedSlot: slot,
+      directSlot: directSlot))
 
 method delSubscription*(
     self: AgentActor, sig: SigilName, tgt: WeakRef[Agent], slot: AgentProc

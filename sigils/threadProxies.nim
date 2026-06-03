@@ -98,7 +98,7 @@ method addSubscription*(
 method addSubscription*(
     obj: AgentProxyShared, sig: SigilName, tgt: WeakRef[Agent], slot: AgentProc
 ) {.gcsafe, raises: [].} =
-  obj.addSubscription(sig, Subscription(tgt: tgt, slot: slot))
+  obj.addSubscription(sig, Subscription(tgt: tgt, packedSlot: slot))
 
 method delSubscription*(
     self: AgentProxyShared, sig: SigilName, subscription: Subscription
@@ -139,7 +139,7 @@ method callMethod*(
     return
 
   if slot == localSlot or slot == remoteSlot:
-    debugPrint "\t proxy:callMethod:localSlot: "
+    debugPrint "\t proxy:callMethod:directSlot: "
     proxy.callSlots(req)
   else:
     var req = req.duplicate()
@@ -201,7 +201,7 @@ iterator findSubscribedTo(
   for item in other[].subcriptions.mitems():
     if item.subscription.tgt == agent:
       yield (item.signal, Subscription(tgt: other,
-          slot: item.subscription.slot))
+          packedSlot: item.subscription.packedSlot))
 
 proc moveToThread*[T: AgentActor, R: SigilThread](
     agentTy: var T, thread: ptr R, inbox = 1_000
@@ -241,14 +241,14 @@ proc moveToThread*[T: AgentActor, R: SigilThread](
   var listenSubs = false
   for item in oldListeningSubs:
     item.subscription.tgt[].addSubscription(item.signal, localProxy,
-        item.subscription.slot)
+        item.subscription.packedSlot)
     listenSubs = true
 
   # update my subcriptionsTable so agent uses the remote proxy to send events back
   var hasSubs = false
   for item in oldSubscribers:
     localProxy.addSubscription(item.signal, item.subscription.tgt,
-        item.subscription.slot)
+        item.subscription.packedSlot)
     hasSubs = true
 
   thread.send(ThreadSignal(kind: Move, item: move agentTy))
