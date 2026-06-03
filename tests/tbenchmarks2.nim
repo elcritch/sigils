@@ -38,7 +38,9 @@ method onBumpMethod*(self: Agent, val: array[1024, int]) {.base.} =
 method onBumpMethod*(self: Counter, val: array[1024, int]) =
   self.value += val[0]
 
-var durationMicrosDirectProc: float
+var
+  durationMicrosDirectProc: float
+  durationMicrosMethod: float
 
 const n = block:
   when defined(slowbench): 1_000_000
@@ -63,6 +65,23 @@ suite "benchmarks":
     let opsPerSec = (n.float * 1_000_000.0) / max(1.0, us)
     echo &"[bench] slot proc baseline: n={n}, time={us:.2f} us, rate={opsPerSec:.0f} ops/s, procRatio=1.00"
 
+  test "nim method call (tight loop)":
+    var b: Agent = Counter()
+
+    let t0 = getMonoTime()
+    var x: array[1024, int]
+    for i in 0 ..< n:
+      x[0] = i
+      b.onBumpMethod(x)
+    let dt = getMonoTime() - t0
+
+    check Counter(b).value == expectedValue
+
+    let us = dt.inMicroseconds.float
+    durationMicrosMethod = us
+    let opsPerSec = (n.float * 1_000_000.0) / max(1.0, us)
+    echo &"[bench] nim method call: n={n}, time={us:.2f} us, rate={opsPerSec:.0f} ops/s, procRatio={us / durationMicrosDirectProc:.2f}"
+
   test "emit->slot throughput (tight loop)":
     var a = Emitter()
     var b = Counter()
@@ -81,23 +100,8 @@ suite "benchmarks":
     let us = dt.inMicroseconds.float
     let ms = dt.inMilliseconds.float
     let opsPerSec = (n.float * 1000.0) / max(1.0, ms)
-    echo &"[bench] emit->slot: n={n}, time={ms:.2f} ms, timeUs={dt.inMicroseconds}, rate={opsPerSec:.0f} ops/s, procRatio={us / durationMicrosDirectProc:.2f}"
-
-  test "nim method call (tight loop)":
-    var b: Agent = Counter()
-
-    let t0 = getMonoTime()
-    var x: array[1024, int]
-    for i in 0 ..< n:
-      x[0] = i
-      b.onBumpMethod(x)
-    let dt = getMonoTime() - t0
-
-    check Counter(b).value == expectedValue
-
-    let us = dt.inMicroseconds.float
-    let opsPerSec = (n.float * 1_000_000.0) / max(1.0, us)
-    echo &"[bench] nim method call: n={n}, time={us:.2f} us, rate={opsPerSec:.0f} ops/s, procRatio={us / durationMicrosDirectProc:.2f}"
+    echo &"[bench] emit->slot: n={n}, time={ms:.2f} ms, timeUs={dt.inMicroseconds}, rate={opsPerSec:.0f} ops/s"
+    echo &"[bench] emit->slot ratios: procRatio={us / durationMicrosDirectProc:.2f}, methodRatio={us / durationMicrosMethod:.2f}"
 
   when false:
     test "reactive computed (lazy) update+read":
