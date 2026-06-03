@@ -1,6 +1,5 @@
 import std/monotimes
 import std/strformat
-import std/math
 import unittest
 
 # Core modules under test
@@ -31,17 +30,40 @@ type
 proc bump*(tp: Emitter, val: array[1024, int]) {.signal.}
 
 proc onBump*(self: Counter, val: array[1024, int]) {.slot.} =
-  self.value += 1
+  self.value += val[0]
 
-var durationMicrosEmitSlot: float
+method onBumpMethod*(self: Agent, val: array[1024, int]) {.base.} =
+  discard
+
+method onBumpMethod*(self: Counter, val: array[1024, int]) =
+  self.value += val[0]
+
+var durationMicrosDirectProc: float
 
 const n = block:
   when defined(slowbench): 1_000_000
   else: 100_000
+const expectedValue = (n * (n - 1)) div 2
 
 suite "benchmarks":
-  test "emit->slot throughput (tight loop)":
+  test "slot proc baseline (tight loop)":
+    var b = Counter()
 
+    let t0 = getMonoTime()
+    var x: array[1024, int]
+    for i in 0 ..< n:
+      x[0] = i
+      b.onBump(x)
+    let dt = getMonoTime() - t0
+
+    check b.value == expectedValue
+
+    let us = dt.inMicroseconds.float
+    durationMicrosDirectProc = us
+    let opsPerSec = (n.float * 1_000_000.0) / max(1.0, us)
+    echo &"[bench] slot proc baseline: n={n}, time={us:.2f} us, rate={opsPerSec:.0f} ops/s, procRatio=1.00"
+
+  test "emit->slot throughput (tight loop)":
     var a = Emitter()
     var b = Counter()
 
@@ -54,29 +76,28 @@ suite "benchmarks":
       emit a.bump(x)
     let dt = getMonoTime() - t0
 
-    check b.value == n
+    check b.value == expectedValue
 
-    durationMicrosEmitSlot = dt.inMicroseconds.float
+    let us = dt.inMicroseconds.float
     let ms = dt.inMilliseconds.float
     let opsPerSec = (n.float * 1000.0) / max(1.0, ms)
-    echo &"[bench] emit->slot: n={n}, time={ms:.2f} ms, rate={opsPerSec:.0f} ops/s, time={dt.inMicroseconds} us"
+    echo &"[bench] emit->slot: n={n}, time={ms:.2f} ms, timeUs={dt.inMicroseconds}, rate={opsPerSec:.0f} ops/s, procRatio={us / durationMicrosDirectProc:.2f}"
 
-  test "slot direct call (tight loop)":
-    var a = Emitter()
-    var b = Counter()
+  test "nim method call (tight loop)":
+    var b: Agent = Counter()
 
     let t0 = getMonoTime()
     var x: array[1024, int]
     for i in 0 ..< n:
       x[0] = i
-      b.onBump(x)
+      b.onBumpMethod(x)
     let dt = getMonoTime() - t0
 
-    check b.value == n
+    check Counter(b).value == expectedValue
 
     let us = dt.inMicroseconds.float
     let opsPerSec = (n.float * 1_000_000.0) / max(1.0, us)
-    echo &"[bench] slot direct call: n={n}, time={us:.2f} us, rate={opsPerSec:.0f} ops/s, ratio={durationMicrosEmitSlot / us:.2f}"
+    echo &"[bench] nim method call: n={n}, time={us:.2f} us, rate={opsPerSec:.0f} ops/s, procRatio={us / durationMicrosDirectProc:.2f}"
 
   when false:
     test "reactive computed (lazy) update+read":
@@ -109,4 +130,3 @@ suite "benchmarks":
       let ms = dt.inMilliseconds.float
       let itersPerSec = (n.float * 1000.0) / max(1.0, ms)
       echo &"[bench] reactive (eager): n={n}, time={ms:.2f} ms, rate={itersPerSec:.0f} iters/s"
-
