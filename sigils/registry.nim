@@ -37,7 +37,7 @@ proc collectProxyCloneSignals[T](proxy: AgentProxy[T]): seq[ProxyCloneSignal] =
       # Only clone self-targeted subscriptions (proxy -> proxy).
       if item.subscription.tgt == proxyRef:
         result.add(ProxyCloneSignal(signal: item.signal,
-            slot: item.subscription.slot))
+            slot: item.subscription.packedSlot))
 
 proc applyProxyCloneSignals[T](proxy: AgentProxy[T],
     clones: seq[ProxyCloneSignal]) {.gcsafe.} =

@@ -115,9 +115,14 @@ template connect*(
     slot: untyped,
     acceptVoidSlot: static bool = false,
 ): void =
-  let agentSlot = `slot`(typeof(b))
-  checkSignalTypes(a, signal, b, agentSlot, acceptVoidSlot)
-  a.addSubscription(signalName(signal), b, agentSlot)
+  let packedAgentSlot = `slot`(typeof(b))
+  let directAgentSlot: LocalAgentProc =
+    when compiles(`slot`(LocalSignalTypes, typeof(b))):
+      `slot`(LocalSignalTypes, typeof(b))
+    else:
+      nil
+  checkSignalTypes(a, signal, b, packedAgentSlot, acceptVoidSlot)
+  a.addSubscription(signalName(signal), b, packedAgentSlot, directAgentSlot)
 
 template connected*(
     a: Agent,

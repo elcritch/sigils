@@ -50,7 +50,8 @@ proc delSelfSubscription(actor: WeakRef[AgentActor], sub: ThreadSub) =
       if actor[].subcriptions[idx].signal == sub.name and
           actor[].subcriptions[idx].subscription.tgt == sub.tgt:
         subsFound.inc()
-        if sub.fn == nil or actor[].subcriptions[idx].subscription.slot == sub.fn:
+        if sub.fn == nil or actor[].subcriptions[idx].subscription.packedSlot ==
+            sub.fn:
           subsDeleted.inc()
           actor[].subcriptions.delete(idx)
     if subsFound == subsDeleted:

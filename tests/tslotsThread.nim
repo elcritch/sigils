@@ -7,9 +7,6 @@ import threading/atomics
 import sigils
 import sigils/threads
 
-import std/terminal
-import std/strutils
-
 type
   SomeAction* = ref object of AgentActor
     value: int
@@ -117,14 +114,15 @@ suite "threaded agent slots":
       b = Counter.new()
       c = Counter.new()
 
-    var agentResults = newChan[(WeakRef[Agent], SigilRequest)]()
-
     connect(a, valueChanged, b, setValue)
     connect(a, valueChanged, c, Counter.setValue)
 
     let wa: WeakRef[SomeAction] = a.unsafeWeakRef()
+    type ActionCall = typeof(wa.valueChanged(137))
+    var agentResults = newChan[ActionCall]()
+
     emit wa.valueChanged(137)
-    check typeof(wa.valueChanged(137)) is (WeakRef[Agent], SigilRequest)
+    check ActionCall is SigilLocalCall[WeakRef[SomeAction], (int, )]
 
     check wa[].value == 0
     check b.value == 137
@@ -199,7 +197,7 @@ suite "threaded agent slots":
       printConnections(bp.remote[])
       let
         subLocalProxy = Subscription(
-          tgt: bp.unsafeWeakRef().asAgent(), slot: setValueGlobal(Counter)
+          tgt: bp.unsafeWeakRef().asAgent(), packedSlot: setValueGlobal(Counter)
         )
         subs = a.getSubscriptions(sigName"valueChanged").toSeq()
       doAssert subs.len() >= 1
@@ -268,7 +266,7 @@ suite "threaded agent slots":
 
       let
         subLocalProxy = Subscription(
-          tgt: bp.unsafeWeakRef().asAgent(), slot: setValueGlobal(Counter)
+          tgt: bp.unsafeWeakRef().asAgent(), packedSlot: setValueGlobal(Counter)
         )
       check a.subcriptions.len() == 0
       check a.listening.len() == 1

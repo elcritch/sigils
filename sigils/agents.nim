@@ -1,10 +1,5 @@
-import std/[options, tables, sequtils, sets, macros, hashes]
-import std/times
-import std/isolation
-import std/[locks, options]
+import std/[hashes, options, sets, strformat, tables]
 import stack_strings
-
-import threading/atomics
 
 import protocol
 import weakrefs
@@ -27,7 +22,8 @@ else:
 
 export sets, options, svariant, IndexableChars, weakrefs, protocol
 
-import std/[terminal, strutils, strformat, sequtils]
+when defined(sigilsDebugPrint):
+  import std/terminal
 export strformat
 export debugs
 
@@ -53,6 +49,13 @@ type
 
   # Procedure signature accepted as an RPC call by server.
   AgentProc* = proc(context: Agent, params: SigilParams) {.nimcall.}
+  LocalAgentProc* = proc(context: Agent, params: pointer) {.nimcall.}
+
+  SigilLocalCall*[S, A] = object
+    source*: S
+    procName*: SigilName
+    origin*: SigilId
+    args*: A
 
   SlotEnv* = ref object of RootObj
     ## Owned environment for receiver-bound closure slots.
@@ -63,15 +66,18 @@ type
 
   Subscription* = object
     tgt*: WeakRef[Agent]
-    slot*: AgentProc
+    packedSlot*: AgentProc
+    directSlot*: LocalAgentProc
     when not sigilsSlotEnvDisabled:
       envSlot*: EnvAgentProc
       env*: SlotEnv
 
   AgentProcTy*[S] = AgentProc
+  LocalAgentProcTy*[S] = LocalAgentProc
 
   Signal*[S] = AgentProcTy[S]
   SignalTypes* = distinct object
+  LocalSignalTypes* = distinct object
 
 when defined(nimscript):
   proc getSigilId*(a: Agent): SigilId =
@@ -108,11 +114,10 @@ method removeSubscriptionsFor*(
   debugPrint "   removeSubscriptionsFor:agent: ", " self:id: ",
       $self.unsafeWeakRef()
   ## Route's an rpc request.
-  var toDel: seq[int] = newSeq[int](self.subcriptions.len())
   for idx in countdown(self.subcriptions.len() - 1, 0):
     debugPrint "   removeSubscriptionsFor subs sig: ", $self.subcriptions[idx].signal
     if self.subcriptions[idx].subscription.tgt == subscriber:
-      self.subcriptions.delete(idx..idx)
+      self.subcriptions.delete(idx)
 
 method unregisterSubscriber*(
     self: Agent, listener: WeakRef[Agent]
@@ -218,7 +223,7 @@ method hasSubscription*(
   for idx in 0 ..< obj.subcriptions.len():
     if obj.subcriptions[idx].signal == sig and
         obj.subcriptions[idx].subscription.tgt == tgt and
-        obj.subcriptions[idx].subscription.slot == slot:
+        obj.subcriptions[idx].subscription.packedSlot == slot:
       return true
 
 template hasSubscription*(obj: Agent,
@@ -230,12 +235,16 @@ template hasSubscription*(obj: Agent,
 
 proc hasCallable(subscription: Subscription): bool =
   when sigilsSlotEnvDisabled:
-    not subscription.slot.isNil
+    not subscription.packedSlot.isNil or not subscription.directSlot.isNil
   else:
-    not subscription.slot.isNil or not subscription.envSlot.isNil
+    not subscription.packedSlot.isNil or not subscription.directSlot.isNil or
+      not subscription.envSlot.isNil
 
 proc sameHandler(a, b: Subscription): bool =
-  result = a.slot == b.slot
+  if a.packedSlot.isNil and b.packedSlot.isNil:
+    result = a.directSlot == b.directSlot
+  else:
+    result = a.packedSlot == b.packedSlot
   when not sigilsSlotEnvDisabled:
     result = result and a.envSlot == b.envSlot and a.env == b.env
 
@@ -269,7 +278,17 @@ method addSubscription*(
 method addSubscription*(
     obj: Agent, sig: SigilName, tgt: WeakRef[Agent], slot: AgentProc
 ) {.base, gcsafe, raises: [].} =
-  addSubscription(obj, sig, Subscription(tgt: tgt, slot: slot))
+  addSubscription(obj, sig, Subscription(tgt: tgt, packedSlot: slot))
+
+method addSubscription*(
+    obj: Agent,
+    sig: SigilName,
+    tgt: WeakRef[Agent],
+    slot: AgentProc,
+    directSlot: LocalAgentProc
+) {.base, gcsafe, raises: [].} =
+  addSubscription(obj, sig, Subscription(tgt: tgt, packedSlot: slot,
+      directSlot: directSlot))
 
 template addSubscription*(
     obj: Agent,
@@ -280,7 +299,30 @@ template addSubscription*(
   let tgtRef = tgt.unsafeWeakRef().toKind(Agent)
   addSubscription(obj, sig.toSigilName(), tgtRef, slot)
 
+template addSubscription*(
+    obj: Agent,
+    sig: IndexableChars,
+    tgt: Agent | WeakRef[Agent],
+    slot: AgentProc,
+    directSlot: LocalAgentProc
+): void =
+  let tgtRef = tgt.unsafeWeakRef().toKind(Agent)
+  addSubscription(obj, sig.toSigilName(), tgtRef, slot, directSlot)
+
 var printConnectionsSlotNames* = initTable[pointer, string]()
+
+when defined(sigilsDebugPrint):
+  proc slotDebugName(subscription: Subscription): string =
+    if not subscription.packedSlot.isNil:
+      return printConnectionsSlotNames.getOrDefault(
+        subscription.packedSlot, subscription.packedSlot.repr
+      )
+    if not subscription.directSlot.isNil:
+      return subscription.directSlot.repr
+    when not sigilsSlotEnvDisabled:
+      if not subscription.envSlot.isNil:
+        return subscription.envSlot.repr
+    "nil"
 
 method delSubscription*(
     self: Agent, sig: SigilName, tgt: WeakRef[Agent], slot: AgentProc
@@ -294,9 +336,9 @@ method delSubscription*(
     if self.subcriptions[idx].signal == sig and
         self.subcriptions[idx].subscription.tgt == tgt:
       subsFound.inc()
-      if slot == nil or self.subcriptions[idx].subscription.slot == slot:
+      if slot == nil or self.subcriptions[idx].subscription.packedSlot == slot:
         subsDeleted.inc()
-        self.subcriptions.delete(idx..idx)
+        self.subcriptions.delete(idx)
 
   if subsFound == subsDeleted:
     tgt[].delListener(self.unsafeWeakRef().asAgent())
@@ -309,7 +351,7 @@ method delSubscription*(
     if self.subcriptions[idx].signal == sig and
         self.subcriptions[idx].subscription.sameSubscription(subscription):
       deleted = true
-      self.subcriptions.delete(idx..idx)
+      self.subcriptions.delete(idx)
 
   if deleted and not procCall hasSubscription(self, sig, subscription.tgt):
     subscription.tgt[].delListener(self.unsafeWeakRef().asAgent())
@@ -342,10 +384,8 @@ proc printConnections*(agent: Agent) =
     brightPrint fgBlue, "connections for Agent: ", $agent.unsafeWeakRef()
     brightPrint fgMagenta, "\t subscribers:", ""
     for item in agent.subcriptions:
-      let sname = printConnectionsSlotNames.getOrDefault(
-          item.subscription.slot, item.subscription.slot.repr)
       brightPrint fgGreen, "\t\t:", $item.signal, ": => ",
-          $item.subscription.tgt & " slot: " & $sname
+          $item.subscription.tgt & " slot: " & slotDebugName(item.subscription)
     brightPrint fgMagenta, "\t listening:", ""
     for listening in agent.listening:
       brightPrint fgRed, "\t\t listen: ", $listening

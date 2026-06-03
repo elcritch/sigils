@@ -210,6 +210,18 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
     for param in parameters[1 ..^ 1]:
       mcall.add param[0]
 
+    let localArgsIdent = ident("localArgs")
+    let localMcall = nnkCall.newTree(rpcMethod)
+    localMcall.add(objId)
+    var localArgIdx = 0
+    for param in parameters[1 ..^ 1]:
+      discard param
+      localMcall.add nnkBracketExpr.newTree(
+        nnkBracketExpr.newTree(localArgsIdent),
+        newIntLitNode(localArgIdx)
+      )
+      localArgIdx.inc()
+
     let agentSlotImpl = quote:
       proc slot(context: Agent, params: SigilParams) {.nimcall.} =
         if context == nil:
@@ -222,6 +234,17 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
           rpcUnpack(`paramsIdent`, params)
         `paramSetups`
         `mcall`
+
+    let directSlotImpl = quote:
+      proc directSlot(context: Agent, rawArgs: pointer) {.nimcall.} =
+        if context == nil:
+          raise newException(ValueError, "bad value")
+        let `objId` = `contextType`(context)
+        if `objId` == nil:
+          raise newException(ConversionError, "bad cast")
+        when `tupTyp` isnot tuple[]:
+          let `localArgsIdent` = cast[ptr `tupTyp`](rawArgs)
+        `localMcall`
 
     let procTyp = quote:
       proc() {.nimcall.}
@@ -238,6 +261,12 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
           `agentSlotImpl`
           slot
 
+        proc `rpcMethod`(
+            `kd`: typedesc[LocalSignalTypes], `tp`: typedesc[`contextType`]
+        ): LocalAgentProcTy[`signalTyp`] =
+          `directSlotImpl`
+          directSlot
+
     result.updateProcsSig(isPublic, genericParams, procLineInfo)
   elif isSignal:
     var construct = nnkTupleConstr.newTree()
@@ -246,13 +275,17 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
     let objId = ident"obj"
 
     result.add quote do:
-      proc `rpcMethod`(`objId`: `firstType`): (Agent, SigilRequestTy[`firstType`]) =
+      proc `rpcMethod`(
+          `objId`: `firstType`
+      ): SigilLocalCall[`firstType`, typeof(`construct`)] =
         var args = `construct`
-        let name: SigilName = toSigilName(`signalName`)
-        let req = initSigilRequest[`firstType`, typeof(args)](
-          procName = name, args = ensureMove args, origin = `objId`.getSigilId()
+        const name: SigilName = toSigilName(`signalName`)
+        result = SigilLocalCall[`firstType`, typeof(args)](
+          source: `objId`,
+          procName: name,
+          origin: `objId`.getSigilId(),
+          args: ensureMove args
         )
-        result = (`objId`, req)
 
     for param in parameters[1 ..^ 1]:
       result[^1][3].add param
@@ -260,13 +293,15 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
     result.add quote do:
       proc `rpcMethod`(
           `objId`: WeakRef[`firstType`]
-      ): (WeakRef[Agent], SigilRequestTy[`firstType`]) =
+      ): SigilLocalCall[WeakRef[`firstType`], typeof(`construct`)] =
         var args = `construct`
-        let name: SigilName = toSigilName(`signalName`)
-        let req = initSigilRequest[`firstType`, typeof(args)](
-          procName = name, args = ensureMove args, origin = `objId`.getSigilId()
+        const name: SigilName = toSigilName(`signalName`)
+        result = SigilLocalCall[WeakRef[`firstType`], typeof(args)](
+          source: `objId`,
+          procName: name,
+          origin: `objId`.getSigilId(),
+          args: ensureMove args
         )
-        result = (`objId`.asAgent(), req)
 
     for param in parameters[1 ..^ 1]:
       result[^1][3].add param

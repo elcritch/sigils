@@ -36,7 +36,7 @@ when not sigilsSlotEnvDisabled:
     ## Route a sigil request through a static slot or an env-backed closure slot.
     if subscription.envSlot.isNil:
       {.cast(gcsafe).}:
-        result = ctx.callMethod(req, subscription.slot)
+        result = ctx.callMethod(req, subscription.packedSlot)
     else:
       {.cast(gcsafe).}:
         subscription.envSlot(ctx, req.params, subscription.env)
@@ -46,6 +46,18 @@ when not sigilsSlotEnvDisabled:
 from system/ansi_c import c_raise
 
 type AgentSlotError* = object of CatchableError
+
+template checkSlotResponse(res: SigilResponse) =
+  when defined(nimscript) or defined(useJsonSerde):
+    discard
+  elif defined(sigilsCborSerde):
+    discard
+  else:
+    variantMatch case res.result.buf as u
+    of SigilError:
+      raise newException(AgentSlotError, $u.code & " msg: " & u.msg)
+    else:
+      discard
 
 template callSlotsImpl(obj: Agent, req: SigilRequest, subsIter: untyped) =
   for sub in subsIter:
@@ -60,21 +72,37 @@ template callSlotsImpl(obj: Agent, req: SigilRequest, subsIter: untyped) =
           discard c_raise(11.cint)
         assert sub.tgt[].freedByThread == 0
       when sigilsSlotEnvDisabled:
-        var res: SigilResponse = sub.tgt[].callMethod(req, sub.slot)
+        var res: SigilResponse = sub.tgt[].callMethod(req, sub.packedSlot)
       else:
         var res: SigilResponse = sub.tgt[].callMethod(req, sub)
 
-      when defined(nimscript) or defined(useJsonSerde):
-        discard
-      elif defined(sigilsCborSerde):
-        discard
+      checkSlotResponse(res)
+
+template callSlotsLocalImpl(
+    obj: Agent,
+    procName: SigilName,
+    origin: SigilId,
+    args: untyped,
+    subsIter: untyped
+) =
+  var
+    reqReady = false
+    req: SigilRequest
+  for sub in subsIter:
+    {.cast(gcsafe).}:
+      if not sub.directSlot.isNil:
+        sub.directSlot(sub.tgt[], addr args)
       else:
-        discard
-        variantMatch case res.result.buf as u
-        of SigilError:
-          raise newException(AgentSlotError, $u.code & " msg: " & u.msg)
+        if not reqReady:
+          req = initSigilRequest[typeof(obj), typeof(args)](
+            procName = procName, args = args, origin = origin
+          )
+          reqReady = true
+        when sigilsSlotEnvDisabled:
+          var res: SigilResponse = sub.tgt[].callMethod(req, sub.packedSlot)
         else:
-          discard
+          var res: SigilResponse = sub.tgt[].callMethod(req, sub)
+        checkSlotResponse(res)
 
 method callSlots*(obj: Agent, req: SigilRequest) {.base, gcsafe.} =
   callSlotsImpl(obj, req, obj.getSubscriptions(req.procName))
@@ -87,9 +115,35 @@ method callSlots*(obj: AgentActor, req: SigilRequest) {.gcsafe.} =
       subs.add(sub)
   callSlotsImpl(Agent(obj), req, subs.items)
 
+proc callSlotsLocal*[A](
+    obj: Agent, procName: SigilName, origin: SigilId, args: var A
+) {.gcsafe.} =
+  if obj of AgentActor:
+    let actor = AgentActor(obj)
+    actor.ensureActorReady()
+    var subs: seq[Subscription]
+    withLock actor.lock:
+      for sub in actor.getSubscriptions(procName):
+        subs.add(sub)
+    callSlotsLocalImpl(Agent(actor), procName, origin, args, subs.items)
+  else:
+    callSlotsLocalImpl(obj, procName, origin, args, obj.getSubscriptions(procName))
+
 proc emit*(call: (Agent | WeakRef[Agent], SigilRequest)) =
   let (obj, req) = call
   when obj is WeakRef[Agent]:
     obj[].callSlots(req)
   else:
     obj.callSlots(req)
+
+proc emit*[T: Agent, A](call: sink SigilLocalCall[T, A]) =
+  var localCall = call
+  localCall.source.callSlotsLocal(
+    localCall.procName, localCall.origin, localCall.args
+  )
+
+proc emit*[T: Agent, A](call: sink SigilLocalCall[WeakRef[T], A]) =
+  var localCall = call
+  localCall.source[].callSlotsLocal(
+    localCall.procName, localCall.origin, localCall.args
+  )
