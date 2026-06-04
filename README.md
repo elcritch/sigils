@@ -7,6 +7,10 @@ A [signal and slots library](https://en.wikipedia.org/wiki/Signals_and_slots) im
 
 Note that this implementation shares many or most of the limitations you'd see in Qt's implementation. Sigils also includes a message-passing threading model; see `docs/threading.md` for the detailed architecture and safety notes.
 
+## Changelog
+
+- v0.22 includes several potential breaking changes
+
 ## Basics
 
 Only objects inheriting from `Agent` can receive signals. Slots must take an `Agent` object as the first argument. The rest of the arguments must match that of the `signal` you wish to connect a slot to.
