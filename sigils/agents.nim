@@ -35,7 +35,6 @@ const
   sigilsSlotEnvDisabled* =
     (not sigilsSlotEnvEnabled) or defined(sigilsNoSlotEnv) or
     defined(sigilsNoClosureSlotEnv)
-  sigilsSubscriptionBinarySearchThreshold {.intdefine.} = 16
 
 type
   AgentProc* = proc(context: Agent, params: SigilParams) {.nimcall.}
@@ -62,8 +61,7 @@ type
       envSlot*: EnvAgentProc
       env*: SlotEnv
 
-  SubscriptionStore* =
-    HybridSigilTable[Subscription, sigilsSubscriptionBinarySearchThreshold]
+  SubscriptionStore* = HybridSigilTable[Subscription]
 
   AgentObj = object of RootObj
     subcriptions*: SubscriptionStore

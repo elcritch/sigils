@@ -1,11 +1,8 @@
 import hybridTables
 import protocol
 
-const sigilsSelectorBinarySearchThreshold {.intdefine.} = 16
-
 type
-  SelectorMethodStore*[Method] =
-    HybridSigilTable[Method, sigilsSelectorBinarySearchThreshold]
+  SelectorMethodStore*[Method] = HybridSigilTable[Method]
 
 proc methodTop*[Method](
     store: SelectorMethodStore[Method], selector: SigilName
