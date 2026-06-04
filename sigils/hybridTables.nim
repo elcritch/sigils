@@ -15,19 +15,9 @@ type
 
   HybridSigilTableItem*[Value] = tuple[key: SigilName, value: Value]
 
-  HybridRemoveAction* = enum
-    hraKeep
-    hraFound
-    hraDelete
-
-  HybridMatchPredicate*[Value] =
-    proc(value: Value): bool {.closure, gcsafe, raises: [].}
-  HybridRemovePredicate*[Value] =
-    proc(value: Value): HybridRemoveAction {.closure, gcsafe, raises: [].}
-
   HybridSigilTable*[Value] = object
     ## Sigil-keyed multimap that keeps a sorted seq for small key counts and
-    ## promotes to a hash table once selector/subscription lookups are larger.
+    ## promotes to a hash table once selector lookups are larger.
     case kind*: HybridSigilTableKind
     of hstSmall:
       small: seq[HybridSigilTableEntry[Value]]
@@ -255,24 +245,6 @@ proc `[]`*[Value](
         idx.dec()
   raise newException(IndexDefect, "HybridSigilTable index out of bounds")
 
-proc containsValue*[Value](
-    table: HybridSigilTable[Value], key: SigilName,
-    predicate: HybridMatchPredicate[Value],
-): bool {.gcsafe, raises: [].} =
-  case table.kind
-  of hstSmall:
-    let idx = entryIndex(table.small, key)
-    if idx < 0:
-      return false
-    for value in table.small[idx].values:
-      if predicate(value):
-        return true
-  of hstLarge:
-    table.large.withValue(key, bucket):
-      for value in bucket:
-        if predicate(value):
-          return true
-
 proc putValues*[Value](
     table: var HybridSigilTable[Value], key: SigilName, values: sink seq[Value],
 ) {.gcsafe, raises: [].} =
@@ -374,67 +346,4 @@ proc popValueStack*[Value](
       return false
     if removeStack:
       table.large.del(key)
-      table.demote()
-
-proc removeMatchingValues[Value](
-    values: var seq[Value], predicate: HybridRemovePredicate[Value]
-): tuple[found, deleted: int] {.gcsafe, raises: [].} =
-  var idx = values.len
-  while idx > 0:
-    idx.dec()
-    case predicate(values[idx])
-    of hraKeep:
-      discard
-    of hraFound:
-      result.found.inc()
-    of hraDelete:
-      result.found.inc()
-      result.deleted.inc()
-      values.delete(idx)
-
-proc removeValuesForKey*[Value](
-    table: var HybridSigilTable[Value], key: SigilName,
-    predicate: HybridRemovePredicate[Value],
-): tuple[found, deleted: int] {.gcsafe, raises: [].} =
-  case table.kind
-  of hstSmall:
-    let idx = entryIndex(table.small, key)
-    if idx < 0:
-      return
-    result = removeMatchingValues(table.small[idx].values, predicate)
-    if table.small[idx].values.len == 0:
-      table.small.delete(idx)
-  of hstLarge:
-    var removeEntry = false
-    table.large.withValue(key, bucket):
-      result = removeMatchingValues(bucket[], predicate)
-      removeEntry = bucket[].len == 0
-    do:
-      return
-    if removeEntry:
-      table.large.del(key)
-      table.demote()
-
-proc removeValues*[Value](
-    table: var HybridSigilTable[Value], predicate: HybridRemovePredicate[Value],
-): int {.gcsafe, raises: [].} =
-  case table.kind
-  of hstSmall:
-    var entryIdx = table.small.len
-    while entryIdx > 0:
-      entryIdx.dec()
-      let removed = removeMatchingValues(table.small[entryIdx].values, predicate)
-      result += removed.deleted
-      if table.small[entryIdx].values.len == 0:
-        table.small.delete(entryIdx)
-  of hstLarge:
-    var emptyKeys: seq[SigilName]
-    for key, values in table.large.mpairs:
-      let removed = removeMatchingValues(values, predicate)
-      result += removed.deleted
-      if values.len == 0:
-        emptyKeys.add key
-    for key in emptyKeys:
-      table.large.del(key)
-    if emptyKeys.len > 0:
       table.demote()
