@@ -33,6 +33,10 @@ const
   n = block:
     when defined(slowbench): 10_000_000
     else: 100_000
+  largeProtocolMethodCount = 32
+  largeLookupIterations = block:
+    when defined(slowbench): 1_000_000
+    else: 10_000
   expectedValue = (n * (n - 1)) div 2
 
 var
@@ -65,6 +69,30 @@ proc newSelectorBenchAgent(): SelectorBenchAgent =
   result = SelectorBenchAgent()
   doAssert result.addMethod(addSelector, addSelectorImpl)
   doAssert result.addMethod(pingSelector, pingSelectorImpl)
+
+proc protocolSelector(prefix: string, idx: int): Selector[int, int] =
+  selector[int, int](prefix & $idx)
+
+proc protocolSelectors(prefix: string, count: int): seq[Selector[int, int]] =
+  for idx in 0 ..< count:
+    result.add protocolSelector(prefix, idx)
+
+proc protocolImplementation(
+    name: string, selectors: openArray[Selector[int, int]]
+): ProtocolImplementation =
+  result.protocol = SigilProtocol(name: toSigilName(name))
+  for selector in selectors:
+    result.protocol.requirements.add requirement(selector)
+    result.methods.add selectorMethod(selector, addSelectorImpl)
+
+proc newProtocolBenchAgent(
+    prefix: string, count: int
+): tuple[target: SelectorBenchAgent, selectors: seq[Selector[int, int]]] =
+  result.target = SelectorBenchAgent()
+  result.selectors = protocolSelectors(prefix, count)
+  let implementation = protocolImplementation(prefix, result.selectors)
+  discard result.target.replaceMethods(implementation)
+  doAssert result.target.hasAdopted(implementation.protocol)
 
 suite "selector benchmarks":
   test "direct proc baseline":
@@ -265,3 +293,78 @@ suite "selector benchmarks":
     check hits == n
 
     reportBench("selector localMethod lookup", n, us)
+
+  test "single-method protocol perform":
+    let bench = newProtocolBenchAgent("selectorBenchSingleProtocol", 1)
+    let selector = bench.selectors[0]
+    var last = 0
+
+    let us = timed:
+      for i in 0 ..< n:
+        discard bench.target.perform(selector, i, last)
+
+    check bench.target.value == expectedValue
+    check last == expectedValue
+
+    reportBench(
+      "selector single-method protocol perform",
+      n,
+      us,
+      directProcMicros,
+      methodMicros,
+    )
+
+  test "single-method protocol localMethod lookup":
+    let bench = newProtocolBenchAgent("selectorBenchSingleLookup", 1)
+    let selector = bench.selectors[0]
+    var hits = 0
+
+    let us = timed:
+      for _ in 0 ..< n:
+        if not bench.target.localMethod(selector).isNil:
+          inc hits
+
+    check hits == n
+
+    reportBench("selector single-method protocol localMethod lookup", n, us)
+
+  test "large protocol last selector perform":
+    let bench = newProtocolBenchAgent(
+      "selectorBenchLargeProtocol",
+      largeProtocolMethodCount,
+    )
+    let selector = bench.selectors[^1]
+    var last = 0
+
+    let us = timed:
+      for i in 0 ..< n:
+        discard bench.target.perform(selector, i, last)
+
+    check bench.target.value == expectedValue
+    check last == expectedValue
+
+    reportBench(
+      "selector large protocol last perform",
+      n,
+      us,
+      directProcMicros,
+      methodMicros,
+    )
+
+  test "large protocol all selector localMethod lookup":
+    let bench = newProtocolBenchAgent(
+      "selectorBenchLargeLookup",
+      largeProtocolMethodCount,
+    )
+    var hits = 0
+
+    let us = timed:
+      for _ in 0 ..< largeLookupIterations:
+        for selector in bench.selectors:
+          if not bench.target.localMethod(selector).isNil:
+            inc hits
+
+    let operations = largeLookupIterations * largeProtocolMethodCount
+    check hits == operations
+
+    reportBench("selector large protocol all localMethod lookup", operations, us)
