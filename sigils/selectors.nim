@@ -1,6 +1,7 @@
-import std/[macros, options, strutils, tables]
+import std/[macros, options, strutils]
 
 import agents
+import selectorMethodStores
 
 export agents
 export options
@@ -62,7 +63,7 @@ type
   ): bool {.closure.}
 
   DynamicAgent* = ref object of Agent
-    methods: Table[SigilName, seq[DynamicMethod]]
+    methods: SelectorMethodStore[DynamicMethod]
     nextResponder: WeakRef[DynamicAgent]
     adoptedProtocols: seq[SigilName]
     forwardingTargetHandler: ForwardingTarget
@@ -471,6 +472,8 @@ macro selectorImpl(p: untyped): untyped =
     let
       selectorProc = p[0].copyNimTree()
       selectorValueProc = genSym(nskTemplate, selectorIdentName(p[0]) & "Selector")
+      selectorValueCache = genSym(nskLet,
+          selectorIdentName(p[0]) & "SelectorValue")
       directProc = genSym(nskProc, selectorIdentName(p[0]) & "Send")
       argsType = selectorArgsType(params, 1)
       dynSelf = genSym(nskParam, "self")
@@ -497,8 +500,11 @@ macro selectorImpl(p: untyped): untyped =
           result = `directSelf`.send(`selectorValue`, `directArgs`)
 
     let selectorValueDef = quote do:
-      template `selectorValueProc`(): untyped =
+      let `selectorValueCache` =
         initSelector[`argsType`, `retType`](`selectorName`)
+
+      template `selectorValueProc`(): untyped =
+        `selectorValueCache`
 
     let directDef = quote do:
       proc `directProc`() =
@@ -914,12 +920,7 @@ proc localMethod*(obj: DynamicAgent, selector: SigilName): DynamicMethod =
   ## Return the top local method for a selector, if one is installed.
   if obj.isNil:
     return nil
-  if selector notin obj.methods:
-    return nil
-  let stack = obj.methods[selector]
-  if stack.len == 0:
-    return nil
-  result = stack[^1]
+  obj.methods.methodTop(selector)
 
 proc localMethod*[A, R](
     obj: DynamicAgent, selector: Selector[A, R]
@@ -939,9 +940,9 @@ proc methodFor*[A, R](
 
 proc methodStack*(obj: DynamicAgent, selector: SigilName): seq[DynamicMethod] =
   ## Return the local method stack for a selector.
-  if obj.isNil or selector notin obj.methods:
+  if obj.isNil:
     return @[]
-  obj.methods[selector]
+  obj.methods.methodStackCopy(selector)
 
 proc methodStack*[A, R](
     obj: DynamicAgent, selector: Selector[A, R]
@@ -1341,9 +1342,9 @@ proc addMethod*[A, R](
     fn: DynamicMethod,
 ): bool =
   ## Add a method only when the object does not already handle the selector.
-  if selector.name in obj.methods and obj.methods[selector.name].len > 0:
+  if not obj.localMethod(selector.name).isNil:
     return false
-  obj.methods[selector.name] = @[fn]
+  obj.methods.putMethodStack(selector.name, @[fn])
   result = true
 
 when sigilsSelectorClosuresEnabled:
@@ -1359,11 +1360,11 @@ proc addMethods*(obj: DynamicAgent, methods: openArray[SelectorMethod]): bool {.
     discardable.} =
   ## Add methods only when none of their selectors already have local handlers.
   for binding in methods:
-    if binding.selector in obj.methods and obj.methods[binding.selector].len > 0:
+    if not obj.localMethod(binding.selector).isNil:
       return false
 
   for binding in methods:
-    obj.methods[binding.selector] = @[binding.implementation]
+    obj.methods.putMethodStack(binding.selector, @[binding.implementation])
   result = true
 
 proc replaceMethod*[A, R](
@@ -1372,8 +1373,7 @@ proc replaceMethod*[A, R](
     fn: DynamicMethod,
 ): DynamicMethod {.discardable.} =
   ## Replace the local implementation and return the previous top method, if any.
-  result = obj.localMethod(selector.name)
-  obj.methods[selector.name] = @[fn]
+  obj.methods.replaceMethodStack(selector.name, @[fn])
 
 when sigilsSelectorClosuresEnabled:
   template replaceMethod*[A, R](
@@ -1391,14 +1391,13 @@ proc replaceMethods*(
   for binding in methods:
     result.add obj.localMethod(binding.selector)
   for binding in methods:
-    obj.methods[binding.selector] = @[binding.implementation]
+    obj.methods.putMethodStack(binding.selector, @[binding.implementation])
 
 proc removeMethod*(obj: DynamicAgent, selector: SigilName): DynamicMethod {.
     discardable.} =
   ## Remove local methods for a selector and return the previous top method.
-  result = obj.localMethod(selector)
-  if not obj.isNil and selector in obj.methods:
-    obj.methods.del(selector)
+  if not obj.isNil:
+    result = obj.methods.removeMethodStack(selector)
 
 proc removeMethod*[A, R](
     obj: DynamicAgent, selector: Selector[A, R]
@@ -1519,12 +1518,11 @@ proc pushMethod*[A, R](
     fn: DynamicMethod,
 ): SwizzleToken =
   ## Push a reversible method override onto the local method stack.
-  let stack = obj.methods.getOrDefault(selector.name)
-  obj.methods[selector.name] = stack & @[fn]
+  let selectorName = selector.name
   result = SwizzleToken(
     owner: obj.unsafeWeakRef(),
-    selector: selector.name,
-    depth: stack.len,
+    selector: selectorName,
+    depth: obj.methods.pushMethodStack(selectorName, fn),
   )
 
 proc pushMethod*[A, R](
@@ -1533,10 +1531,7 @@ proc pushMethod*[A, R](
     wrapper: AroundMethod,
 ): SwizzleToken =
   ## Push a reversible wrapper around the current local implementation.
-  let stack = obj.methods.getOrDefault(selector.name)
-  let previous =
-    if stack.len == 0: DynamicMethod(nil)
-    else: stack[^1]
+  let previous = obj.localMethod(selector.name)
   let wrapped: DynamicMethod = proc(
       self: DynamicAgent, invocation: var Invocation
   ) =
@@ -1571,17 +1566,4 @@ proc popMethod*(token: SwizzleToken): bool =
   if token.owner.isNil:
     return false
 
-  let obj = token.owner[]
-  if token.selector notin obj.methods:
-    return false
-
-  var stack = obj.methods[token.selector]
-  if stack.len != token.depth + 1:
-    return false
-
-  stack.setLen(token.depth)
-  if stack.len == 0:
-    obj.methods.del(token.selector)
-  else:
-    obj.methods[token.selector] = stack
-  result = true
+  token.owner[].methods.popMethodStack(token.selector, token.depth)

@@ -506,6 +506,39 @@ suite "dynamic selectors":
     controller.textDidCommit("saved")
     check controller.lastCommand == "saved"
 
+  test "large method batch installs, dispatches, and removes":
+    let controller = TextController()
+    var implementation = ProtocolImplementation(
+      protocol: SigilProtocol(name: toSigilName("LargePayloadProtocol")),
+    )
+    var selectors: seq[Selector[SelectorPayload, int]]
+
+    for idx in 0 ..< 32:
+      let selector = selector[SelectorPayload, int]("largePayload" & $idx)
+      selectors.add selector
+      implementation.protocol.requirements.add requirement(selector)
+      implementation.methods.add selectorMethod(selector, controllerPayloadTotal)
+
+    let old = controller.replaceMethods(implementation)
+
+    check old.len == selectors.len
+    for fn in old:
+      check fn.isNil
+    check controller.hasAdopted(implementation.protocol)
+    check controller.perform(selectors[0], SelectorPayload(x: 3, y: 4)).get() == 7
+    check controller.perform(selectors[^1], SelectorPayload(x: 5, y: 6)).get() == 11
+
+    let removed = controller.removeMethods(implementation)
+
+    check removed.len == selectors.len
+    for fn in removed:
+      check not fn.isNil
+    check not controller.hasAdopted(implementation.protocol)
+    check controller.perform(
+      selectors[^1],
+      SelectorPayload(x: 1, y: 2),
+    ).isNone
+
   when sigilsSelectorClosuresEnabled:
     test "protocol method batches accept selector closures":
       let controller = TextController()

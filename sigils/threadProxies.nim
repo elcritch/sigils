@@ -198,7 +198,7 @@ proc initProxy*[T](proxy: var AgentProxy[T],
 iterator findSubscribedTo(
     other: WeakRef[Agent], agent: WeakRef[Agent]
 ): tuple[signal: SigilName, subscription: Subscription] =
-  for item in other[].subcriptions.mitems():
+  for item in other[].subcriptions:
     if item.subscription.tgt == agent:
       yield (item.signal, Subscription(tgt: other,
           packedSlot: item.subscription.packedSlot))

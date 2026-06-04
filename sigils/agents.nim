@@ -37,18 +37,6 @@ const
   sigilsSubscriptionBinarySearchThreshold {.intdefine.} = 16
 
 type
-  AgentObj = object of RootObj
-    subcriptions*: seq[tuple[signal: SigilName, subscription: Subscription]]
-      ## agents listening to me
-    listening*: HashSet[WeakRef[Agent]] ## agents I'm listening to
-    when defined(sigilsDebug) or defined(debug) or defined(sigilsDebugPrint):
-      freedByThread*: int
-    when defined(sigilsDebug):
-      debugName*: string
-
-  Agent* = ref object of AgentObj
-
-  # Procedure signature accepted as an RPC call by server.
   AgentProc* = proc(context: Agent, params: SigilParams) {.nimcall.}
   LocalAgentProc* = proc(context: Agent, params: pointer) {.nimcall.}
 
@@ -72,6 +60,17 @@ type
     when not sigilsSlotEnvDisabled:
       envSlot*: EnvAgentProc
       env*: SlotEnv
+
+  AgentObj = object of RootObj
+    subcriptions*: seq[tuple[signal: SigilName, subscription: Subscription]]
+      ## agents listening to me
+    listening*: HashSet[WeakRef[Agent]] ## agents I'm listening to
+    when defined(sigilsDebug) or defined(debug) or defined(sigilsDebugPrint):
+      freedByThread*: int
+    when defined(sigilsDebug):
+      debugName*: string
+
+  Agent* = ref object of AgentObj
 
   AgentProcTy*[S] = AgentProc
   LocalAgentProcTy*[S] = LocalAgentProc
