@@ -5,6 +5,7 @@ import isolateutils
 import agents
 import actors
 import core
+import hybridTables
 import threadBase
 
 export threadBase
@@ -44,17 +45,16 @@ proc removeActor(pool: SigilThreadPoolPtr, actor: WeakRef[AgentActor]) =
 
 proc delSelfSubscription(actor: WeakRef[AgentActor], sub: ThreadSub) =
   withLock actor[].lock:
-    var subsFound = 0
-    var subsDeleted = 0
-    for idx in countdown(actor[].subcriptions.len() - 1, 0):
-      if actor[].subcriptions[idx].signal == sub.name and
-          actor[].subcriptions[idx].subscription.tgt == sub.tgt:
-        subsFound.inc()
-        if sub.fn == nil or actor[].subcriptions[idx].subscription.packedSlot ==
-            sub.fn:
-          subsDeleted.inc()
-          actor[].subcriptions.delete(idx)
-    if subsFound == subsDeleted:
+    let removed = actor[].subcriptions.removeValuesForKey(sub.name) do(
+        subscription: Subscription
+    ) -> HybridRemoveAction:
+      if subscription.tgt != sub.tgt:
+        hraKeep
+      elif sub.fn == nil or subscription.packedSlot == sub.fn:
+        hraDelete
+      else:
+        hraFound
+    if removed.found == removed.deleted:
       actor[].listening.excl(actor.actorRef)
 
 proc enqueueReadyLocked(pool: SigilThreadPoolPtr, actor: WeakRef[AgentActor]) =
