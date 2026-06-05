@@ -387,9 +387,6 @@ proc selectorIdentName(node: NimNode): string =
   else:
     result = node.strVal
 
-proc selectorIdentExported(node: NimNode): bool =
-  node.kind == nnkPostfix and node.len == 2 and node[0].eqIdent("*")
-
 proc selectorIdent(name: string, exported: bool): NimNode =
   if exported:
     result = nnkPostfix.newTree(ident"*", ident(name))
@@ -399,7 +396,7 @@ proc selectorIdent(name: string, exported: bool): NimNode =
 proc protocolSlotCheckIdent(name: NimNode): NimNode =
   selectorIdent(
     "check" & selectorIdentName(name) & "Slots",
-    name.selectorIdentExported,
+    true,
   )
 
 proc protocolSlotCheckCall(protocol: NimNode, receiver: NimNode): NimNode =
@@ -1214,7 +1211,7 @@ proc protocolDeclaration(
         nnkBracket.newTree(slts),
       )
 
-  result.add newLetStmt(name.copyNimTree(), protocolCall)
+  result.add newLetStmt(selectorIdent(selectorIdentName(name), true), protocolCall)
 
 proc implementProtocolForReceiver(
     protocol: NimNode, receiver: NimNode, body: NimNode
