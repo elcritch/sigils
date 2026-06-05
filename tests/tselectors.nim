@@ -1,6 +1,9 @@
 import std/[options, strutils, unittest]
 
+import sigils/core
 import sigils/selectors
+import sigils/signals
+import sigils/slots
 
 type
   TextField = ref object of DynamicAgent
@@ -50,12 +53,27 @@ protocol TitledProtocol:
 
 protocol CaptionedViewProtocol from View:
   property caption -> string
+  proc captionWillChange(view: View) {.signal.}
+
+  proc applyCaption(self: View, value: string) {.slot.} =
+    self.name = value
 
   method caption(self: View): string =
     self.name
 
   method setCaption(self: View, value: string) =
     self.name = value
+
+protocol WindowLifecycleProtocolInternal:
+  method windowShouldSetContentView*(view: View): bool {.optional.}
+  proc windowWillSetContentView*(window: Window, view: View) {.signal.}
+  proc windowDidSetContentView*(window: Window, view: View) {.signal.}
+  proc rememberContentView*(view: View) {.slot.}
+
+protocol StrictWindowLifecycleProtocol includes WindowLifecycleProtocolInternal:
+  method windowIdentifier*(): string
+  proc windowDidBecomeKey*(window: Window) {.signal.}
+  proc rememberWindowKey*() {.slot.}
 
 method parseField(self: TextField, text: string): int {.selector.} =
   parseInt(text)
@@ -81,6 +99,12 @@ method controllerCommand(self: TextController,
 
 method controllerCommit(self: TextController, text: string) {.selector.} =
   self.lastCommand = text
+
+proc rememberContentView(self: TextController, view: View) {.slot.} =
+  self.lastCommand = view.name
+
+proc rememberWindowKey(self: TextController) {.slot.} =
+  self.lastCommand = "key"
 
 method controllerSelectionRange(self: TextController): string {.selector.} =
   $self.parsed
@@ -446,6 +470,61 @@ suite "dynamic selectors":
     check TextFieldDelegate.requirement(placeholderText).get().required == false
     check selectorName(validateText) in TextFieldDelegate.selectors
 
+  test "protocol signal and slot declarations are metadata only":
+    let window = Window()
+
+    check WindowLifecycleProtocolInternal.requirements.len == 1
+    check WindowLifecycleProtocolInternal.requiredRequirements.len == 0
+    check WindowLifecycleProtocolInternal.signals.len == 2
+    check WindowLifecycleProtocolInternal.slots.len == 1
+    check toSigilName("windowWillSetContentView") in
+        WindowLifecycleProtocolInternal.signalNames
+    check toSigilName("rememberContentView") in
+        WindowLifecycleProtocolInternal.slotNames
+    check WindowLifecycleProtocolInternal.hasSignal(
+      toSigilName("windowDidSetContentView")
+    )
+    check WindowLifecycleProtocolInternal.hasSlot(toSigilName("rememberContentView"))
+    check WindowLifecycleProtocolInternal.protocolSignal(
+      toSigilName("windowWillSetContentView")
+    ).get().signature.len > 0
+    check WindowLifecycleProtocolInternal.protocolSlot(
+      toSigilName("rememberContentView")
+    ).get().signature.len > 0
+
+    check window.canConformTo(WindowLifecycleProtocolInternal)
+    check window.missingRequirements(WindowLifecycleProtocolInternal).len == 0
+    check SignalTypes.windowWillSetContentView(Window) is (View, )
+    check SignalTypes.rememberContentView(TextController) is (View, )
+    checkProtocolSlots(TextController, WindowLifecycleProtocolInternal)
+
+    static:
+      doAssert not compiles(checkProtocolSlots(Window,
+          WindowLifecycleProtocolInternal))
+
+  test "protocol includes inherit signals and slots":
+    check StrictWindowLifecycleProtocol.requirements.len == 2
+    check StrictWindowLifecycleProtocol.signals.len == 3
+    check StrictWindowLifecycleProtocol.slots.len == 2
+    check StrictWindowLifecycleProtocol.hasSignal(
+      toSigilName("windowWillSetContentView")
+    )
+    check StrictWindowLifecycleProtocol.hasSignal(toSigilName("windowDidBecomeKey"))
+    check StrictWindowLifecycleProtocol.hasSlot(toSigilName("rememberContentView"))
+    check StrictWindowLifecycleProtocol.hasSlot(toSigilName("rememberWindowKey"))
+    checkProtocolSlots(TextController, StrictWindowLifecycleProtocol)
+
+  test "protocol signal declarations emit normal signals":
+    let
+      window = Window()
+      view = View(name: "content")
+      controller = TextController()
+
+    connect(window, windowWillSetContentView, controller, rememberContentView)
+    emit window.windowWillSetContentView(view)
+
+    check controller.lastCommand == "content"
+
   test "protocol includes inherit requirements":
     let controller = TextController()
 
@@ -483,10 +562,22 @@ suite "dynamic selectors":
     let view = View(name: "old").withProto
 
     check CaptionedViewProtocol.requirements.len == 2
+    check CaptionedViewProtocol.signals.len == 1
+    check CaptionedViewProtocol.slots.len == 1
     check CaptionedViewProtocol.hasRequirement(caption)
     check CaptionedViewProtocol.hasRequirement(setCaption)
+    check CaptionedViewProtocol.hasSignal(toSigilName("captionWillChange"))
+    check CaptionedViewProtocol.hasSlot(toSigilName("applyCaption"))
+    check SignalTypes.captionWillChange(View) is tuple[]
+    check SignalTypes.applyCaption(View) is (string, )
+    checkProtocolSlots(View, CaptionedViewProtocol)
     check view.hasAdopted(CaptionedViewProtocol)
     check view.caption() == "old"
+    check view.captionWillChange().procName == toSigilName("captionWillChange")
+    check view.unsafeWeakRef().captionWillChange().procName ==
+        toSigilName("captionWillChange")
+    view.applyCaption("applied")
+    check view.caption() == "applied"
     view.setCaption("new")
     check view.caption() == "new"
 
@@ -547,9 +638,9 @@ suite "dynamic selectors":
       let old = controller.replaceMethods(TextFieldDelegate, [
         selectorMethod(validateText) do(self: TextController,
             text: string) -> bool:
-          text.strip.len >= minimum,
+        text.strip.len >= minimum,
         selectorMethod(textDidCommit) do(self: TextController, text: string):
-          self.lastCommand = "closed:" & text,
+        self.lastCommand = "closed:" & text,
       ])
 
       check old.len == 2

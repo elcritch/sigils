@@ -2,6 +2,7 @@ import std/[macros, options, strutils]
 
 import agents
 import selectorMethodStores
+import slots
 
 export agents
 export options
@@ -20,15 +21,27 @@ type
     signature*: string
     required*: bool
 
+  ProtocolSignal* = object
+    ## A signal declared as part of a dynamic protocol's descriptive surface.
+    name*: SigilName
+    signature*: string
+
+  ProtocolSlot* = object
+    ## A slot declared as part of a dynamic protocol's descriptive surface.
+    name*: SigilName
+    signature*: string
+
   SelectorMethod* = object
     ## A selector paired with a dynamic implementation for batch installs.
     selector*: SigilName
     implementation*: DynamicMethod
 
   SigilProtocol* = object
-    ## A named runtime contract made of required and optional selectors.
+    ## A named runtime contract made of selector requirements, signals, and slots.
     name*: SigilName
     requirements*: seq[ProtocolRequirement]
+    signals*: seq[ProtocolSignal]
+    slots*: seq[ProtocolSlot]
 
   ProtocolImplementation* = object
     ## A protocol paired with dynamic methods implementing its selectors.
@@ -107,6 +120,30 @@ proc requirement*[A, R](
     required: required,
   )
 
+proc protocolSignal*(name: SigilName, signature = ""): ProtocolSignal =
+  result = ProtocolSignal(
+    name: name,
+    signature: signature,
+  )
+
+proc protocolSignal*(name: static string, signature = ""): ProtocolSignal =
+  protocolSignal(toSigilName(name), signature)
+
+proc protocolSignal*(name: string, signature = ""): ProtocolSignal =
+  protocolSignal(toSigilName(name), signature)
+
+proc protocolSlot*(name: SigilName, signature = ""): ProtocolSlot =
+  result = ProtocolSlot(
+    name: name,
+    signature: signature,
+  )
+
+proc protocolSlot*(name: static string, signature = ""): ProtocolSlot =
+  protocolSlot(toSigilName(name), signature)
+
+proc protocolSlot*(name: string, signature = ""): ProtocolSlot =
+  protocolSlot(toSigilName(name), signature)
+
 proc initSelectorMethod*[A, R](
     selector: Selector[A, R], implementation: DynamicMethod
 ): SelectorMethod =
@@ -141,6 +178,54 @@ proc initProtocol*(
     requirements: @requirements,
   )
 
+proc initProtocol*(
+    name: static string,
+    requirements: openArray[ProtocolRequirement],
+    signals: openArray[ProtocolSignal],
+): SigilProtocol =
+  result = SigilProtocol(
+    name: toSigilName(name),
+    requirements: @requirements,
+    signals: @signals,
+  )
+
+proc initProtocol*(
+    name: string,
+    requirements: openArray[ProtocolRequirement],
+    signals: openArray[ProtocolSignal],
+): SigilProtocol =
+  result = SigilProtocol(
+    name: toSigilName(name),
+    requirements: @requirements,
+    signals: @signals,
+  )
+
+proc initProtocol*(
+    name: static string,
+    requirements: openArray[ProtocolRequirement],
+    signals: openArray[ProtocolSignal],
+    slots: openArray[ProtocolSlot],
+): SigilProtocol =
+  result = SigilProtocol(
+    name: toSigilName(name),
+    requirements: @requirements,
+    signals: @signals,
+    slots: @slots,
+  )
+
+proc initProtocol*(
+    name: string,
+    requirements: openArray[ProtocolRequirement],
+    signals: openArray[ProtocolSignal],
+    slots: openArray[ProtocolSlot],
+): SigilProtocol =
+  result = SigilProtocol(
+    name: toSigilName(name),
+    requirements: @requirements,
+    signals: @signals,
+    slots: @slots,
+  )
+
 proc containsRequirement(
     requirements: openArray[ProtocolRequirement], selector: SigilName
 ): bool =
@@ -161,6 +246,46 @@ proc composeRequirements*(
     if not result.containsRequirement(req.selector):
       result.add req
 
+proc containsProtocolSignal(
+    signals: openArray[ProtocolSignal], name: SigilName
+): bool =
+  for signal in signals:
+    if signal.name == name:
+      return true
+
+proc composeProtocolSignals*(
+    protocols: openArray[SigilProtocol],
+    signals: openArray[ProtocolSignal],
+): seq[ProtocolSignal] =
+  ## Merge inherited and local protocol signals, keeping the first occurrence.
+  for protocol in protocols:
+    for signal in protocol.signals:
+      if not result.containsProtocolSignal(signal.name):
+        result.add signal
+  for signal in signals:
+    if not result.containsProtocolSignal(signal.name):
+      result.add signal
+
+proc containsProtocolSlot(
+    slots: openArray[ProtocolSlot], name: SigilName
+): bool =
+  for slot in slots:
+    if slot.name == name:
+      return true
+
+proc composeProtocolSlots*(
+    protocols: openArray[SigilProtocol],
+    slots: openArray[ProtocolSlot],
+): seq[ProtocolSlot] =
+  ## Merge inherited and local protocol slots, keeping the first occurrence.
+  for protocol in protocols:
+    for slot in protocol.slots:
+      if not result.containsProtocolSlot(slot.name):
+        result.add slot
+  for slot in slots:
+    if not result.containsProtocolSlot(slot.name):
+      result.add slot
+
 proc initProtocol*(
     name: static string,
     protocols: openArray[SigilProtocol],
@@ -169,6 +294,8 @@ proc initProtocol*(
   result = SigilProtocol(
     name: toSigilName(name),
     requirements: composeRequirements(protocols, requirements),
+    signals: composeProtocolSignals(protocols, []),
+    slots: composeProtocolSlots(protocols, []),
   )
 
 proc initProtocol*(
@@ -179,6 +306,62 @@ proc initProtocol*(
   result = SigilProtocol(
     name: toSigilName(name),
     requirements: composeRequirements(protocols, requirements),
+    signals: composeProtocolSignals(protocols, []),
+    slots: composeProtocolSlots(protocols, []),
+  )
+
+proc initProtocol*(
+    name: static string,
+    protocols: openArray[SigilProtocol],
+    requirements: openArray[ProtocolRequirement],
+    signals: openArray[ProtocolSignal],
+): SigilProtocol =
+  result = SigilProtocol(
+    name: toSigilName(name),
+    requirements: composeRequirements(protocols, requirements),
+    signals: composeProtocolSignals(protocols, signals),
+    slots: composeProtocolSlots(protocols, []),
+  )
+
+proc initProtocol*(
+    name: string,
+    protocols: openArray[SigilProtocol],
+    requirements: openArray[ProtocolRequirement],
+    signals: openArray[ProtocolSignal],
+): SigilProtocol =
+  result = SigilProtocol(
+    name: toSigilName(name),
+    requirements: composeRequirements(protocols, requirements),
+    signals: composeProtocolSignals(protocols, signals),
+    slots: composeProtocolSlots(protocols, []),
+  )
+
+proc initProtocol*(
+    name: static string,
+    protocols: openArray[SigilProtocol],
+    requirements: openArray[ProtocolRequirement],
+    signals: openArray[ProtocolSignal],
+    slots: openArray[ProtocolSlot],
+): SigilProtocol =
+  result = SigilProtocol(
+    name: toSigilName(name),
+    requirements: composeRequirements(protocols, requirements),
+    signals: composeProtocolSignals(protocols, signals),
+    slots: composeProtocolSlots(protocols, slots),
+  )
+
+proc initProtocol*(
+    name: string,
+    protocols: openArray[SigilProtocol],
+    requirements: openArray[ProtocolRequirement],
+    signals: openArray[ProtocolSignal],
+    slots: openArray[ProtocolSlot],
+): SigilProtocol =
+  result = SigilProtocol(
+    name: toSigilName(name),
+    requirements: composeRequirements(protocols, requirements),
+    signals: composeProtocolSignals(protocols, signals),
+    slots: composeProtocolSlots(protocols, slots),
   )
 
 proc initProtocolImplementation*(
@@ -204,11 +387,35 @@ proc selectorIdentName(node: NimNode): string =
   else:
     result = node.strVal
 
+proc selectorIdentExported(node: NimNode): bool =
+  node.kind == nnkPostfix and node.len == 2 and node[0].eqIdent("*")
+
 proc selectorIdent(name: string, exported: bool): NimNode =
   if exported:
     result = nnkPostfix.newTree(ident"*", ident(name))
   else:
     result = ident(name)
+
+proc protocolSlotCheckIdent(name: NimNode): NimNode =
+  selectorIdent(
+    "check" & selectorIdentName(name) & "Slots",
+    name.selectorIdentExported,
+  )
+
+proc protocolSlotCheckCall(protocol: NimNode, receiver: NimNode): NimNode =
+  if protocol.kind == nnkDotExpr and protocol.len == 2:
+    result = newCall(
+      nnkDotExpr.newTree(
+        protocol[0].copyNimTree(),
+        ident("check" & selectorIdentName(protocol[1]) & "Slots"),
+      ),
+      receiver.copyNimTree(),
+    )
+  else:
+    result = newCall(
+      ident("check" & selectorIdentName(protocol) & "Slots"),
+      receiver.copyNimTree(),
+    )
 
 proc setterIdentName(name: string): string =
   if name.len == 0:
@@ -285,6 +492,12 @@ proc stripPragma(node: NimNode, name: string): NimNode =
 proc methodIsOptional(node: NimNode): bool =
   node.kind == nnkMethodDef and node[4].hasPragma("optional")
 
+proc procIsSignal(node: NimNode): bool =
+  node.kind == nnkProcDef and node[4].hasPragma("signal")
+
+proc procIsSlot(node: NimNode): bool =
+  node.kind == nnkProcDef and node[4].hasPragma("slot")
+
 proc selectorArgsType(params: NimNode, firstArg: int): NimNode =
   if params.len == firstArg:
     return nnkTupleTy.newTree()
@@ -313,6 +526,19 @@ proc selectorCallArgs(params: NimNode, firstArg: int, argsIdent: NimNode): seq[N
     let arg = params[idx]
     for nameIdx in 0 ..< arg.len - 2:
       result.add nnkDotExpr.newTree(argsIdent, arg[nameIdx].copyNimTree())
+
+proc slotArgsType(params: NimNode, firstArg: int): NimNode =
+  if params.len == firstArg:
+    return nnkTupleTy.newTree()
+
+  result = nnkTupleConstr.newTree()
+  for idx in firstArg ..< params.len:
+    let arg = params[idx]
+    if arg.kind != nnkIdentDefs:
+      error("slot arguments must be named parameters", arg)
+    let argType = arg[^2]
+    for nameIdx in 0 ..< arg.len - 2:
+      result.add argType.copyNimTree()
 
 proc selectorDirectArgs(params: NimNode, firstArg: int): NimNode =
   if params.len == firstArg:
@@ -684,7 +910,9 @@ proc implementBlock(
     bindings: seq[NimNode]
 
   for item in body:
-    if item.protocolPropertyMethods().len > 0:
+    if item.procIsSignal or item.procIsSlot:
+      discard
+    elif item.protocolPropertyMethods().len > 0:
       if not allowProperties:
         error("protocol implementations must contain method declarations", item)
     else:
@@ -751,6 +979,35 @@ proc validateProtocolReceiver(item: NimNode, receiver: NimNode) =
   if params[1][1].repr != receiver.repr:
     error("protocol implementation receiver must be " & receiver.repr, params[1][1])
 
+proc validateProtocolSlotReceiver(item: NimNode, receiver: NimNode) =
+  let params = item[3]
+  if params.len < 2:
+    error("receiver-bound protocol slot declarations must take a receiver", params)
+  if params[1].kind != nnkIdentDefs or params[1].len != 3:
+    error("protocol slot receiver must be a single named parameter", params[1])
+  if params[1][1].repr != receiver.repr:
+    error("protocol slot receiver must be " & receiver.repr, params[1][1])
+
+proc protocolSlotCheck(
+    item: NimNode, firstArg: int, receiver: NimNode
+): NimNode =
+  let
+    slotName = selectorIdentName(item[0])
+    slotIdent = ident(slotName)
+    argsType = slotArgsType(item[3], firstArg)
+    missingMessage = "missing protocol slot " & slotName
+    mismatchMessage = "protocol slot " & slotName & " has the wrong signature"
+
+  result = quote do:
+    block:
+      when compiles(SignalTypes.`slotIdent`(`receiver`)):
+        when typeof(SignalTypes.`slotIdent`(`receiver`)) is `argsType`:
+          discard
+        else:
+          {.error: `mismatchMessage`.}
+      else:
+        {.error: `missingMessage`.}
+
 proc addProtocolRequirement(
     selectorDecls: var seq[NimNode],
     reqs: var seq[NimNode],
@@ -776,6 +1033,75 @@ proc addProtocolRequirement(
     newLit(requirementMethod.repr),
   )
 
+proc addProtocolSignal(
+    signalDecls: var seq[NimNode],
+    sigs: var seq[NimNode],
+    signals: var seq[string],
+    item: NimNode,
+) =
+  if not item.procIsSignal:
+    error("protocol signal declarations must be procs with {.signal.}", item)
+  if item[6].kind != nnkEmpty:
+    error("protocol signal declarations cannot have implementations", item)
+  if item[3].len < 2:
+    error("protocol signal declarations must take a signal source argument",
+        item[3])
+
+  let signalName = selectorIdentName(item[0])
+  if signalName in signals:
+    return
+  signals.add signalName
+
+  signalDecls.add newCall(
+    bindSym"rpcImpl",
+    item.copyNimTree(),
+    newLit("signal"),
+    newNilLit(),
+  )
+  sigs.add newCall(
+    bindSym"protocolSignal",
+    newLit(signalName),
+    newLit(item.repr),
+  )
+
+proc addProtocolSlot(
+    slotDecls: var seq[NimNode],
+    slotChecks: var seq[NimNode],
+    slots: var seq[NimNode],
+    slotNames: var seq[string],
+    item: NimNode,
+    firstArg: int,
+    receiver: NimNode,
+    checkReceiver: NimNode,
+) =
+  if not item.procIsSlot:
+    error("protocol slot declarations must be procs with {.slot.}", item)
+  if receiver.isNil and item[6].kind != nnkEmpty:
+    error("protocol slot declarations cannot have implementations without a receiver",
+        item)
+  if not receiver.isNil:
+    validateProtocolSlotReceiver(item, receiver)
+
+  let slotName = selectorIdentName(item[0])
+  if slotName in slotNames:
+    return
+  slotNames.add slotName
+
+  if not receiver.isNil:
+    slotDecls.add newCall(
+      bindSym"rpcImpl",
+      item.copyNimTree(),
+      newNilLit(),
+      newNilLit(),
+    )
+
+  slotChecks.add protocolSlotCheck(item, firstArg, checkReceiver)
+  slots.add newCall(
+    bindSym"protocolSlot",
+    newLit(slotName),
+    newLit(item.repr),
+  )
+
 proc protocolDeclaration(
     name: NimNode,
     body: NimNode,
@@ -786,8 +1112,17 @@ proc protocolDeclaration(
   let protocolName = newStrLitNode(selectorIdentName(name))
   var
     selectorDecls: seq[NimNode]
+    signalDecls: seq[NimNode]
+    slotDecls: seq[NimNode]
     reqs: seq[NimNode]
+    sigs: seq[NimNode]
+    slts: seq[NimNode]
+    slotChecks: seq[NimNode]
     selectors: seq[string]
+    signals: seq[string]
+    slotNames: seq[string]
+
+  let checkReceiver = genSym(nskParam, "receiver")
 
   for section in body:
     let propertyDecls = section.protocolPropertyMethods()
@@ -815,12 +1150,50 @@ proc protocolDeclaration(
         firstArg,
         not section.methodIsOptional,
       )
+    elif section.procIsSignal:
+      addProtocolSignal(
+        signalDecls,
+        sigs,
+        signals,
+        section,
+      )
+    elif section.procIsSlot:
+      addProtocolSlot(
+        slotDecls,
+        slotChecks,
+        slts,
+        slotNames,
+        section,
+        if receiver.isNil: 1 else: 2,
+        receiver,
+        checkReceiver,
+      )
     else:
-      error("protocol bodies must contain method declarations", section)
+      error("protocol bodies must contain method requirements, properties, signals, or slots",
+          section)
 
   result = newStmtList()
   for selectorDecl in selectorDecls:
     result.add selectorDecl
+  for signalDecl in signalDecls:
+    result.add signalDecl
+  for slotDecl in slotDecls:
+    result.add slotDecl
+
+  let checkName = protocolSlotCheckIdent(name)
+  var checkBody = newStmtList()
+  for inheritedProtocol in inherited:
+    checkBody.add protocolSlotCheckCall(inheritedProtocol, checkReceiver)
+  for slotCheck in slotChecks:
+    checkBody.add slotCheck
+  if checkBody.len == 0:
+    checkBody.add quote do:
+      discard
+
+  result.add quote do:
+    template `checkName`(`checkReceiver`: typedesc): untyped {.used.} =
+      block:
+        `checkBody`
 
   let protocolCall =
     if inherited.len == 0:
@@ -828,6 +1201,8 @@ proc protocolDeclaration(
         bindSym"initProtocol",
         protocolName,
         nnkBracket.newTree(reqs),
+        nnkBracket.newTree(sigs),
+        nnkBracket.newTree(slts),
       )
     else:
       newCall(
@@ -835,6 +1210,8 @@ proc protocolDeclaration(
         protocolName,
         nnkBracket.newTree(inherited),
         nnkBracket.newTree(reqs),
+        nnkBracket.newTree(sigs),
+        nnkBracket.newTree(slts),
       )
 
   result.add newLetStmt(name.copyNimTree(), protocolCall)
@@ -883,6 +1260,10 @@ macro protocol*(name: untyped, body: untyped): untyped =
 macro protocol*(name: untyped, receiver: untyped, body: untyped): untyped =
   ## Declare a protocol and its default implementation for a receiver type.
   implementProtocolForReceiver(name, receiver, body)
+
+macro checkProtocolSlots*(receiver: untyped, protocol: untyped): untyped =
+  ## Check at compile time that a receiver type exposes a protocol's slots.
+  protocolSlotCheckCall(protocol, receiver)
 
 macro implement*(protocol: untyped, body: untyped): untyped =
   ## Build a reusable protocol implementation from selector method bodies.
@@ -1031,6 +1412,16 @@ proc optionalSelectors*(protocol: SigilProtocol): seq[SigilName] =
     if not req.required:
       result.add req.selector
 
+proc signalNames*(protocol: SigilProtocol): seq[SigilName] =
+  ## Return signal names declared by a protocol.
+  for signal in protocol.signals:
+    result.add signal.name
+
+proc slotNames*(protocol: SigilProtocol): seq[SigilName] =
+  ## Return slot names declared by a protocol.
+  for slot in protocol.slots:
+    result.add slot.name
+
 proc requirement*(
     protocol: SigilProtocol, selector: SigilName
 ): Option[ProtocolRequirement] =
@@ -1054,6 +1445,30 @@ proc hasRequirement*[A, R](
 ): bool =
   ## Check whether a protocol declares a typed selector.
   protocol.hasRequirement(selector.name)
+
+proc protocolSignal*(
+    protocol: SigilProtocol, name: SigilName
+): Option[ProtocolSignal] =
+  ## Return the protocol signal metadata for a signal name, if present.
+  for signal in protocol.signals:
+    if signal.name == name:
+      return some(signal)
+
+proc hasSignal*(protocol: SigilProtocol, name: SigilName): bool =
+  ## Check whether a protocol declares a signal.
+  protocol.protocolSignal(name).isSome
+
+proc protocolSlot*(
+    protocol: SigilProtocol, name: SigilName
+): Option[ProtocolSlot] =
+  ## Return the protocol slot metadata for a slot name, if present.
+  for slot in protocol.slots:
+    if slot.name == name:
+      return some(slot)
+
+proc hasSlot*(protocol: SigilProtocol, name: SigilName): bool =
+  ## Check whether a protocol declares a slot.
+  protocol.protocolSlot(name).isSome
 
 proc missingRequirements*(obj: DynamicAgent, protocol: SigilProtocol): seq[
     ProtocolRequirement] =

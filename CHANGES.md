@@ -1,3 +1,4 @@
+- `v0.22.1` - allow protocol declarations to include descriptive `.signal.` and `.slot.` procs without affecting conformance
 - `v0.19.0` - improve threadSelectors timer handling and io exhaustion; improve registry
 - `v0.19.0` - refactor threading and proxy design! may break some code but simplifies proxies
 - `v0.18.0` - breaking change: connect no longer supports proxies - use connectThreaded!

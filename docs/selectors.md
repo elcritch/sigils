@@ -162,6 +162,19 @@ protocol TitledView:
 
 That declares `title` and `setTitle`.
 
+Protocols may also list signals and slots that belong to the same conceptual surface. Protocol signals are generated as normal Sigils signals and recorded in `protocol.signals`. Protocol slots are recorded in `protocol.slots` and can be checked with `checkProtocolSlots(Receiver, Protocol)`. Neither signals nor slots affect `canConformTo` or `adopt`.
+
+The first signal parameter is still the signal source type. Receiverless slot declarations describe the slot payload. A `protocol ... from Receiver` may use normal receiver-first slot implementations.
+
+```nim
+protocol WindowLifecycle:
+  method windowShouldClose(): bool {.optional.}
+  proc windowWillClose(window: Window) {.signal.}
+  proc rememberClose() {.slot.}
+
+checkProtocolSlots(WindowController, WindowLifecycle)
+```
+
 ## Default Implementations
 
 You can package a reusable protocol implementation and install it later.
