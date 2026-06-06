@@ -211,6 +211,20 @@ connectProtocol(listView, controller, ListViewEvents)
 emit listView.selectionDidChange(controller)
 ```
 
+Use `slotFor` when the slot implementation needs a different Nim name from the event:
+
+```nim
+protocol ViewLayoutInputSlots from View:
+  includes ViewLayoutInputEvents
+
+  proc markLayoutInputDirty(
+      view: View, reason: LayoutInvalidationReason
+  ) {.slotFor: layoutInputChanged.} =
+    view.xLayoutDirty.incl reason
+```
+
+That connects `layoutInputChanged` to `markLayoutInputDirty` while keeping the public event name unchanged. `slotFor` implies a slot, so `{.slot.}` is not required on the same proc.
+
 A receiver-bound `from Receiver` protocol implementation with body-level `includes`, or a named `protocol Variant of Events` implementation, may provide event slots. Those slot names are checked at compile time against the base protocol's signals, and their payload types must match.
 
 `observeProtocol` is the same operation with observer-first argument order, which is useful for small GUI wrappers:

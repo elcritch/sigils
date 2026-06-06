@@ -8,5 +8,5 @@ protocol PublicWindowEvents:
   proc windowDidClose(window: PublicWindow) {.signal.}
 
 protocol WindowSpyEvents of PublicWindowEvents:
-  proc windowWillClose(spy: WindowSpy) {.slot.} =
+  proc rememberWindowWillClose(spy: WindowSpy) {.slotFor: windowWillClose.} =
     discard

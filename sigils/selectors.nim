@@ -31,6 +31,7 @@ type
   ProtocolSlot* = object
     ## A slot declared as part of a dynamic protocol's descriptive surface.
     name*: SigilName
+    eventName*: SigilName
     signature*: string
 
   SelectorMethod* = object
@@ -151,17 +152,39 @@ proc protocolSignal*(name: static string, signature = ""): ProtocolSignal =
 proc protocolSignal*(name: string, signature = ""): ProtocolSignal =
   protocolSignal(toSigilName(name), signature)
 
-proc protocolSlot*(name: SigilName, signature = ""): ProtocolSlot =
+proc protocolSlot*(
+    name: SigilName,
+    signature = "",
+    eventName: SigilName = default(SigilName),
+): ProtocolSlot =
+  let resolvedEventName =
+    if eventName == default(SigilName):
+      name
+    else:
+      eventName
   result = ProtocolSlot(
     name: name,
+    eventName: resolvedEventName,
     signature: signature,
   )
 
-proc protocolSlot*(name: static string, signature = ""): ProtocolSlot =
-  protocolSlot(toSigilName(name), signature)
+proc protocolSlot*(
+    name: static string, signature = "", eventName: static string = ""
+): ProtocolSlot =
+  protocolSlot(
+    toSigilName(name),
+    signature,
+    if eventName.len == 0: toSigilName(name) else: toSigilName(eventName),
+  )
 
-proc protocolSlot*(name: string, signature = ""): ProtocolSlot =
-  protocolSlot(toSigilName(name), signature)
+proc protocolSlot*(
+    name: string, signature = "", eventName: string = ""
+): ProtocolSlot =
+  protocolSlot(
+    toSigilName(name),
+    signature,
+    if eventName.len == 0: toSigilName(name) else: toSigilName(eventName),
+  )
 
 proc initSelectorMethod*[A, R](
     selector: Selector[A, R], implementation: DynamicMethod
@@ -545,6 +568,18 @@ proc protocolSignalSlotCheckIdent(name: NimNode): NimNode =
     true,
   )
 
+proc protocolConnectSlotIdent(name: NimNode): NimNode =
+  selectorIdent(
+    "connect" & selectorIdentName(name) & "ProtocolSlot",
+    true,
+  )
+
+proc protocolDisconnectSlotIdent(name: NimNode): NimNode =
+  selectorIdent(
+    "disconnect" & selectorIdentName(name) & "ProtocolSlot",
+    true,
+  )
+
 proc protocolObserverCall(
     protocol: NimNode, source: NimNode, observer: NimNode, disconnect = false
 ): NimNode =
@@ -592,7 +627,10 @@ proc protocolHasSignalNameCall(protocol: NimNode,
     result = newCall(ident(callName), signalName.copyNimTree())
 
 proc protocolSignalSlotCheckCall(
-    protocol: NimNode, signalName: NimNode, receiver: NimNode
+    protocol: NimNode,
+    signalName: NimNode,
+    receiver: NimNode,
+    slotName: NimNode = nil,
 ): NimNode =
   let callName = "check" & selectorIdentName(
     if protocol.kind == nnkDotExpr and protocol.len == 2: protocol[
@@ -604,12 +642,53 @@ proc protocolSignalSlotCheckCall(
       nnkDotExpr.newTree(protocol[0].copyNimTree(), ident(callName)),
       signalName.copyNimTree(),
       receiver.copyNimTree(),
+      if slotName.isNil: ident(selectorIdentName(
+          signalName)) else: slotName.copyNimTree(),
     )
   else:
     result = newCall(
       ident(callName),
       signalName.copyNimTree(),
       receiver.copyNimTree(),
+      if slotName.isNil: ident(selectorIdentName(
+          signalName)) else: slotName.copyNimTree(),
+    )
+
+proc protocolObserverSlotCall(
+    protocol: NimNode,
+    eventName: NimNode,
+    source: NimNode,
+    observer: NimNode,
+    slot: NimNode,
+    disconnect = false,
+): NimNode =
+  let callName =
+    if disconnect:
+      "disconnect" & selectorIdentName(
+        if protocol.kind == nnkDotExpr and protocol.len == 2: protocol[
+            1] else: protocol
+      ) & "ProtocolSlot"
+    else:
+      "connect" & selectorIdentName(
+        if protocol.kind == nnkDotExpr and protocol.len == 2: protocol[
+            1] else: protocol
+      ) & "ProtocolSlot"
+
+  if protocol.kind == nnkDotExpr and protocol.len == 2:
+    result = newCall(
+      nnkDotExpr.newTree(protocol[0].copyNimTree(), ident(callName)),
+      eventName.copyNimTree(),
+      source.copyNimTree(),
+      observer.copyNimTree(),
+      slot.copyNimTree(),
+    )
+  else:
+    result = newCall(
+      ident(callName),
+      eventName.copyNimTree(),
+      source.copyNimTree(),
+      observer.copyNimTree(),
+      slot.copyNimTree(),
     )
 
 proc setterIdentName(name: string): string =
@@ -668,6 +747,13 @@ proc hasPragma(node: NimNode, name: string): bool =
     if item.kind == nnkIdent and item.eqIdent(name):
       return true
 
+proc pragmaValue(node: NimNode, name: string): NimNode =
+  if node.kind != nnkPragma:
+    return nil
+  for item in node:
+    if item.kind == nnkExprColonExpr and item.len == 2 and item[0].eqIdent(name):
+      return item[1]
+
 proc stripPragma(node: NimNode, name: string): NimNode =
   result = node.copyNimTree()
   if result.kind != nnkPragma:
@@ -676,6 +762,8 @@ proc stripPragma(node: NimNode, name: string): NimNode =
   let pragmas = nnkPragma.newTree()
   for item in result:
     if item.kind == nnkIdent and item.eqIdent(name):
+      continue
+    if item.kind == nnkExprColonExpr and item.len == 2 and item[0].eqIdent(name):
       continue
     pragmas.add item
 
@@ -691,7 +779,18 @@ proc procIsSignal(node: NimNode): bool =
   node.kind == nnkProcDef and node[4].hasPragma("signal")
 
 proc procIsSlot(node: NimNode): bool =
-  node.kind == nnkProcDef and node[4].hasPragma("slot")
+  node.kind == nnkProcDef and
+    (node[4].hasPragma("slot") or not node[4].pragmaValue("slotFor").isNil)
+
+proc procSlotEventName(node: NimNode): string =
+  let slotFor = node[4].pragmaValue("slotFor")
+  if slotFor.isNil:
+    return selectorIdentName(node[0])
+  selectorIdentName(slotFor)
+
+proc slotPragma(node: NimNode): NimNode =
+  result = node.copyNimTree()
+  result[4] = result[4].stripPragma("slotFor")
 
 proc selectorArgsType(params: NimNode, firstArg: int): NimNode =
   if params.len == firstArg:
@@ -1174,6 +1273,7 @@ proc implementVariant(variant: NimNode, protocol: NimNode,
     slotChecks = newStmtList()
     observerBindings = nnkBracket.newTree()
     connectorDefs = newStmtList()
+    slotAliases: seq[tuple[name: string, eventName: string]]
 
   for item in body:
     if item.procIsSignal:
@@ -1190,15 +1290,17 @@ proc implementVariant(variant: NimNode, protocol: NimNode,
 
     slotDecls.add newCall(
       bindSym"rpcImpl",
-      item.copyNimTree(),
+      item.slotPragma(),
       newNilLit(),
       newNilLit(),
     )
     slotChecks.add protocolSignalSlotCheckCall(
       protocol,
-      newLit(selectorIdentName(item[0])),
+      newLit(item.procSlotEventName()),
       itemReceiver,
+      ident(selectorIdentName(item[0])),
     )
+    slotAliases.add (selectorIdentName(item[0]), item.procSlotEventName())
 
   if not receiverType.isNil:
     let
@@ -1219,6 +1321,26 @@ proc implementVariant(variant: NimNode, protocol: NimNode,
       disconnectProtocolCall = protocolObserverCall(
         protocol, observerSource, observerReceiver, disconnect = true
       )
+    var
+      connectAliases = newStmtList(connectProtocolCall)
+      disconnectAliases = newStmtList(disconnectProtocolCall)
+    for slot in slotAliases:
+      if slot.name != slot.eventName:
+        connectAliases.add protocolObserverSlotCall(
+          protocol,
+          newLit(slot.eventName),
+          observerSource,
+          observerReceiver,
+          ident(slot.name),
+        )
+        disconnectAliases.add protocolObserverSlotCall(
+          protocol,
+          newLit(slot.eventName),
+          observerSource,
+          observerReceiver,
+          ident(slot.name),
+          disconnect = true,
+        )
 
     connectorDefs.add quote do:
       template `connectName`(
@@ -1230,7 +1352,7 @@ proc implementVariant(variant: NimNode, protocol: NimNode,
           else:
             let `observerReceiver` = `receiverType`(`observerTarget`)
           if not `observerReceiver`.isNil:
-            `connectProtocolCall`
+            `connectAliases`
 
       template `disconnectName`(
           `observerSource`, `observerTarget`: untyped
@@ -1241,7 +1363,7 @@ proc implementVariant(variant: NimNode, protocol: NimNode,
           else:
             let `observerReceiver` = `receiverType`(`observerTarget`)
           if not `observerReceiver`.isNil:
-            `disconnectProtocolCall`
+            `disconnectAliases`
 
       proc `connectRuntimeName`(
           `observerSource`: Agent, `observerTarget`: Agent
@@ -1341,19 +1463,30 @@ proc protocolSlotCheck(
         {.error: `missingMessage`.}
 
 proc protocolSignalSlotCheck(
-    signalName: string, sourceType: NimNode, receiver: NimNode
+    signalName: string,
+    sourceType: NimNode,
+    receiver: NimNode,
+    slotIdent: NimNode = nil,
 ): NimNode =
   let
     signalIdent = ident(signalName)
-    missingMessage = "missing protocol signal slot " & signalName
-    mismatchMessage = "protocol signal slot " & signalName &
+    resolvedSlotIdent =
+      if slotIdent.isNil:
+        signalIdent
+      else:
+        slotIdent.copyNimTree()
+    resolvedSlotName = selectorIdentName(resolvedSlotIdent)
+    missingMessage = "missing protocol signal slot " & resolvedSlotName &
+      " for event " & signalName
+    mismatchMessage = "protocol signal slot " & resolvedSlotName &
+      " for event " & signalName &
       " has the wrong signature"
 
   result = quote do:
     block:
-      when compiles(`signalIdent`(`receiver`)):
+      when compiles(`resolvedSlotIdent`(`receiver`)):
         when typeof(SignalTypes.`signalIdent`(`sourceType`)) is typeof(
-            SignalTypes.`signalIdent`(`receiver`)
+            SignalTypes.`resolvedSlotIdent`(`receiver`)
         ):
           discard
         else:
@@ -1362,10 +1495,11 @@ proc protocolSignalSlotCheck(
         {.error: `missingMessage`.}
 
 proc protocolObserverStatement(
-    name: string,
+    eventName: string,
     sourceType: NimNode,
     source: NimNode,
     observer: NimNode,
+    slotName = "",
     disconnect = false,
 ): NimNode =
   let
@@ -1378,8 +1512,13 @@ proc protocolObserverStatement(
     sourceTypeName = sourceType.repr
     observerName = observer.repr
     signalSourceName = "sigilsProtocolSignalSource"
-    call = actionName & "(" & signalSourceName & ", " & name & ", " &
-      observerName & ", " & name & ")"
+    resolvedSlotName =
+      if slotName.len == 0:
+        eventName
+      else:
+        slotName
+    call = actionName & "(" & signalSourceName & ", " & eventName & ", " &
+      observerName & ", " & resolvedSlotName & ")"
 
   result = parseStmt(
     "block:\n" &
@@ -1462,7 +1601,7 @@ proc addProtocolSlot(
     slotDecls: var seq[NimNode],
     slotChecks: var seq[NimNode],
     slots: var seq[NimNode],
-    slotNames: var seq[string],
+    slotNames: var seq[tuple[name: string, eventName: string]],
     item: NimNode,
     firstArg: int,
     receiver: NimNode,
@@ -1476,15 +1615,18 @@ proc addProtocolSlot(
   if not receiver.isNil:
     validateProtocolSlotReceiver(item, receiver)
 
-  let slotName = selectorIdentName(item[0])
-  if slotName in slotNames:
-    return
-  slotNames.add slotName
+  let
+    slotName = selectorIdentName(item[0])
+    eventName = item.procSlotEventName()
+  for slot in slotNames:
+    if slot.name == slotName:
+      return
+  slotNames.add (slotName, eventName)
 
   if not receiver.isNil:
     slotDecls.add newCall(
       bindSym"rpcImpl",
-      item.copyNimTree(),
+      item.slotPragma(),
       newNilLit(),
       newNilLit(),
     )
@@ -1494,6 +1636,7 @@ proc addProtocolSlot(
     bindSym"protocolSlot",
     newLit(slotName),
     newLit(item.repr),
+    newLit(eventName),
   )
 
 proc addIncludedProtocols(result: var seq[NimNode], node: NimNode) =
@@ -1556,7 +1699,7 @@ proc protocolDeclaration(
     selectors: seq[string]
     signals: seq[string]
     signalSources: seq[tuple[name: string, sourceType: NimNode]]
-    slotNames: seq[string]
+    slotNames: seq[tuple[name: string, eventName: string]]
 
   let checkReceiver = ident("receiver")
 
@@ -1626,6 +1769,7 @@ proc protocolDeclaration(
     hasSignalName = protocolHasSignalNameIdent(name)
     signalSlotCheckName = protocolSignalSlotCheckIdent(name)
     signalNameParam = newIdentNode("sigilsProtocolSignalName")
+    slotNameParam = newIdentNode("sigilsProtocolSlotName")
   var checkBody = newStmtList()
   for inheritedProtocol in allInherited:
     checkBody.add protocolSlotCheckCall(inheritedProtocol, checkReceiver)
@@ -1671,6 +1815,7 @@ proc protocolDeclaration(
           inheritedProtocol,
           signalNameParam,
           checkReceiver,
+          slotNameParam,
       )
     ),
     )
@@ -1678,8 +1823,13 @@ proc protocolDeclaration(
     signalSlotCheckBody.add nnkElifBranch.newTree(
       nnkInfix.newTree(ident"==", signalNameParam, newLit(signal.name)),
       newStmtList(
-        protocolSignalSlotCheck(signal.name, signal.sourceType, checkReceiver)
-      ),
+        protocolSignalSlotCheck(
+          signal.name,
+          signal.sourceType,
+          checkReceiver,
+          slotNameParam,
+      )
+    ),
     )
   signalSlotCheckBody.add nnkElse.newTree(newStmtList(quote do:
     {.error: `unsupportedSignalSlotMessage`.}
@@ -1689,21 +1839,25 @@ proc protocolDeclaration(
     template `signalSlotCheckName`(
         `signalNameParam`: static string,
         `checkReceiver`: typedesc,
+        `slotNameParam`: untyped,
     ): untyped {.used.} =
       block:
         `signalSlotCheckBody`
 
   if not receiver.isNil and allInherited.len > 0:
-    for slotName in slotNames:
+    for slot in slotNames:
       result.add protocolSignalSlotCheckCall(
         name,
-        newLit(slotName),
+        newLit(slot.eventName),
         receiver,
+        ident(slot.name),
       )
 
   let
     connectName = protocolConnectIdent(name)
     disconnectName = protocolDisconnectIdent(name)
+    connectSlotName = protocolConnectSlotIdent(name)
+    disconnectSlotName = protocolDisconnectSlotIdent(name)
     connectCallName = ident("connect" & selectorIdentName(name) & "Protocol")
     disconnectCallName = ident("disconnect" & selectorIdentName(name) & "Protocol")
     connectRuntimeName = protocolConnectRuntimeIdent(name)
@@ -1711,6 +1865,8 @@ proc protocolDeclaration(
     observerSource = newIdentNode("sigilsProtocolSource")
     observerTarget = newIdentNode("sigilsProtocolObserver")
     observerReceiver = newIdentNode("sigilsProtocolReceiver")
+    observerEventName = newIdentNode("sigilsProtocolEventName")
+    observerSlot = newIdentNode("sigilsProtocolSlot")
     observerForConnect =
       if receiver.isNil:
         observerTarget
@@ -1719,12 +1875,43 @@ proc protocolDeclaration(
   var
     connectBody = newStmtList()
     disconnectBody = newStmtList()
+    connectSlotBody = newStmtList()
+    disconnectSlotBody = newStmtList()
 
   for inheritedProtocol in allInherited:
     connectBody.add protocolObserverCall(inheritedProtocol, observerSource,
         observerForConnect)
     disconnectBody.add protocolObserverCall(inheritedProtocol, observerSource,
         observerForConnect, disconnect = true)
+    connectSlotBody.add nnkWhenStmt.newTree(
+      nnkElifBranch.newTree(
+        protocolHasSignalNameCall(inheritedProtocol, observerEventName),
+        newStmtList(
+          protocolObserverSlotCall(
+            inheritedProtocol,
+            observerEventName,
+            observerSource,
+            observerForConnect,
+            observerSlot,
+      )
+    ),
+      )
+    )
+    disconnectSlotBody.add nnkWhenStmt.newTree(
+      nnkElifBranch.newTree(
+        protocolHasSignalNameCall(inheritedProtocol, observerEventName),
+        newStmtList(
+          protocolObserverSlotCall(
+            inheritedProtocol,
+            observerEventName,
+            observerSource,
+            observerForConnect,
+            observerSlot,
+            disconnect = true,
+      )
+    ),
+      )
+    )
 
   for signal in signalSources:
     connectBody.add protocolObserverStatement(signal.name,
@@ -1732,6 +1919,53 @@ proc protocolDeclaration(
     disconnectBody.add protocolObserverStatement(signal.name,
         signal.sourceType, observerSource, observerForConnect,
         disconnect = true)
+    connectSlotBody.add nnkWhenStmt.newTree(
+      nnkElifBranch.newTree(
+        nnkInfix.newTree(ident"==", observerEventName, newLit(signal.name)),
+        newStmtList(
+          protocolObserverStatement(
+            signal.name,
+            signal.sourceType,
+            observerSource,
+            observerForConnect,
+            slotName = observerSlot.repr,
+      )
+    ),
+      )
+    )
+    disconnectSlotBody.add nnkWhenStmt.newTree(
+      nnkElifBranch.newTree(
+        nnkInfix.newTree(ident"==", observerEventName, newLit(signal.name)),
+        newStmtList(
+          protocolObserverStatement(
+            signal.name,
+            signal.sourceType,
+            observerSource,
+            observerForConnect,
+            slotName = observerSlot.repr,
+            disconnect = true,
+      )
+    ),
+      )
+    )
+
+  for slot in slotNames:
+    if slot.name != slot.eventName:
+      connectBody.add protocolObserverSlotCall(
+        name,
+        newLit(slot.eventName),
+        observerSource,
+        observerForConnect,
+        ident(slot.name),
+      )
+      disconnectBody.add protocolObserverSlotCall(
+        name,
+        newLit(slot.eventName),
+        observerSource,
+        observerForConnect,
+        ident(slot.name),
+        disconnect = true,
+      )
 
   if connectBody.len == 0:
     connectBody.add quote do:
@@ -1739,9 +1973,33 @@ proc protocolDeclaration(
   if disconnectBody.len == 0:
     disconnectBody.add quote do:
       discard
+  if connectSlotBody.len == 0:
+    connectSlotBody.add quote do:
+      discard
+  if disconnectSlotBody.len == 0:
+    disconnectSlotBody.add quote do:
+      discard
 
   if receiver.isNil:
     result.add quote do:
+      template `connectSlotName`(
+          `observerEventName`: static string,
+          `observerSource`,
+          `observerTarget`,
+          `observerSlot`: untyped,
+      ): untyped {.used.} =
+        block:
+          `connectSlotBody`
+
+      template `disconnectSlotName`(
+          `observerEventName`: static string,
+          `observerSource`,
+          `observerTarget`,
+          `observerSlot`: untyped,
+      ): untyped {.used.} =
+        block:
+          `disconnectSlotBody`
+
       template `connectName`(
           `observerSource`, `observerTarget`: untyped
       ): untyped {.used.} =
@@ -1756,6 +2014,34 @@ proc protocolDeclaration(
   else:
     let receiverType = receiver.copyNimTree()
     result.add quote do:
+      template `connectSlotName`(
+          `observerEventName`: static string,
+          `observerSource`,
+          `observerTarget`,
+          `observerSlot`: untyped,
+      ): untyped {.used.} =
+        block:
+          when typeof(`observerTarget`) is `receiverType`:
+            let `observerReceiver` = `observerTarget`
+          else:
+            let `observerReceiver` = `receiverType`(`observerTarget`)
+          if not `observerReceiver`.isNil:
+            `connectSlotBody`
+
+      template `disconnectSlotName`(
+          `observerEventName`: static string,
+          `observerSource`,
+          `observerTarget`,
+          `observerSlot`: untyped,
+      ): untyped {.used.} =
+        block:
+          when typeof(`observerTarget`) is `receiverType`:
+            let `observerReceiver` = `observerTarget`
+          else:
+            let `observerReceiver` = `receiverType`(`observerTarget`)
+          if not `observerReceiver`.isNil:
+            `disconnectSlotBody`
+
       template `connectName`(
           `observerSource`, `observerTarget`: untyped
       ): untyped {.used.} =

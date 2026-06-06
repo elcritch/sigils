@@ -4,8 +4,15 @@ import sigils/core
 import sigils/selectors
 
 type
+  LayoutInvalidationReason = enum
+    layoutSizeChanged
+    layoutPositionChanged
+
   ListView = ref object of DynamicAgent
     xDelegate: DynamicAgent
+
+  LayoutView = ref object of DynamicAgent
+    dirtyReasons: set[LayoutInvalidationReason]
 
   ListDelegateSpy = ref object of DynamicAgent
     changingCount: int
@@ -22,6 +29,10 @@ type
     changedCount: int
     lastSender: DynamicAgent
 
+  AliasedNamedVariantListDelegateSpy = ref object of DynamicAgent
+    changedCount: int
+    lastSender: DynamicAgent
+
   CompleteListDelegateSpy = ref object of DynamicAgent
     changingCount: int
     changedCount: int
@@ -31,6 +42,19 @@ type
 
 protocol ListViewDelegate:
   method shouldSelectRow*(listView: ListView, row: int): bool {.optional.}
+
+protocol ViewLayoutInputEvents:
+  proc layoutInputChanged*(
+      view: LayoutView, reason: LayoutInvalidationReason
+  ) {.signal.}
+
+protocol ViewLayoutInputSlots from LayoutView:
+  includes ViewLayoutInputEvents
+
+  proc markLayoutInputDirty*(
+      view: LayoutView, reason: LayoutInvalidationReason
+  ) {.slotFor: layoutInputChanged.} =
+    view.dirtyReasons.incl reason
 
 protocol ListViewEvents:
   proc selectionIsChanging*(listView: ListView, sender: DynamicAgent) {.signal.}
@@ -63,6 +87,13 @@ protocol NamedVariantListDelegateSpyEvents of ListViewEvents:
   proc selectionDidChange*(
       delegate: NamedVariantListDelegateSpy, sender: DynamicAgent
   ) {.slot.} =
+    inc delegate.changedCount
+    delegate.lastSender = sender
+
+protocol NamedVariantAliasedListDelegateSpyEvents of ListViewEvents:
+  proc rememberSelectionDidChange*(
+      delegate: AliasedNamedVariantListDelegateSpy, sender: DynamicAgent
+  ) {.slotFor: selectionDidChange.} =
     inc delegate.changedCount
     delegate.lastSender = sender
 
@@ -222,6 +253,20 @@ suite "protocol signal-slot connection":
     check delegate.changedCount == 1
     check delegate.lastSender == sender
 
+  test "receiver-bound protocol slots can alias event names":
+    let view = LayoutView().withProto()
+
+    connectProtocol(view, view, ViewLayoutInputSlots)
+
+    check view.hasSubscription(toSigilName("layoutInputChanged"), view)
+    check ViewLayoutInputSlots.protocolSlot(
+      toSigilName("markLayoutInputDirty")
+    ).get().eventName == toSigilName("layoutInputChanged")
+
+    emit view.layoutInputChanged(layoutSizeChanged)
+
+    check layoutSizeChanged in view.dirtyReasons
+
   test "named protocol variants can provide matching event slots":
     let
       listView = ListView()
@@ -232,6 +277,23 @@ suite "protocol signal-slot connection":
     check delegate.hasAdopted(ListViewEvents)
 
     connectProtocol(listView, delegate, NamedVariantListDelegateSpyEvents)
+
+    check listView.hasSubscription(toSigilName("selectionDidChange"), delegate)
+
+    emit listView.selectionDidChange(sender)
+
+    check delegate.changedCount == 1
+    check delegate.lastSender == sender
+
+  test "named protocol variants can alias event slot names":
+    let
+      listView = ListView()
+      delegate = AliasedNamedVariantListDelegateSpy().withProtocol(
+        NamedVariantAliasedListDelegateSpyEvents
+      )
+      sender = DynamicAgent()
+
+    connectProtocol(listView, delegate, NamedVariantAliasedListDelegateSpyEvents)
 
     check listView.hasSubscription(toSigilName("selectionDidChange"), delegate)
 
@@ -314,5 +376,5 @@ suite "protocol signal-slot connection":
     )
     checkInvalidProtocolExample(
       "mismatchedProtocolEventSlot.nim",
-      "protocol signal slot windowDidClose has the wrong signature",
+      "for event windowDidClose has the wrong signature",
     )
