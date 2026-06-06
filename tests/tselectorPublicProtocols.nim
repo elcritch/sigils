@@ -25,6 +25,20 @@ suite "public selector protocols":
 
     check controller.windowClosed
 
+  test "exported protocol connectors are visible across modules":
+    let
+      window = PublicWindow()
+      controller = PublicController().withProto()
+
+    connectProtocol(
+      window,
+      controller,
+      selectorPublicProtocolsFixture.PublicControllerEvents,
+    )
+    emit window.windowDidClose()
+
+    check controller.windowClosed
+
   test "exported receiver-bound protocol is visible across modules":
     let view = PublicView(caption: "old").withProto
 

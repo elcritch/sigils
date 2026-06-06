@@ -179,7 +179,7 @@ doAssert selectorName(numberOfRows) ==
 
 This is runtime selector scoping, not a generated Nim namespace; `ListViewDataSource.numberOfRows` is not created. If two imported modules export the same short selector helper, use normal Nim module qualification to choose between them. Scoped selector names must still fit in `SigilName`, which is 48 bytes by default.
 
-Protocols may also list signals and slots that belong to the same conceptual surface. Protocol signals are generated as normal Sigils signals and recorded in `protocol.signals`. Protocol slots are recorded in `protocol.slots` and can be checked with `checkProtocolSlots(Receiver, Protocol)`. Neither signals nor slots affect `canConformTo` or `adopt`.
+Protocols may also list signals and slots that belong to the same conceptual surface. Protocol signals are generated as normal Sigils signals and recorded in `protocol.signals`. Explicit protocol slots are recorded in `protocol.slots` and can be checked with `checkProtocolSlots(Receiver, Protocol)` or `requireProtocolSlots(Receiver, Protocol)`. Neither signals nor slots affect `canConformTo` or `adopt`.
 
 The first signal parameter is still the signal source type. Receiverless slot declarations describe the slot payload. A `protocol ... from Receiver` may use normal receiver-first slot implementations.
 
@@ -191,6 +191,49 @@ protocol WindowLifecycle:
 
 checkProtocolSlots(WindowController, WindowLifecycle)
 ```
+
+For event protocols, a signal declaration is enough. `connectProtocol` tries to connect every protocol signal to an observer slot with the same name and compatible payload type. Missing observer slots are ignored, which makes partial observers cheap.
+
+```nim
+protocol ListViewEvents:
+  proc selectionDidChange(listView: ListView, sender: DynamicAgent) {.signal.}
+
+protocol ListControllerEvents from ListController includes ListViewEvents:
+  proc selectionDidChange(controller: ListController, sender: DynamicAgent) {.slot.} =
+    controller.updatePreview()
+
+let controller = ListController().withProto()
+connectProtocol(listView, controller, ListViewEvents)
+emit listView.selectionDidChange(controller)
+```
+
+A receiver-bound `from ... includes ...` protocol implementation, or a named `protocol Variant of Events` implementation, may provide event slots. Those slot names are checked at compile time against the base protocol's signals, and their payload types must match.
+
+`observeProtocol` is the same operation with observer-first argument order, which is useful for small GUI wrappers:
+
+```nim
+controller.observeProtocol(listView, ListViewEvents)
+controller.unobserveProtocol(listView, ListViewEvents)
+```
+
+`disconnectProtocol` and `unobserveProtocol` remove the matching protocol subscriptions.
+
+For delegate-style APIs, keep behavior selectors and observation events as separate protocols. `setProtocolDelegate` updates a `DynamicAgent` delegate field, adopts the behavior protocol on the new delegate, disconnects the old delegate's registered event observer, and connects the new one.
+
+```nim
+protocol ListViewDelegate:
+  method shouldSelectRow(listView: ListView, row: int): bool {.optional.}
+
+if listView.setProtocolDelegate(
+  listView.xDelegate,
+  controller,
+  ListViewDelegate,
+  ListViewEvents,
+):
+  listView.reloadData()
+```
+
+The erased-delegate path uses event observers registered by receiver-bound protocols installed with `withProto`, or named event implementations installed with `withProtocol`. Direct `connectProtocol(source, observer, SomeEvents)` still works when the observer's concrete slot type is visible at the call site.
 
 ## Default Implementations
 

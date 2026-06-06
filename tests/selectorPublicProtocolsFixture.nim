@@ -16,6 +16,13 @@ protocol PublicWindowLifecycleProtocol:
   proc windowWillClose*(window: PublicWindow) {.signal.}
   proc rememberWindowClose*() {.slot.}
 
+protocol PublicWindowEvents:
+  proc windowDidClose*(window: PublicWindow) {.signal.}
+
+protocol PublicControllerEvents from PublicController includes PublicWindowEvents:
+  proc windowDidClose*(self: PublicController) {.slot.} =
+    self.windowClosed = true
+
 protocol PublicCaptionedViewProtocol from PublicView:
   method currentCaption*(self: PublicView): string =
     self.caption

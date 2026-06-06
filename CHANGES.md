@@ -1,3 +1,4 @@
+- `v0.22.3` - add protocol signal-slot observation helpers, signal-name event slot matching, receiver-bound/named event implementations, and delegate event wiring
 - `v0.22.2` - add opt-in protocol selector scoping with compile-time `SigilName` length diagnostics
 - `v0.22.1` - allow protocol declarations to include descriptive `.signal.` and `.slot.` procs without affecting conformance
 - `v0.19.0` - improve threadSelectors timer handling and io exhaustion; improve registry
