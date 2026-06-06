@@ -129,7 +129,7 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
     procName = ident(procNameStr) # ident("agentSlot_" & rpcMethodGen.repr)
     rpcMethod = ident(procNameStr)
 
-    paramsIdent = ident("args")
+    paramsIdent = genSym(nskVar, "sigilsSlotArgs")
     paramTypeName = ident("RpcType" & procNameStr)
 
   # echo "SLOTS:slot:NAME: ", p.name(), " => ", procNameStr, " genname: ", rpcMethodGen
@@ -140,7 +140,6 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
 
   var
     # process the argument types
-    paramSetups = mkParamsVars(paramsIdent, paramTypeName, parameters)
     paramTypes = mkParamsType(paramsIdent, paramTypeName, parameters, genericParams)
 
     procBody =
@@ -199,7 +198,7 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
         rpcType.add arg
 
     # Create the rpc wrapper procs
-    let objId = ident "obj"
+    let objId = genSym(nskLet, "sigilsSlotObj")
     var tupTyp = nnkTupleConstr.newTree()
     for pt in paramTypes[0][^1]:
       tupTyp.add pt[1]
@@ -207,10 +206,13 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
       tupTyp = nnkTupleTy.newTree()
     let mcall = nnkCall.newTree(rpcMethod)
     mcall.add(objId)
+    var argIdx = 0
     for param in parameters[1 ..^ 1]:
-      mcall.add param[0]
+      discard param
+      mcall.add nnkBracketExpr.newTree(paramsIdent, newIntLitNode(argIdx))
+      argIdx.inc()
 
-    let localArgsIdent = ident("localArgs")
+    let localArgsIdent = genSym(nskLet, "sigilsLocalSlotArgs")
     let localMcall = nnkCall.newTree(rpcMethod)
     localMcall.add(objId)
     var localArgIdx = 0
@@ -232,7 +234,6 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
         when `tupTyp` isnot tuple[]:
           var `paramsIdent`: `tupTyp`
           rpcUnpack(`paramsIdent`, params)
-        `paramSetups`
         `mcall`
 
     let directSlotImpl = quote:
@@ -272,19 +273,21 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
     var construct = nnkTupleConstr.newTree()
     for param in parameters[1 ..^ 1]:
       construct.add param[0]
-    let objId = ident"obj"
+    let
+      objId = newIdentNode("__sigilsSignalSource")
+      signalArgsIdent = newIdentNode("__sigilsSignalArgs")
 
     result.add quote do:
       proc `rpcMethod`(
           `objId`: `firstType`
       ): SigilLocalCall[`firstType`, typeof(`construct`)] =
-        var args = `construct`
+        var `signalArgsIdent` = `construct`
         const name: SigilName = toSigilName(`signalName`)
-        result = SigilLocalCall[`firstType`, typeof(args)](
+        result = SigilLocalCall[`firstType`, typeof(`signalArgsIdent`)](
           source: `objId`,
           procName: name,
           origin: `objId`.getSigilId(),
-          args: ensureMove args
+          args: ensureMove `signalArgsIdent`
         )
 
     for param in parameters[1 ..^ 1]:
@@ -294,13 +297,14 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
       proc `rpcMethod`(
           `objId`: WeakRef[`firstType`]
       ): SigilLocalCall[WeakRef[`firstType`], typeof(`construct`)] =
-        var args = `construct`
+        var `signalArgsIdent` = `construct`
         const name: SigilName = toSigilName(`signalName`)
-        result = SigilLocalCall[WeakRef[`firstType`], typeof(args)](
+        result = SigilLocalCall[WeakRef[`firstType`], typeof(
+            `signalArgsIdent`)](
           source: `objId`,
           procName: name,
           origin: `objId`.getSigilId(),
-          args: ensureMove args
+          args: ensureMove `signalArgsIdent`
         )
 
     for param in parameters[1 ..^ 1]:
