@@ -162,6 +162,23 @@ protocol TitledView:
 
 That declares `title` and `setTitle`.
 
+If a protocol should use protocol-qualified runtime selector names, opt in with `selectorScope: protocol`.
+
+```nim
+protocol ListViewDataSource {.selectorScope: protocol.}:
+  method numberOfRows(listView: ListView): int {.optional.}
+  method objectValueForRow(listView: ListView, row: int): string {.optional.}
+```
+
+The Nim selector symbols stay short (`numberOfRows`, `objectValueForRow`), but their runtime `SigilName` values are prefixed with the protocol name:
+
+```nim
+doAssert selectorName(numberOfRows) ==
+  toSigilName("ListViewDataSource.numberOfRows")
+```
+
+This is runtime selector scoping, not a generated Nim namespace; `ListViewDataSource.numberOfRows` is not created. If two imported modules export the same short selector helper, use normal Nim module qualification to choose between them. Scoped selector names must still fit in `SigilName`, which is 48 bytes by default.
+
 Protocols may also list signals and slots that belong to the same conceptual surface. Protocol signals are generated as normal Sigils signals and recorded in `protocol.signals`. Protocol slots are recorded in `protocol.slots` and can be checked with `checkProtocolSlots(Receiver, Protocol)`. Neither signals nor slots affect `canConformTo` or `adopt`.
 
 The first signal parameter is still the signal source type. Receiverless slot declarations describe the slot payload. A `protocol ... from Receiver` may use normal receiver-first slot implementations.

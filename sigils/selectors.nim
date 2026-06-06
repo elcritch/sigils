@@ -50,6 +50,10 @@ type
 
   SelectorDefaultArg = object
 
+  SelectorScope = enum
+    selectorScopeNone
+    selectorScopeProtocol
+
   UnhandledSelectorError* = object of CatchableError
     ## Raised by required selector sends when no responder handles the selector.
 
@@ -393,6 +397,51 @@ proc selectorIdent(name: string, exported: bool): NimNode =
   else:
     result = ident(name)
 
+proc checkSigilNameLength(name: string, node: NimNode, kind: string) =
+  if name.len > sigilsMaxSignalLength:
+    error(
+      kind & " `" & name & "` is " & $name.len &
+        " bytes, but SigilName capacity is " & $sigilsMaxSignalLength,
+      node,
+    )
+
+proc scopedSelectorName(
+    protocolName: string, selectorName: string, selectorScope: SelectorScope
+): string =
+  case selectorScope
+  of selectorScopeNone:
+    selectorName
+  of selectorScopeProtocol:
+    protocolName & "." & selectorName
+
+proc unwrappedPar(node: NimNode): NimNode =
+  if node.kind == nnkPar and node.len == 1:
+    node[0]
+  else:
+    node
+
+proc protocolNameAndScope(name: NimNode): tuple[name: NimNode,
+    selectorScope: SelectorScope] =
+  result.name = name.unwrappedPar.copyNimTree()
+  result.selectorScope = selectorScopeNone
+
+  let node = name.unwrappedPar
+  if node.kind != nnkPragmaExpr:
+    return
+
+  result.name = node[0].unwrappedPar.copyNimTree()
+  for pragma in node[1]:
+    if pragma.kind == nnkExprColonExpr and pragma.len == 2 and
+        pragma[0].eqIdent("selectorScope"):
+      if pragma[1].eqIdent("protocol"):
+        result.selectorScope = selectorScopeProtocol
+      elif pragma[1].eqIdent("none"):
+        result.selectorScope = selectorScopeNone
+      else:
+        error("selectorScope must be `protocol` or `none`", pragma[1])
+    else:
+      error("unsupported protocol pragma", pragma)
+
 proc protocolSlotCheckIdent(name: NimNode): NimNode =
   selectorIdent(
     "check" & selectorIdentName(name) & "Slots",
@@ -588,6 +637,11 @@ proc selectorPragma(node: NimNode): NimNode =
   else:
     result[4].add ident"selector"
 
+proc selectorImplNode(p: NimNode, runtimeSelectorName = ""): NimNode
+
+proc selectorDeclaration(node: NimNode, runtimeSelectorName = ""): NimNode =
+  selectorImplNode(selectorPragma(node), runtimeSelectorName)
+
 when sigilsSelectorClosuresEnabled:
   macro selectorClosureImpl(selector: typed, blk: typed): untyped =
     ## Build a DynamicMethod from a typed receiver closure.
@@ -678,12 +732,18 @@ when sigilsSelectorClosuresEnabled:
 
         `dynMethod`
 
-macro selectorImpl(p: untyped): untyped =
+proc selectorImplNode(p: NimNode, runtimeSelectorName = ""): NimNode =
   if p.kind != nnkMethodDef:
     error("selector pragma can only be used on a method", p)
 
   let
-    selectorName = newStrLitNode(selectorIdentName(p[0]))
+    selectorSymbolName = selectorIdentName(p[0])
+    selectorRuntimeName =
+      if runtimeSelectorName.len == 0:
+        selectorSymbolName
+      else:
+        runtimeSelectorName
+    selectorName = newStrLitNode(selectorRuntimeName)
     params = p[3]
     retType =
       if params[0].kind == nnkEmpty:
@@ -691,13 +751,15 @@ macro selectorImpl(p: untyped): untyped =
       else:
         params[0].copyNimTree()
 
+  checkSigilNameLength(selectorRuntimeName, p[0], "selector name")
+
   if p[6].kind == nnkEmpty:
     let
       selectorProc = p[0].copyNimTree()
-      selectorValueProc = genSym(nskTemplate, selectorIdentName(p[0]) & "Selector")
+      selectorValueProc = genSym(nskTemplate, selectorSymbolName & "Selector")
       selectorValueCache = genSym(nskLet,
-          selectorIdentName(p[0]) & "SelectorValue")
-      directProc = genSym(nskProc, selectorIdentName(p[0]) & "Send")
+          selectorSymbolName & "SelectorValue")
+      directProc = genSym(nskProc, selectorSymbolName & "Send")
       argsType = selectorArgsType(params, 1)
       dynSelf = genSym(nskParam, "self")
       directParams = params.copyNimTree()
@@ -757,7 +819,7 @@ macro selectorImpl(p: untyped): untyped =
 
     let
       dynProc = p[0].copyNimTree()
-      implProc = genSym(nskProc, selectorIdentName(p[0]) & "Impl")
+      implProc = genSym(nskProc, selectorSymbolName & "Impl")
       implParams = params.copyNimTree()
       body = p[6].copyNimTree()
       receiverName = params[1][0].copyNimTree()
@@ -809,6 +871,9 @@ macro selectorImpl(p: untyped): untyped =
           raise newException(ConversionError, "bad cast")
         `dispatchBody`
 
+macro selectorImpl(p: untyped): untyped =
+  selectorImplNode(p)
+
 template selector*(p: untyped): untyped =
   selectorImpl(p)
 
@@ -819,7 +884,7 @@ macro property*(spec: untyped): untyped =
 
   result = newStmtList()
   for item in propertyMethods(spec[1], spec[2]):
-    result.add selectorPragma(item)
+    result.add selectorDeclaration(item)
 
 proc implementMethodBinding(item: NimNode): tuple[defs: seq[NimNode],
     binding: NimNode] =
@@ -1012,17 +1077,22 @@ proc addProtocolRequirement(
     item: NimNode,
     firstArg: int,
     required: bool,
+    protocolName: string,
+    selectorScope: SelectorScope,
 ) =
   if item.kind != nnkMethodDef:
     error("protocol requirements must be method declarations", item)
 
-  let selectorName = selectorIdentName(item[0])
+  let
+    selectorName = selectorIdentName(item[0])
+    runtimeSelectorName = scopedSelectorName(protocolName, selectorName,
+        selectorScope)
   if selectorName in selectors:
     return
   selectors.add selectorName
 
   let requirementMethod = protocolRequirementMethod(item, firstArg)
-  selectorDecls.add selectorPragma(requirementMethod)
+  selectorDecls.add selectorDeclaration(requirementMethod, runtimeSelectorName)
   reqs.add newCall(
     bindSym"requirement",
     ident(selectorName),
@@ -1105,8 +1175,13 @@ proc protocolDeclaration(
     firstArg = 1,
     receiver: NimNode = nil,
     inherited: openArray[NimNode] = [],
+    selectorScope = selectorScopeNone,
 ): NimNode =
-  let protocolName = newStrLitNode(selectorIdentName(name))
+  let
+    protocolNameString = selectorIdentName(name)
+    protocolName = newStrLitNode(protocolNameString)
+  checkSigilNameLength(protocolNameString, name, "protocol name")
+
   var
     selectorDecls: seq[NimNode]
     signalDecls: seq[NimNode]
@@ -1132,6 +1207,8 @@ proc protocolDeclaration(
           propertyDecl,
           1,
           not propertyDecl.methodIsOptional,
+          protocolNameString,
+          selectorScope,
         )
     elif section.kind == nnkMethodDef:
       if not receiver.isNil:
@@ -1146,6 +1223,8 @@ proc protocolDeclaration(
         section,
         firstArg,
         not section.methodIsOptional,
+        protocolNameString,
+        selectorScope,
       )
     elif section.procIsSignal:
       addProtocolSignal(
@@ -1214,10 +1293,14 @@ proc protocolDeclaration(
   result.add newLetStmt(selectorIdent(selectorIdentName(name), true), protocolCall)
 
 proc implementProtocolForReceiver(
-    protocol: NimNode, receiver: NimNode, body: NimNode
+    protocol: NimNode,
+    receiver: NimNode,
+    body: NimNode,
+    selectorScope = selectorScopeNone,
 ): NimNode =
   let
-    protocolDecl = protocolDeclaration(protocol, body, 2, receiver)
+    protocolDecl = protocolDeclaration(protocol, body, 2, receiver,
+        selectorScope = selectorScope)
     implementation = implementBlock(protocol, body, allowProperties = true)
     receiverType = receiver.copyNimTree()
 
@@ -1227,13 +1310,24 @@ proc implementProtocolForReceiver(
     proc proto*(_: typedesc[`receiverType`]): ProtocolImplementation =
       `implementation`
 
-proc protocolIncludes(name: NimNode): tuple[matched: bool, protocol: NimNode,
-    inherited: seq[NimNode]] =
+proc protocolIncludes(name: NimNode): tuple[
+    matched: bool,
+    protocol: NimNode,
+    inherited: seq[NimNode],
+    selectorScope: SelectorScope,
+] =
   if name.kind == nnkCommand and name.len == 2 and
       name[1].kind == nnkCommand and name[1].len == 2 and
       name[1][0].eqIdent("includes"):
+    if name[1][1].kind == nnkPragmaExpr:
+      error(
+        "selectorScope belongs on the protocol name; use: protocol (Name {.selectorScope: protocol.}) includes Base:",
+        name[1][1],
+      )
+    let parsed = protocolNameAndScope(name[0])
     result.matched = true
-    result.protocol = name[0]
+    result.protocol = parsed.name
+    result.selectorScope = parsed.selectorScope
     result.inherited.add name[1][1]
 
 macro protocol*(name: untyped, body: untyped): untyped =
@@ -1241,22 +1335,29 @@ macro protocol*(name: untyped, body: untyped): untyped =
   if name.kind == nnkInfix and name.len == 3 and name[0].eqIdent("of"):
     return implementVariant(name[1], name[2], body)
   if name.kind == nnkInfix and name.len == 3 and name[0].eqIdent("from"):
-    return implementProtocolForReceiver(name[1], name[2], body)
+    let parsed = protocolNameAndScope(name[1])
+    return implementProtocolForReceiver(parsed.name, name[2], body,
+        parsed.selectorScope)
   let includes = protocolIncludes(name)
   if includes.matched:
     return protocolDeclaration(includes.protocol, body,
-        inherited = includes.inherited)
+        inherited = includes.inherited, selectorScope = includes.selectorScope)
   if name.kind == nnkCommand and name.len == 2 and
       name[1].kind == nnkCommand and name[1].len == 2 and
       name[1][0].kind == nnkAccQuoted and
       name[1][0].len == 1 and name[1][0][0].eqIdent("for"):
-    return implementProtocolForReceiver(name[0], name[1][1], body)
+    let parsed = protocolNameAndScope(name[0])
+    return implementProtocolForReceiver(parsed.name, name[1][1], body,
+        parsed.selectorScope)
 
-  protocolDeclaration(name, body)
+  let parsed = protocolNameAndScope(name)
+  protocolDeclaration(parsed.name, body, selectorScope = parsed.selectorScope)
 
 macro protocol*(name: untyped, receiver: untyped, body: untyped): untyped =
   ## Declare a protocol and its default implementation for a receiver type.
-  implementProtocolForReceiver(name, receiver, body)
+  let parsed = protocolNameAndScope(name)
+  implementProtocolForReceiver(parsed.name, receiver, body,
+      parsed.selectorScope)
 
 macro checkProtocolSlots*(receiver: untyped, protocol: untyped): untyped =
   ## Check at compile time that a receiver type exposes a protocol's slots.
