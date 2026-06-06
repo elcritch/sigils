@@ -15,7 +15,9 @@ protocol SelectorOnlyProtocol:
 protocol SelectorOnlyEvents:
   proc selectorOnlyEvent(source: SelectorOnlySource) {.signal.}
 
-protocol SelectorOnlyObserverEvents from SelectorOnlyObserver includes SelectorOnlyEvents:
+protocol SelectorOnlyObserverEvents from SelectorOnlyObserver:
+  includes SelectorOnlyEvents
+
   proc selectorOnlyEvent(observer: SelectorOnlyObserver) {.slot.} =
     observer.handled = true
 

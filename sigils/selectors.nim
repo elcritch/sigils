@@ -1496,6 +1496,36 @@ proc addProtocolSlot(
     newLit(item.repr),
   )
 
+proc addIncludedProtocols(result: var seq[NimNode], node: NimNode) =
+  if node.kind == nnkInfix and node.len == 3 and node[0].eqIdent(","):
+    result.addIncludedProtocols(node[1])
+    result.addIncludedProtocols(node[2])
+  elif node.kind in {nnkPar, nnkTupleConstr}:
+    for item in node:
+      result.addIncludedProtocols(item)
+  elif node.kind != nnkEmpty:
+    result.add node.copyNimTree()
+
+proc protocolBodyIncludes(item: NimNode): tuple[matched: bool,
+    protocols: seq[NimNode]] =
+  if item.kind in {nnkCommand, nnkCall} and item.len >= 2 and
+      item[0].eqIdent("includes"):
+    result.matched = true
+    for idx in 1 ..< item.len:
+      result.protocols.addIncludedProtocols(item[idx])
+
+proc splitProtocolBody(body: NimNode): tuple[body: NimNode,
+    inherited: seq[NimNode]] =
+  result.body = newStmtList()
+  for section in body:
+    let includes = protocolBodyIncludes(section)
+    if includes.matched:
+      if includes.protocols.len == 0:
+        error("includes requires at least one protocol", section)
+      result.inherited.add includes.protocols
+    else:
+      result.body.add section.copyNimTree()
+
 proc protocolDeclaration(
     name: NimNode,
     body: NimNode,
@@ -1504,6 +1534,12 @@ proc protocolDeclaration(
     inherited: openArray[NimNode] = [],
     selectorScope = selectorScopeNone,
 ): NimNode =
+  let split = splitProtocolBody(body)
+  var allInherited = newSeq[NimNode]()
+  for inheritedProtocol in inherited:
+    allInherited.add inheritedProtocol.copyNimTree()
+  allInherited.add split.inherited
+
   let
     protocolNameString = selectorIdentName(name)
     protocolName = newStrLitNode(protocolNameString)
@@ -1524,7 +1560,7 @@ proc protocolDeclaration(
 
   let checkReceiver = ident("receiver")
 
-  for section in body:
+  for section in split.body:
     let propertyDecls = section.protocolPropertyMethods()
     if propertyDecls.len > 0:
       for propertyDecl in propertyDecls:
@@ -1591,7 +1627,7 @@ proc protocolDeclaration(
     signalSlotCheckName = protocolSignalSlotCheckIdent(name)
     signalNameParam = newIdentNode("sigilsProtocolSignalName")
   var checkBody = newStmtList()
-  for inheritedProtocol in inherited:
+  for inheritedProtocol in allInherited:
     checkBody.add protocolSlotCheckCall(inheritedProtocol, checkReceiver)
   for slotCheck in slotChecks:
     checkBody.add slotCheck
@@ -1605,7 +1641,7 @@ proc protocolDeclaration(
         `checkBody`
 
   var hasSignalNameExpr = newLit(false)
-  for inheritedProtocol in inherited:
+  for inheritedProtocol in allInherited:
     hasSignalNameExpr = nnkInfix.newTree(
       ident"or",
       hasSignalNameExpr,
@@ -1627,7 +1663,7 @@ proc protocolDeclaration(
   let unsupportedSignalSlotMessage =
     "protocol slot does not match any signal in protocol " & protocolNameString
   var signalSlotCheckBody = nnkWhenStmt.newTree()
-  for inheritedProtocol in inherited:
+  for inheritedProtocol in allInherited:
     signalSlotCheckBody.add nnkElifBranch.newTree(
       protocolHasSignalNameCall(inheritedProtocol, signalNameParam),
       newStmtList(
@@ -1657,7 +1693,7 @@ proc protocolDeclaration(
       block:
         `signalSlotCheckBody`
 
-  if not receiver.isNil and inherited.len > 0:
+  if not receiver.isNil and allInherited.len > 0:
     for slotName in slotNames:
       result.add protocolSignalSlotCheckCall(
         name,
@@ -1684,7 +1720,7 @@ proc protocolDeclaration(
     connectBody = newStmtList()
     disconnectBody = newStmtList()
 
-  for inheritedProtocol in inherited:
+  for inheritedProtocol in allInherited:
     connectBody.add protocolObserverCall(inheritedProtocol, observerSource,
         observerForConnect)
     disconnectBody.add protocolObserverCall(inheritedProtocol, observerSource,
@@ -1754,7 +1790,7 @@ proc protocolDeclaration(
       `disconnectCallName`(`observerSource`, `observerTarget`)
 
   let protocolCall =
-    if inherited.len == 0:
+    if allInherited.len == 0:
       newCall(
         bindSym"initProtocol",
         protocolName,
@@ -1766,7 +1802,7 @@ proc protocolDeclaration(
       newCall(
         bindSym"initProtocol",
         protocolName,
-        nnkBracket.newTree(inherited),
+        nnkBracket.newTree(allInherited),
         nnkBracket.newTree(reqs),
         nnkBracket.newTree(sigs),
         nnkBracket.newTree(slts),
@@ -1781,6 +1817,12 @@ proc implementProtocolForReceiver(
     inherited: openArray[NimNode] = [],
     selectorScope = selectorScopeNone,
 ): NimNode =
+  let split = splitProtocolBody(body)
+  var allInherited = newSeq[NimNode]()
+  for inheritedProtocol in inherited:
+    allInherited.add inheritedProtocol.copyNimTree()
+  allInherited.add split.inherited
+
   let observerBindings = nnkBracket.newTree()
   observerBindings.add newCall(
     bindSym"protocolObserver",
@@ -1789,7 +1831,7 @@ proc implementProtocolForReceiver(
     protocolConnectRuntimeIdent(protocol),
     protocolDisconnectRuntimeIdent(protocol),
   )
-  for inheritedProtocol in inherited:
+  for inheritedProtocol in allInherited:
     observerBindings.add newCall(
       bindSym"protocolObserver",
       inheritedProtocol.copyNimTree(),
@@ -1799,10 +1841,10 @@ proc implementProtocolForReceiver(
     )
 
   let
-    protocolDecl = protocolDeclaration(protocol, body, 2, receiver,
-        inherited = inherited, selectorScope = selectorScope)
-    implementation = implementBlock(protocol, body, allowProperties = true,
-        observers = observerBindings)
+    protocolDecl = protocolDeclaration(protocol, split.body, 2, receiver,
+        inherited = allInherited, selectorScope = selectorScope)
+    implementation = implementBlock(protocol, split.body,
+        allowProperties = true, observers = observerBindings)
     receiverType = receiver.copyNimTree()
 
   result = quote do:
@@ -1811,68 +1853,14 @@ proc implementProtocolForReceiver(
     proc proto*(_: typedesc[`receiverType`]): ProtocolImplementation =
       `implementation`
 
-proc protocolIncludes(name: NimNode): tuple[
-    matched: bool,
-    protocol: NimNode,
-    inherited: seq[NimNode],
-    selectorScope: SelectorScope,
-] =
-  if name.kind == nnkCommand and name.len == 2 and
-      name[1].kind == nnkCommand and name[1].len == 2 and
-      name[1][0].eqIdent("includes"):
-    if name[1][1].kind == nnkPragmaExpr:
-      error(
-        "selectorScope belongs on the protocol name; use: protocol (Name {.selectorScope: protocol.}) includes Base:",
-        name[1][1],
-      )
-    let parsed = protocolNameAndScope(name[0])
-    result.matched = true
-    result.protocol = parsed.name
-    result.selectorScope = parsed.selectorScope
-    result.inherited.add name[1][1]
-
-proc protocolFromIncludes(name: NimNode): tuple[
-    matched: bool,
-    protocol: NimNode,
-    receiver: NimNode,
-    inherited: seq[NimNode],
-    selectorScope: SelectorScope,
-] =
-  if name.kind != nnkInfix or name.len != 3 or not name[0].eqIdent("from"):
-    return
-
-  let spec = name[2]
-  if spec.kind == nnkCommand and spec.len == 2 and
-      spec[1].kind == nnkCommand and spec[1].len == 2 and
-      spec[1][0].eqIdent("includes"):
-    let parsed = protocolNameAndScope(name[1])
-    result.matched = true
-    result.protocol = parsed.name
-    result.selectorScope = parsed.selectorScope
-    result.receiver = spec[0]
-    result.inherited.add spec[1][1]
-
 macro protocol*(name: untyped, body: untyped): untyped =
   ## Declare a protocol or a named implementation variant for a protocol.
   if name.kind == nnkInfix and name.len == 3 and name[0].eqIdent("of"):
     return implementVariant(name[1], name[2], body)
-  let fromIncludes = protocolFromIncludes(name)
-  if fromIncludes.matched:
-    return implementProtocolForReceiver(
-      fromIncludes.protocol,
-      fromIncludes.receiver,
-      body,
-      inherited = fromIncludes.inherited,
-      selectorScope = fromIncludes.selectorScope,
-    )
   if name.kind == nnkInfix and name.len == 3 and name[0].eqIdent("from"):
     let parsed = protocolNameAndScope(name[1])
     return implementProtocolForReceiver(parsed.name, name[2], body,
         selectorScope = parsed.selectorScope)
-  let includes = protocolIncludes(name)
-  if includes.matched:
-    return protocolDeclaration(includes.protocol, body,
-        inherited = includes.inherited, selectorScope = includes.selectorScope)
   if name.kind == nnkCommand and name.len == 2 and
       name[1].kind == nnkCommand and name[1].len == 2 and
       name[1][0].kind == nnkAccQuoted and

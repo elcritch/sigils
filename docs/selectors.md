@@ -149,7 +149,9 @@ doAssert controller.validateText("value")
 Protocols support inheritance:
 
 ```nim
-protocol StrictTextFieldDelegate includes TextFieldDelegate:
+protocol StrictTextFieldDelegate:
+  includes TextFieldDelegate
+
   method selectionRange(): string
 ```
 
@@ -198,7 +200,9 @@ For event protocols, a signal declaration is enough. `connectProtocol` tries to 
 protocol ListViewEvents:
   proc selectionDidChange(listView: ListView, sender: DynamicAgent) {.signal.}
 
-protocol ListControllerEvents from ListController includes ListViewEvents:
+protocol ListControllerEvents from ListController:
+  includes ListViewEvents
+
   proc selectionDidChange(controller: ListController, sender: DynamicAgent) {.slot.} =
     controller.updatePreview()
 
@@ -207,7 +211,7 @@ connectProtocol(listView, controller, ListViewEvents)
 emit listView.selectionDidChange(controller)
 ```
 
-A receiver-bound `from ... includes ...` protocol implementation, or a named `protocol Variant of Events` implementation, may provide event slots. Those slot names are checked at compile time against the base protocol's signals, and their payload types must match.
+A receiver-bound `from Receiver` protocol implementation with body-level `includes`, or a named `protocol Variant of Events` implementation, may provide event slots. Those slot names are checked at compile time against the base protocol's signals, and their payload types must match.
 
 `observeProtocol` is the same operation with observer-first argument order, which is useful for small GUI wrappers:
 

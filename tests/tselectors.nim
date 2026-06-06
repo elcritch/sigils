@@ -45,7 +45,9 @@ protocol TextFieldDelegate:
   method textDidCommit(text: string) {.optional.}
   method placeholderText(): string {.optional.}
 
-protocol StrictTextFieldDelegate includes TextFieldDelegate:
+protocol StrictTextFieldDelegate:
+  includes TextFieldDelegate
+
   method selectionRange(): string
 
 protocol TitledProtocol:
@@ -70,7 +72,9 @@ protocol WindowLifecycleProtocolInternal:
   proc windowDidSetContentView*(window: Window, view: View) {.signal.}
   proc rememberContentView*(view: View) {.slot.}
 
-protocol StrictWindowLifecycleProtocol includes WindowLifecycleProtocolInternal:
+protocol StrictWindowLifecycleProtocol:
+  includes WindowLifecycleProtocolInternal
+
   method windowIdentifier*(): string
   proc windowDidBecomeKey*(window: Window) {.signal.}
   proc rememberWindowKey*() {.slot.}

@@ -44,11 +44,15 @@ protocol ListViewObserverSlots:
   proc rowWasActivated*(sender: DynamicAgent) {.slot.}
   proc selectionWasIgnored*(sender: DynamicAgent) {.slot.}
 
-protocol StrictListViewEvents includes ListViewEvents:
+protocol ListViewReloadEvents:
   proc listWasReloaded*(listView: ListView, sender: DynamicAgent) {.signal.}
 
-protocol ReceiverBoundListDelegateSpyEvents from
-  ReceiverBoundListDelegateSpy includes ListViewEvents:
+protocol StrictListViewEvents:
+  includes ListViewEvents, ListViewReloadEvents
+
+protocol ReceiverBoundListDelegateSpyEvents from ReceiverBoundListDelegateSpy:
+  includes ListViewEvents
+
   proc selectionDidChange*(
       delegate: ReceiverBoundListDelegateSpy, sender: DynamicAgent
   ) {.slot.} =
@@ -62,19 +66,23 @@ protocol NamedVariantListDelegateSpyEvents of ListViewEvents:
     inc delegate.changedCount
     delegate.lastSender = sender
 
-proc selectionIsChanging*(delegate: ListDelegateSpy, sender: DynamicAgent) {.slot.} =
+proc selectionIsChanging*(delegate: ListDelegateSpy,
+    sender: DynamicAgent) {.slot.} =
   inc delegate.changingCount
   delegate.lastSender = sender
 
-proc selectionDidChange*(delegate: ListDelegateSpy, sender: DynamicAgent) {.slot.} =
+proc selectionDidChange*(delegate: ListDelegateSpy,
+    sender: DynamicAgent) {.slot.} =
   inc delegate.changedCount
   delegate.lastSender = sender
 
-proc rowWasActivated*(delegate: ListDelegateSpy, sender: DynamicAgent) {.slot.} =
+proc rowWasActivated*(delegate: ListDelegateSpy,
+    sender: DynamicAgent) {.slot.} =
   inc delegate.activatedCount
   delegate.lastSender = sender
 
-proc listWasReloaded*(delegate: ListDelegateSpy, sender: DynamicAgent) {.slot.} =
+proc listWasReloaded*(delegate: ListDelegateSpy,
+    sender: DynamicAgent) {.slot.} =
   inc delegate.reloadedCount
   delegate.lastSender = sender
 

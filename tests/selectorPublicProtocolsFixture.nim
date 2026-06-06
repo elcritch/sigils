@@ -19,7 +19,9 @@ protocol PublicWindowLifecycleProtocol:
 protocol PublicWindowEvents:
   proc windowDidClose*(window: PublicWindow) {.signal.}
 
-protocol PublicControllerEvents from PublicController includes PublicWindowEvents:
+protocol PublicControllerEvents from PublicController:
+  includes PublicWindowEvents
+
   proc windowDidClose*(self: PublicController) {.slot.} =
     self.windowClosed = true
 
