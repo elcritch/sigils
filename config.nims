@@ -4,6 +4,10 @@ switch("nimcache", ".nimcache")
 import std/[os, strformat, strutils]
 
 const testDir = "tests"
+const stringSigilNameTests = [
+  "tbenchmarksSigilName.nim",
+  "tselectorProtocolConnect.nim",
+]
 
 task test, "Compile and run all tests in tests/":
   withDir(testDir):
@@ -13,6 +17,10 @@ task test, "Compile and run all tests in tests/":
         if not name.startsWith("t"): continue # run only t*.nim files
         echo fmt"[sigils] Running {path}"
         exec fmt"nim c -r {path}"
+
+    for path in stringSigilNameTests:
+      echo fmt"[sigils:string] Running {path}"
+      exec fmt"nim c -r -d:sigilsSigilNameString {path}"
 
 proc runTsanTest(path: string) =
   putEnv("TSAN_OPTIONS", "suppressions=tests/tsan.ignore")

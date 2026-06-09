@@ -1,8 +1,11 @@
 import std/[tables, strutils]
-import stack_strings
+
+when not defined(sigilsSigilNameString):
+  import stack_strings
 
 export tables
-export stack_strings
+when not defined(sigilsSigilNameString):
+  export stack_strings
 
 type FastErrorCodes* = enum
   # Error messages
@@ -12,6 +15,11 @@ type FastErrorCodes* = enum
   INVALID_PARAMS = -24
   INTERNAL_ERROR = -23
   SERVER_ERROR = -22
+
+when defined(sigilsSigilNameString):
+  type SigilName* = string
+else:
+  type SigilName* = StackString[48]
 
 when defined(nimscript) or defined(useJsonSerde) or defined(sigilsJsonSerde):
   import std/json
@@ -49,8 +57,6 @@ type
 
   SigilId* = distinct int
 
-  SigilName* = StackString[48]
-
   SigilRequest* = object
     kind*: RequestType
     origin*: SigilId
@@ -75,6 +81,12 @@ type
     code*: int
     msg*: string
     stacktrace*: seq[string]
+
+func compareSigilName*(a, b: SigilName): int {.inline.} =
+  when defined(sigilsSigilNameString):
+    cmp(a, b)
+  else:
+    cmp($a, $b)
 
 proc duplicate*(params: SigilParams): SigilParams =
   when defined(nimscript) or defined(useJsonSerde) or defined(sigilsJsonSerde):
@@ -160,14 +172,21 @@ proc initSigilRequest*[S, T](
 
 const sigilsMaxSignalLength* {.intdefine.} = 48
 
-proc toSigilName*(name: IndexableChars): SigilName =
-  return toStackString(name, sigilsMaxSignalLength)
+when defined(sigilsSigilNameString):
+  proc toSigilName*(name: static string): SigilName =
+    return name
 
-proc toSigilName*(name: static string): SigilName =
-  return toStackString(name, sigilsMaxSignalLength)
+  proc toSigilName*(name: string): SigilName =
+    return name
+else:
+  proc toSigilName*(name: IndexableChars): SigilName =
+    return toStackString(name, sigilsMaxSignalLength)
 
-proc toSigilName*(name: string): SigilName =
-  return toStackString(name, sigilsMaxSignalLength)
+  proc toSigilName*(name: static string): SigilName =
+    return toStackString(name, sigilsMaxSignalLength)
+
+  proc toSigilName*(name: string): SigilName =
+    return toStackString(name, sigilsMaxSignalLength)
 
 template sigName*(name: static string): SigilName =
   ## Static Signal Name template

@@ -1,6 +1,4 @@
 import std/[hashes, options, sets, strformat, tables]
-import stack_strings
-
 import protocol
 import weakrefs
 import debugs
@@ -20,7 +18,7 @@ elif defined(useJsonSerde):
 else:
   import svariant
 
-export sets, options, svariant, IndexableChars, weakrefs, protocol
+export sets, options, svariant, weakrefs, protocol
 
 when defined(sigilsDebugPrint):
   import std/terminal
@@ -187,23 +185,6 @@ func useLinearSubscriptionScan(subsLen: int): bool {.inline.} =
   sigilsSubscriptionBinarySearchThreshold > 0 and
     subsLen < sigilsSubscriptionBinarySearchThreshold
 
-func cmpSigilName(a, b: SigilName): int {.inline.} =
-  let minLen = min(a.len, b.len)
-  var idx = 0
-  while idx < minLen:
-    if a.data[idx] < b.data[idx]:
-      return -1
-    if a.data[idx] > b.data[idx]:
-      return 1
-    idx.inc()
-
-  if a.len < b.len:
-    -1
-  elif a.len > b.len:
-    1
-  else:
-    0
-
 proc lowerBoundSubscription(
     subs: seq[SubscriptionEntry], sig: SigilName
 ): int {.inline, gcsafe, raises: [].} =
@@ -212,7 +193,7 @@ proc lowerBoundSubscription(
     hi = subs.len
   while lo < hi:
     let mid = (lo + hi) shr 1
-    if cmpSigilName(subs[mid].signal, sig) < 0:
+    if compareSigilName(subs[mid].signal, sig) < 0:
       lo = mid + 1
     else:
       hi = mid
@@ -226,7 +207,7 @@ proc upperBoundSubscription(
     hi = subs.len
   while lo < hi:
     let mid = (lo + hi) shr 1
-    if cmpSigilName(subs[mid].signal, sig) <= 0:
+    if compareSigilName(subs[mid].signal, sig) <= 0:
       lo = mid + 1
     else:
       hi = mid
@@ -254,7 +235,7 @@ iterator getSubscriptions*(obj: Agent, sig: SigilName): var Subscription =
   elif sig == AnySigilName:
     for sub in subscriptionsForSignal(obj.subcriptions, sig):
       yield sub
-  elif cmpSigilName(AnySigilName, sig) <= 0:
+  elif compareSigilName(AnySigilName, sig) <= 0:
     for sub in subscriptionsForSignal(obj.subcriptions, AnySigilName):
       yield sub
     for sub in subscriptionsForSignal(obj.subcriptions, sig):
@@ -407,22 +388,42 @@ method addSubscription*(
 
 template addSubscription*(
     obj: Agent,
-    sig: IndexableChars,
-    tgt: Agent | WeakRef[Agent],
+    sig: SigilName,
+    tgt: Agent,
     slot: AgentProc
 ): void =
   let tgtRef = tgt.unsafeWeakRef().toKind(Agent)
-  addSubscription(obj, sig.toSigilName(), tgtRef, slot)
+  addSubscription(obj, sig, tgtRef, slot)
 
 template addSubscription*(
     obj: Agent,
-    sig: IndexableChars,
-    tgt: Agent | WeakRef[Agent],
+    sig: SigilName,
+    tgt: Agent,
     slot: AgentProc,
     directSlot: LocalAgentProc
 ): void =
   let tgtRef = tgt.unsafeWeakRef().toKind(Agent)
-  addSubscription(obj, sig.toSigilName(), tgtRef, slot, directSlot)
+  addSubscription(obj, sig, tgtRef, slot, directSlot)
+
+when not defined(sigilsSigilNameString):
+  template addSubscription*(
+      obj: Agent,
+      sig: IndexableChars,
+      tgt: Agent | WeakRef[Agent],
+      slot: AgentProc
+  ): void =
+    let tgtRef = tgt.unsafeWeakRef().toKind(Agent)
+    addSubscription(obj, sig.toSigilName(), tgtRef, slot)
+
+  template addSubscription*(
+      obj: Agent,
+      sig: IndexableChars,
+      tgt: Agent | WeakRef[Agent],
+      slot: AgentProc,
+      directSlot: LocalAgentProc
+  ): void =
+    let tgtRef = tgt.unsafeWeakRef().toKind(Agent)
+    addSubscription(obj, sig.toSigilName(), tgtRef, slot, directSlot)
 
 var printConnectionsSlotNames* = initTable[pointer, string]()
 
@@ -493,17 +494,23 @@ method delSubscription*(
   if deleted and not procCall hasSubscription(self, sig, subscription.tgt):
     subscription.tgt[].delListener(self.unsafeWeakRef().asAgent())
 
-
 template delSubscription*(
-    obj: Agent, sig: IndexableChars, tgt: WeakRef[Agent], slot: AgentProc
-): void =
-  delSubscription(obj, sig.toSigilName(), tgt, slot)
-
-template delSubscription*(
-    obj: Agent, sig: IndexableChars, tgt: Agent, slot: AgentProc
+    obj: Agent, sig: SigilName, tgt: Agent, slot: AgentProc
 ): void =
   let tgtRef = tgt.unsafeWeakRef().toKind(Agent)
-  delSubscription(obj, sig.toSigilName(), tgtRef, slot)
+  delSubscription(obj, sig, tgtRef, slot)
+
+when not defined(sigilsSigilNameString):
+  template delSubscription*(
+      obj: Agent, sig: IndexableChars, tgt: WeakRef[Agent], slot: AgentProc
+  ): void =
+    delSubscription(obj, sig.toSigilName(), tgt, slot)
+
+  template delSubscription*(
+      obj: Agent, sig: IndexableChars, tgt: Agent, slot: AgentProc
+  ): void =
+    let tgtRef = tgt.unsafeWeakRef().toKind(Agent)
+    delSubscription(obj, sig.toSigilName(), tgtRef, slot)
 
 proc printConnections*(agent: Agent) =
   when defined(sigilsDebugPrint):

@@ -179,7 +179,7 @@ doAssert selectorName(numberOfRows) ==
   toSigilName("ListViewDataSource.numberOfRows")
 ```
 
-This is runtime selector scoping, not a generated Nim namespace; `ListViewDataSource.numberOfRows` is not created. If two imported modules export the same short selector helper, use normal Nim module qualification to choose between them. Scoped selector names must still fit in `SigilName`, which is 48 bytes by default.
+This is runtime selector scoping, not a generated Nim namespace; `ListViewDataSource.numberOfRows` is not created. If two imported modules export the same short selector helper, use normal Nim module qualification to choose between them. `SigilName` is a `StackString[48]` by default; you can switch to regular strings with `-d:sigilsSigilNameString`.
 
 Protocols may also list signals and slots that belong to the same conceptual surface. Protocol signals are generated as normal Sigils signals and recorded in `protocol.signals`. Explicit protocol slots are recorded in `protocol.slots` and can be checked with `checkProtocolSlots(Receiver, Protocol)` or `requireProtocolSlots(Receiver, Protocol)`. Neither signals nor slots affect `canConformTo` or `adopt`.
 

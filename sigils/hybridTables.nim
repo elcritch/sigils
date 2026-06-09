@@ -24,23 +24,6 @@ type
     of hstLarge:
       large: Table[SigilName, seq[Value]]
 
-func compareSigilName*(a, b: SigilName): int {.inline.} =
-  let minLen = min(a.len, b.len)
-  var idx = 0
-  while idx < minLen:
-    if a.data[idx] < b.data[idx]:
-      return -1
-    if a.data[idx] > b.data[idx]:
-      return 1
-    idx.inc()
-
-  if a.len < b.len:
-    -1
-  elif a.len > b.len:
-    1
-  else:
-    0
-
 func useSmallStorage(keyCount: int): bool {.inline.} =
   sigilsHybridTableThreshold > 0 and keyCount < sigilsHybridTableThreshold
 

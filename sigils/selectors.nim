@@ -140,51 +140,87 @@ proc requirement*[A, R](
     required: required,
   )
 
-proc protocolSignal*(name: SigilName, signature = ""): ProtocolSignal =
-  result = ProtocolSignal(
-    name: name,
-    signature: signature,
-  )
+when defined(sigilsSigilNameString):
+  proc protocolSignal*(name: string, signature = ""): ProtocolSignal =
+    result = ProtocolSignal(
+      name: toSigilName(name),
+      signature: signature,
+    )
 
-proc protocolSignal*(name: static string, signature = ""): ProtocolSignal =
-  protocolSignal(toSigilName(name), signature)
+  proc protocolSlot*(
+      name: static string, signature = "", eventName: static string = ""
+  ): ProtocolSlot =
+    let resolvedEventName =
+      if eventName.len == 0:
+        name
+      else:
+        eventName
+    result = ProtocolSlot(
+      name: toSigilName(name),
+      eventName: toSigilName(resolvedEventName),
+      signature: signature,
+    )
 
-proc protocolSignal*(name: string, signature = ""): ProtocolSignal =
-  protocolSignal(toSigilName(name), signature)
+  proc protocolSlot*(
+      name: string, signature = "", eventName: string = ""
+  ): ProtocolSlot =
+    let resolvedEventName =
+      if eventName.len == 0:
+        name
+      else:
+        eventName
+    result = ProtocolSlot(
+      name: toSigilName(name),
+      eventName: toSigilName(resolvedEventName),
+      signature: signature,
+    )
 
-proc protocolSlot*(
-    name: SigilName,
-    signature = "",
-    eventName: SigilName = default(SigilName),
-): ProtocolSlot =
-  let resolvedEventName =
-    if eventName == default(SigilName):
-      name
-    else:
-      eventName
-  result = ProtocolSlot(
-    name: name,
-    eventName: resolvedEventName,
-    signature: signature,
-  )
+else:
+  proc protocolSignal*(name: SigilName, signature = ""): ProtocolSignal =
+    result = ProtocolSignal(
+      name: name,
+      signature: signature,
+    )
 
-proc protocolSlot*(
-    name: static string, signature = "", eventName: static string = ""
-): ProtocolSlot =
-  protocolSlot(
-    toSigilName(name),
-    signature,
-    if eventName.len == 0: toSigilName(name) else: toSigilName(eventName),
-  )
+  proc protocolSignal*(name: static string, signature = ""): ProtocolSignal =
+    protocolSignal(toSigilName(name), signature)
 
-proc protocolSlot*(
-    name: string, signature = "", eventName: string = ""
-): ProtocolSlot =
-  protocolSlot(
-    toSigilName(name),
-    signature,
-    if eventName.len == 0: toSigilName(name) else: toSigilName(eventName),
-  )
+  proc protocolSignal*(name: string, signature = ""): ProtocolSignal =
+    protocolSignal(toSigilName(name), signature)
+
+  proc protocolSlot*(
+      name: SigilName,
+      signature = "",
+      eventName: SigilName = default(SigilName),
+  ): ProtocolSlot =
+    let resolvedEventName =
+      if eventName == default(SigilName):
+        name
+      else:
+        eventName
+    result = ProtocolSlot(
+      name: name,
+      eventName: resolvedEventName,
+      signature: signature,
+    )
+
+  proc protocolSlot*(
+      name: static string, signature = "", eventName: static string = ""
+  ): ProtocolSlot =
+    protocolSlot(
+      toSigilName(name),
+      signature,
+      if eventName.len == 0: toSigilName(name) else: toSigilName(eventName),
+    )
+
+  proc protocolSlot*(
+      name: string, signature = "", eventName: string = ""
+  ): ProtocolSlot =
+    protocolSlot(
+      toSigilName(name),
+      signature,
+      if eventName.len == 0: toSigilName(name) else: toSigilName(eventName),
+    )
 
 proc initSelectorMethod*[A, R](
     selector: Selector[A, R], implementation: DynamicMethod
@@ -473,12 +509,13 @@ proc selectorIdent(name: string, exported: bool): NimNode =
     result = ident(name)
 
 proc checkSigilNameLength(name: string, node: NimNode, kind: string) =
-  if name.len > sigilsMaxSignalLength:
-    error(
-      kind & " `" & name & "` is " & $name.len &
-        " bytes, but SigilName capacity is " & $sigilsMaxSignalLength,
-      node,
-    )
+  when not defined(sigilsSigilNameString):
+    if name.len > sigilsMaxSignalLength:
+      error(
+        kind & " `" & name & "` is " & $name.len &
+          " bytes, but SigilName capacity is " & $sigilsMaxSignalLength,
+        node,
+      )
 
 proc scopedSelectorName(
     protocolName: string, selectorName: string, selectorScope: SelectorScope

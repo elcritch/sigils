@@ -1,3 +1,4 @@
+- `v0.22.6` - add optional `-d:sigilsSigilNameString` compile flag to use plain `string` for `SigilName` instead of `StackString`
 - `v0.22.5` - add protocol `slotFor` aliases for event slots whose implementation names differ from signal names
 - `v0.22.4` - move protocol composition to body-level `includes`, including comma-separated protocol lists
 - `v0.22.3` - add protocol signal-slot observation helpers, signal-name event slot matching, receiver-bound/named event implementations, and delegate event wiring
