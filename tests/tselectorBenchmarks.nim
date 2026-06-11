@@ -33,6 +33,7 @@ const
   n = block:
     when defined(slowbench): 10_000_000
     else: 100_000
+  baselineRuns = 10
   largeProtocolMethodCount = 32
   largeLookupIterations = block:
     when defined(slowbench): 1_000_000
@@ -70,6 +71,31 @@ proc newSelectorBenchAgent(): SelectorBenchAgent =
   doAssert result.addMethod(addSelector, addSelectorImpl)
   doAssert result.addMethod(pingSelector, pingSelectorImpl)
 
+proc measureDirectProcBaseline(): float =
+  let target = SelectorBenchAgent()
+  var last = 0
+
+  let us = timed:
+    for i in 0 ..< n:
+      last = target.addDirect(i)
+
+  check target.value == expectedValue
+  check last == expectedValue
+  us
+
+proc measureMethodBaseline(): float =
+  let target = SelectorBenchAgent()
+  var receiver: DynamicAgent = target
+  var last = 0
+
+  let us = timed:
+    for i in 0 ..< n:
+      last = receiver.addMethodBaseline(i)
+
+  check target.value == expectedValue
+  check last == expectedValue
+  us
+
 proc protocolSelector(prefix: string, idx: int): Selector[int, int] =
   selector[int, int](prefix & $idx)
 
@@ -96,30 +122,17 @@ proc newProtocolBenchAgent(
 
 suite "selector benchmarks":
   test "direct proc baseline":
-    let target = SelectorBenchAgent()
-    var last = 0
-
-    let us = timed:
-      for i in 0 ..< n:
-        last = target.addDirect(i)
-
-    check target.value == expectedValue
-    check last == expectedValue
+    var us = 0.0
+    for _ in 1..baselineRuns:
+      us = measureDirectProcBaseline()
 
     directProcMicros = us
     reportBench("selector direct proc baseline", n, us)
 
   test "nim method baseline":
-    let target = SelectorBenchAgent()
-    var receiver: DynamicAgent = target
-    var last = 0
-
-    let us = timed:
-      for i in 0 ..< n:
-        last = receiver.addMethodBaseline(i)
-
-    check target.value == expectedValue
-    check last == expectedValue
+    var us = 0.0
+    for _ in 1..baselineRuns:
+      us = measureMethodBaseline()
 
     methodMicros = us
     reportBench("selector nim method baseline", n, us, directProcMicros)
