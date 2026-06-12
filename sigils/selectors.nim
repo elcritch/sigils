@@ -81,6 +81,9 @@ type
     params*: SigilParams
     result*: SigilParams
     handled*: bool
+    argsPtr: pointer
+    resultPtr: pointer
+    resultWritten: bool
 
   ForwardingTarget* = proc(
     self: DynamicAgent, selector: SigilName
@@ -984,14 +987,12 @@ when sigilsSelectorClosuresEnabled:
             `invocation`.setResult(`call`)
       elif retType.kind == nnkTupleTy and retType.len == 0:
         quote do:
-          var `argsIdent`: `argsType`
-          rpcUnpack(`argsIdent`, `invocation`.params)
+          var `argsIdent` = `invocation`.argsAs(`argsType`)
           `call`
           `invocation`.setResult(())
       else:
         quote do:
-          var `argsIdent`: `argsType`
-          rpcUnpack(`argsIdent`, `invocation`.params)
+          var `argsIdent` = `invocation`.argsAs(`argsType`)
           `invocation`.setResult(`call`)
 
     result = quote do:
@@ -1135,14 +1136,12 @@ proc selectorImplNode(p: NimNode, runtimeSelectorName = ""): NimNode =
             `invocation`.setResult(`implProc`(`receiverName`))
       elif retType.kind == nnkTupleTy and retType.len == 0:
         quote do:
-          var `argsIdent`: `argsType`
-          rpcUnpack(`argsIdent`, `invocation`.params)
+          var `argsIdent` = `invocation`.argsAs(`argsType`)
           `call`
           `invocation`.setResult(())
       else:
         quote do:
-          var `argsIdent`: `argsType`
-          rpcUnpack(`argsIdent`, `invocation`.params)
+          var `argsIdent` = `invocation`.argsAs(`argsType`)
           `invocation`.setResult(`call`)
 
     result = newStmtList()
@@ -1224,14 +1223,12 @@ proc implementMethodBinding(item: NimNode): tuple[defs: seq[NimNode],
           `invocation`.setResult(`implProc`(`receiverName`))
     elif retType.kind == nnkTupleTy and retType.len == 0:
       quote do:
-        var `argsIdent`: `argsType`
-        rpcUnpack(`argsIdent`, `invocation`.params)
+        var `argsIdent` = `invocation`.argsAs(`argsType`)
         `call`
         `invocation`.setResult(())
     else:
       quote do:
-        var `argsIdent`: `argsType`
-        rpcUnpack(`argsIdent`, `invocation`.params)
+        var `argsIdent` = `invocation`.argsAs(`argsType`)
         `invocation`.setResult(`call`)
 
   let dynDef = quote do:
@@ -2255,15 +2252,35 @@ proc initInvocation*[A](
     handled: false,
   )
 
+proc initLocalInvocation[A, R](
+    selector: SigilName, args: var A, value: var R
+): Invocation =
+  result = Invocation(
+    selector: selector,
+    handled: false,
+    argsPtr: addr args,
+    resultPtr: addr value,
+  )
+
 proc argsAs*[A](invocation: Invocation, _: typedesc[A]): A =
-  rpcUnpack(result, invocation.params)
+  if not invocation.argsPtr.isNil:
+    result = cast[ptr A](invocation.argsPtr)[]
+  else:
+    rpcUnpack(result, invocation.params)
 
 proc setResult*[R](invocation: var Invocation, value: sink R) =
-  invocation.result = rpcPack(ensureMove value)
+  if not invocation.resultPtr.isNil:
+    cast[ptr R](invocation.resultPtr)[] = ensureMove value
+    invocation.resultWritten = true
+  else:
+    invocation.result = rpcPack(ensureMove value)
   invocation.handled = true
 
 proc resultAs*[R](invocation: Invocation, _: typedesc[R]): R =
-  rpcUnpack(result, invocation.result)
+  if invocation.resultWritten and not invocation.resultPtr.isNil:
+    result = cast[ptr R](invocation.resultPtr)[]
+  else:
+    rpcUnpack(result, invocation.result)
 
 proc localMethod*(obj: DynamicAgent, selector: SigilName): DynamicMethod =
   ## Return the top local method for a selector, if one is installed.
@@ -2671,9 +2688,10 @@ proc perform*[A, R](
     args: sink A,
     value: var R,
 ): bool =
-  var invocation = initInvocation(selector.name, ensureMove args)
+  var localArgs = ensureMove args
+  var invocation = initLocalInvocation(selector.name, localArgs, value)
   result = obj.dispatch(invocation)
-  if result:
+  if result and not invocation.resultWritten:
     rpcUnpack(value, invocation.result)
 
 proc performLocal*[A, R](
@@ -2682,9 +2700,10 @@ proc performLocal*[A, R](
     args: sink A,
     value: var R,
 ): bool =
-  var invocation = initInvocation(selector.name, ensureMove args)
+  var localArgs = ensureMove args
+  var invocation = initLocalInvocation(selector.name, localArgs, value)
   result = obj.dispatchLocal(invocation)
-  if result:
+  if result and not invocation.resultWritten:
     rpcUnpack(value, invocation.result)
 
 proc perform*[A, R](
