@@ -83,10 +83,10 @@ for value in [10, 20, 30, 40]:
   emit dispatcher.workRequested(value)
   os.sleep(850)
 
-waitForResults(collector, expected = 6)
+waitForResults(collector, expected = 8)
 
-doAssert collector.received == 6
-doAssert collector.total == 120
+doAssert collector.received == 8
+doAssert collector.total == 200
 
 pool.stop()
 pool.join()

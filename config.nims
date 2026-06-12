@@ -1,5 +1,6 @@
 # NimScript configuration and tasks for this repo
 switch("nimcache", ".nimcache")
+--debugger:native
 
 import std/[os, strformat, strutils]
 
