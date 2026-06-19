@@ -89,22 +89,37 @@ type
     runtime*: SmalltalkRuntime
     lastValue*: SmalltalkValue
 
+  SmalltalkMessageProc = proc(
+    self: SmalltalkValue, args: seq[SmalltalkValue]
+  ): SmalltalkValue {.nimcall.}
+
 proc newSmalltalkNumber*(value: int): SmalltalkValue
 proc newSmalltalkBool*(value: bool): SmalltalkValue
 proc newSmalltalkString*(value: string): SmalltalkValue
 proc newSmalltalkNil*: SmalltalkValue
 proc bindCoreMethods*(self: SmalltalkValue)
 
-method stAdd*(rhs: SmalltalkValue): SmalltalkValue {.selector.}
-method stSub*(rhs: SmalltalkValue): SmalltalkValue {.selector.}
-method stMul*(rhs: SmalltalkValue): SmalltalkValue {.selector.}
-method stDiv*(rhs: SmalltalkValue): SmalltalkValue {.selector.}
-method stLt*(rhs: SmalltalkValue): SmalltalkValue {.selector.}
-method stEq*(rhs: SmalltalkValue): SmalltalkValue {.selector.}
-method stAsString*: SmalltalkValue {.selector.}
-method stPrint*: SmalltalkValue {.selector.}
+proc argumentCountText(expected: int): string =
+  if expected == 0:
+    "no arguments"
+  elif expected == 1:
+    "one argument"
+  else:
+    $expected & " arguments"
 
-proc stAddImpl(self: SmalltalkValue, rhs: SmalltalkValue): SmalltalkValue =
+proc expectArgCount(selector: string, args: openArray[SmalltalkValue],
+    expected: int) =
+  if args.len != expected:
+    raise newException(SmalltalkError,
+      selector & " expects " & argumentCountText(expected))
+
+proc expectOneArg(selector: string,
+    args: openArray[SmalltalkValue]): SmalltalkValue =
+  expectArgCount(selector, args, 1)
+  result = args[0]
+
+proc stAdd(self: SmalltalkValue, args: seq[SmalltalkValue]): SmalltalkValue =
+  let rhs = expectOneArg("add", args)
   case self.kind
   of stNumber:
     if rhs.kind != stNumber:
@@ -120,19 +135,22 @@ proc stAddImpl(self: SmalltalkValue, rhs: SmalltalkValue): SmalltalkValue =
     raise newException(SmalltalkError,
       "add requires matching number or string operands")
 
-proc stSubImpl(self: SmalltalkValue, rhs: SmalltalkValue): SmalltalkValue =
+proc stSub(self: SmalltalkValue, args: seq[SmalltalkValue]): SmalltalkValue =
+  let rhs = expectOneArg("sub", args)
   if self.kind != stNumber or rhs.kind != stNumber:
     raise newException(SmalltalkError,
       "sub requires number receiver and number argument")
   result = newSmalltalkNumber(self.numberValue - rhs.numberValue)
 
-proc stMulImpl(self: SmalltalkValue, rhs: SmalltalkValue): SmalltalkValue =
+proc stMul(self: SmalltalkValue, args: seq[SmalltalkValue]): SmalltalkValue =
+  let rhs = expectOneArg("mul", args)
   if self.kind != stNumber or rhs.kind != stNumber:
     raise newException(SmalltalkError,
       "mul requires number receiver and number argument")
   result = newSmalltalkNumber(self.numberValue * rhs.numberValue)
 
-proc stDivImpl(self: SmalltalkValue, rhs: SmalltalkValue): SmalltalkValue =
+proc stDiv(self: SmalltalkValue, args: seq[SmalltalkValue]): SmalltalkValue =
+  let rhs = expectOneArg("div", args)
   if self.kind != stNumber or rhs.kind != stNumber:
     raise newException(SmalltalkError,
       "div requires number receiver and number argument")
@@ -140,13 +158,15 @@ proc stDivImpl(self: SmalltalkValue, rhs: SmalltalkValue): SmalltalkValue =
     raise newException(SmalltalkError, "division by zero")
   result = newSmalltalkNumber(self.numberValue div rhs.numberValue)
 
-proc stLtImpl(self: SmalltalkValue, rhs: SmalltalkValue): SmalltalkValue =
+proc stLt(self: SmalltalkValue, args: seq[SmalltalkValue]): SmalltalkValue =
+  let rhs = expectOneArg("lt", args)
   if self.kind != stNumber or rhs.kind != stNumber:
     raise newException(SmalltalkError,
       "lt requires number receiver and number argument")
   result = newSmalltalkBool(self.numberValue < rhs.numberValue)
 
-proc stEqImpl(self: SmalltalkValue, rhs: SmalltalkValue): SmalltalkValue =
+proc stEq(self: SmalltalkValue, args: seq[SmalltalkValue]): SmalltalkValue =
+  let rhs = expectOneArg("eq", args)
   case self.kind
   of stNumber:
     if rhs.kind != stNumber:
@@ -166,7 +186,9 @@ proc stEqImpl(self: SmalltalkValue, rhs: SmalltalkValue): SmalltalkValue =
   of stNil:
     result = newSmalltalkBool(rhs.kind == stNil)
 
-proc stAsStringImpl(self: SmalltalkValue, _: tuple[]): SmalltalkValue =
+proc stAsString(self: SmalltalkValue,
+    args: seq[SmalltalkValue]): SmalltalkValue =
+  expectArgCount("asString", args, 0)
   case self.kind
   of stNumber:
     result = newSmalltalkString($self.numberValue)
@@ -177,9 +199,20 @@ proc stAsStringImpl(self: SmalltalkValue, _: tuple[]): SmalltalkValue =
   of stNil:
     result = newSmalltalkString("nil")
 
-proc stPrintImpl(self: SmalltalkValue, _: tuple[]): SmalltalkValue =
-  echo stAsStringImpl(self, ()).stringValue
+proc stPrint(self: SmalltalkValue, args: seq[SmalltalkValue]): SmalltalkValue =
+  expectArgCount("print", args, 0)
+  echo stAsString(self, @[]).stringValue
   result = self
+
+proc smalltalkSelector(
+    name: static string
+): Selector[seq[SmalltalkValue], SmalltalkValue] =
+  selector[seq[SmalltalkValue], SmalltalkValue](name)
+
+proc bindSmalltalkMethod(
+    self: SmalltalkValue, name: static string, fn: SmalltalkMessageProc
+) =
+  discard self.addMethod(smalltalkSelector(name), toDynamicMethod(fn))
 
 proc newSmalltalkNumber*(value: int): SmalltalkValue =
   result = SmalltalkValue(kind: stNumber, numberValue: value)
@@ -201,14 +234,20 @@ proc bindCoreMethods*(self: SmalltalkValue) =
   if self.installed:
     return
   self.installed = true
-  discard self.addMethod(stAdd, toDynamicMethod(stAddImpl))
-  discard self.addMethod(stSub, toDynamicMethod(stSubImpl))
-  discard self.addMethod(stMul, toDynamicMethod(stMulImpl))
-  discard self.addMethod(stDiv, toDynamicMethod(stDivImpl))
-  discard self.addMethod(stLt, toDynamicMethod(stLtImpl))
-  discard self.addMethod(stEq, toDynamicMethod(stEqImpl))
-  discard self.addMethod(stAsString, toDynamicMethod(stAsStringImpl))
-  discard self.addMethod(stPrint, toDynamicMethod(stPrintImpl))
+  self.bindSmalltalkMethod("add:", stAdd)
+  self.bindSmalltalkMethod("add", stAdd)
+  self.bindSmalltalkMethod("sub:", stSub)
+  self.bindSmalltalkMethod("sub", stSub)
+  self.bindSmalltalkMethod("mul:", stMul)
+  self.bindSmalltalkMethod("mul", stMul)
+  self.bindSmalltalkMethod("div:", stDiv)
+  self.bindSmalltalkMethod("div", stDiv)
+  self.bindSmalltalkMethod("lt:", stLt)
+  self.bindSmalltalkMethod("lt", stLt)
+  self.bindSmalltalkMethod("eq:", stEq)
+  self.bindSmalltalkMethod("eq", stEq)
+  self.bindSmalltalkMethod("asString", stAsString)
+  self.bindSmalltalkMethod("print", stPrint)
 
 proc toInt*(self: SmalltalkValue): int =
   if self.kind != stNumber:
@@ -245,7 +284,7 @@ proc lexSource*(source: string): seq[SmalltalkToken] =
       while idx < source.len and source[idx] != '\n':
         inc idx
       continue
-    if source[idx] == '(': 
+    if source[idx] == '(':
       result.add token(tkLParen)
       inc idx
     elif source[idx] == ')':
@@ -430,43 +469,19 @@ proc sendByName(
     args: openArray[SmalltalkValue]
 ): SmalltalkValue =
   receiver.bindCoreMethods()
-  case selector
-  of "add:", "add":
-    if args.len != 1:
-      raise newException(SmalltalkError, "add expects one argument")
-    receiver.stAdd(args[0])
-  of "sub:", "sub":
-    if args.len != 1:
-      raise newException(SmalltalkError, "sub expects one argument")
-    receiver.stSub(args[0])
-  of "mul:", "mul":
-    if args.len != 1:
-      raise newException(SmalltalkError, "mul expects one argument")
-    receiver.stMul(args[0])
-  of "div:", "div":
-    if args.len != 1:
-      raise newException(SmalltalkError, "div expects one argument")
-    receiver.stDiv(args[0])
-  of "lt:", "lt":
-    if args.len != 1:
-      raise newException(SmalltalkError, "lt expects one argument")
-    receiver.stLt(args[0])
-  of "eq:", "eq":
-    if args.len != 1:
-      raise newException(SmalltalkError, "eq expects one argument")
-    receiver.stEq(args[0])
-  of "asString":
-    if args.len != 0:
-      raise newException(SmalltalkError, "asString expects no arguments")
-    receiver.stAsString()
-  of "print":
-    if args.len != 0:
-      raise newException(SmalltalkError, "print expects no arguments")
-    receiver.stPrint()
+
+  var messageArgs = newSeq[SmalltalkValue](args.len)
+  for idx, arg in args:
+    messageArgs[idx] = arg
+
+  var invocation = initInvocation(selector.toSigilName(), messageArgs)
+  if receiver.dispatch(invocation):
+    result = invocation.resultAs(SmalltalkValue)
   else:
     raise newException(SmalltalkError, "unknown selector: " & selector)
 
-proc evalExpr*(state: var SmalltalkRuntime, expr: SmalltalkExprRef): SmalltalkValue =
+proc evalExpr*(state: var SmalltalkRuntime,
+    expr: SmalltalkExprRef): SmalltalkValue =
   case expr.kind
   of exInt:
     result = newSmalltalkNumber(expr.intValue)
@@ -497,7 +512,8 @@ proc execute*(
   of stExpr:
     result = runtime.evalExpr(statement.expr)
 
-proc run*(runtime: var SmalltalkRuntime, program: SmalltalkProgram): SmalltalkValue =
+proc run*(runtime: var SmalltalkRuntime,
+    program: SmalltalkProgram): SmalltalkValue =
   for statement in program:
     result = runtime.execute(statement)
 
