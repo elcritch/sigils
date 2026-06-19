@@ -1,6 +1,14 @@
-import std/unittest
+import std/[tables, unittest]
 
 import ./smalltalk
+import sigils/selectors
+
+proc stDouble(
+    self: SmalltalkValue, args: seq[SmalltalkValue]
+): SmalltalkValue =
+  if args.len != 0:
+    raise newException(SmalltalkError, "double expects no arguments")
+  newSmalltalkNumber(self.toInt() * 2)
 
 suite "mini smalltalk interpreter":
   test "small arithmetic and message chaining":
@@ -28,3 +36,16 @@ suite "mini smalltalk interpreter":
     check result.lastValue.toInt() == 5
     check result.runtime.getVar("a").toInt() == 2
     check result.runtime.getVar("b").toInt() == 3
+
+  test "message sends dispatch by runtime selector name":
+    var runtime = newRuntime()
+    let value = newSmalltalkNumber(4)
+    discard value.addMethod(
+      selector[seq[SmalltalkValue], SmalltalkValue]("double"),
+      toDynamicMethod(stDouble),
+    )
+    runtime.vars["value"] = value
+
+    let result = runtime.run(parseProgram("value double."))
+
+    check result.toInt() == 8
