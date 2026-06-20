@@ -27,6 +27,11 @@ type
   PlainThing = ref object of DynamicAgent
     value: int
 
+  BaseWidget = ref object of DynamicAgent
+    log: seq[string]
+
+  DerivedWidget = ref object of BaseWidget
+
   SelectorPayload = object
     x: int
     y: int
@@ -133,6 +138,32 @@ protocol ExportedThingProtocol from ExportedThing:
 protocol PlainThingProtocol from PlainThing:
   method plainValue*(self: PlainThing): int =
     self.value
+
+protocol WidgetEvents:
+  method handleWidgetEvent*(event: string): string
+
+protocol BaseWidgetEvents of WidgetEvents:
+  method handleWidgetEvent(self: BaseWidget, event: string): string =
+    self.log.add "base:" & event
+    "base:" & event
+
+protocol MiddleWidgetEvents of WidgetEvents:
+  method handleWidgetEvent(self: DerivedWidget, event: string): string =
+    self.log.add "middle:" & event
+    let next = self.performNext(handleWidgetEvent, event)
+    if next.isSome:
+      "middle(" & next.get() & ")"
+    else:
+      "middle"
+
+protocol DerivedWidgetEvents of WidgetEvents:
+  method handleWidgetEvent(self: DerivedWidget, event: string): string =
+    self.log.add "derived:" & event
+    let next = self.performNext(handleWidgetEvent, event)
+    if next.isSome:
+      "derived(" & next.get() & ")"
+    else:
+      "derived"
 
 method viewHitTest(self: View, x, y: int): string {.selector.} =
   if x >= self.x and y >= self.y and
@@ -685,6 +716,30 @@ suite "dynamic selectors":
     check not thing.builtWithNew
     check thing.hasAdopted(ExportedThingProtocol)
     check thing.exportedValue == 42
+
+  test "stacked protocol implementations can call the next selector method":
+    let widget = DerivedWidget()
+    discard widget.replaceMethods(BaseWidgetEvents.init())
+
+    let middleTokens = widget.pushMethods(MiddleWidgetEvents.init())
+    let tokens = widget.pushMethods(DerivedWidgetEvents.init())
+
+    check tokens.len == 1
+    check middleTokens.len == 1
+    check widget.handleWidgetEvent("drag") == "derived(middle(base:drag))"
+    check widget.log == @["derived:drag", "middle:drag", "base:drag"]
+    check BaseWidget(widget).handleWidgetEvent("cast") ==
+        "derived(middle(base:cast))"
+    check widget.log == @[
+      "derived:drag", "middle:drag", "base:drag", "derived:cast", "middle:cast",
+      "base:cast"
+    ]
+
+    check tokens[0].popMethod()
+    check widget.handleWidgetEvent("drop") == "middle(base:drop)"
+    check middleTokens[0].popMethod()
+    check widget.handleWidgetEvent("drop") == "base:drop"
+    check widget.trySendNext(handleWidgetEvent, "drop").isNone
 
   test "newProto prefers a typedesc new overload":
     let thing = ExportedThing.newProto(value = 41)

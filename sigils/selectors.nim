@@ -97,8 +97,13 @@ type
     self: DynamicAgent, selector: SigilName
   ): bool {.closure.}
 
+  DispatchFrame = object
+    selector: SigilName
+    index: int
+
   DynamicAgent* = ref object of Agent
     methods: SelectorMethodStore[DynamicMethod]
+    dispatchFrames: seq[DispatchFrame]
     nextResponder: WeakRef[DynamicAgent]
     adoptedProtocols: seq[SigilName]
     protocolObservers: seq[ProtocolObserverBinding]
@@ -2632,19 +2637,48 @@ proc setProtocolDelegate*(
 
   result = true
 
+proc activeDispatchIndex(obj: DynamicAgent, selector: SigilName): int =
+  if obj.isNil:
+    return -1
+  for index in countdown(obj.dispatchFrames.len - 1, 0):
+    if obj.dispatchFrames[index].selector == selector:
+      return obj.dispatchFrames[index].index
+  -1
+
+proc invokeLocalMethodAt(
+    obj: DynamicAgent,
+    selector: SigilName,
+    index: int,
+    fn: DynamicMethod,
+    invocation: var Invocation,
+): bool =
+  if fn.isNil:
+    return false
+  let frameLen = obj.dispatchFrames.len
+  obj.dispatchFrames.add DispatchFrame(selector: selector, index: index)
+  try:
+    fn(obj, invocation)
+    result = invocation.handled
+  finally:
+    obj.dispatchFrames.setLen(frameLen)
+
 proc dispatch*(obj: DynamicAgent, invocation: var Invocation): bool =
   ## Try to handle an invocation locally, then through the responder chain.
   if obj.isNil:
     return false
 
-  var fn = obj.localMethod(invocation.selector)
-  if fn.isNil and not obj.resolveMethodHandler.isNil and
+  var stack = obj.methodStack(invocation.selector)
+  if stack.len == 0 and not obj.resolveMethodHandler.isNil and
       obj.resolveMethodHandler(obj, invocation.selector):
-    fn = obj.localMethod(invocation.selector)
+    stack = obj.methodStack(invocation.selector)
 
-  if not fn.isNil:
-    fn(obj, invocation)
-    if invocation.handled:
+  if stack.len > 0:
+    if obj.invokeLocalMethodAt(
+      invocation.selector,
+      stack.len - 1,
+      stack[^1],
+      invocation,
+    ):
       return true
 
   if not obj.forwardingTargetHandler.isNil:
@@ -2664,14 +2698,18 @@ proc dispatchLocal*(obj: DynamicAgent, invocation: var Invocation): bool =
   if obj.isNil:
     return false
 
-  var fn = obj.localMethod(invocation.selector)
-  if fn.isNil and not obj.resolveMethodHandler.isNil and
+  var stack = obj.methodStack(invocation.selector)
+  if stack.len == 0 and not obj.resolveMethodHandler.isNil and
       obj.resolveMethodHandler(obj, invocation.selector):
-    fn = obj.localMethod(invocation.selector)
+    stack = obj.methodStack(invocation.selector)
 
-  if not fn.isNil:
-    fn(obj, invocation)
-    if invocation.handled:
+  if stack.len > 0:
+    if obj.invokeLocalMethodAt(
+      invocation.selector,
+      stack.len - 1,
+      stack[^1],
+      invocation,
+    ):
       return true
 
   if not obj.forwardingTargetHandler.isNil:
@@ -2706,6 +2744,41 @@ proc performLocal*[A, R](
   if result and not invocation.resultWritten:
     rpcUnpack(value, invocation.result)
 
+proc dispatchNextLocal*(obj: DynamicAgent, invocation: var Invocation): bool =
+  ## Try lower local implementations for an invocation without walking responders.
+  if obj.isNil:
+    return false
+
+  let stack = obj.methodStack(invocation.selector)
+  if stack.len < 2:
+    return false
+
+  let activeIndex = obj.activeDispatchIndex(invocation.selector)
+  let nextIndex =
+    if activeIndex > 0:
+      activeIndex - 1
+    else:
+      stack.len - 2
+  if nextIndex < 0:
+    return false
+
+  for index in countdown(min(nextIndex, stack.len - 1), 0):
+    if obj.invokeLocalMethodAt(invocation.selector, index, stack[index], invocation):
+      return true
+
+proc performNext*[A, R](
+    obj: DynamicAgent,
+    selector: Selector[A, R],
+    args: sink A,
+    value: var R,
+): bool =
+  ## Perform the next lower local implementation for a selector.
+  var localArgs = ensureMove args
+  var invocation = initLocalInvocation(selector.name, localArgs, value)
+  result = obj.dispatchNextLocal(invocation)
+  if result and not invocation.resultWritten:
+    rpcUnpack(value, invocation.result)
+
 proc perform*[A, R](
     obj: DynamicAgent, selector: Selector[A, R], args: sink A
 ): Option[R] =
@@ -2718,6 +2791,14 @@ proc performLocal*[A, R](
 ): Option[R] =
   var value: R
   if obj.performLocal(selector, ensureMove args, value):
+    result = some(value)
+
+proc performNext*[A, R](
+    obj: DynamicAgent, selector: Selector[A, R], args: sink A
+): Option[R] =
+  ## Perform the next lower local implementation for an optional selector send.
+  var value: R
+  if obj.performNext(selector, ensureMove args, value):
     result = some(value)
 
 proc trySend*[A, R](
@@ -2740,6 +2821,16 @@ proc trySendLocal*[R](obj: DynamicAgent, selector: Selector[tuple[],
     R]): Option[R] =
   ## Perform an optional zero-argument selector send without walking the responder chain.
   obj.performLocal(selector, ())
+
+proc trySendNext*[A, R](
+    obj: DynamicAgent, selector: Selector[A, R], args: sink A
+): Option[R] =
+  ## Perform the next lower local implementation for an optional selector send.
+  obj.performNext(selector, ensureMove args)
+
+proc trySendNext*[R](obj: DynamicAgent, selector: Selector[tuple[], R]): Option[R] =
+  ## Perform the next lower local zero-argument selector implementation.
+  obj.performNext(selector, ())
 
 proc sendIfHandled*[A, R](
     obj: DynamicAgent, selector: Selector[A, R], args: sink A
@@ -2766,6 +2857,18 @@ proc sendLocalIfHandled*[R](
   ## Perform an optional zero-argument selector send without walking the responder chain.
   var value: R
   obj.performLocal(selector, (), value)
+
+proc sendNextIfHandled*[A, R](
+    obj: DynamicAgent, selector: Selector[A, R], args: sink A
+): bool =
+  ## Perform the next lower local selector implementation and report handling.
+  var value: R
+  obj.performNext(selector, ensureMove args, value)
+
+proc sendNextIfHandled*[R](obj: DynamicAgent, selector: Selector[tuple[], R]): bool =
+  ## Perform the next lower local zero-argument selector implementation.
+  var value: R
+  obj.performNext(selector, (), value)
 
 proc raiseUnhandledSelector(selector: SigilName) =
   raise newException(UnhandledSelectorError, "unhandled selector: " & $selector)
@@ -2926,6 +3029,26 @@ proc addMethods*(
   if obj.addMethods(implementation.protocol, implementation.methods):
     obj.installProtocolObservers(implementation.observers)
     result = true
+
+proc pushMethods*(
+    obj: DynamicAgent, methods: openArray[SelectorMethod]
+): seq[SwizzleToken] {.discardable.} =
+  ## Push selector implementations onto the local method stacks.
+  for binding in methods:
+    result.add SwizzleToken(
+      owner: obj.unsafeWeakRef(),
+      selector: binding.selector,
+      depth: obj.methods.pushMethodStack(binding.selector,
+          binding.implementation),
+    )
+
+proc pushMethods*(
+    obj: DynamicAgent, implementation: ProtocolImplementation
+): seq[SwizzleToken] {.discardable.} =
+  ## Push a reusable protocol implementation, then adopt its protocol.
+  result = obj.pushMethods(implementation.methods)
+  discard obj.adopt(implementation.protocol)
+  obj.installProtocolObservers(implementation.observers)
 
 proc replaceMethods*(
     obj: DynamicAgent, implementation: ProtocolImplementation
