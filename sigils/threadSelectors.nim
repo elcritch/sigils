@@ -29,6 +29,7 @@ type
     isReady*: bool
     thr*: Thread[ptr SigilSelectorThread]
     timerLock*: Lock
+    timerHandles*: Table[SigilTimer, int]
 
   SigilSelectorThreadPtr* = ptr SigilSelectorThread
 
@@ -46,7 +47,7 @@ proc selectReady*(ev: SigilSelectEvent) {.signal.}
 proc selectEvent*(ev: SigilSelectEvent) {.signal.}
 
 proc newSigilSocketEvent*(
-  thread: SigilSelectorThreadPtr, fd: int | Socket
+    thread: SigilSelectorThreadPtr, fd: int | Socket
 ): SigilSocketEvent {.gcsafe.} =
   ## Register a file/socket descriptor with the selector so that when it
   ## becomes readable, a `dataReady` signal is emitted on `ev`.
@@ -57,7 +58,7 @@ proc newSigilSocketEvent*(
   registerHandle(thread.sel, fd, {Event.Read}, SigilThreadEvent(result))
 
 proc newSigilSelectEvent*(
-  thread: SigilSelectorThreadPtr, event = newSelectEvent()
+    thread: SigilSelectorThreadPtr, event = newSelectEvent()
 ): SigilSelectEvent {.gcsafe.} =
   ## Register a custom std/selectors SelectEvent with this selector
   ## thread and emit `selectEvent` (and `selectReady` for
@@ -67,37 +68,35 @@ proc newSigilSelectEvent*(
   registerEvent(thread.sel, event, SigilThreadEvent(result))
 
 proc newSigilSelectorThread*(): ptr SigilSelectorThread =
-  result = cast[ptr SigilSelectorThread](allocShared0(sizeof(
-      SigilSelectorThread)))
+  result = cast[ptr SigilSelectorThread](allocShared0(sizeof(SigilSelectorThread)))
   result[] = SigilSelectorThread() # important!
   result[].sel = newSelector[SigilThreadEvent]()
   result[].agent = SigilThreadAgent()
   result[].signaledLock.initLock()
   result[].timerLock.initLock()
+  result[].timerHandles = initTable[SigilTimer, int]()
   result[].inputs = newSigilChan()
   result[].running.store(true, Relaxed)
   result[].drain.store(true, Relaxed)
 
 method send*(
-    thread: SigilSelectorThreadPtr, msg: sink ThreadSignal,
-        blocking: BlockingKinds
+    thread: SigilSelectorThreadPtr, msg: sink ThreadSignal, blocking: BlockingKinds
 ) {.gcsafe.} =
   var msg = isolateRuntime(msg)
   case blocking
   of Blocking:
     thread.inputs.send(msg)
-    debugQueuePrint "queue:thread inputs size: ", $thread.inputs.peek(),
-      " thread: ", $getThreadId(thread.toSigilThread()[])
+    debugQueuePrint "queue:thread inputs size: ",
+      $thread.inputs.peek(), " thread: ", $getThreadId(thread.toSigilThread()[])
   of NonBlocking:
     let sent = thread.inputs.trySend(msg)
     if not sent:
       raise newException(MessageQueueFullError, "could not send!")
-    debugQueuePrint "queue:thread inputs size: ", $thread.inputs.peek(),
-      " thread: ", $getThreadId(thread.toSigilThread()[])
+    debugQueuePrint "queue:thread inputs size: ",
+      $thread.inputs.peek(), " thread: ", $getThreadId(thread.toSigilThread()[])
 
 method recv*(
-    thread: SigilSelectorThreadPtr, msg: var ThreadSignal,
-        blocking: BlockingKinds
+    thread: SigilSelectorThreadPtr, msg: var ThreadSignal, blocking: BlockingKinds
 ): bool {.gcsafe.} =
   case blocking
   of Blocking:
@@ -106,14 +105,34 @@ method recv*(
   of NonBlocking:
     result = thread.inputs.tryRecv(msg)
 
-method setTimer*(
-    thread: SigilSelectorThreadPtr, timer: SigilTimer
-) {.gcsafe.} =
+method setTimer*(thread: SigilSelectorThreadPtr, timer: SigilTimer) {.gcsafe.} =
   ## Schedule a timer on this selector-backed thread using selector timers.
   let durMs = max(timer.duration.inMilliseconds(), 1)
   let oneshot = (not timer.isRepeat()) and timer.count <= 1
   withLock thread.timerLock:
-    discard thread.sel.registerTimer(durMs.int, oneshot, timer)
+    thread.timerHandles[timer] = thread.sel.registerTimer(durMs.int, oneshot, timer)
+
+proc unregisterTimer(thread: SigilSelectorThreadPtr, timer: SigilTimer, fd: int) =
+  withLock thread.timerLock:
+    if fd >= 0 and thread.sel.contains(fd):
+      thread.sel.unregister(fd)
+    thread.timerHandles.del(timer)
+
+proc unregisterAllTimers(thread: SigilSelectorThreadPtr) =
+  var fds: seq[int]
+  withLock thread.timerLock:
+    for _, fd in thread.timerHandles.pairs:
+      fds.add fd
+    thread.timerHandles.clear()
+  for fd in fds:
+    if fd >= 0 and thread.sel.contains(fd):
+      thread.sel.unregister(fd)
+
+proc closeSelectorThread*(thread: SigilSelectorThreadPtr) =
+  if thread.isNil:
+    return
+  thread.unregisterAllTimers()
+  thread.sel.close()
 
 proc pumpTimers(thread: SigilSelectorThreadPtr, timeoutMs: int) {.gcsafe.} =
   ## Wait up to timeoutMs and deliver any due timers via selector events.
@@ -131,8 +150,7 @@ proc pumpTimers(thread: SigilSelectorThreadPtr, timeoutMs: int) {.gcsafe.} =
     if ev of SigilTimer:
       let tt = SigilTimer(ev)
       if thread.hasCancelTimer(tt):
-        withLock thread.timerLock:
-          thread.sel.unregister(k.fd)
+        thread.unregisterTimer(tt, k.fd)
         thread.removeTimer(tt)
         continue
       emit tt.timeout()
@@ -141,8 +159,7 @@ proc pumpTimers(thread: SigilSelectorThreadPtr, timeoutMs: int) {.gcsafe.} =
         if tt.count > 0:
           tt.count.dec()
         if tt.count == 0:
-          withLock thread.timerLock:
-            thread.sel.unregister(k.fd)
+          thread.unregisterTimer(tt, k.fd)
     elif ev of SigilSocketEvent:
       let dr = SigilSocketEvent(ev)
       # Only emit when the descriptor is readable.
@@ -201,8 +218,9 @@ proc start*(thread: ptr SigilSelectorThread) =
     thread[].exceptionHandler = defaultExceptionHandler
   createThread(thread[].thr, runSelectorThread, thread)
 
-proc stop*(thread: ptr SigilSelectorThread, immediate: bool = false,
-    drain: bool = false) =
+proc stop*(
+    thread: ptr SigilSelectorThread, immediate: bool = false, drain: bool = false
+) =
   thread[].running.store(false, Relaxed)
   thread[].drain.store(drain or immediate, Relaxed)
 
