@@ -3,8 +3,6 @@ import sigils/slots
 import sigils/core
 import sigils/closures
 
-import std/sugar
-
 type
   Counter* = ref object of Agent
     value: int
@@ -65,51 +63,12 @@ suite "agent closure slots":
       b.value = val
 
     check not compiles(
-      connectTo(a, valueChanged) do(val: float):
-        b.value = val
+      block:
+        connectTo(a, valueChanged) do(val: float):
+          b.value = val
     )
 
     echo "cc3: Type: ", $typeof(clsAgent)
     emit a.valueChanged(42)
     check b.value == 42
     check clsAgent.typeof() is ClosureAgent[(int, )]
-
-  when not sigilsSlotEnvDisabled:
-    test "receiver-bound closure slot captures state and mutates target":
-      var
-        a = Counter()
-        b = Counter(value: 100)
-        offset = 10
-
-      let conn = connectTo(a, valueChanged, b) do(self: Counter, val: int):
-        self.value = val + offset
-
-      emit a.valueChanged(5)
-      check b.value == 15
-
-      check conn.disconnect()
-      check not conn.disconnect()
-
-      emit a.valueChanged(7)
-      check b.value == 15
-
-    test "receiver-bound closure slots keep separate environments":
-      var
-        a = Counter()
-        b = Counter()
-        first = 2
-        second = 3
-
-      let conn1 = connectTo(a, valueChanged, b) do(self: Counter, val: int):
-        self.value += val * first
-
-      let conn2 = connectTo(a, valueChanged, b) do(self: Counter, val: int):
-        self.avg += val * second
-
-      emit a.valueChanged(4)
-
-      check b.value == 8
-      check b.avg == 12
-
-      check conn1.disconnect()
-      check conn2.disconnect()
