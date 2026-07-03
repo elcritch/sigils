@@ -21,6 +21,11 @@ You need to wrap procs with a `slot` to set up the proc to support receiving sig
 
 Connecting signals and slots is accomplished using `connect`. Note that `connect` is idempotent, meaning that you can call it on the same objects the multiple times without ill effect.
 
+## Compile-time Options
+
+- Closure slots: compile with `-d:sigilsClosures` and import `sigils/closures` to use `connectTo(...) do:`.
+- String sigil names: compile with `-d:sigilsSigilNameString` to use plain `string` for `SigilName` instead of the default fixed-size `StackString[48]`.
+
 ## Examples
 
 ```nim
