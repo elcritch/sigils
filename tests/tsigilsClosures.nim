@@ -12,7 +12,16 @@ type ClosureFlagCounter = ref object of Agent
   value: int
   avg: int
 
+type ClosureFlagSource = ref object of Agent
+  destroyed: ptr bool
+
+proc `=destroy`(source: var typeof(ClosureFlagSource()[])) =
+  if not source.destroyed.isNil:
+    source.destroyed[] = true
+  destroyAgent(source)
+
 proc valueChanged(self: ClosureFlagCounter, value: int) {.signal.}
+proc valueChanged(self: ClosureFlagSource, value: int) {.signal.}
 
 suite "agent closure slots (-d:sigilsClosures)":
   test "receiver-bound closure slot captures state and mutates target":
@@ -56,3 +65,19 @@ suite "agent closure slots (-d:sigilsClosures)":
 
     check conn1.disconnect()
     check conn2.disconnect()
+
+  test "disconnect after source destruction does not dereference weak source":
+    var
+      sourceDestroyed = false
+      target = ClosureFlagCounter()
+      conn: SlotConnection
+
+    block:
+      let source = ClosureFlagSource(destroyed: addr sourceDestroyed)
+      conn = connectTo(source, valueChanged, target) do(
+          self: ClosureFlagCounter, val: int):
+        self.value = val
+
+    GC_fullCollect()
+    check sourceDestroyed
+    check not conn.disconnect()

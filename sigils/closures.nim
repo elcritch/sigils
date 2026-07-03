@@ -12,18 +12,24 @@ type ClosureAgent*[T] = ref object of Agent
 when not sigilsSlotEnvDisabled:
   type SlotConnection* = object
     source*: WeakRef[Agent]
+    state*: SlotConnectionState
     signal*: SigilName
     subscription*: Subscription
 
   proc disconnect*(connection: SlotConnection): bool {.discardable.} =
+    if connection.state.isNil or not connection.state.alive:
+      return false
     if connection.source.isNil:
+      connection.state.alive = false
       return false
     if not connection.source[].hasSubscription(
       connection.signal, connection.subscription
     ):
+      connection.state.alive = false
       return false
     connection.source[].delSubscription(connection.signal,
         connection.subscription)
+    connection.state.alive = false
     result = true
 
 iterator closureParamTypes(params: NimNode, firstArg: int): NimNode =
@@ -233,16 +239,19 @@ when not sigilsSlotEnvDisabled:
 
       let
         sig = signalName(sigProc)
+        state = SlotConnectionState(alive: true)
         subscription = Subscription(
           tgt: b.unsafeWeakRef().asAgent(),
           envSlot: envSlot,
           env: slotEnv,
+          connectionState: state,
         )
 
       a.addSubscription(sig, subscription)
 
       SlotConnection(
         source: a.unsafeWeakRef().asAgent(),
+        state: state,
         signal: sig,
         subscription: subscription,
       )

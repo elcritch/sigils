@@ -47,6 +47,9 @@ type
   SlotEnv* = ref object of RootObj
     ## Owned environment for receiver-bound closure slots.
 
+  SlotConnectionState* = ref object
+    alive*: bool
+
   EnvAgentProc* = proc(
     context: Agent, params: SigilParams, env: SlotEnv
   ) {.nimcall.}
@@ -58,6 +61,7 @@ type
     when not sigilsSlotEnvDisabled:
       envSlot*: EnvAgentProc
       env*: SlotEnv
+      connectionState*: SlotConnectionState
 
   AgentObj = object of RootObj
     subcriptions*: seq[tuple[signal: SigilName, subscription: Subscription]]
@@ -78,6 +82,11 @@ type
   LocalSignalTypes* = distinct object
 
 type SubscriptionEntry* = tuple[signal: SigilName, subscription: Subscription]
+
+proc invalidateConnectionState(subscription: Subscription) {.inline.} =
+  when not sigilsSlotEnvDisabled:
+    if not subscription.connectionState.isNil:
+      subscription.connectionState.alive = false
 
 when defined(nimscript):
   proc getSigilId*(a: Agent): SigilId =
@@ -117,6 +126,7 @@ method removeSubscriptionsFor*(
   for idx in countdown(self.subcriptions.len() - 1, 0):
     debugPrint "   removeSubscriptionsFor subs sig: ", $self.subcriptions[idx].signal
     if self.subcriptions[idx].subscription.tgt == subscriber:
+      self.subcriptions[idx].subscription.invalidateConnectionState()
       self.subcriptions.delete(idx)
 
 method unregisterSubscriber*(
@@ -142,6 +152,7 @@ template removeSubscriptions*(
   var tgts: HashSet[WeakRef[Agent]] = initHashSet[WeakRef[Agent]](
       subcriptions.len())
   for idx in 0 ..< subcriptions.len():
+    subcriptions[idx].subscription.invalidateConnectionState()
     tgts.incl(subcriptions[idx].subscription.tgt)
 
   for tgt in tgts:
@@ -455,6 +466,7 @@ method delSubscription*(
         subsFound.inc()
         if slot == nil or self.subcriptions[idx].subscription.packedSlot == slot:
           subsDeleted.inc()
+          self.subcriptions[idx].subscription.invalidateConnectionState()
           self.subcriptions.delete(idx)
   else:
     let first = lowerBoundSubscription(self.subcriptions, sig)
@@ -466,6 +478,7 @@ method delSubscription*(
         subsFound.inc()
         if slot == nil or self.subcriptions[idx].subscription.packedSlot == slot:
           subsDeleted.inc()
+          self.subcriptions[idx].subscription.invalidateConnectionState()
           self.subcriptions.delete(idx)
 
   if subsFound == subsDeleted:
@@ -480,6 +493,7 @@ method delSubscription*(
       if self.subcriptions[idx].signal == sig and
           self.subcriptions[idx].subscription.sameSubscription(subscription):
         deleted = true
+        self.subcriptions[idx].subscription.invalidateConnectionState()
         self.subcriptions.delete(idx)
   else:
     let first = lowerBoundSubscription(self.subcriptions, sig)
@@ -489,6 +503,7 @@ method delSubscription*(
       if self.subcriptions[idx].signal == sig and
           self.subcriptions[idx].subscription.sameSubscription(subscription):
         deleted = true
+        self.subcriptions[idx].subscription.invalidateConnectionState()
         self.subcriptions.delete(idx)
 
   if deleted and not procCall hasSubscription(self, sig, subscription.tgt):
