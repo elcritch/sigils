@@ -295,7 +295,7 @@ suite "dynamic selectors":
     check field.perform(parseInteger, "9").get() == 18
     check field.parseInteger("9") == 18
 
-  when sigilsSelectorClosuresEnabled:
+  when sigilsClosuresEnabled:
     test "selector closure methods capture state":
       let field = TextField(text: "field")
       var offset = 10
@@ -356,7 +356,7 @@ suite "dynamic selectors":
     check token.popMethod()
     check field.methodStack(selector).len == 1
 
-  when sigilsSelectorClosuresEnabled:
+  when sigilsClosuresEnabled:
     test "pushMethod accepts a selector closure override":
       let field = TextField()
       var offset = 5
@@ -665,7 +665,7 @@ suite "dynamic selectors":
       SelectorPayload(x: 1, y: 2),
     ).isNone
 
-  when sigilsSelectorClosuresEnabled:
+  when sigilsClosuresEnabled:
     test "protocol method batches accept selector closures":
       let controller = TextController()
       let minimum = 4

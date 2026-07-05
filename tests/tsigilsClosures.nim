@@ -1,5 +1,7 @@
-when not defined(sigilsClosures):
-  {.error: "tests/tsigilsClosures.nims must define sigilsClosures".}
+import sigils/agents
+
+when not sigilsClosuresEnabled:
+  {.error: "tests/tsigilsClosures.nim requires a sigils closures define".}
 
 import std/unittest
 

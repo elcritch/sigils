@@ -23,8 +23,9 @@ Connecting signals and slots is accomplished using `connect`. Note that `connect
 
 ## Compile-time Options
 
-- Closure slots: compile with `-d:sigilsClosures` and import `sigils/closures` to use `connectTo(...) do:`.
-- String sigil names: compile with `-d:sigilsSigilNameString` to use plain `string` for `SigilName` instead of the default fixed-size `StackString[48]`.
+- Closure slots: enable `-d:sigilsClosures`, `-d:sigils.closures`, or the `closures` package feature, then import `sigils/closures` to use `connectTo(...) do:`.
+- String sigil names: enable `-d:sigilsSigilNameString`, `-d:sigils.sigNameAsString`, or the `sigNameAsString` package feature to use plain `string` for `SigilName` instead of the default fixed-size `StackString[48]`. The performance profile differs.
+- Package features can be requested by dependents with `requires "sigils[sigNameAsString, closures]"`.
 
 ## Examples
 

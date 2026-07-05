@@ -26,7 +26,6 @@ export strformat
 export debugs
 
 const
-  sigilsClosuresEnabled* = defined(sigilsClosures)
   sigilsSlotEnvEnabled* =
     sigilsClosuresEnabled or defined(sigilsSlotEnv)
   sigilsSlotEnvDisabled* =
@@ -416,7 +415,7 @@ template addSubscription*(
   let tgtRef = tgt.unsafeWeakRef().toKind(Agent)
   addSubscription(obj, sig, tgtRef, slot, directSlot)
 
-when not defined(sigilsSigilNameString):
+when not sigilsSigilNameStringEnabled:
   template addSubscription*(
       obj: Agent,
       sig: IndexableChars,
@@ -515,7 +514,7 @@ template delSubscription*(
   let tgtRef = tgt.unsafeWeakRef().toKind(Agent)
   delSubscription(obj, sig, tgtRef, slot)
 
-when not defined(sigilsSigilNameString):
+when not sigilsSigilNameStringEnabled:
   template delSubscription*(
       obj: Agent, sig: IndexableChars, tgt: WeakRef[Agent], slot: AgentProc
   ): void =

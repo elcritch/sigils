@@ -9,9 +9,6 @@ export agents
 export options
 export signals
 
-const sigilsSelectorClosuresEnabled* =
-  sigilsClosuresEnabled or defined(sigilsSelectorClosures)
-
 type
   Selector*[A, R] = object
     ## A typed runtime method name.
@@ -148,7 +145,7 @@ proc requirement*[A, R](
     required: required,
   )
 
-when defined(sigilsSigilNameString):
+when sigilsSigilNameStringEnabled:
   proc protocolSignal*(name: string, signature = ""): ProtocolSignal =
     result = ProtocolSignal(
       name: toSigilName(name),
@@ -517,7 +514,7 @@ proc selectorIdent(name: string, exported: bool): NimNode =
     result = ident(name)
 
 proc checkSigilNameLength(name: string, node: NimNode, kind: string) =
-  when not defined(sigilsSigilNameString):
+  when not sigilsSigilNameStringEnabled:
     if name.len > sigilsMaxSignalLength:
       error(
         kind & " `" & name & "` is " & $name.len &
@@ -935,7 +932,7 @@ proc selectorImplNode(p: NimNode, runtimeSelectorName = ""): NimNode
 proc selectorDeclaration(node: NimNode, runtimeSelectorName = ""): NimNode =
   selectorImplNode(selectorPragma(node), runtimeSelectorName)
 
-when sigilsSelectorClosuresEnabled:
+when sigilsClosuresEnabled:
   macro selectorClosureImpl(selector: typed, blk: typed): untyped =
     ## Build a DynamicMethod from a typed receiver closure.
     if blk.kind notin {
@@ -967,6 +964,7 @@ when sigilsSelectorClosuresEnabled:
           params[0].copyNimTree()
       receiverType = params[1][1].copyNimTree()
       argsType = selectorArgsType(params, 2)
+      argsTypeAlias = genSym(nskType, "SelectorClosureArgs")
       callback = genSym(nskLet, "selectorCallback")
       dynMethod = genSym(nskLet, "selectorMethod")
       selectorType = genSym(nskVar, "selectorType")
@@ -992,19 +990,20 @@ when sigilsSelectorClosuresEnabled:
             `invocation`.setResult(`call`)
       elif retType.kind == nnkTupleTy and retType.len == 0:
         quote do:
-          var `argsIdent` = `invocation`.argsAs(`argsType`)
+          var `argsIdent` = `invocation`.argsAs(`argsTypeAlias`)
           `call`
           `invocation`.setResult(())
       else:
         quote do:
-          var `argsIdent` = `invocation`.argsAs(`argsType`)
+          var `argsIdent` = `invocation`.argsAs(`argsTypeAlias`)
           `invocation`.setResult(`call`)
 
     result = quote do:
       block:
+        type `argsTypeAlias` = `argsType`
         let `callback` = `blk`
         var `selectorType` {.used.}: typeof(`selector`)
-        var `closureSelectorType` {.used.}: Selector[`argsType`, `retType`]
+        var `closureSelectorType` {.used.}: Selector[`argsTypeAlias`, `retType`]
 
         when compiles(`selectorType` = `closureSelectorType`):
           discard
@@ -2904,7 +2903,7 @@ proc toDynamicMethod*[T: DynamicAgent, A, R](
     let args = invocation.argsAs(A)
     invocation.setResult(fn(obj, args))
 
-when sigilsSelectorClosuresEnabled:
+when sigilsClosuresEnabled:
   template toDynamicMethod*[A, R](
       selector: Selector[A, R], blk: typed
   ): DynamicMethod =
@@ -2933,7 +2932,7 @@ proc addMethod*[A, R](
   obj.methods.putMethodStack(selector.name, @[fn])
   result = true
 
-when sigilsSelectorClosuresEnabled:
+when sigilsClosuresEnabled:
   template addMethod*[A, R](
       obj: DynamicAgent,
       selector: Selector[A, R],
@@ -2961,7 +2960,7 @@ proc replaceMethod*[A, R](
   ## Replace the local implementation and return the previous top method, if any.
   obj.methods.replaceMethodStack(selector.name, @[fn])
 
-when sigilsSelectorClosuresEnabled:
+when sigilsClosuresEnabled:
   template replaceMethod*[A, R](
       obj: DynamicAgent,
       selector: Selector[A, R],
@@ -3162,7 +3161,7 @@ proc pushMethod*[A, R](
     wrapper(self, invocation, next)
   result = obj.pushMethod(selector, wrapped)
 
-when sigilsSelectorClosuresEnabled:
+when sigilsClosuresEnabled:
   template pushMethod*[A, R](
       obj: DynamicAgent,
       selector: Selector[A, R],

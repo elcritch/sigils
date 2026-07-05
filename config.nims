@@ -1,6 +1,6 @@
 # NimScript configuration and tasks for this repo
 switch("nimcache", ".nimcache")
---debugger:native
+--debugger: native
 
 import std/[os, strformat, strutils]
 
@@ -8,6 +8,17 @@ const testDir = "tests"
 const stringSigilNameTests = [
   "tbenchmarksSigilName.nim",
   "tselectorProtocolConnect.nim",
+]
+const closureTests = [
+  "tselectors.nim",
+]
+const featureFlagDefineTests = [
+  "sigilsSigilNameString",
+  "sigils.sigNameAsString",
+  "feature.sigils.sigNameAsString",
+  "sigilsClosures",
+  "sigils.closures",
+  "feature.sigils.closures",
 ]
 
 task test, "Compile and run all tests in tests/":
@@ -22,6 +33,14 @@ task test, "Compile and run all tests in tests/":
     for path in stringSigilNameTests:
       echo fmt"[sigils:string] Running {path}"
       exec fmt"nim c -r -d:sigilsSigilNameString {path}"
+
+    for path in closureTests:
+      echo fmt"[sigils:closures] Running {path}"
+      exec fmt"nim c -r -d:sigilsClosures {path}"
+
+    for define in featureFlagDefineTests:
+      echo fmt"[sigils:features] Running tfeatureFlags.nim with -d:{define}"
+      exec fmt"nim c -r -d:{define} tfeatureFlags.nim"
 
 proc runTsanTest(path: string) =
   putEnv("TSAN_OPTIONS", "suppressions=tests/tsan.ignore")

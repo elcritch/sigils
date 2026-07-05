@@ -1,10 +1,13 @@
 import std/[tables, strutils]
+import features
 
-when not defined(sigilsSigilNameString):
+export features
+
+when not sigilsSigilNameStringEnabled:
   import stack_strings
 
 export tables
-when not defined(sigilsSigilNameString):
+when not sigilsSigilNameStringEnabled:
   export stack_strings
 
 type FastErrorCodes* = enum
@@ -16,7 +19,7 @@ type FastErrorCodes* = enum
   INTERNAL_ERROR = -23
   SERVER_ERROR = -22
 
-when defined(sigilsSigilNameString):
+when sigilsSigilNameStringEnabled:
   type SigilName* = string
 else:
   type SigilName* = StackString[48]
@@ -83,7 +86,7 @@ type
     stacktrace*: seq[string]
 
 func compareSigilName*(a, b: SigilName): int {.inline.} =
-  when defined(sigilsSigilNameString):
+  when sigilsSigilNameStringEnabled:
     cmp(a, b)
   else:
     cmp($a, $b)
@@ -172,7 +175,7 @@ proc initSigilRequest*[S, T](
 
 const sigilsMaxSignalLength* {.intdefine.} = 48
 
-when defined(sigilsSigilNameString):
+when sigilsSigilNameStringEnabled:
   proc toSigilName*(name: static string): SigilName =
     return name
 
