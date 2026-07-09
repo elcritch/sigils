@@ -62,6 +62,17 @@ type
 
   SelectorDefaultArg = object
 
+  ProtocolPropertyNilPolicy = enum
+    propertyNilUnchecked
+    propertyNilSafe
+    propertyNilCheck
+
+  ProtocolProperty = object
+    name: NimNode
+    valueType: NimNode
+    field: NimNode
+    nilPolicy: ProtocolPropertyNilPolicy
+
   SelectorScope = enum
     selectorScopeNone
     selectorScopeProtocol
@@ -739,6 +750,63 @@ proc setterIdentName(name: string): string =
   result = "set" & name
   result[3] = result[3].toUpperAscii
 
+proc setPropertyNilPolicy(
+    nilPolicy: var ProtocolPropertyNilPolicy,
+    value: ProtocolPropertyNilPolicy,
+    pragma: NimNode,
+) =
+  if nilPolicy != propertyNilUnchecked:
+    error("property nil policy can only be declared once", pragma)
+  nilPolicy = value
+
+proc propertyValueType(
+    valueType: NimNode,
+    field: var NimNode,
+    nilPolicy: var ProtocolPropertyNilPolicy,
+): NimNode =
+  if valueType.kind != nnkPragmaExpr:
+    return valueType.copyNimTree()
+
+  result = valueType[0].copyNimTree()
+  for pragma in valueType[1]:
+    if pragma.kind == nnkExprColonExpr and pragma.len == 2 and
+        pragma[0].eqIdent("field"):
+      if not field.isNil:
+        error("property field pragma can only be declared once", pragma)
+      field = pragma[1].copyNimTree()
+    elif pragma.kind == nnkCall and pragma.len == 2 and pragma[0].eqIdent("field"):
+      if not field.isNil:
+        error("property field pragma can only be declared once", pragma)
+      field = pragma[1].copyNimTree()
+    elif pragma.kind == nnkIdent and pragma.eqIdent("nilSafe"):
+      nilPolicy.setPropertyNilPolicy(propertyNilSafe, pragma)
+    elif pragma.kind == nnkIdent and pragma.eqIdent("checkNil"):
+      nilPolicy.setPropertyNilPolicy(propertyNilCheck, pragma)
+    else:
+      error("unsupported property pragma", pragma)
+
+proc protocolProperty(item: NimNode): tuple[prop: ProtocolProperty, found: bool] =
+  if item.kind != nnkCommand or item.len < 2 or not item[0].eqIdent("property"):
+    return
+
+  if item.len == 2 and item[1].kind == nnkInfix and item[1].len == 3 and
+      item[1][0].eqIdent("->"):
+    var field: NimNode
+    var nilPolicy = propertyNilUnchecked
+    let valueType = propertyValueType(item[1][2], field, nilPolicy)
+    if field.isNil and nilPolicy != propertyNilUnchecked:
+      error("property nil policy requires a field pragma", item)
+    result.prop = ProtocolProperty(
+      name: item[1][1].copyNimTree(),
+      valueType: valueType,
+      field: field,
+      nilPolicy: nilPolicy,
+    )
+    result.found = true
+    return
+
+  error("property declarations use: property name -> Type", item)
+
 proc propertyMethod(
     name: NimNode, valueType: NimNode, setter = false
 ): NimNode =
@@ -772,15 +840,97 @@ proc propertyMethods(name: NimNode, valueType: NimNode): seq[NimNode] =
   result.add propertyMethod(name, valueType)
   result.add propertyMethod(name, valueType, setter = true)
 
-proc protocolPropertyMethods(item: NimNode): seq[NimNode] =
-  if item.kind != nnkCommand or item.len < 2 or not item[0].eqIdent("property"):
-    return
+proc propertyMethods(prop: ProtocolProperty): seq[NimNode] =
+  propertyMethods(prop.name, prop.valueType)
 
-  if item.len == 2 and item[1].kind == nnkInfix and item[1].len == 3 and
-      item[1][0].eqIdent("->"):
-    return propertyMethods(item[1][1], item[1][2])
+proc propertyFieldExpr(receiver: NimNode, field: NimNode): NimNode =
+  if field.kind == nnkDotExpr and field.len == 2:
+    return nnkDotExpr.newTree(
+      propertyFieldExpr(receiver, field[0]),
+      field[1].copyNimTree(),
+    )
+  nnkDotExpr.newTree(receiver.copyNimTree(), field.copyNimTree())
 
-  error("property declarations use: property name -> Type", item)
+proc propertyFieldParts(field: NimNode, parts: var seq[NimNode]) =
+  if field.kind == nnkDotExpr and field.len == 2:
+    propertyFieldParts(field[0], parts)
+    parts.add field[1].copyNimTree()
+  else:
+    parts.add field.copyNimTree()
+
+proc propertyNilCheckPrefixes(receiver: NimNode, field: NimNode): seq[NimNode] =
+  result.add receiver.copyNimTree()
+
+  var parts: seq[NimNode]
+  propertyFieldParts(field, parts)
+  var prefix = receiver.copyNimTree()
+  for idx in 0 ..< max(0, parts.len - 1):
+    prefix = nnkDotExpr.newTree(prefix, parts[idx].copyNimTree())
+    result.add prefix.copyNimTree()
+
+proc propertyNilGuard(
+    prefix: NimNode,
+    valueType: NimNode,
+    nilPolicy: ProtocolPropertyNilPolicy,
+    setter: bool,
+): NimNode =
+  let condition = nnkInfix.newTree(ident"==", prefix.copyNimTree(), newNilLit())
+  let action =
+    case nilPolicy
+    of propertyNilUnchecked:
+      newStmtList()
+    of propertyNilSafe:
+      if setter:
+        quote do:
+          return
+      else:
+        quote do:
+          return default(`valueType`)
+    of propertyNilCheck:
+      quote do:
+        raise newException(NilAccessDefect, "nil property field")
+
+  result = quote do:
+    when compiles(`condition`):
+      if `condition`:
+        `action`
+
+proc propertyFieldBody(
+    prop: ProtocolProperty, receiverName: NimNode, setter = false
+): NimNode =
+  result = newStmtList()
+  if prop.nilPolicy != propertyNilUnchecked:
+    for prefix in propertyNilCheckPrefixes(receiverName, prop.field):
+      result.add propertyNilGuard(prefix, prop.valueType, prop.nilPolicy, setter)
+
+  let fieldExpr = propertyFieldExpr(receiverName, prop.field)
+  if setter:
+    result.add newAssignment(fieldExpr, ident"value")
+  else:
+    result.add fieldExpr
+
+proc propertyImplementationMethods(
+    prop: ProtocolProperty, receiverType: NimNode
+): seq[NimNode] =
+  let
+    receiverName = ident("self")
+    getter = propertyMethod(prop.name, prop.valueType)
+    setter = propertyMethod(prop.name, prop.valueType, setter = true)
+
+  getter[3].insert(
+    1,
+    newIdentDefs(receiverName.copyNimTree(), receiverType.copyNimTree()),
+  )
+  getter[6] = propertyFieldBody(prop, receiverName)
+
+  setter[3].insert(
+    1,
+    newIdentDefs(receiverName.copyNimTree(), receiverType.copyNimTree()),
+  )
+  setter[6] = propertyFieldBody(prop, receiverName, setter = true)
+
+  result.add getter
+  result.add setter
 
 proc hasPragma(node: NimNode, name: string): bool =
   if node.kind != nnkPragma:
@@ -1170,8 +1320,19 @@ macro property*(spec: untyped): untyped =
   if spec.kind != nnkInfix or spec.len != 3 or not spec[0].eqIdent("->"):
     error("property declarations use: property name -> Type", spec)
 
+  var field: NimNode
+  var nilPolicy = propertyNilUnchecked
+  let valueType = propertyValueType(spec[2], field, nilPolicy)
+  if not field.isNil:
+    error(
+      "property field pragma requires a receiver-bound protocol implementation",
+      spec,
+    )
+  if nilPolicy != propertyNilUnchecked:
+    error("property nil policy requires a field pragma", spec)
+
   result = newStmtList()
-  for item in propertyMethods(spec[1], spec[2]):
+  for item in propertyMethods(spec[1], valueType):
     result.add selectorDeclaration(item)
 
 proc implementMethodBinding(item: NimNode): tuple[defs: seq[NimNode],
@@ -1252,6 +1413,7 @@ proc implementBlock(
     body: NimNode,
     receiver: NimNode = nil,
     allowProperties = false,
+    propertyReceiver: NimNode = nil,
     observers: NimNode = nil,
 ): NimNode =
   var
@@ -1261,13 +1423,26 @@ proc implementBlock(
   for item in body:
     if item.procIsSignal or item.procIsSlot:
       discard
-    elif item.protocolPropertyMethods().len > 0:
-      if not allowProperties:
-        error("protocol implementations must contain method declarations", item)
     else:
-      let binding = implementMethodBinding(item)
-      defs.add binding.defs
-      bindings.add binding.binding
+      let property = item.protocolProperty()
+      if property.found:
+        if not allowProperties:
+          error("protocol implementations must contain method declarations", item)
+        if not property.prop.field.isNil:
+          if propertyReceiver.isNil:
+            error(
+              "property field pragma requires a receiver-bound protocol implementation",
+              item,
+            )
+          for propertyMethod in propertyImplementationMethods(
+              property.prop, propertyReceiver):
+            let binding = implementMethodBinding(propertyMethod)
+            defs.add binding.defs
+            bindings.add binding.binding
+      else:
+        let binding = implementMethodBinding(item)
+        defs.add binding.defs
+        bindings.add binding.binding
 
   let methods = nnkBracket.newTree(bindings)
   let observerBindings =
@@ -1742,9 +1917,14 @@ proc protocolDeclaration(
   let checkReceiver = ident("receiver")
 
   for section in split.body:
-    let propertyDecls = section.protocolPropertyMethods()
-    if propertyDecls.len > 0:
-      for propertyDecl in propertyDecls:
+    let property = section.protocolProperty()
+    if property.found:
+      if not property.prop.field.isNil and receiver.isNil:
+        error(
+          "property field pragma requires a receiver-bound protocol implementation",
+          section,
+        )
+      for propertyDecl in propertyMethods(property.prop):
         addProtocolRequirement(
           selectorDecls,
           reqs,
@@ -2168,7 +2348,8 @@ proc implementProtocolForReceiver(
     protocolDecl = protocolDeclaration(protocol, split.body, 2, receiver,
         inherited = allInherited, selectorScope = selectorScope)
     implementation = implementBlock(protocol, split.body,
-        allowProperties = true, observers = observerBindings)
+        allowProperties = true, propertyReceiver = receiver,
+        observers = observerBindings)
     receiverType = receiver.copyNimTree()
 
   result = quote do:

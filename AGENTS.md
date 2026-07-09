@@ -7,9 +7,9 @@
 
 ## Build, Test, and Development
 - Install deps (atlas workspace): `atlas install` (ensure `atlas` is installed and configured for your environment). *Never* use Nimble - it's horrible. *Always* use Atlas and it's `deps/` folder and `nim.cfg` file to see paths.
-- Run all tests: `nim test` (uses the `test` task in `config.nims` to compile and run every `tests/*.nim`).
+- Run all tests: `atlas-run tests`.
 - Run a single test locally:
-  - `nim c -r tests/treactiveSigil.nim`
+  - `atlas-run tests reactiveSigil.nim`
 - Helpful flags: `-d:sigilsDebug` for verbose names; define `tsan` to enable ThreadSanitizer per `tests/config.nims`.
 
 ## Coding Style & Naming
@@ -21,13 +21,13 @@
 ## Testing Guidelines
 - Framework: `unittest` with descriptive `suite` and `test` names.
 - Location: add new tests under `tests/`, mirroring module names (e.g., `tslots.nim` for `slots.nim`).
-- Run all: `nim test`. Run one: `nim c -r tests/tslots.nim`.
+- Run all: `atlas-run tests`. Run one: `atlas-run tests slots.nim`.
 - Concurrency: tests run with `--threads:on` (see `tests/config.nims`). Use `when defined(sigilsDebug)` to gate extra diagnostics.
 
 ## Commit & Pull Requests
 - Commits: short, imperative mood (e.g., "add isRunning"), optionally reference PR/issue like `(#21)`.
 - PRs: include a clear description, linked issues, summary of changes, any threading or GC considerations, and test coverage notes. Attach logs or minimal repros if fixing concurrency.
-- Requirements: CI (`nim test`) must pass; include tests for new behavior and update `README.md`/`CHANGES.md` as needed.
+- Requirements: CI (`atlas-run tests`) must pass; include tests for new behavior and update `README.md`/`CHANGES.md` as needed.
 
 ## Security & Configuration Tips
 - GC: library requires ARC/ORC (`--gc:arc` or `--gc:orc`); enforced in `sigils.nim`.

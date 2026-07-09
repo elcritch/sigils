@@ -155,7 +155,7 @@ protocol StrictTextFieldDelegate:
   method selectionRange(): string
 ```
 
-They also support property declarations. A property creates getter and setter selectors.
+They also support property declarations. A property creates getter and setter selectors; it does not create storage by itself.
 
 ```nim
 protocol TitledView:
@@ -163,6 +163,38 @@ protocol TitledView:
 ```
 
 That declares `title` and `setTitle`.
+
+In a receiver-bound protocol implementation, you can satisfy the property with normal selector methods:
+
+```nim
+protocol CaptionedViewProtocol from View:
+  property caption -> string
+
+  method caption(self: View): string =
+    self.name
+
+  method setCaption(self: View, value: string) =
+    self.name = value
+```
+
+For direct field-backed properties, `field` can generate those methods:
+
+```nim
+protocol CaptionedViewProtocol from View:
+  property caption -> string {.field: name.}
+```
+
+That expands to the same getter/setter shape: `caption(self: View): string` returns `self.name`, and `setCaption(self: View, value: string)` assigns `self.name = value`.
+
+For nullable field paths, add a nil policy:
+
+```nim
+protocol ChildNameProtocol from View:
+  property safeChildName -> string {.field: child.name, nilSafe.}
+  property checkedChildName -> string {.field: child.name, checkNil.}
+```
+
+`nilSafe` makes getters return `default(T)` and setters do nothing when a checked path prefix is nil. `checkNil` raises `NilAccessDefect` instead. Nil policies are only valid with `field`, and only one policy can be used on a property.
 
 If a protocol should use protocol-qualified runtime selector names, opt in with `selectorScope: protocol`.
 

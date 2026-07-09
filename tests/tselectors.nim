@@ -17,6 +17,18 @@ type
     name: string
     x, y, width, height: int
 
+  FieldBackedView = ref object of DynamicAgent
+    name: string
+
+  FieldChild = ref object
+    name: string
+
+  NilSafeFieldBackedView = ref object of DynamicAgent
+    child: FieldChild
+
+  CheckNilFieldBackedView = ref object of DynamicAgent
+    child: FieldChild
+
   Window = ref object of DynamicAgent
     focused: bool
 
@@ -70,6 +82,15 @@ protocol CaptionedViewProtocol from View:
 
   method setCaption(self: View, value: string) =
     self.name = value
+
+protocol FieldCaptionedViewProtocol from FieldBackedView:
+  property fieldCaption -> string {.field: name.}
+
+protocol NilSafeFieldViewProtocol from NilSafeFieldBackedView:
+  property safeChildName -> string {.field: child.name, nilSafe.}
+
+protocol CheckNilFieldViewProtocol from CheckNilFieldBackedView:
+  property checkedChildName -> string {.field: child.name, checkNil.}
 
 protocol WindowLifecycleProtocolInternal:
   method windowShouldSetContentView*(view: View): bool {.optional.}
@@ -615,6 +636,54 @@ suite "dynamic selectors":
     check view.caption() == "applied"
     view.setCaption("new")
     check view.caption() == "new"
+
+  test "field property declarations generate implementation methods":
+    let view = FieldBackedView(name: "old").withProto
+
+    check FieldCaptionedViewProtocol.requirements.len == 2
+    check FieldCaptionedViewProtocol.hasRequirement(fieldCaption)
+    check FieldCaptionedViewProtocol.hasRequirement(setFieldCaption)
+    check view.hasAdopted(FieldCaptionedViewProtocol)
+    check view.fieldCaption() == "old"
+    view.setFieldCaption("new")
+    check view.fieldCaption() == "new"
+    check view.name == "new"
+
+  test "nilSafe field properties return default and skip setters":
+    let view = NilSafeFieldBackedView().withProto
+
+    check NilSafeFieldViewProtocol.requirements.len == 2
+    check NilSafeFieldViewProtocol.hasRequirement(safeChildName)
+    check NilSafeFieldViewProtocol.hasRequirement(setSafeChildName)
+    check view.hasAdopted(NilSafeFieldViewProtocol)
+    check view.safeChildName() == ""
+    view.setSafeChildName("ignored")
+    check view.child.isNil
+
+    view.child = FieldChild(name: "old")
+    check view.safeChildName() == "old"
+    view.setSafeChildName("new")
+    check view.safeChildName() == "new"
+    check view.child.name == "new"
+
+  test "checkNil field properties raise nil access defects":
+    let view = CheckNilFieldBackedView().withProto
+
+    check CheckNilFieldViewProtocol.requirements.len == 2
+    check CheckNilFieldViewProtocol.hasRequirement(checkedChildName)
+    check CheckNilFieldViewProtocol.hasRequirement(setCheckedChildName)
+    check view.hasAdopted(CheckNilFieldViewProtocol)
+    expect NilAccessDefect:
+      discard view.checkedChildName()
+    expect NilAccessDefect:
+      view.setCheckedChildName("rejected")
+    check view.child.isNil
+
+    view.child = FieldChild(name: "old")
+    check view.checkedChildName() == "old"
+    view.setCheckedChildName("new")
+    check view.checkedChildName() == "new"
+    check view.child.name == "new"
 
   test "replaceMethods can install and adopt a protocol":
     let controller = TextController()
