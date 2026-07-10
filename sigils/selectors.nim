@@ -1473,9 +1473,14 @@ proc implementBlock(
   result = nnkBlockStmt.newTree(newEmptyNode(), stmts)
 
 proc protocolSlotReceiverType(item: NimNode): NimNode
+proc validateProtocolReceiver(item: NimNode, receiver: NimNode)
 
-proc implementVariant(variant: NimNode, protocol: NimNode,
-    body: NimNode): NimNode =
+proc implementVariant(
+    variant: NimNode,
+    protocol: NimNode,
+    body: NimNode,
+    receiver: NimNode = nil,
+): NimNode =
   let
     variantType = variant.copyNimTree()
     variantTypeUse = ident(selectorIdentName(variant))
@@ -1491,10 +1496,15 @@ proc implementVariant(variant: NimNode, protocol: NimNode,
   for item in body:
     if item.procIsSignal:
       error("named protocol implementations cannot declare signals", item)
+    if not receiver.isNil and item.kind == nnkMethodDef:
+      validateProtocolReceiver(item, receiver)
     if not item.procIsSlot:
       continue
 
     let itemReceiver = protocolSlotReceiverType(item)
+    if not receiver.isNil and itemReceiver.repr != receiver.repr:
+      error("protocol implementation slot receiver must be " & receiver.repr,
+        itemReceiver)
     if receiverType.isNil:
       receiverType = itemReceiver
     elif receiverType.repr != itemReceiver.repr:
@@ -1596,8 +1606,13 @@ proc implementVariant(variant: NimNode, protocol: NimNode,
       disconnectRuntimeName,
     )
 
-  let implementation = implementBlock(protocol, body,
-      observers = observerBindings)
+  let implementation = implementBlock(
+    protocol,
+    body,
+    allowProperties = not receiver.isNil,
+    propertyReceiver = receiver,
+    observers = observerBindings,
+  )
 
   result = quote do:
     type `variantType` = object
@@ -2360,7 +2375,12 @@ proc implementProtocolForReceiver(
 
 macro protocol*(name: untyped, body: untyped): untyped =
   ## Declare a protocol or a named implementation variant for a protocol.
+  if name.kind == nnkInfix and name.len == 3 and name[0].eqIdent("from") and
+      name[1].kind == nnkInfix and name[1].len == 3 and name[1][0].eqIdent("of"):
+    return implementVariant(name[1][1], name[1][2], body, name[2])
   if name.kind == nnkInfix and name.len == 3 and name[0].eqIdent("of"):
+    if name[2].kind == nnkInfix and name[2].len == 3 and name[2][0].eqIdent("from"):
+      return implementVariant(name[1], name[2][1], body, name[2][2])
     return implementVariant(name[1], name[2], body)
   if name.kind == nnkInfix and name.len == 3 and name[0].eqIdent("from"):
     let parsed = protocolNameAndScope(name[1])

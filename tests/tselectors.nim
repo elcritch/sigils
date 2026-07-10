@@ -86,6 +86,9 @@ protocol CaptionedViewProtocol from View:
 protocol FieldCaptionedViewProtocol from FieldBackedView:
   property fieldCaption -> string {.field: name.}
 
+protocol FieldTitledViewVariant of TitledProtocol from FieldBackedView:
+  property title -> string {.field: name.}
+
 protocol NilSafeFieldViewProtocol from NilSafeFieldBackedView:
   property safeChildName -> string {.field: child.name, nilSafe.}
 
@@ -647,6 +650,15 @@ suite "dynamic selectors":
     check view.fieldCaption() == "old"
     view.setFieldCaption("new")
     check view.fieldCaption() == "new"
+    check view.name == "new"
+
+  test "field property declarations work in receiver-bound variants":
+    let view = FieldBackedView(name: "old").withProtocol(FieldTitledViewVariant)
+
+    check view.hasAdopted(TitledProtocol)
+    check view.title() == "old"
+    view.setTitle("new")
+    check view.title() == "new"
     check view.name == "new"
 
   test "nilSafe field properties return default and skip setters":

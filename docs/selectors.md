@@ -302,6 +302,17 @@ let controller = TextController().withProtocol(DefaultTextField)
 doAssert controller.hasAdopted(TextFieldDelegate)
 ```
 
+Named implementations can also bind a receiver with `from`. This enables
+field-backed properties while preserving the reusable implementation variant:
+
+```nim
+protocol DefaultTitledView of TitledView from View:
+  property title -> string {.field: name.}
+```
+
+The generated `title` and `setTitle` methods receive `self: View`. Other
+methods and slots in the variant must use the same receiver type.
+
 For a default protocol attached to a receiver type, use `from` and then construct with `withProto` or `newProto`.
 
 ```nim

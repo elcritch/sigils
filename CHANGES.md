@@ -1,4 +1,4 @@
-- Unreleased - add `sigNameAsString` and `closures` package features plus `-d:sigils.sigNameAsString` and `-d:sigils.closures` aliases for the existing compile flags; selector closures now use the same closures flag; add `field`, `nilSafe`, and `checkNil` pragma support for receiver-bound protocol properties
+- Unreleased - add `sigNameAsString` and `closures` package features plus `-d:sigils.sigNameAsString` and `-d:sigils.closures` aliases for the existing compile flags; selector closures now use the same closures flag; add `field`, `nilSafe`, and `checkNil` pragma support for receiver-bound protocol properties and named variants
 - `v0.22.6` - add optional `-d:sigilsSigilNameString` compile flag to use plain `string` for `SigilName` instead of `StackString`
 - `v0.22.5` - add protocol `slotFor` aliases for event slots whose implementation names differ from signal names
 - `v0.22.4` - move protocol composition to body-level `includes`, including comma-separated protocol lists
