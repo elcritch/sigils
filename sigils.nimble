@@ -20,3 +20,7 @@ feature "cbor":
 
 feature "mummy":
   requires "mummy"
+
+feature "faststreams":
+  requires "https://github.com/status-im/nim-faststreams"
+
