@@ -29,6 +29,9 @@ type
   CheckNilFieldBackedView = ref object of DynamicAgent
     child: FieldChild
 
+  NimSetterView = ref object of DynamicAgent
+    storedEnabled: bool
+
   Window = ref object of DynamicAgent
     focused: bool
 
@@ -67,7 +70,7 @@ protocol StrictTextFieldDelegate:
 
   method selectionRange(): string
 
-protocol TitledProtocol:
+protocol TitledProtocol {.setterStyle: prefixed.}:
   property title -> string
 
 protocol CaptionedViewProtocol from View:
@@ -89,11 +92,20 @@ protocol FieldCaptionedViewProtocol from FieldBackedView:
 protocol FieldTitledViewVariant of TitledProtocol from FieldBackedView:
   property title -> string {.field: name.}
 
+protocol NimTitledProtocol {.setterStyle: nim.}:
+  property nimTitle -> string
+
+protocol NimTitleVariant {.setterStyle: nim.} of NimTitledProtocol from FieldBackedView:
+  property nimTitle -> string {.field: name.}
+
 protocol NilSafeFieldViewProtocol from NilSafeFieldBackedView:
   property safeChildName -> string {.field: child.name, nilSafe.}
 
 protocol CheckNilFieldViewProtocol from CheckNilFieldBackedView:
   property checkedChildName -> string {.field: child.name, checkNil.}
+
+protocol NimSetterViewProtocol {.setterStyle: nim.} from NimSetterView:
+  property enabled -> bool {.field: storedEnabled.}
 
 protocol SettableWindowProtocol from Window:
   method `enabled=`*(self: Window, value: bool) =
@@ -667,6 +679,20 @@ suite "dynamic selectors":
     check view.fieldCaption() == "new"
     check view.name == "new"
 
+  test "nim setter style generates assignment selectors for properties":
+    let view = NimSetterView().withProto
+
+    check NimSetterViewProtocol.requirements.len == 2
+    check NimSetterViewProtocol.requirements[0].selector ==
+        toSigilName("enabled")
+    check NimSetterViewProtocol.requirements[1].selector ==
+        toSigilName("enabled=")
+    check view.hasAdopted(NimSetterViewProtocol)
+    check not view.enabled()
+    view.enabled = true
+    check view.enabled()
+    check view.storedEnabled
+
   test "field property declarations work in receiver-bound variants":
     let view = FieldBackedView(name: "old").withProtocol(FieldTitledViewVariant)
 
@@ -674,6 +700,17 @@ suite "dynamic selectors":
     check view.title() == "old"
     view.setTitle("new")
     check view.title() == "new"
+    check view.name == "new"
+
+  test "nim setter style works in receiver-bound variants":
+    let view = FieldBackedView(name: "old").withProtocol(NimTitleVariant)
+
+    check NimTitledProtocol.requirements.len == 2
+    check NimTitledProtocol.requirements[1].selector == toSigilName("nimTitle=")
+    check view.hasAdopted(NimTitledProtocol)
+    check view.nimTitle() == "old"
+    view.nimTitle = "new"
+    check view.nimTitle() == "new"
     check view.name == "new"
 
   test "nilSafe field properties return default and skip setters":

@@ -164,6 +164,25 @@ protocol TitledView:
 
 That declares `title` and `setTitle`.
 
+To generate a Nim-style `title=` setter instead, set the protocol's
+`setterStyle` pragma to `nim`:
+
+```nim
+protocol TitledView {.setterStyle: nim.}:
+  property title -> string
+```
+
+This declares `title` and `title=`, with the runtime selector name `"title="`.
+Once the protocol implementation is installed, normal assignment syntax calls
+the selector:
+
+```nim
+view.title = "new title"
+```
+
+Without the pragma, properties continue to use the `setTitle` form. The
+explicit `{.setterStyle: prefixed.}` spelling is also accepted.
+
 In a receiver-bound protocol implementation, you can satisfy the property with normal selector methods:
 
 ```nim
@@ -312,6 +331,17 @@ protocol DefaultTitledView of TitledView from View:
 
 The generated `title` and `setTitle` methods receive `self: View`. Other
 methods and slots in the variant must use the same receiver type.
+
+For a protocol that uses Nim-style setters, repeat the pragma on a named
+variant when it generates field-backed property methods:
+
+```nim
+protocol NimTitled {.setterStyle: nim.}:
+  property title -> string
+
+protocol NimTitledView {.setterStyle: nim.} of NimTitled from View:
+  property title -> string {.field: name.}
+```
 
 For a default protocol attached to a receiver type, use `from` and then construct with `withProto` or `newProto`.
 

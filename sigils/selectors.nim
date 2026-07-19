@@ -77,6 +77,10 @@ type
     selectorScopeNone
     selectorScopeProtocol
 
+  ProtocolSetterStyle = enum
+    setterStylePrefixed
+    setterStyleNim
+
   UnhandledSelectorError* = object of CatchableError
     ## Raised by required selector sends when no responder handles the selector.
 
@@ -551,10 +555,14 @@ proc unwrappedPar(node: NimNode): NimNode =
   else:
     node
 
-proc protocolNameAndScope(name: NimNode): tuple[name: NimNode,
-    selectorScope: SelectorScope] =
+proc protocolNameAndOptions(name: NimNode): tuple[
+    name: NimNode,
+    selectorScope: SelectorScope,
+    setterStyle: ProtocolSetterStyle,
+] =
   result.name = name.unwrappedPar.copyNimTree()
   result.selectorScope = selectorScopeNone
+  result.setterStyle = setterStylePrefixed
 
   let node = name.unwrappedPar
   if node.kind != nnkPragmaExpr:
@@ -570,6 +578,14 @@ proc protocolNameAndScope(name: NimNode): tuple[name: NimNode,
         result.selectorScope = selectorScopeNone
       else:
         error("selectorScope must be `protocol` or `none`", pragma[1])
+    elif pragma.kind == nnkExprColonExpr and pragma.len == 2 and
+        pragma[0].eqIdent("setterStyle"):
+      if pragma[1].eqIdent("nim"):
+        result.setterStyle = setterStyleNim
+      elif pragma[1].eqIdent("prefixed"):
+        result.setterStyle = setterStylePrefixed
+      else:
+        error("setterStyle must be `nim` or `prefixed`", pragma[1])
     else:
       error("unsupported protocol pragma", pragma)
 
@@ -747,11 +763,15 @@ proc protocolObserverSlotCall(
       slot.copyNimTree(),
     )
 
-proc setterIdentName(name: string): string =
-  if name.len == 0:
-    return "set"
-  result = "set" & name
-  result[3] = result[3].toUpperAscii
+proc setterIdentName(name: string, setterStyle: ProtocolSetterStyle): string =
+  case setterStyle
+  of setterStylePrefixed:
+    if name.len == 0:
+      return "set"
+    result = "set" & name
+    result[3] = result[3].toUpperAscii
+  of setterStyleNim:
+    result = name & "="
 
 proc setPropertyNilPolicy(
     nilPolicy: var ProtocolPropertyNilPolicy,
@@ -811,13 +831,16 @@ proc protocolProperty(item: NimNode): tuple[prop: ProtocolProperty, found: bool]
   error("property declarations use: property name -> Type", item)
 
 proc propertyMethod(
-    name: NimNode, valueType: NimNode, setter = false
+    name: NimNode,
+    valueType: NimNode,
+    setter = false,
+    setterStyle = setterStylePrefixed,
 ): NimNode =
   let
     propertyName = selectorIdentName(name)
     methodName =
       if setter:
-        selectorIdent(setterIdentName(propertyName), true)
+        selectorIdent(setterIdentName(propertyName, setterStyle), true)
       else:
         selectorIdent(propertyName, true)
     params =
@@ -839,12 +862,24 @@ proc propertyMethod(
     newEmptyNode(),
   )
 
-proc propertyMethods(name: NimNode, valueType: NimNode): seq[NimNode] =
+proc propertyMethods(
+    name: NimNode,
+    valueType: NimNode,
+    setterStyle = setterStylePrefixed,
+): seq[NimNode] =
   result.add propertyMethod(name, valueType)
-  result.add propertyMethod(name, valueType, setter = true)
+  result.add propertyMethod(
+    name,
+    valueType,
+    setter = true,
+    setterStyle = setterStyle,
+  )
 
-proc propertyMethods(prop: ProtocolProperty): seq[NimNode] =
-  propertyMethods(prop.name, prop.valueType)
+proc propertyMethods(
+    prop: ProtocolProperty,
+    setterStyle = setterStylePrefixed,
+): seq[NimNode] =
+  propertyMethods(prop.name, prop.valueType, setterStyle)
 
 proc propertyFieldExpr(receiver: NimNode, field: NimNode): NimNode =
   if field.kind == nnkDotExpr and field.len == 2:
@@ -913,12 +948,19 @@ proc propertyFieldBody(
     result.add fieldExpr
 
 proc propertyImplementationMethods(
-    prop: ProtocolProperty, receiverType: NimNode
+    prop: ProtocolProperty,
+    receiverType: NimNode,
+    setterStyle = setterStylePrefixed,
 ): seq[NimNode] =
   let
     receiverName = ident("self")
     getter = propertyMethod(prop.name, prop.valueType)
-    setter = propertyMethod(prop.name, prop.valueType, setter = true)
+    setter = propertyMethod(
+      prop.name,
+      prop.valueType,
+      setter = true,
+      setterStyle = setterStyle,
+    )
 
   getter[3].insert(
     1,
@@ -1417,6 +1459,7 @@ proc implementBlock(
     receiver: NimNode = nil,
     allowProperties = false,
     propertyReceiver: NimNode = nil,
+    setterStyle = setterStylePrefixed,
     observers: NimNode = nil,
 ): NimNode =
   var
@@ -1438,7 +1481,7 @@ proc implementBlock(
               item,
             )
           for propertyMethod in propertyImplementationMethods(
-              property.prop, propertyReceiver):
+              property.prop, propertyReceiver, setterStyle):
             let binding = implementMethodBinding(propertyMethod)
             defs.add binding.defs
             bindings.add binding.binding
@@ -1483,6 +1526,7 @@ proc implementVariant(
     protocol: NimNode,
     body: NimNode,
     receiver: NimNode = nil,
+    setterStyle = setterStylePrefixed,
 ): NimNode =
   let
     variantType = variant.copyNimTree()
@@ -1614,6 +1658,7 @@ proc implementVariant(
     body,
     allowProperties = not receiver.isNil,
     propertyReceiver = receiver,
+    setterStyle = setterStyle,
     observers = observerBindings,
   )
 
@@ -1907,6 +1952,7 @@ proc protocolDeclaration(
     receiver: NimNode = nil,
     inherited: openArray[NimNode] = [],
     selectorScope = selectorScopeNone,
+    setterStyle = setterStylePrefixed,
 ): NimNode =
   let split = splitProtocolBody(body)
   var allInherited = newSeq[NimNode]()
@@ -1942,7 +1988,7 @@ proc protocolDeclaration(
           "property field pragma requires a receiver-bound protocol implementation",
           section,
         )
-      for propertyDecl in propertyMethods(property.prop):
+      for propertyDecl in propertyMethods(property.prop, setterStyle):
         addProtocolRequirement(
           selectorDecls,
           reqs,
@@ -2338,6 +2384,7 @@ proc implementProtocolForReceiver(
     body: NimNode,
     inherited: openArray[NimNode] = [],
     selectorScope = selectorScopeNone,
+    setterStyle = setterStylePrefixed,
 ): NimNode =
   let split = splitProtocolBody(body)
   var allInherited = newSeq[NimNode]()
@@ -2364,9 +2411,11 @@ proc implementProtocolForReceiver(
 
   let
     protocolDecl = protocolDeclaration(protocol, split.body, 2, receiver,
-        inherited = allInherited, selectorScope = selectorScope)
+        inherited = allInherited, selectorScope = selectorScope,
+        setterStyle = setterStyle)
     implementation = implementBlock(protocol, split.body,
         allowProperties = true, propertyReceiver = receiver,
+        setterStyle = setterStyle,
         observers = observerBindings)
     receiverType = receiver.copyNimTree()
 
@@ -2380,31 +2429,37 @@ macro protocol*(name: untyped, body: untyped): untyped =
   ## Declare a protocol or a named implementation variant for a protocol.
   if name.kind == nnkInfix and name.len == 3 and name[0].eqIdent("from") and
       name[1].kind == nnkInfix and name[1].len == 3 and name[1][0].eqIdent("of"):
-    return implementVariant(name[1][1], name[1][2], body, name[2])
+    let parsed = protocolNameAndOptions(name[1][1])
+    return implementVariant(parsed.name, name[1][2], body, name[2],
+        setterStyle = parsed.setterStyle)
   if name.kind == nnkInfix and name.len == 3 and name[0].eqIdent("of"):
+    let parsed = protocolNameAndOptions(name[1])
     if name[2].kind == nnkInfix and name[2].len == 3 and name[2][0].eqIdent("from"):
-      return implementVariant(name[1], name[2][1], body, name[2][2])
-    return implementVariant(name[1], name[2], body)
+      return implementVariant(parsed.name, name[2][1], body, name[2][2],
+          setterStyle = parsed.setterStyle)
+    return implementVariant(parsed.name, name[2], body,
+        setterStyle = parsed.setterStyle)
   if name.kind == nnkInfix and name.len == 3 and name[0].eqIdent("from"):
-    let parsed = protocolNameAndScope(name[1])
+    let parsed = protocolNameAndOptions(name[1])
     return implementProtocolForReceiver(parsed.name, name[2], body,
-        selectorScope = parsed.selectorScope)
+        selectorScope = parsed.selectorScope, setterStyle = parsed.setterStyle)
   if name.kind == nnkCommand and name.len == 2 and
       name[1].kind == nnkCommand and name[1].len == 2 and
       name[1][0].kind == nnkAccQuoted and
       name[1][0].len == 1 and name[1][0][0].eqIdent("for"):
-    let parsed = protocolNameAndScope(name[0])
+    let parsed = protocolNameAndOptions(name[0])
     return implementProtocolForReceiver(parsed.name, name[1][1], body,
-        selectorScope = parsed.selectorScope)
+        selectorScope = parsed.selectorScope, setterStyle = parsed.setterStyle)
 
-  let parsed = protocolNameAndScope(name)
-  protocolDeclaration(parsed.name, body, selectorScope = parsed.selectorScope)
+  let parsed = protocolNameAndOptions(name)
+  protocolDeclaration(parsed.name, body, selectorScope = parsed.selectorScope,
+      setterStyle = parsed.setterStyle)
 
 macro protocol*(name: untyped, receiver: untyped, body: untyped): untyped =
   ## Declare a protocol and its default implementation for a receiver type.
-  let parsed = protocolNameAndScope(name)
+  let parsed = protocolNameAndOptions(name)
   implementProtocolForReceiver(parsed.name, receiver, body,
-      selectorScope = parsed.selectorScope)
+      selectorScope = parsed.selectorScope, setterStyle = parsed.setterStyle)
 
 macro checkProtocolSlots*(receiver: untyped, protocol: untyped): untyped =
   ## Check at compile time that a receiver type exposes a protocol's slots.
