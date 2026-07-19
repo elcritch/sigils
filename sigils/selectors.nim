@@ -508,7 +508,10 @@ template selectorDefaultArg(): SelectorDefaultArg =
 
 proc selectorIdentName(node: NimNode): string =
   if node.kind == nnkPostfix and node.len == 2 and node[0].eqIdent("*"):
-    result = node[1].strVal
+    result = selectorIdentName(node[1])
+  elif node.kind == nnkAccQuoted:
+    for part in node:
+      result.add selectorIdentName(part)
   elif node.kind in {nnkStrLit .. nnkTripleStrLit}:
     let value = node.strVal
     if value.len > 0 and value[^1] == '*':

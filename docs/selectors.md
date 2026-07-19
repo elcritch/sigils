@@ -324,6 +324,17 @@ let controller = TextController().withProto()
 doAssert controller.controllerLabel() == "0"
 ```
 
+Protocol methods may use backticked operator names, including Nim setters:
+
+```nim
+protocol ToggleInfo from Toggle:
+  method `enabled=`(self: Toggle, value: bool) =
+    self.isEnabled = value
+
+let toggle = Toggle().withProto()
+toggle.enabled = true
+```
+
 ## Wrapping Behavior
 
 `pushMethod` adds a reversible wrapper around the current local method. This is useful for temporary overrides, logging, normalization, and tests.

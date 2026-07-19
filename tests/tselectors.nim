@@ -95,6 +95,10 @@ protocol NilSafeFieldViewProtocol from NilSafeFieldBackedView:
 protocol CheckNilFieldViewProtocol from CheckNilFieldBackedView:
   property checkedChildName -> string {.field: child.name, checkNil.}
 
+protocol SettableWindowProtocol from Window:
+  method `enabled=`*(self: Window, value: bool) =
+    self.focused = value
+
 protocol WindowLifecycleProtocolInternal:
   method windowShouldSetContentView*(view: View): bool {.optional.}
   proc windowWillSetContentView*(window: Window, view: View) {.signal.}
@@ -599,6 +603,17 @@ suite "dynamic selectors":
     check controller.canConformTo(StrictTextFieldDelegate)
     check controller.adopt(StrictTextFieldDelegate)
     check StrictTextFieldDelegate.name in controller.adoptedProtocols
+
+  test "protocol methods support setter names":
+    let window = Window().withProto
+
+    check SettableWindowProtocol.requirements.len == 1
+    check SettableWindowProtocol.requirements[0].selector ==
+        toSigilName("enabled=")
+    check window.hasAdopted(SettableWindowProtocol)
+    check not window.focused
+    window.enabled = true
+    check window.focused
 
   test "property declarations create getter and setter selectors":
     let view = View(name: "old")
