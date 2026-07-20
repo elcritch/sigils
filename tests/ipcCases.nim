@@ -157,6 +157,21 @@ suite "Chronos IPC":
     expect IpcFrameError:
       discard framePayload("1", 0)
 
+  test "frames use the provisional CBF4 tag and fixed 32-bit lengths":
+    check framePayload("x") == "\xD9\xCB\xF4\x5A\x00\x00\x00\x01x"
+    check framePayload(repeat("x", 23)).startsWith(
+      "\xD9\xCB\xF4\x5A\x00\x00\x00\x17",
+    )
+    check framePayload(repeat("x", 24)).startsWith(
+      "\xD9\xCB\xF4\x5A\x00\x00\x00\x18",
+    )
+    check framePayload(repeat("x", 256)).startsWith(
+      "\xD9\xCB\xF4\x5A\x00\x00\x01\x00",
+    )
+    check framePayload(repeat("x", 65_536)).startsWith(
+      "\xD9\xCB\xF4\x5A\x00\x01\x00\x00",
+    )
+
   test "outgoing routes require a target and name":
     var fixture = initIpcFixture()
     proc runInvalidRoute(fixture: ptr IpcFixture): Future[tuple[
