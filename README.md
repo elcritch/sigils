@@ -26,7 +26,7 @@ Connecting signals and slots is accomplished using `connect`. Note that `connect
 - Closure slots: enable `-d:sigilsClosures`, `-d:sigils.closures`, or the `closures` package feature, then import `sigils/closures` to use `connectTo(...) do:`.
 - String sigil names: enable `-d:sigilsSigilNameString`, `-d:sigils.sigNameAsString`, or the `sigNameAsString` package feature to use plain `string` for `SigilName` instead of the default fixed-size `StackString[48]`. The performance profile differs.
 - Chronos threads: enable the `chronos` package feature to make `SigilChronosThread` available through `sigils/threads`.
-- Chronos IPC: enable the `ipc` package feature for CBOR RPC over TCP, Unix-domain sockets, or Windows named pipes.
+- Chronos IPC: enable the `chronos` and `ipc` package features for CBOR RPC over TCP, Unix-domain sockets, or Windows named pipes.
 - Package features can be requested by dependents with `requires "sigils[sigNameAsString, closures, chronos, ipc]"`.
 
 ## Examples

@@ -4,7 +4,7 @@ Sigils IPC carries slots, signals, selectors, and runtime protocols across a
 Chronos stream. The first transport is deliberately small: CBOR messages inside
 a bounded length frame. On POSIX, a Chronos `AddressFamily.Unix` endpoint is a
 Unix-domain socket. On Windows, Chronos maps that same address family to a named
-pipe.
+pipe. Enable both the `chronos` and `ipc` package features to use this layer.
 
 ## Wire model
 

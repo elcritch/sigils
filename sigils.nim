@@ -7,12 +7,15 @@ import sigils/selectors
 import sigils/core
 import sigils/threads
 
-when defined(feature.sigils.ipc):
+when defined(feature.sigils.ipc) and not defined(feature.sigils.chronos):
+  {.error: "the sigils 'ipc' feature requires the 'chronos' feature".}
+
+when defined(feature.sigils.ipc) and defined(feature.sigils.chronos):
   import sigils/ipc
 
 export weakrefs, agents, actors, signals, slots, selectors, threads, core
 
-when defined(feature.sigils.ipc):
+when defined(feature.sigils.ipc) and defined(feature.sigils.chronos):
   export ipc
 
 when not defined(gcArc) and not defined(gcOrc) and not defined(gcAtomicArc) and

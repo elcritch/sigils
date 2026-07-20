@@ -28,5 +28,4 @@ feature "chronos":
   requires "https://github.com/status-im/nim-chronos >= 4.2.0"
 
 feature "ipc":
-  requires "https://github.com/status-im/nim-chronos >= 4.2.0"
   requires "cborious"
