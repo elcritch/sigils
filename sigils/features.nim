@@ -7,3 +7,4 @@ const
     defined(sigilsClosures) or
     defined(sigils.closures) or
     defined(feature.sigils.closures)
+  sigilsCborSerdeEnabled* = defined(sigilsCborSerde)

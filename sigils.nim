@@ -7,7 +7,13 @@ import sigils/selectors
 import sigils/core
 import sigils/threads
 
+when defined(feature.sigils.ipc):
+  import sigils/ipc
+
 export weakrefs, agents, actors, signals, slots, selectors, threads, core
+
+when defined(feature.sigils.ipc):
+  export ipc
 
 when not defined(gcArc) and not defined(gcOrc) and not defined(gcAtomicArc) and
     not defined(nimdoc):

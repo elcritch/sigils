@@ -25,3 +25,9 @@ suite "compile feature flags":
       check not sigilsClosuresEnabled
       check not sigilsSlotEnvEnabled
       check sigilsSlotEnvDisabled
+
+  test "IPC leaves global CBOR serde selection unchanged":
+    when defined(sigilsCborSerde):
+      check sigilsCborSerdeEnabled
+    else:
+      check not sigilsCborSerdeEnabled

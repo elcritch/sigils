@@ -24,24 +24,36 @@ when sigilsSigilNameStringEnabled:
 else:
   type SigilName* = StackString[48]
 
+when defined(feature.sigils.ipc):
+  type
+    SigilIpcEncodeError* = object of CatchableError ## IPC CBOR encode failure.
+    SigilIpcDecodeError* = object of CatchableError ## IPC CBOR decode failure.
+
 when defined(nimscript) or defined(useJsonSerde) or defined(sigilsJsonSerde):
   import std/json
   export json
-elif defined(sigilsCborSerde):
+elif sigilsCborSerdeEnabled:
   import cborious
   export cborious
 else:
   import svariant
+  when defined(feature.sigils.ipc):
+    import cborious
   export svariant
+  when defined(feature.sigils.ipc):
+    # Cborious serialization generics resolve their packers at instantiation.
+    export cborious
 
 
 type SigilParams* {.acyclic.} = object ## implementation specific -- handles data buffer
   when defined(nimscript) or defined(useJsonSerde) or defined(sigilsJsonSerde):
     buf*: JsonNode
-  elif defined(sigilsCborSerde):
+  elif sigilsCborSerdeEnabled:
     buf*: CborStream
   else:
     buf*: WVariant
+    when defined(feature.sigils.ipc):
+      ipcData*: string
 
 type
   RequestType* {.size: sizeof(uint8).} = enum
@@ -94,10 +106,12 @@ func compareSigilName*(a, b: SigilName): int {.inline.} =
 proc duplicate*(params: SigilParams): SigilParams =
   when defined(nimscript) or defined(useJsonSerde) or defined(sigilsJsonSerde):
     result.buf = params.buf
-  elif defined(sigilsCborSerde):
+  elif sigilsCborSerdeEnabled:
     result.buf = params.buf
   else:
     result.buf = params.buf.duplicate()
+    when defined(feature.sigils.ipc):
+      result.ipcData = params.ipcData
 
 proc duplicate*(req: SigilRequest): SigilRequest =
   result = SigilRequest(
@@ -119,7 +133,7 @@ proc rpcPack*[T](res: sink T): SigilParams =
     result = SigilParams(buf: jn)
   elif defined(sigilsOrigSerde):
     result = SigilParams(buf: newVariant(ensureMove res))
-  elif defined(sigilsCborSerde):
+  elif sigilsCborSerdeEnabled:
     var buf {.global, threadvar.}: CborStream
     buf = CborStream.init()
     buf.setPosition(0)
@@ -133,6 +147,46 @@ proc rpcPack*[T](res: sink T): SigilParams =
       requestCache.resetTo(res)
     result = SigilParams(buf: requestCache)
 
+when defined(feature.sigils.ipc):
+  proc initIpcParams*(data: sink string): SigilParams =
+    ## Build type-erased parameters that generated slots/selectors decode from CBOR.
+    when sigilsCborSerdeEnabled:
+      result = SigilParams(buf: CborStream.init(data))
+    else:
+      result = SigilParams(ipcData: data)
+
+  proc hasIpcData*(params: SigilParams): bool =
+    when sigilsCborSerdeEnabled:
+      not params.buf.isNil
+    else:
+      params.ipcData.len > 0
+
+  proc ipcData*(params: SigilParams): string =
+    when sigilsCborSerdeEnabled:
+      if not params.buf.isNil:
+        result = params.buf.data
+    else:
+      result = params.ipcData
+
+  proc rpcPackIpc*[T](res: sink T): SigilParams =
+    ## Preserve the local representation and attach CBOR for an IPC response.
+    when sigilsCborSerdeEnabled:
+      result = rpcPack(ensureMove res)
+    else:
+      when compiles(cborious.toCbor(res)):
+        let encoded =
+          try:
+            cborious.toCbor(res)
+          except CatchableError as error:
+            raise newException(SigilIpcEncodeError, error.msg)
+        result = rpcPack(ensureMove res)
+        result.ipcData = encoded
+      else:
+        raise newException(
+          SigilIpcEncodeError,
+          "type cannot be encoded as IPC CBOR",
+        )
+
 proc rpcUnpack*[T](obj: var T, ss: SigilParams) =
   when defined(nimscript) or defined(useJsonSerde):
     obj.fromJson(ss.buf)
@@ -140,12 +194,28 @@ proc rpcUnpack*[T](obj: var T, ss: SigilParams) =
   elif defined(sigilsOrigSerde):
     assert not ss.buf.isNil
     obj = ss.buf.get(T)
-  elif defined(sigilsCborSerde):
+  elif sigilsCborSerdeEnabled:
     ss.buf.setPosition(0)
     obj = unpack(ss.buf, T)
   else:
-    assert not ss.buf.isNil
-    obj = ss.buf.getWrapped(T)
+    when defined(feature.sigils.ipc):
+      if ss.ipcData.len > 0:
+        when compiles(cborious.fromCbor("", T)):
+          try:
+            obj = cborious.fromCbor(ss.ipcData, T)
+          except CatchableError as error:
+            raise newException(SigilIpcDecodeError, error.msg)
+        else:
+          raise newException(
+            SigilIpcDecodeError,
+            "type cannot be decoded from IPC CBOR",
+          )
+      else:
+        assert not ss.buf.isNil
+        obj = ss.buf.getWrapped(T)
+    else:
+      assert not ss.buf.isNil
+      obj = ss.buf.getWrapped(T)
 
 proc wrapResponse*(id: SigilId, resp: SigilParams,
     kind = Response): SigilResponse =

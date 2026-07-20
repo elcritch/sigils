@@ -26,7 +26,8 @@ Connecting signals and slots is accomplished using `connect`. Note that `connect
 - Closure slots: enable `-d:sigilsClosures`, `-d:sigils.closures`, or the `closures` package feature, then import `sigils/closures` to use `connectTo(...) do:`.
 - String sigil names: enable `-d:sigilsSigilNameString`, `-d:sigils.sigNameAsString`, or the `sigNameAsString` package feature to use plain `string` for `SigilName` instead of the default fixed-size `StackString[48]`. The performance profile differs.
 - Chronos threads: enable the `chronos` package feature to make `SigilChronosThread` available through `sigils/threads`.
-- Package features can be requested by dependents with `requires "sigils[sigNameAsString, closures, chronos]"`.
+- Chronos IPC: enable the `ipc` package feature for CBOR RPC over TCP, Unix-domain sockets, or Windows named pipes.
+- Package features can be requested by dependents with `requires "sigils[sigNameAsString, closures, chronos, ipc]"`.
 
 ## Examples
 
@@ -143,6 +144,35 @@ discard ct.pollAll() # deliver forwarded events to local thread
 
 doAssert sink.seen == 42
 ```
+
+## IPC
+
+The optional IPC layer carries typed selectors, slots, and signal notifications
+over Chronos. Runtime protocols act as the remote allowlist, and `cborious`
+encodes arguments and results. A Unix-family Chronos address uses a Unix-domain
+socket on POSIX and a named pipe on Windows.
+
+```nim
+let addNumbers = selector[(int, int), int]("addNumbers")
+let calculator = DynamicAgent()
+
+proc add(self: DynamicAgent, values: (int, int)): int =
+  values[0] + values[1]
+
+discard calculator.addMethod(addNumbers, toDynamicMethod(add))
+let calculatorApi = initProtocol(
+  "Calculator",
+  [requirement(addNumbers)],
+)
+
+let router = newIpcRouter()
+router.registerProtocol("calculator", calculator, calculatorApi)
+```
+
+`createIpcServer`, `connectIpc`, and `callSelector` complete the Chronos side of
+the flow. See [`examples/chronos_ipc.nim`](examples/chronos_ipc.nim) for a
+runnable round trip and [`docs/ipc.md`](docs/ipc.md) for the framing design and
+the WebSocket/CoAP comparison.
 
 ## Closures
 
