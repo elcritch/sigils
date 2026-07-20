@@ -21,6 +21,9 @@ feature "cbor":
 feature "mummy":
   requires "mummy"
 
-feature "faststreams":
-  requires "https://github.com/status-im/nim-faststreams"
+feature "fastrpc":
+  requires "fastrpc"
+
+feature "chronos":
+  requires "https://github.com/status-im/nim-chronos >= 4.2.0"
 

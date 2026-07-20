@@ -25,7 +25,8 @@ Connecting signals and slots is accomplished using `connect`. Note that `connect
 
 - Closure slots: enable `-d:sigilsClosures`, `-d:sigils.closures`, or the `closures` package feature, then import `sigils/closures` to use `connectTo(...) do:`.
 - String sigil names: enable `-d:sigilsSigilNameString`, `-d:sigils.sigNameAsString`, or the `sigNameAsString` package feature to use plain `string` for `SigilName` instead of the default fixed-size `StackString[48]`. The performance profile differs.
-- Package features can be requested by dependents with `requires "sigils[sigNameAsString, closures]"`.
+- Chronos threads: enable the `chronos` package feature to make `SigilChronosThread` available through `sigils/threads`.
+- Package features can be requested by dependents with `requires "sigils[sigNameAsString, closures, chronos]"`.
 
 ## Examples
 
@@ -100,6 +101,7 @@ Thread implementations:
 - `newSigilThread()` / `SigilThreadDefault`: blocking worker thread (message loop).
 - `newSigilSelectorThread()` / `SigilSelectorThread`: selector-backed thread with timers and fd events.
 - `AsyncSigilThread` (import `sigils/threadAsyncs`): integrates with `asyncdispatch`.
+- `newSigilChronosThread()` / `SigilChronosThread`: uses an OS-backed cross-thread wake signal and sleeps in the Chronos dispatcher while idle. Enable the `chronos` package feature or import `sigils/threadChronos` directly.
 
 ```nim
 import sigils
