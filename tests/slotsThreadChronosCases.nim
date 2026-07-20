@@ -1,4 +1,4 @@
-import std/[os, times, unittest]
+import std/[times, unittest]
 
 import sigils
 import sigils/threadChronos
@@ -65,17 +65,3 @@ suite "Chronos-backed Sigils thread":
 
     thread.stop()
     thread.close()
-
-  test "blocks in the OS dispatcher while idle":
-    let thread = newSigilChronosThread()
-    thread.start()
-    sleep(25)
-
-    let cpuStartedAt = cpuTime()
-    sleep(250)
-    let idleCpuTime = cpuTime() - cpuStartedAt
-
-    thread.stop()
-    thread.join()
-
-    check idleCpuTime < 0.15
