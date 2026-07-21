@@ -170,9 +170,22 @@ router.registerProtocol("calculator", calculator, calculatorApi)
 ```
 
 `createIpcServer`, `connectIpc`, and `callSelector` complete the Chronos side of
-the flow. See [`examples/chronos_ipc.nim`](examples/chronos_ipc.nim) for a
-runnable round trip and [`docs/ipc.md`](docs/ipc.md) for the framing design and
-the WebSocket/CoAP comparison.
+the flow. Build the example, then launch its server and client modes in separate
+terminals:
+
+```sh
+nim c examples/chronos_ipc.nim
+./examples/chronos_ipc server
+```
+
+```sh
+./examples/chronos_ipc client
+```
+
+Append `.exe` to the executable name on Windows. See
+[`examples/chronos_ipc.nim`](examples/chronos_ipc.nim) for the complete example
+and [`docs/ipc.md`](docs/ipc.md) for the framing design and the WebSocket/CoAP
+comparison.
 
 ## Closures
 
