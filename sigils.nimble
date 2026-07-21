@@ -1,4 +1,4 @@
-version = "0.25.3"
+version = "0.26.0"
 author = "Jaremy Creechley"
 description = "A slot and signals implementation for the Nim programming language"
 license = "MIT"
@@ -20,3 +20,12 @@ feature "cbor":
 
 feature "mummy":
   requires "mummy"
+
+feature "fastrpc":
+  requires "fastrpc"
+
+feature "chronos":
+  requires "https://github.com/status-im/nim-chronos >= 4.2.0"
+
+feature "ipc":
+  requires "cborious"

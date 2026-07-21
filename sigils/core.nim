@@ -50,7 +50,7 @@ type AgentSlotError* = object of CatchableError
 template checkSlotResponse(res: SigilResponse) =
   when defined(nimscript) or defined(useJsonSerde):
     discard
-  elif defined(sigilsCborSerde):
+  elif sigilsCborSerdeEnabled:
     discard
   else:
     variantMatch case res.result.buf as u

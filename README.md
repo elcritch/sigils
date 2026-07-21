@@ -25,7 +25,9 @@ Connecting signals and slots is accomplished using `connect`. Note that `connect
 
 - Closure slots: enable `-d:sigilsClosures`, `-d:sigils.closures`, or the `closures` package feature, then import `sigils/closures` to use `connectTo(...) do:`.
 - String sigil names: enable `-d:sigilsSigilNameString`, `-d:sigils.sigNameAsString`, or the `sigNameAsString` package feature to use plain `string` for `SigilName` instead of the default fixed-size `StackString[48]`. The performance profile differs.
-- Package features can be requested by dependents with `requires "sigils[sigNameAsString, closures]"`.
+- Chronos threads: enable the `chronos` package feature to make `SigilChronosThread` available through `sigils/threads`.
+- Chronos IPC: enable the `chronos` and `ipc` package features for CBOR RPC over TCP, Unix-domain sockets, or Windows named pipes.
+- Package features can be requested by dependents with `requires "sigils[sigNameAsString, closures, chronos, ipc]"`.
 
 ## Examples
 
@@ -100,6 +102,7 @@ Thread implementations:
 - `newSigilThread()` / `SigilThreadDefault`: blocking worker thread (message loop).
 - `newSigilSelectorThread()` / `SigilSelectorThread`: selector-backed thread with timers and fd events.
 - `AsyncSigilThread` (import `sigils/threadAsyncs`): integrates with `asyncdispatch`.
+- `newSigilChronosThread()` / `SigilChronosThread`: uses an OS-backed cross-thread wake signal and sleeps in the Chronos dispatcher while idle. Enable the `chronos` package feature or import `sigils/threadChronos` directly.
 
 ```nim
 import sigils
@@ -141,6 +144,44 @@ discard ct.pollAll() # deliver forwarded events to local thread
 
 doAssert sink.seen == 42
 ```
+
+## IPC
+
+The optional IPC layer carries typed selectors, slots, and signal notifications
+over Chronos. Runtime protocols act as the remote allowlist, and `cborious`
+encodes arguments and results. A Unix-family Chronos address uses a Unix-domain
+socket on POSIX and a named pipe on Windows.
+
+```nim
+protocol Calculator:
+  method addNumbers(left, right: int): int
+
+protocol CalculatorService of Calculator:
+  method addNumbers(self: DynamicAgent, left, right: int): int =
+    left + right
+
+let calculator = DynamicAgent().withProtocol(CalculatorService)
+let router = newIpcRouter()
+router.registerProtocol("calculator", calculator, Calculator)
+```
+
+`createIpcServer`, `connectIpc`, and `callSelector` complete the Chronos side of
+the flow. Build the example, then launch its server and client modes in separate
+terminals:
+
+```sh
+nim c examples/chronos_ipc.nim
+./examples/chronos_ipc server
+```
+
+```sh
+./examples/chronos_ipc client
+```
+
+Append `.exe` to the executable name on Windows. See
+[`examples/chronos_ipc.nim`](examples/chronos_ipc.nim) for the complete example
+and [`docs/ipc.md`](docs/ipc.md) for the framing design and the WebSocket/CoAP
+comparison.
 
 ## Closures
 
