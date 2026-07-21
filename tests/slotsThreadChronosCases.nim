@@ -1,5 +1,7 @@
 import std/[times, unittest]
 
+import chronos
+
 import sigils
 import sigils/threadChronos
 
@@ -22,6 +24,14 @@ proc setCompleted(source: Source, value: int) {.slot.} =
 
 proc increment(counter: Counter) {.slot.} =
   counter.value.inc()
+
+proc setValueAfterDelay(counter: Counter, value: int) {.slot.} =
+  proc update() {.async: (raises: [Exception]).} =
+    await sleepAsync(chronos.milliseconds(5))
+    counter.value = value
+    emit counter.updated(value)
+
+  asyncSpawn update()
 
 suite "Chronos-backed Sigils thread":
   test "dispatches threaded signals and wakes promptly":
@@ -47,6 +57,31 @@ suite "Chronos-backed Sigils thread":
 
     check source.value == 42
     check elapsed < 1.0
+
+  test "runs Chronos futures from a slot":
+    let thread = newSigilChronosThread()
+    thread.start()
+    startLocalThreadDefault()
+
+    var source = Source()
+    var counter = Counter()
+    block:
+      let counterProxy = counter.moveToThread(thread)
+      connectThreaded(
+        source,
+        valueChanged,
+        counterProxy,
+        Counter.setValueAfterDelay(),
+      )
+      connectThreaded(counterProxy, updated, source, Source.setCompleted())
+
+      emit source.valueChanged(73)
+      getCurrentSigilThread().poll()
+
+    thread.stop()
+    thread.join()
+
+    check source.value == 73
 
   test "uses Chronos timers":
     let thread = newSigilChronosThread()
