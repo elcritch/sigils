@@ -27,19 +27,19 @@ protocol and checks that the receiver conforms before the server starts.
 The native stream frame is:
 
 ```text
-+----------------+--------------------------+------------------------+
-| CBOR tag 52212 | fixed byte-string head   | CBOR envelope          |
-| d9 cb f4       | 5a + u32 byte length     | exactly byte length    |
-+----------------+--------------------------+------------------------+
++-------------+--------------------------+------------------------+
+| CBOR tag 24 | fixed byte-string head   | CBOR envelope          |
+| d8 18       | 5a + u32 byte length     | exactly byte length    |
++-------------+--------------------------+------------------------+
 ```
 
-The provisional private CBF4 tag identifies a fixed32-framed encoded CBOR item.
-Its tag and byte-string head form an eight-byte prefix; see the
-[CBF4 specification](cbor-fixed32-frame.md). The default maximum payload is 16
-MiB. The reader rejects the wrong prefix, zero-length payloads, and oversized
-frames before allocating their payload. The writer submits the tag, byte-string
-header, and payload to Chronos in one write, so concurrent RPC calls cannot
-interleave parts of different frames.
+Sigils applies a fixed32 application profile to the standard encoded-CBOR tag.
+The tag and byte-string head form a seven-byte prefix; see the
+[tag-24 framing profile](cbor-tag24-fixed32-frame.md). The default maximum
+payload is 16 MiB. The reader rejects the wrong prefix, zero-length payloads,
+and oversized frames before allocating their payload. The writer submits the
+tag, byte-string header, and payload to Chronos in one write, so concurrent RPC
+calls cannot interleave parts of different frames.
 
 IPC CBOR is attached only to calls that cross the IPC boundary. Normal local and
 cross-thread Sigils calls continue using the existing variant representation;

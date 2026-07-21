@@ -5,9 +5,9 @@ import chronos
 
 const
   DefaultIpcMaxFrameSize* = 16 * 1024 * 1024 ## Default 16 MiB frame limit.
-  IpcFrameTag* = CborTag(52_212'u64)         ## Provisional CBF4 fixed-width frame tag.
-  IpcFrameHeaderSize = 8
-  IpcFramePrefix = [0xd9'u8, 0xcb'u8, 0xf4'u8, 0x5a'u8]
+  IpcFrameTag* = CborTag(24'u64)             ## Encoded CBOR data item tag.
+  IpcFrameHeaderSize = 7
+  IpcFramePrefix = [0xd8'u8, 0x18'u8, 0x5a'u8]
 
 type IpcFrameError* = object of CatchableError ## Invalid or incomplete frame.
 
@@ -56,10 +56,10 @@ proc readFrame*(
       raise newException(IpcFrameError, "unexpected CBOR IPC frame prefix")
 
   let size =
-    (uint32(header[4]) shl 24) or
-    (uint32(header[5]) shl 16) or
-    (uint32(header[6]) shl 8) or
-    uint32(header[7])
+    (uint32(header[3]) shl 24) or
+    (uint32(header[4]) shl 16) or
+    (uint32(header[5]) shl 8) or
+    uint32(header[6])
   if size == 0:
     raise newException(IpcFrameError, "IPC frames must not be empty")
   if uint64(size) > uint64(maxFrameSize):
