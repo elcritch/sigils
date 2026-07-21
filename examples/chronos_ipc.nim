@@ -5,8 +5,6 @@ import chronos
 import sigils
 import sigils/ipc
 
-type AddArgs = tuple[left: int, right: int]
-
 const usage = """
 Usage:
   chronos_ipc server
@@ -18,22 +16,20 @@ when defined(windows):
 else:
   const endpoint = "/tmp/sigils-calculator.sock"
 
-let addNumbers = selector[AddArgs, int]("addNumbers")
+protocol Calculator:
+  method addNumbers(left, right: int): int
 
-proc addImpl(self: DynamicAgent, args: AddArgs): int =
-  args.left + args.right
+protocol CalculatorService of Calculator:
+  method addNumbers(self: DynamicAgent, left, right: int): int =
+    result = left + right
+    echo "addNumbers(", left, ", ", right, ") = ", result
 
 proc createCalculatorServer(address: TransportAddress): IpcServer =
   let
-    calculator = DynamicAgent()
-    calculatorApi = initProtocol(
-      "Calculator",
-      [requirement(addNumbers)],
-    )
+    calculator = DynamicAgent().withProtocol(CalculatorService)
     router = newIpcRouter()
 
-  discard calculator.addMethod(addNumbers, toDynamicMethod(addImpl))
-  router.registerProtocol("calculator", calculator, calculatorApi)
+  router.registerProtocol("calculator", calculator, Calculator)
   result = createIpcServer(address, router)
   result.start()
 

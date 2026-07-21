@@ -153,20 +153,16 @@ encodes arguments and results. A Unix-family Chronos address uses a Unix-domain
 socket on POSIX and a named pipe on Windows.
 
 ```nim
-let addNumbers = selector[(int, int), int]("addNumbers")
-let calculator = DynamicAgent()
+protocol Calculator:
+  method addNumbers(left, right: int): int
 
-proc add(self: DynamicAgent, values: (int, int)): int =
-  values[0] + values[1]
+protocol CalculatorService of Calculator:
+  method addNumbers(self: DynamicAgent, left, right: int): int =
+    left + right
 
-discard calculator.addMethod(addNumbers, toDynamicMethod(add))
-let calculatorApi = initProtocol(
-  "Calculator",
-  [requirement(addNumbers)],
-)
-
+let calculator = DynamicAgent().withProtocol(CalculatorService)
 let router = newIpcRouter()
-router.registerProtocol("calculator", calculator, calculatorApi)
+router.registerProtocol("calculator", calculator, Calculator)
 ```
 
 `createIpcServer`, `connectIpc`, and `callSelector` complete the Chronos side of
