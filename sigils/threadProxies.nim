@@ -113,7 +113,7 @@ method delSubscription*(
   self.removeForwarded([sig])
 
 method callMethod*(
-    proxy: AgentProxyShared, req: SigilRequest, slot: AgentProc
+    proxy: AgentProxyShared, req: sink SigilRequest, slot: AgentProc
 ): SigilResponse {.gcsafe, effectsOf: slot.} =
   ## Route's an rpc request.
   debugPrint "callMethod: proxy: ",
@@ -124,9 +124,8 @@ method callMethod*(
     repr(slot)
   let ct = getCurrentSigilThread()
   if not proxy.homeThread.isNil and ct != proxy.homeThread:
-    var req = req.duplicate()
     var msg = isolateRuntime ThreadSignal(
-      kind: Call, slot: slot, req: move req,
+      kind: Call, slot: slot, req: ensureMove(req),
       tgt: proxy.unsafeWeakRef().asAgent()
     )
     when defined(sigilsDebug) or defined(debug):
@@ -140,13 +139,12 @@ method callMethod*(
 
   if slot == localSlot or slot == remoteSlot:
     debugPrint "\t proxy:callMethod:directSlot: "
-    proxy.callSlots(req)
+    proxy.callSlots(ensureMove(req))
   else:
-    var req = req.duplicate()
     debugPrint "\t callMethod:agentProxy:InitCall:Outbound: ",
       req.procName, " proxy:remote:obj: ", proxy.remote.getSigilId()
     var msg = isolateRuntime ThreadSignal(
-      kind: Call, slot: slot, req: move req, tgt: proxy.remote.toKind(Agent)
+      kind: Call, slot: slot, req: ensureMove(req), tgt: proxy.remote.toKind(Agent)
     )
     when defined(sigilNonBlockingThreads):
       discard
@@ -335,7 +333,7 @@ proc fwdSlotTy[A: Agent; B: Agent; S: static string](self: Agent,
   let agentSlot = callCode(S)
   let req = SigilRequest(
     kind: Request, origin: SigilId(-1), procName: signalName(signal),
-        params: params.duplicate()
+        params: params.clone()
   )
   var msg = ThreadSignal(kind: Call)
   msg.slot = agentSlot
@@ -372,7 +370,7 @@ proc fwdSlot[A: Agent; B: Agent; S: static string](self: Agent,
     kind: Request,
     origin: SigilId(-1),
     procName: signalName(signal),
-    params: params.duplicate()
+    params: params.clone()
   )
   var msg = ThreadSignal(kind: Call)
   msg.slot = agentSlot

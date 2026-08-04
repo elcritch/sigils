@@ -1,3 +1,4 @@
+- Unreleased - restore type-aware Variant payload ownership; move single-recipient calls directly and recursively clone only fanout payloads
 - Unreleased - add the optional Chronos-backed Sigils thread with OS-dispatched wakeups and Chronos timers; add CBOR IPC over Chronos TCP, Unix sockets, and Windows named pipes with slots, signals, selectors, and protocol allowlists
 - `v0.25.3` - add the protocol-level `setterStyle: nim` pragma for generating Nim-style `field=` property setters instead of `setField`
 - `v0.25.2` - add `sigNameAsString` and `closures` package features plus `-d:sigils.sigNameAsString` and `-d:sigils.closures` aliases for the existing compile flags; selector closures now use the same closures flag; add `field`, `nilSafe`, and `checkNil` pragma support for receiver-bound protocol properties and named variants; support backticked protocol method names such as setters

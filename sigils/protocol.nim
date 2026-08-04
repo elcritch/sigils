@@ -1,7 +1,8 @@
 import std/[tables, strutils]
+import cloneutils
 import features
 
-export features
+export cloneutils, features
 
 when not sigilsSigilNameStringEnabled:
   import stack_strings
@@ -45,13 +46,14 @@ else:
     export cborious
 
 
-type SigilParams* {.acyclic.} = object ## implementation specific -- handles data buffer
+type SigilParams* {.acyclic.} = object ## Implementation-specific call payload.
   when defined(nimscript) or defined(useJsonSerde) or defined(sigilsJsonSerde):
-    buf*: JsonNode
+    payload*: JsonNode
   elif sigilsCborSerdeEnabled:
-    buf*: CborStream
+    payload*: CborStream
   else:
-    buf*: WVariant
+    payload*: Variant
+    cloner*: VariantCloner
     when defined(feature.sigils.ipc):
       ipcData*: string
 
@@ -103,22 +105,26 @@ func compareSigilName*(a, b: SigilName): int {.inline.} =
   else:
     cmp($a, $b)
 
-proc duplicate*(params: SigilParams): SigilParams =
+proc clone*(params: SigilParams): SigilParams =
   when defined(nimscript) or defined(useJsonSerde) or defined(sigilsJsonSerde):
-    result.buf = params.buf
+    result.payload = params.payload
   elif sigilsCborSerdeEnabled:
-    result.buf = params.buf
+    result.payload = params.payload
   else:
-    result.buf = params.buf.duplicate()
+    if not params.payload.isNil:
+      if params.cloner.isNil:
+        raise newException(ValueError, "cannot clone SigilParams without a cloner")
+      result.payload = params.cloner(params.payload)
+      result.cloner = params.cloner
     when defined(feature.sigils.ipc):
       result.ipcData = params.ipcData
 
-proc duplicate*(req: SigilRequest): SigilRequest =
+proc clone*(req: SigilRequest): SigilRequest =
   result = SigilRequest(
     kind: req.kind,
     origin: req.origin,
     procName: req.procName,
-    params: req.params.duplicate(),
+    params: req.params.clone(),
   )
 
 proc `$`*(id: SigilId): string =
@@ -130,41 +136,37 @@ proc rpcPack*(res: SigilParams): SigilParams {.inline.} =
 proc rpcPack*[T](res: sink T): SigilParams =
   when defined(nimscript) or defined(sigilsJsonSerde):
     let jn = toJson(res)
-    result = SigilParams(buf: jn)
-  elif defined(sigilsOrigSerde):
-    result = SigilParams(buf: newVariant(ensureMove res))
+    result = SigilParams(payload: jn)
   elif sigilsCborSerdeEnabled:
     var buf {.global, threadvar.}: CborStream
     buf = CborStream.init()
     buf.setPosition(0)
     buf.pack(res)
-    result = SigilParams(buf: buf)
+    result = SigilParams(payload: buf)
   else:
-    var requestCache {.global, threadvar.}: WVariant
-    if requestCache.isNil:
-      requestCache = newWrapperVariant(ensureMove res)
-    else:
-      requestCache.resetTo(res)
-    result = SigilParams(buf: requestCache)
+    result = SigilParams(
+      payload: newOwnedVariant(ensureMove(res)),
+      cloner: clonerFor(T),
+    )
 
 when defined(feature.sigils.ipc):
   proc initIpcParams*(data: sink string): SigilParams =
     ## Build type-erased parameters that generated slots/selectors decode from CBOR.
     when sigilsCborSerdeEnabled:
-      result = SigilParams(buf: CborStream.init(data))
+      result = SigilParams(payload: CborStream.init(data))
     else:
       result = SigilParams(ipcData: data)
 
   proc hasIpcData*(params: SigilParams): bool =
     when sigilsCborSerdeEnabled:
-      not params.buf.isNil
+      not params.payload.isNil
     else:
       params.ipcData.len > 0
 
   proc ipcData*(params: SigilParams): string =
     when sigilsCborSerdeEnabled:
-      if not params.buf.isNil:
-        result = params.buf.data
+      if not params.payload.isNil:
+        result = params.payload.data
     else:
       result = params.ipcData
 
@@ -189,14 +191,11 @@ when defined(feature.sigils.ipc):
 
 proc rpcUnpack*[T](obj: var T, ss: SigilParams) =
   when defined(nimscript) or defined(useJsonSerde):
-    obj.fromJson(ss.buf)
+    obj.fromJson(ss.payload)
     discard
-  elif defined(sigilsOrigSerde):
-    assert not ss.buf.isNil
-    obj = ss.buf.get(T)
   elif sigilsCborSerdeEnabled:
-    ss.buf.setPosition(0)
-    obj = unpack(ss.buf, T)
+    ss.payload.setPosition(0)
+    obj = unpack(ss.payload, T)
   else:
     when defined(feature.sigils.ipc):
       if ss.ipcData.len > 0:
@@ -211,11 +210,11 @@ proc rpcUnpack*[T](obj: var T, ss: SigilParams) =
             "type cannot be decoded from IPC CBOR",
           )
       else:
-        assert not ss.buf.isNil
-        obj = ss.buf.getWrapped(T)
+        assert not ss.payload.isNil
+        obj = ss.payload.get(T)
     else:
-      assert not ss.buf.isNil
-      obj = ss.buf.getWrapped(T)
+      assert not ss.payload.isNil
+      obj = ss.payload.get(T)
 
 proc wrapResponse*(id: SigilId, resp: SigilParams,
     kind = Response): SigilResponse =

@@ -13,14 +13,23 @@ type
   Counter* = ref object of Agent
     value: int
 
+  ManagedMessage = object
+    label: string
+    values: seq[int]
+
 proc valueChanged*(tp: SomeAction, val: int) {.signal.}
+proc messageChanged(source: SomeAction, message: ManagedMessage) {.signal.}
 
 var globalCounter: seq[int]
+var globalMessages: seq[ManagedMessage]
 
 proc setValueGlobal*(self: Counter, value: int) {.slot.} =
   if self.value != value:
     self.value = value
   globalCounter.add(value)
+
+proc receiveMessage(self: Counter, message: ManagedMessage) {.slot.} =
+  globalMessages.add(message)
 
 proc timerRun*(self: Counter) {.slot.} =
   self.value.inc()
@@ -67,12 +76,31 @@ suite "connectQueued to local thread":
     check polled == 3
     check globalCounter == @[139, 314, 278]
 
+  test "queued calls own managed payloads":
+    globalMessages = @[]
+    startLocalThreadDefault()
+    let
+      source = SomeAction()
+      receiver = Counter()
+
+    connectQueued(source, messageChanged, receiver, receiveMessage)
+
+    emit source.messageChanged(ManagedMessage(label: "first", values: @[1, 2]))
+    emit source.messageChanged(ManagedMessage(label: "second", values: @[3, 4]))
+
+    let currentThread = getCurrentSigilThread()
+    check currentThread.pollAll() == 2
+    check globalMessages == @[
+      ManagedMessage(label: "first", values: @[1, 2]),
+      ManagedMessage(label: "second", values: @[3, 4]),
+    ]
+
   test "timer callback":
     setLocalSigilThread(newSigilAsyncThread())
     let ct = getCurrentSigilThread()
     check ct of AsyncSigilThreadPtr
 
-    var timer = newSigilTimer(duration=initDuration(milliseconds=2))
+    var timer = newSigilTimer(duration = initDuration(milliseconds = 2))
     var a = Counter()
 
     connect(timer, timeout, a, Counter.timerRun())
@@ -93,7 +121,7 @@ suite "connectQueued to local thread":
     let ct = getCurrentSigilThread()
     check ct of AsyncSigilThreadPtr
 
-    var timer = newSigilTimer(duration=initDuration(milliseconds=10), count=2)
+    var timer = newSigilTimer(duration = initDuration(milliseconds = 10), count = 2)
     var a = Counter()
 
     connect(timer, timeout, a, Counter.timerRun())

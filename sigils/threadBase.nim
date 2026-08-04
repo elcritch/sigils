@@ -126,7 +126,8 @@ proc gcCollectReferences(thread: SigilThreadPtr) =
     debugPrint "\tderef cleanup: ", agent.unsafeWeakRef()
     thread.references.del(agent)
 
-proc exec*(thread: SigilThreadPtr, sig: ThreadSignal) {.gcsafe.} =
+proc exec*(thread: SigilThreadPtr, sig: sink ThreadSignal) {.gcsafe.} =
+  var sig = ensureMove(sig)
   debugPrint "\nthread got request: ", $sig.kind
   case sig.kind
   of Exit:
@@ -192,7 +193,7 @@ proc exec*(thread: SigilThreadPtr, sig: ThreadSignal) {.gcsafe.} =
         # discard c_raise(11.cint)
       assert sig.tgt[].freedByThread == 0
     {.cast(gcsafe).}:
-      let res = sig.tgt[].callMethod(sig.req, sig.slot)
+      let res = sig.tgt[].callMethod(ensureMove(sig.req), sig.slot)
     debugPrint "\t threadExec:tgt: ",
       $sig.tgt[].getSigilId(), " rc: ", $sig.tgt[].unsafeGcCount()
   of Trigger:
@@ -207,7 +208,7 @@ proc exec*(thread: SigilThreadPtr, sig: ThreadSignal) {.gcsafe.} =
         debugPrint "triggering:inbox size: ", $signaled[].inbox.peek()
         while signaled[].inbox.tryRecv(sig):
           debugPrint "\t threadExec:tgt: ", $sig.tgt, " rc: ", $sig.tgt[].unsafeGcCount()
-          let res = sig.tgt[].callMethod(sig.req, sig.slot)
+          let res = sig.tgt[].callMethod(move(sig.req), sig.slot)
 
 proc runForever*(thread: SigilThreadPtr) {.gcsafe.} =
   emit thread.agent.started()

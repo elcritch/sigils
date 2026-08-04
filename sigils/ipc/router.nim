@@ -173,7 +173,8 @@ proc handleRequest*(router: IpcRouter, envelope: IpcEnvelope): IpcEnvelope =
       params: paramsFromPayload(envelope.payload),
     )
     try:
-      discard route.receiver.callMethod(request, route.implementation)
+      discard route.receiver.callMethod(ensureMove(request),
+          route.implementation)
     except SigilIpcDecodeError as error:
       raise routeError(IpcInvalidParams, error.msg)
     return responseEnvelope(envelope.id, packIpcPayload(true))
@@ -212,4 +213,4 @@ proc handleNotify*(router: IpcRouter, envelope: IpcEnvelope) =
     procName: toSigilName(envelope.name),
     params: paramsFromPayload(envelope.payload),
   )
-  endpoint.source.callSlots(request)
+  endpoint.source.callSlots(ensureMove(request))
