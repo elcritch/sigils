@@ -86,14 +86,14 @@ template callSlotsImpl(obj: Agent, req: SigilRequest, subsIter: untyped) =
       checkSlotResponse(res)
 
   var
-    pendingSubscription: Subscription
+    pendingSubscription {.cursor.}: Subscription
     hasPendingSubscription = false
-  for borrowedSubscription in subsIter:
-    # Own the lookahead before the pending slot can mutate the source sequence.
-    var nextSubscription = borrowedSubscription
+  for subscription in subsIter:
+    # Snapshot the lookahead before the pending slot can mutate the source sequence.
+    let nextSubscription {.cursor.} = subscription
     if hasPendingSubscription:
       callSubscription(pendingSubscription, false)
-    pendingSubscription = ensureMove(nextSubscription)
+    pendingSubscription = nextSubscription
     hasPendingSubscription = true
 
   if hasPendingSubscription:
@@ -133,14 +133,14 @@ template callSlotsLocalImpl(
         checkSlotResponse(res)
 
   var
-    pendingSubscription: Subscription
+    pendingSubscription {.cursor.}: Subscription
     hasPendingSubscription = false
-  for borrowedSubscription in subsIter:
-    # Own the lookahead before the pending slot can mutate the source sequence.
-    var nextSubscription = borrowedSubscription
+  for subscription in subsIter:
+    # Snapshot the lookahead before the pending slot can mutate the source sequence.
+    let nextSubscription {.cursor.} = subscription
     if hasPendingSubscription:
       callSubscription(pendingSubscription, false)
-    pendingSubscription = ensureMove(nextSubscription)
+    pendingSubscription = nextSubscription
     hasPendingSubscription = true
 
   if hasPendingSubscription:

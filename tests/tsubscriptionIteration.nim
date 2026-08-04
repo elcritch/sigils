@@ -63,7 +63,7 @@ suite "subscription iteration":
     for observer in observers:
       check observer.calls == 1
 
-  test "local fanout owns the next subscription across mutation":
+  test "local fanout preserves the next subscription across mutation":
     let
       source = MutationSource()
       mutator = MutationReceiver(source: source)
@@ -76,7 +76,7 @@ suite "subscription iteration":
     check mutator.replacementCalls == 0
     check observer.calls == 1
 
-  test "packed fanout owns the next subscription across mutation":
+  test "packed fanout preserves the next subscription across mutation":
     let
       source = MutationSource()
       mutator = MutationReceiver(source: source, packed: true)
