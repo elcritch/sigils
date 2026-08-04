@@ -80,7 +80,7 @@ template callSlotsImpl(obj: Agent, req: SigilRequest, subsIter: untyped) =
         if remainingSubscriptions == 0:
           move(req)
         else:
-          req.clone()
+          req.clone(sub.cloneMode)
       when sigilsSlotEnvDisabled:
         var res: SigilResponse = sub.tgt[].callMethod(
           ensureMove(subReq), sub.packedSlot
@@ -117,7 +117,7 @@ template callSlotsLocalImpl(
           else:
             initSigilRequest[typeof(obj), typeof(args)](
               procName = procName,
-              args = args.clone(),
+              args = args.cloneForDelivery(sub.cloneMode),
               origin = origin,
             )
         when sigilsSlotEnvDisabled:

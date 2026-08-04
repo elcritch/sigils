@@ -17,11 +17,17 @@ type
     label: string
     values: seq[int]
 
+  RefMessage = ref object
+    label: string
+
 proc valueChanged*(tp: SomeAction, val: int) {.signal.}
 proc messageChanged(source: SomeAction, message: ManagedMessage) {.signal.}
+proc refMessageChanged(source: SomeAction, message: RefMessage) {.signal.}
 
 var globalCounter: seq[int]
 var globalMessages: seq[ManagedMessage]
+var globalRefMessage: RefMessage
+var globalRefMessages: seq[RefMessage]
 
 proc setValueGlobal*(self: Counter, value: int) {.slot.} =
   if self.value != value:
@@ -30,6 +36,12 @@ proc setValueGlobal*(self: Counter, value: int) {.slot.} =
 
 proc receiveMessage(self: Counter, message: ManagedMessage) {.slot.} =
   globalMessages.add(message)
+
+proc receiveRefMessage(self: Counter, message: RefMessage) {.slot.} =
+  globalRefMessage = message
+
+proc collectRefMessage(self: Counter, message: RefMessage) {.slot.} =
+  globalRefMessages.add(message)
 
 proc timerRun*(self: Counter) {.slot.} =
   self.value.inc()
@@ -94,6 +106,40 @@ suite "connectQueued to local thread":
       ManagedMessage(label: "first", values: @[1, 2]),
       ManagedMessage(label: "second", values: @[3, 4]),
     ]
+
+  test "queued calls retain references on the local thread":
+    globalRefMessage = nil
+    startLocalThreadDefault()
+    let
+      source = SomeAction()
+      receiver = Counter()
+      message = RefMessage(label: "queued")
+
+    connectQueued(source, refMessageChanged, receiver, receiveRefMessage)
+    emit source.refMessageChanged(message)
+
+    let currentThread = getCurrentSigilThread()
+    check currentThread.pollAll() == 1
+    check globalRefMessage == message
+
+  test "queued fanout retains references for every recipient":
+    globalRefMessages = @[]
+    startLocalThreadDefault()
+    let
+      source = SomeAction()
+      first = Counter()
+      second = Counter()
+      message = RefMessage(label: "fanout")
+
+    connectQueued(source, refMessageChanged, first, collectRefMessage)
+    connectQueued(source, refMessageChanged, second, collectRefMessage)
+    emit source.refMessageChanged(message)
+
+    let currentThread = getCurrentSigilThread()
+    check currentThread.pollAll() == 2
+    check globalRefMessages.len == 2
+    check globalRefMessages[0] == message
+    check globalRefMessages[1] == message
 
   test "timer callback":
     setLocalSigilThread(newSigilAsyncThread())

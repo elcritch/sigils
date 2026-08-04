@@ -105,7 +105,9 @@ func compareSigilName*(a, b: SigilName): int {.inline.} =
   else:
     cmp($a, $b)
 
-proc clone*(params: SigilParams): SigilParams =
+proc clone*(
+    params: SigilParams, mode: CloneMode = defaultCloneMode
+): SigilParams =
   when defined(nimscript) or defined(useJsonSerde) or defined(sigilsJsonSerde):
     result.payload = params.payload
   elif sigilsCborSerdeEnabled:
@@ -114,17 +116,21 @@ proc clone*(params: SigilParams): SigilParams =
     if not params.payload.isNil:
       if params.cloner.isNil:
         raise newException(ValueError, "cannot clone SigilParams without a cloner")
-      result.payload = params.cloner(params.payload)
+      result.payload = params.cloner(
+        params.payload, deliveryCloneMode(mode)
+      )
       result.cloner = params.cloner
     when defined(feature.sigils.ipc):
       result.ipcData = params.ipcData
 
-proc clone*(req: SigilRequest): SigilRequest =
+proc clone*(
+    req: SigilRequest, mode: CloneMode = defaultCloneMode
+): SigilRequest =
   result = SigilRequest(
     kind: req.kind,
     origin: req.origin,
     procName: req.procName,
-    params: req.params.clone(),
+    params: req.params.clone(mode),
   )
 
 proc `$`*(id: SigilId): string =

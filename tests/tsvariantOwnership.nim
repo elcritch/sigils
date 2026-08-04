@@ -55,5 +55,18 @@ suite "SVariant managed payload ownership":
       packed = rpcPack(payload)
       copied = packed.clone()
 
-    check customCloneCalls == 1
+    when defined(gcAtomicArc):
+      check customCloneCalls == 0
+    else:
+      check customCloneCalls == 1
+    check copied.payload.get(CustomPayload).value == payload.value
+
+  test "typed variant supports explicit RC cloning":
+    customCloneCalls = 0
+    let
+      payload = CustomPayload(value: LifetimePayload(id: 3))
+      packed = rpcPack(payload)
+      copied = packed.clone(CloneMode.Rc)
+
+    check customCloneCalls == 0
     check copied.payload.get(CustomPayload).value == payload.value

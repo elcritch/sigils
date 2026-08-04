@@ -107,7 +107,7 @@ suite "typed variant thread ownership":
     thread.setRunning(false)
     thread.join()
 
-  test "fanout clones one owned case payload and moves the other":
+  test "fanout applies the memory manager clone policy":
     const MessageCount = 100
     resetCounters()
     let
@@ -126,7 +126,10 @@ suite "typed variant thread ownership":
     for id in 0 ..< MessageCount:
       emit source.payloadChanged(payload(id))
 
-    check cloneCalls.load() == MessageCount
+    when defined(gcAtomicArc):
+      check cloneCalls.load() == 0
+    else:
+      check cloneCalls.load() == MessageCount
     waitForReceived(0, MessageCount)
     waitForReceived(1, MessageCount)
     check receivedPayloads[0].load() == MessageCount

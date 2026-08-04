@@ -30,7 +30,7 @@ suite "packed signal ownership":
     check receiver.received == payload
     check receiver.received.text == "single"
 
-  test "packed fanout clones all but the final payload":
+  test "packed fanout follows the memory manager reference policy":
     let
       source = Emitter()
       first = Receiver()
@@ -44,8 +44,15 @@ suite "packed signal ownership":
 
     check not first.received.isNil
     check not second.received.isNil
-    check first.received != second.received
-    check first.received == payload or second.received == payload
+    when defined(gcAtomicArc):
+      check first.received == payload
+      check second.received == payload
 
-    first.received.text[0] = 'F'
-    check second.received.text == "fanout"
+      first.received.text[0] = 'F'
+      check second.received.text == "Fanout"
+    else:
+      check first.received != second.received
+      check first.received == payload or second.received == payload
+
+      first.received.text[0] = 'F'
+      check second.received.text == "fanout"

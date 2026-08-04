@@ -57,6 +57,7 @@ type
     tgt*: WeakRef[Agent]
     packedSlot*: AgentProc
     directSlot*: LocalAgentProc
+    cloneMode*: CloneMode
     when not sigilsSlotEnvDisabled:
       envSlot*: EnvAgentProc
       env*: SlotEnv

@@ -28,8 +28,11 @@ type
     of NumberPayload:
       numbers: seq[int]
 
+var sharedCloneCalls = 0
+
 proc clone(value: SharedPayload): SharedPayload {.gcsafe.} =
   ## This value intentionally shares its reference when its parent is cloned.
+  sharedCloneCalls.inc()
   value
 
 suite "recursive clone":
@@ -57,12 +60,47 @@ suite "recursive clone":
     check copied.values == @[9, 2, 3]
 
   test "custom clone overloads apply recursively":
+    sharedCloneCalls = 0
     let source = CloneEnvelope(
       shared: SharedPayload(value: RefPayload(name: "shared", values: @[1]))
     )
     let copied = source.clone()
 
+    check sharedCloneCalls == 1
     check copied.shared.value == source.shared.value
+
+  test "RC clone retains references and copies value containers":
+    sharedCloneCalls = 0
+    let source = CasePayload(
+      requestId: UserId("request-rc"),
+      kind: TextPayload,
+      text: "alpha",
+      metadata: RefPayload(name: "meta", values: @[1, 2]),
+    )
+    var copied = source.cloneRc()
+
+    check sharedCloneCalls == 0
+    check copied.metadata == source.metadata
+    copied.text[0] = 'A'
+    copied.metadata.name[0] = 'M'
+
+    check source.text == "alpha"
+    check source.metadata.name == "Meta"
+
+  test "delivery cloning follows the memory manager":
+    let source = RefPayload(name: "delivery", values: @[1])
+    let copied = source.cloneForDelivery(CloneMode.Deep)
+
+    when defined(gcAtomicArc):
+      check copied == source
+    else:
+      check copied != source
+
+  test "delivery cloning can explicitly retain references":
+    let source = RefPayload(name: "delivery", values: @[1])
+    let copied = source.cloneForDelivery(CloneMode.Rc)
+
+    check copied == source
 
   test "distinct values clone through their base type":
     let source = UserId("user-1")

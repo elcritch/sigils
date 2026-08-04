@@ -1,5 +1,25 @@
 import std/typetraits
 
+type CloneMode* {.pure.} = enum
+  Deep
+  Rc
+
+when defined(gcAtomicArc):
+  const defaultCloneMode* = CloneMode.Rc
+else:
+  const defaultCloneMode* = CloneMode.Deep
+
+proc cloneRc*[T](value: T): T {.inline, gcsafe.} =
+  ## Copy value containers while retaining referenced objects.
+  result = value
+
+func deliveryCloneMode*(requested: CloneMode): CloneMode {.inline.} =
+  ## Atomic ARC can safely retain reference lifetimes across a delivery boundary.
+  when defined(gcAtomicArc):
+    CloneMode.Rc
+  else:
+    requested
+
 proc clone*[T](value: T): T {.gcsafe.} =
   ## Clone a value recursively, preserving value semantics for managed fields.
   ##
@@ -30,3 +50,14 @@ proc clone*[T](value: T): T {.gcsafe.} =
       resultField = clone(resultField)
   else:
     result = value
+
+proc cloneForDelivery*[T](
+    value: T, mode: CloneMode = defaultCloneMode
+): T {.gcsafe.} =
+  ## Clone a fanout payload according to the active memory manager.
+  case deliveryCloneMode(mode)
+  of CloneMode.Rc:
+    result = cloneRc(value)
+  of CloneMode.Deep:
+    mixin clone
+    result = clone(value)
