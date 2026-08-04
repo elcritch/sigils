@@ -8,6 +8,7 @@ import ./svariant
 type ProxyCloneSignal = object
   signal*: SigilName
   slot*: AgentProc
+  cloneMode*: CloneMode
 
 type AgentLocation* = object
   thread*: SigilThreadPtr
@@ -37,7 +38,8 @@ proc collectProxyCloneSignals[T](proxy: AgentProxy[T]): seq[ProxyCloneSignal] =
       # Only clone self-targeted subscriptions (proxy -> proxy).
       if item.subscription.tgt == proxyRef:
         result.add(ProxyCloneSignal(signal: item.signal,
-            slot: item.subscription.packedSlot))
+            slot: item.subscription.packedSlot,
+            cloneMode: item.subscription.cloneMode))
 
 proc applyProxyCloneSignals[T](proxy: AgentProxy[T],
     clones: seq[ProxyCloneSignal]) {.gcsafe.} =
@@ -45,7 +47,14 @@ proc applyProxyCloneSignals[T](proxy: AgentProxy[T],
     return
   let proxyRef = proxy.unsafeWeakRef().asAgent()
   for item in clones:
-    proxy.addSubscription(item.signal, proxyRef, item.slot)
+    proxy.addSubscription(
+      item.signal,
+      Subscription(
+        tgt: proxyRef,
+        packedSlot: item.slot,
+        cloneMode: item.cloneMode,
+      ),
+    )
 
 proc registerGlobalNameImpl[T](
     name: SigilName,

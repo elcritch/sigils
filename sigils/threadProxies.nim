@@ -113,7 +113,7 @@ method delSubscription*(
   self.removeForwarded([sig])
 
 method callMethod*(
-    proxy: AgentProxyShared, req: SigilRequest, slot: AgentProc
+    proxy: AgentProxyShared, req: sink SigilRequest, slot: AgentProc
 ): SigilResponse {.gcsafe, effectsOf: slot.} =
   ## Route's an rpc request.
   debugPrint "callMethod: proxy: ",
@@ -124,9 +124,8 @@ method callMethod*(
     repr(slot)
   let ct = getCurrentSigilThread()
   if not proxy.homeThread.isNil and ct != proxy.homeThread:
-    var req = req.duplicate()
     var msg = isolateRuntime ThreadSignal(
-      kind: Call, slot: slot, req: move req,
+      kind: Call, slot: slot, req: ensureMove(req),
       tgt: proxy.unsafeWeakRef().asAgent()
     )
     when defined(sigilsDebug) or defined(debug):
@@ -140,13 +139,12 @@ method callMethod*(
 
   if slot == localSlot or slot == remoteSlot:
     debugPrint "\t proxy:callMethod:directSlot: "
-    proxy.callSlots(req)
+    proxy.callSlots(ensureMove(req))
   else:
-    var req = req.duplicate()
     debugPrint "\t callMethod:agentProxy:InitCall:Outbound: ",
       req.procName, " proxy:remote:obj: ", proxy.remote.getSigilId()
     var msg = isolateRuntime ThreadSignal(
-      kind: Call, slot: slot, req: move req, tgt: proxy.remote.toKind(Agent)
+      kind: Call, slot: slot, req: ensureMove(req), tgt: proxy.remote.toKind(Agent)
     )
     when defined(sigilNonBlockingThreads):
       discard
@@ -201,7 +199,8 @@ iterator findSubscribedTo(
   for item in other[].subcriptions:
     if item.subscription.tgt == agent:
       yield (item.signal, Subscription(tgt: other,
-          packedSlot: item.subscription.packedSlot))
+          packedSlot: item.subscription.packedSlot,
+          cloneMode: item.subscription.cloneMode))
 
 proc moveToThread*[T: AgentActor, R: SigilThread](
     agentTy: var T, thread: ptr R, inbox = 1_000
@@ -240,15 +239,27 @@ proc moveToThread*[T: AgentActor, R: SigilThread](
   # update subscriptions agent is listening to use the local proxy to send events
   var listenSubs = false
   for item in oldListeningSubs:
-    item.subscription.tgt[].addSubscription(item.signal, localProxy,
-        item.subscription.packedSlot)
+    item.subscription.tgt[].addSubscription(
+      item.signal,
+      Subscription(
+        tgt: localProxy.unsafeWeakRef().asAgent(),
+        packedSlot: item.subscription.packedSlot,
+        cloneMode: item.subscription.cloneMode,
+      ),
+    )
     listenSubs = true
 
   # update my subcriptionsTable so agent uses the remote proxy to send events back
   var hasSubs = false
   for item in oldSubscribers:
-    localProxy.addSubscription(item.signal, item.subscription.tgt,
-        item.subscription.packedSlot)
+    localProxy.addSubscription(
+      item.signal,
+      Subscription(
+        tgt: item.subscription.tgt,
+        packedSlot: item.subscription.packedSlot,
+        cloneMode: item.subscription.cloneMode,
+      ),
+    )
     hasSubs = true
 
   thread.send(ThreadSignal(kind: Move, item: move agentTy))
@@ -335,7 +346,7 @@ proc fwdSlotTy[A: Agent; B: Agent; S: static string](self: Agent,
   let agentSlot = callCode(S)
   let req = SigilRequest(
     kind: Request, origin: SigilId(-1), procName: signalName(signal),
-        params: params.duplicate()
+        params: params.clone(CloneMode.Rc)
   )
   var msg = ThreadSignal(kind: Call)
   msg.slot = agentSlot
@@ -356,7 +367,14 @@ template connectQueued*[T](
   checkSignalTypes(a, signal, b, slot, acceptVoidSlot)
   let ct = getCurrentSigilThread()
   let fs: AgentProc = fwdSlotTy[a, b, astToStr(slot)]
-  a.addSubscription(signalName(signal), b, fs)
+  a.addSubscription(
+    signalName(signal),
+    Subscription(
+      tgt: b.unsafeWeakRef().asAgent(),
+      packedSlot: fs,
+      cloneMode: CloneMode.Rc,
+    ),
+  )
 
 macro callSlot(s: static string, a: typed): untyped =
   ## calls a slot to get the signal type using a static string
@@ -372,7 +390,7 @@ proc fwdSlot[A: Agent; B: Agent; S: static string](self: Agent,
     kind: Request,
     origin: SigilId(-1),
     procName: signalName(signal),
-    params: params.duplicate()
+    params: params.clone(CloneMode.Rc)
   )
   var msg = ThreadSignal(kind: Call)
   msg.slot = agentSlot
@@ -394,4 +412,11 @@ template connectQueued*(
   checkSignalTypes(a, signal, b, agentSlot, acceptVoidSlot)
   let ct = getCurrentSigilThread()
   let fs: AgentProc = fwdSlot[a, b, astToStr(slot)]
-  a.addSubscription(signalName(signal), b, fs)
+  a.addSubscription(
+    signalName(signal),
+    Subscription(
+      tgt: b.unsafeWeakRef().asAgent(),
+      packedSlot: fs,
+      cloneMode: CloneMode.Rc,
+    ),
+  )

@@ -40,6 +40,12 @@ proc `=destroy`*(obj: InnerC) =
 proc valueChanged*(tp: SomeAction, val: int) {.signal.}
 proc updated*(tp: Counter, final: int) {.signal.}
 
+var
+  delaySetValue: Atomic[bool]
+  delayedSetValueStarted: Atomic[bool]
+  releaseDelayedSetValue: Atomic[bool]
+  delayedSetValueFinished: Atomic[bool]
+
 proc setValue*(self: Counter, value: int) {.slot.} =
   # echo "setValue! ", value, " id: ", self.getSigilId().int, " (th: ", getThreadId(), ")"
   # echo "setValue! self:refcount: ", self.unsafeGcCount()
@@ -47,9 +53,21 @@ proc setValue*(self: Counter, value: int) {.slot.} =
     self.value = value
   # echo "setValue:subcriptionsTable: ", self.subcriptionsTable.pairs().toSeq.mapIt(it[1].mapIt(cast[pointer](it.tgt.getSigilId()).repr))
   # echo "setValue:listening: ", $self.listening.toSeq.mapIt(cast[pointer](it.getSigilId()).repr)
-  if value == 756809:
-    os.sleep(1)
+  let delayed = value == 756809 and delaySetValue.load()
+  if delayed:
+    delayedSetValueStarted.store(true)
+    while not releaseDelayedSetValue.load():
+      os.sleep(1)
   emit self.updated(self.value)
+  if delayed:
+    delayedSetValueFinished.store(true)
+
+proc waitFor(flag: var Atomic[bool], timeoutMs = 1_000): bool =
+  for _ in 0 ..< timeoutMs:
+    if flag.load():
+      return true
+    os.sleep(1)
+  flag.load()
 
 var globalCounter: Atomic[int]
 globalCounter.store(0)
@@ -405,6 +423,14 @@ suite "threaded agent slots":
       startLocalThreadDefault()
       let ct = getCurrentSigilThread()
 
+      delaySetValue.store(true)
+      delayedSetValueStarted.store(false)
+      releaseDelayedSetValue.store(false)
+      delayedSetValueFinished.store(false)
+      defer:
+        releaseDelayedSetValue.store(true)
+        delaySetValue.store(false)
+
       var a = SomeAction.new()
 
       block:
@@ -422,10 +448,13 @@ suite "threaded agent slots":
         emit a.valueChanged(89)
         emit a.valueChanged(756809)
 
+        require waitFor(delayedSetValueStarted)
         ct.poll()
         check a.value == 89
       echo "block done"
 
+      releaseDelayedSetValue.store(true)
+      require waitFor(delayedSetValueFinished)
       let cnt = ct.pollAll()
       check cnt == 0
       check a.value == 89
