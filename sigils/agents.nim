@@ -225,21 +225,21 @@ proc upperBoundSubscription(
   lo
 
 iterator subscriptionsForSignal(
-    subs: var seq[SubscriptionEntry], sig: SigilName
-): var Subscription =
+    subs: seq[SubscriptionEntry], sig: SigilName
+): lent Subscription =
   var idx = lowerBoundSubscription(subs, sig)
   while idx < subs.len and subs[idx].signal == sig:
     yield subs[idx].subscription
     idx.inc()
 
 iterator subscriptionsForSignalLinear(
-    subs: var seq[SubscriptionEntry], sig: SigilName
-): var Subscription =
-  for item in subs.mitems():
+    subs: seq[SubscriptionEntry], sig: SigilName
+): lent Subscription =
+  for item in subs.items():
     if item.signal == sig or item.signal == AnySigilName:
       yield item.subscription
 
-iterator getSubscriptions*(obj: Agent, sig: SigilName): var Subscription =
+iterator getSubscriptions*(obj: Agent, sig: SigilName): lent Subscription =
   if useLinearSubscriptionScan(obj.subcriptions.len):
     for sub in subscriptionsForSignalLinear(obj.subcriptions, sig):
       yield sub
@@ -258,7 +258,7 @@ iterator getSubscriptions*(obj: Agent, sig: SigilName): var Subscription =
       yield sub
 
 iterator getSubscriptions*(obj: WeakRef[Agent],
-                           sig: SigilName): var Subscription =
+                           sig: SigilName): lent Subscription =
   for sub in obj[].getSubscriptions(sig):
     yield sub
 

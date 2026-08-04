@@ -60,12 +60,7 @@ template checkSlotResponse(res: SigilResponse) =
       discard
 
 template callSlotsImpl(obj: Agent, req: SigilRequest, subsIter: untyped) =
-  var remainingSubscriptions = 0
-  for _ in subsIter:
-    remainingSubscriptions.inc()
-
-  for sub in subsIter:
-    remainingSubscriptions.dec()
+  template callSubscription(sub: Subscription, isLast: bool) =
     {.cast(gcsafe).}:
       when defined(sigilsDebug):
         if sub.tgt[].freedByThread != 0:
@@ -77,7 +72,7 @@ template callSlotsImpl(obj: Agent, req: SigilRequest, subsIter: untyped) =
           discard c_raise(11.cint)
         assert sub.tgt[].freedByThread == 0
       var subReq =
-        if remainingSubscriptions == 0:
+        if isLast:
           move(req)
         else:
           req.clone(sub.cloneMode)
@@ -90,6 +85,20 @@ template callSlotsImpl(obj: Agent, req: SigilRequest, subsIter: untyped) =
 
       checkSlotResponse(res)
 
+  var
+    pendingSubscription: Subscription
+    hasPendingSubscription = false
+  for borrowedSubscription in subsIter:
+    # Own the lookahead before the pending slot can mutate the source sequence.
+    var nextSubscription = borrowedSubscription
+    if hasPendingSubscription:
+      callSubscription(pendingSubscription, false)
+    pendingSubscription = ensureMove(nextSubscription)
+    hasPendingSubscription = true
+
+  if hasPendingSubscription:
+    callSubscription(pendingSubscription, true)
+
 template callSlotsLocalImpl(
     obj: Agent,
     procName: SigilName,
@@ -97,18 +106,13 @@ template callSlotsLocalImpl(
     args: untyped,
     subsIter: untyped
 ) =
-  var remainingSubscriptions = 0
-  for _ in subsIter:
-    remainingSubscriptions.inc()
-
-  for sub in subsIter:
-    remainingSubscriptions.dec()
+  template callSubscription(sub: Subscription, isLast: bool) =
     {.cast(gcsafe).}:
       if not sub.directSlot.isNil:
         sub.directSlot(sub.tgt[], addr args)
       else:
         var req =
-          if remainingSubscriptions == 0:
+          if isLast:
             initSigilRequest[typeof(obj), typeof(args)](
               procName = procName,
               args = move(args),
@@ -127,6 +131,20 @@ template callSlotsLocalImpl(
         else:
           var res: SigilResponse = sub.tgt[].callMethod(ensureMove(req), sub)
         checkSlotResponse(res)
+
+  var
+    pendingSubscription: Subscription
+    hasPendingSubscription = false
+  for borrowedSubscription in subsIter:
+    # Own the lookahead before the pending slot can mutate the source sequence.
+    var nextSubscription = borrowedSubscription
+    if hasPendingSubscription:
+      callSubscription(pendingSubscription, false)
+    pendingSubscription = ensureMove(nextSubscription)
+    hasPendingSubscription = true
+
+  if hasPendingSubscription:
+    callSubscription(pendingSubscription, true)
 
 method callSlots*(obj: Agent, req: sink SigilRequest) {.base, gcsafe.} =
   let procName = req.procName
