@@ -1,4 +1,4 @@
-version = "0.27.1"
+version = "0.27.2"
 author = "Jaremy Creechley"
 description = "A slot and signals implementation for the Nim programming language"
 license = "MIT"
@@ -22,7 +22,7 @@ feature "mummy":
   requires "mummy"
 
 feature "siwin":
-  requires "gh:elcritch/siwin#refactor-window-events"
+  requires "siwin"
 
 feature "chronos":
   requires "https://github.com/status-im/nim-chronos >= 4.2.0"
