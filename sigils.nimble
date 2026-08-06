@@ -21,8 +21,8 @@ feature "cbor":
 feature "mummy":
   requires "mummy"
 
-feature "fastrpc":
-  requires "fastrpc"
+feature "siwin":
+  requires "gh:elcritch/siwin#refactor-window-events"
 
 feature "chronos":
   requires "https://github.com/status-im/nim-chronos >= 4.2.0"
