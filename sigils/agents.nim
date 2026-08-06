@@ -74,6 +74,8 @@ type
 
   Agent* = ref object of AgentObj
 
+  AgentCloneDefect* = object of Defect
+
   AgentProcTy*[S] = AgentProc
   LocalAgentProcTy*[S] = LocalAgentProc
 
@@ -82,6 +84,16 @@ type
   LocalSignalTypes* = distinct object
 
 type SubscriptionEntry* = tuple[signal: SigilName, subscription: Subscription]
+
+proc clone*[T: Agent](value: T): T {.gcsafe.} =
+  ## Agents have identity and cannot be deep-cloned implicitly. Agent subtypes
+  ## that support independent duplication must provide a more specific overload.
+  if value.isNil:
+    return nil
+  raise newException(
+    AgentCloneDefect,
+    "deep cloning an Agent requires an explicit clone overload",
+  )
 
 proc invalidateConnectionState(subscription: Subscription) {.inline.} =
   when not sigilsSlotEnvDisabled:

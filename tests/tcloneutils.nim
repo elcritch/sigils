@@ -1,6 +1,6 @@
 import std/[typetraits, unittest]
 
-import sigils/cloneutils
+import sigils/[agents, cloneutils]
 
 type
   UserId = distinct string
@@ -8,6 +8,14 @@ type
   RefPayload = ref object
     name: string
     values: seq[int]
+
+  DefaultCloneAgent = ref object of Agent
+
+  CloneableAgent = ref object of Agent
+    value: RefPayload
+
+  AgentEnvelope[T] = object
+    agent: T
 
   SharedPayload = object
     value: RefPayload
@@ -35,6 +43,10 @@ proc clone(value: SharedPayload): SharedPayload {.gcsafe.} =
   sharedCloneCalls.inc()
   value
 
+proc clone(value: CloneableAgent): CloneableAgent {.gcsafe.} =
+  if not value.isNil:
+    result = CloneableAgent(value: value.value.clone())
+
 suite "recursive clone":
   test "strings and sequences preserve value semantics":
     let source = (text: "alpha", values: @[1, 2, 3])
@@ -58,6 +70,52 @@ suite "recursive clone":
     check source.values == @[1, 2, 3]
     check copied.name == "Alpha"
     check copied.values == @[9, 2, 3]
+
+  test "agents reject implicit deep clones":
+    let source = DefaultCloneAgent()
+
+    expect AgentCloneDefect:
+      discard source.clone()
+
+  test "nil agents clone to nil":
+    let source: DefaultCloneAgent = nil
+
+    check source.clone().isNil
+
+  test "RC delivery retains agent identity":
+    let source = DefaultCloneAgent()
+    let payload = AgentEnvelope[DefaultCloneAgent](agent: source)
+    let copied = payload.cloneForDelivery(CloneMode.Rc)
+
+    check copied.agent == source
+
+  test "deep delivery rejects agents without a clone overload":
+    let source = DefaultCloneAgent()
+    let payload = AgentEnvelope[DefaultCloneAgent](agent: source)
+
+    when defined(gcAtomicArc):
+      let copied = payload.cloneForDelivery(CloneMode.Deep)
+      check copied.agent == source
+    else:
+      expect AgentCloneDefect:
+        discard payload.cloneForDelivery(CloneMode.Deep)
+
+  test "explicit agent clone overloads apply recursively":
+    let source = CloneableAgent(
+      value: RefPayload(name: "agent", values: @[1, 2, 3])
+    )
+    let payload = AgentEnvelope[CloneableAgent](agent: source)
+    var copied = payload.clone()
+
+    check copied.agent != source
+    check copied.agent.value != source.value
+    copied.agent.value.name[0] = 'A'
+    copied.agent.value.values[0] = 9
+
+    check source.value.name == "agent"
+    check source.value.values == @[1, 2, 3]
+    check copied.agent.value.name == "Agent"
+    check copied.agent.value.values == @[9, 2, 3]
 
   test "custom clone overloads apply recursively":
     sharedCloneCalls = 0
