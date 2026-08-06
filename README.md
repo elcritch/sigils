@@ -103,6 +103,7 @@ Thread implementations:
 - `newSigilSelectorThread()` / `SigilSelectorThread`: selector-backed thread with timers and fd events.
 - `AsyncSigilThread` (import `sigils/threadAsyncs`): integrates with `asyncdispatch`.
 - `newSigilChronosThread()` / `SigilChronosThread`: uses an OS-backed cross-thread wake signal and sleeps in the Chronos dispatcher while idle. Enable the `chronos` package feature or import `sigils/threadChronos` directly.
+- `installSiwinEventLoopWaker()` (from `sigils/threadExtras`): makes sends to an existing application-thread scheduler wake Siwin, without replacing that scheduler. Enable the `siwin` package feature.
 
 ```nim
 import sigils
@@ -144,6 +145,48 @@ discard ct.pollAll() # deliver forwarded events to local thread
 
 doAssert sink.seen == 42
 ```
+
+### Siwin application loop
+
+With the `siwin` package feature enabled, attach Siwin to the application
+thread's existing scheduler before creating proxies whose home is that thread.
+The scheduler retains a copied `EventLoopWaker`, not the complete
+`SiwinGlobals`:
+
+```nim
+import sigils
+import siwin
+
+let globals = newSiwinGlobals()
+let window = globals.newSoftwareRenderingWindow(title = "Sigils + Siwin")
+let sigilThread = installSiwinEventLoopWaker(globals)
+
+while not window.closed:
+  globals.waitEvents()
+  discard sigilThread.pollAll()
+  window.serviceWindow()
+```
+
+Every successful Sigils send publishes its message to the destination queue
+before waking Siwin. Wake notifications may be coalesced, so always drain the
+queue after `waitEvents` returns. The same hook can be installed explicitly on
+a `SigilThreadDefault`, `SigilSelectorThread`, `AsyncSigilThread`, or
+`SigilChronosThread` with
+`thread.toSigilThread().installSiwinEventLoopWaker(globals)`. This preserves the
+scheduler and its own wake mechanism; it only bridges messages enqueued in its
+Sigils queue. Selector file-descriptor readiness and selector/Chronos timer
+deadlines still need to be serviced by their respective event loops.
+
+The underlying integration is generic: each `SigilThread` retains a sequence of
+`SigilThreadWakeCallback` closures registered with `addWakeCallback`. This lets
+other event queues add their own thread-safe, nonblocking wake primitive without
+changing the scheduler types. Registration invokes the callback once
+immediately so already-queued work is not stranded. After stopping producers,
+`clearWakeCallbacks` releases all integrations retained by that scheduler.
+
+Producers may use the scheduler from worker threads, but install the waker
+before starting them. The Siwin globals and native event pump stay on the
+application thread.
 
 ## IPC
 

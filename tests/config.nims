@@ -19,6 +19,12 @@
 --passc:
   "-Wno-int-conversion"
 
+when defined(feature.sigils.siwin) and defined(macosx):
+  --passc:
+    "-Wno-incompatible-function-pointer-types"
+  --passc:
+    "-Wno-error=incompatible-function-pointer-types"
+
 when defined(tsan):
   --debugger:
     native

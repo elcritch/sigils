@@ -36,6 +36,9 @@ type
 
   SigilThreadAgent* = ref object of Agent
 
+  SigilThreadWakeCallback* = proc() {.closure, gcsafe, raises: [].}
+    ## Thread-safe, nonblocking notification called after a scheduler enqueue.
+
   SigilThread* = object of RootObj
     threadId*: Atomic[int]
 
@@ -49,6 +52,8 @@ type
       debugName*: string
     running*: Atomic[bool]
     toCancel*: HashSet[SigilTimer]
+    wakeCallbacks: seq[SigilThreadWakeCallback]
+    hasWakeCallbacks: Atomic[bool]
 
   SigilThreadPtr* = ptr SigilThread
 
@@ -75,6 +80,46 @@ proc `=destroy`*(thread: var SigilThread) =
 
 proc newSigilChan*(): SigilChan =
   result = newChan[ThreadSignal](1_000)
+
+proc notifyMessageEnqueued*(thread: SigilThreadPtr) {.inline, gcsafe, raises: [].} =
+  ## Scheduler implementation hook called after publishing a destination-queue
+  ## message. Registered callbacks run synchronously on the sending thread.
+  if thread.hasWakeCallbacks.load(Acquire):
+    withLock thread.signaledLock:
+      for index in 0 ..< thread.wakeCallbacks.len:
+        thread.wakeCallbacks[index]()
+
+proc addWakeCallback*(
+    thread: SigilThreadPtr,
+    callback: SigilThreadWakeCallback,
+) =
+  ## Retain a notification callback and wake it once immediately.
+  ##
+  ## The immediate call ensures that work queued before registration is not
+  ## stranded. Callbacks subsequently run after every successful enqueue, on
+  ## whichever thread performed that enqueue. They must return promptly, must
+  ## not raise, and must synchronize any captured mutable state. A callback must
+  ## not re-enter the same scheduler or mutate its wake-callback registrations.
+  if thread.isNil:
+    raise newException(ValueError, "Sigils thread must not be nil")
+  if callback.isNil:
+    raise newException(ValueError, "wake callback must not be nil")
+
+  withLock thread.signaledLock:
+    thread.wakeCallbacks.add(callback)
+    thread.hasWakeCallbacks.store(true, Release)
+    callback()
+
+proc clearWakeCallbacks*(thread: SigilThreadPtr) =
+  ## Remove all wake callbacks after any callback in progress has returned.
+  ##
+  ## Stop producers before clearing callbacks if later sends must continue to
+  ## wake an external event queue.
+  if thread.isNil:
+    return
+  withLock thread.signaledLock:
+    thread.hasWakeCallbacks.store(false, Release)
+    thread.wakeCallbacks.setLen(0)
 
 proc signal*(thread: SigilThreadPtr, obj: WeakRef[AgentActor]) =
   withLock thread.signaledLock:

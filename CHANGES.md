@@ -1,3 +1,4 @@
+- Unreleased - add generic per-scheduler wake callbacks plus an optional Siwin adapter for default, selector-, asyncdispatch-, and Chronos-backed application schedulers, allowing efficient `waitEvents`/`pollAll` integration
 - Unreleased - reject implicit deep cloning of Agents, retain their identity for RC deliveries, and support explicit clone overloads for independently cloneable Agent types
 - `v0.27.0` - restore type-aware Variant payload ownership; move single-recipient calls directly, recursively clone ARC/ORC thread fanout, retain references for local queues and Atomic ARC, and traverse subscription fanout once using an owned lookahead
 - Unreleased - add the optional Chronos-backed Sigils thread with OS-dispatched wakeups and Chronos timers; add CBOR IPC over Chronos TCP, Unix sockets, and Windows named pipes with slots, signals, selectors, and protocol allowlists

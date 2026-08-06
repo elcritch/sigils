@@ -68,7 +68,8 @@ proc newSigilSelectEvent*(
   registerEvent(thread.sel, event, SigilThreadEvent(result))
 
 proc newSigilSelectorThread*(): ptr SigilSelectorThread =
-  result = cast[ptr SigilSelectorThread](allocShared0(sizeof(SigilSelectorThread)))
+  result = cast[ptr SigilSelectorThread](allocShared0(sizeof(
+      SigilSelectorThread)))
   result[] = SigilSelectorThread() # important!
   result[].sel = newSelector[SigilThreadEvent]()
   result[].agent = SigilThreadAgent()
@@ -80,7 +81,8 @@ proc newSigilSelectorThread*(): ptr SigilSelectorThread =
   result[].drain.store(true, Relaxed)
 
 method send*(
-    thread: SigilSelectorThreadPtr, msg: sink ThreadSignal, blocking: BlockingKinds
+    thread: SigilSelectorThreadPtr, msg: sink ThreadSignal,
+        blocking: BlockingKinds
 ) {.gcsafe.} =
   var msg = isolateRuntime(msg)
   case blocking
@@ -94,9 +96,11 @@ method send*(
       raise newException(MessageQueueFullError, "could not send!")
     debugQueuePrint "queue:thread inputs size: ",
       $thread.inputs.peek(), " thread: ", $getThreadId(thread.toSigilThread()[])
+  thread.toSigilThread().notifyMessageEnqueued()
 
 method recv*(
-    thread: SigilSelectorThreadPtr, msg: var ThreadSignal, blocking: BlockingKinds
+    thread: SigilSelectorThreadPtr, msg: var ThreadSignal,
+        blocking: BlockingKinds
 ): bool {.gcsafe.} =
   case blocking
   of Blocking:
@@ -219,7 +223,8 @@ proc start*(thread: ptr SigilSelectorThread) =
   createThread(thread[].thr, runSelectorThread, thread)
 
 proc stop*(
-    thread: ptr SigilSelectorThread, immediate: bool = false, drain: bool = false
+    thread: ptr SigilSelectorThread, immediate: bool = false,
+        drain: bool = false
 ) =
   thread[].running.store(false, Relaxed)
   thread[].drain.store(drain or immediate, Relaxed)

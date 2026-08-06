@@ -72,6 +72,7 @@ method send*(
 
   debugQueuePrint "queue:Chronos thread inputs size: ",
     $thread.inputs.peek(), " thread: ", $getThreadId(thread.toSigilThread()[])
+  thread.toSigilThread().notifyMessageEnqueued()
   thread.wakeDispatcher()
 
 method recv*(

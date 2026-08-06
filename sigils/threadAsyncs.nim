@@ -54,6 +54,7 @@ method send*(
       raise newException(MessageQueueFullError, "could not send!")
   debugQueuePrint "queue:thread inputs size: ", $thread.inputs.peek(),
     " thread: ", $getThreadId(thread.toSigilThread()[])
+  thread.toSigilThread().notifyMessageEnqueued()
   thread.event.trigger()
 
 method recv*(
