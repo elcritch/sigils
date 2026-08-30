@@ -2536,7 +2536,7 @@ proc setResult*[R](invocation: var Invocation, value: sink R) =
     cast[ptr R](invocation.resultPtr)[] = ensureMove value
     invocation.resultWritten = true
   else:
-    when defined(feature.sigils.ipc):
+    when defined(features.sigils.ipc):
       if invocation.params.hasIpcData():
         invocation.result = rpcPackIpc(ensureMove value)
       else:

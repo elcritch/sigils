@@ -1,2 +1,2 @@
-when defined(feature.sigils.ipc) and defined(feature.sigils.chronos):
+when defined(features.sigils.ipc) and defined(features.sigils.chronos):
   include ipcBenchmarkCases

@@ -14,7 +14,7 @@ import threadPool
 import threadProxies
 import threadAsyncs
 
-when defined(feature.sigils.chronos):
+when defined(features.sigils.chronos):
   import threadChronos
 
 import threadExtras
@@ -24,7 +24,7 @@ export threadBase
 export threadDefault
 export threadPool
 export threadProxies
-when defined(feature.sigils.chronos):
+when defined(features.sigils.chronos):
   export threadChronos
 export threadExtras
 # export threadAsyncs

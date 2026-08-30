@@ -1,4 +1,4 @@
-when defined(feature.sigils.siwin):
+when defined(features.sigils.siwin):
   import std/unittest
 
   import threading/atomics
@@ -96,7 +96,7 @@ when defined(feature.sigils.siwin):
       checkSchedulerWake(destination.toSigilThread())
       destination.closeSelectorThread()
 
-    when defined(feature.sigils.chronos):
+    when defined(features.sigils.chronos):
       test "the same hook composes with an existing Chronos scheduler":
         let destination = newSigilChronosThread()
         checkSchedulerWake(destination.toSigilThread())

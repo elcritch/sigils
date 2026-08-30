@@ -1,2 +1,2 @@
-when defined(feature.sigils.chronos):
+when defined(features.sigils.chronos):
   include chronosIdleCases
