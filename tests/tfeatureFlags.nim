@@ -5,7 +5,7 @@ import sigils/agents
 suite "compile feature flags":
   test "sigil name string aliases":
     when defined(sigilsSigilNameString) or defined(sigils.sigNameAsString) or
-        defined(feature.sigils.sigNameAsString):
+        defined(features.sigils.sigNameAsString):
       check sigilsSigilNameStringEnabled
       check SigilName is string
       let name = toSigilName("featureName")
@@ -17,7 +17,7 @@ suite "compile feature flags":
 
   test "closure aliases":
     when defined(sigilsClosures) or defined(sigils.closures) or
-        defined(feature.sigils.closures):
+        defined(features.sigils.closures):
       check sigilsClosuresEnabled
       check sigilsSlotEnvEnabled
       check not sigilsSlotEnvDisabled

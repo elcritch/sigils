@@ -25,7 +25,7 @@ when sigilsSigilNameStringEnabled:
 else:
   type SigilName* = StackString[48]
 
-when defined(feature.sigils.ipc):
+when defined(features.sigils.ipc):
   type
     SigilIpcEncodeError* = object of CatchableError ## IPC CBOR encode failure.
     SigilIpcDecodeError* = object of CatchableError ## IPC CBOR decode failure.
@@ -38,10 +38,10 @@ elif sigilsCborSerdeEnabled:
   export cborious
 else:
   import svariant
-  when defined(feature.sigils.ipc):
+  when defined(features.sigils.ipc):
     import cborious
   export svariant
-  when defined(feature.sigils.ipc):
+  when defined(features.sigils.ipc):
     # Cborious serialization generics resolve their packers at instantiation.
     export cborious
 
@@ -54,7 +54,7 @@ type SigilParams* {.acyclic.} = object ## Implementation-specific call payload.
   else:
     payload*: Variant
     cloner*: VariantCloner
-    when defined(feature.sigils.ipc):
+    when defined(features.sigils.ipc):
       ipcData*: string
 
 type
@@ -120,7 +120,7 @@ proc clone*(
         params.payload, deliveryCloneMode(mode)
       )
       result.cloner = params.cloner
-    when defined(feature.sigils.ipc):
+    when defined(features.sigils.ipc):
       result.ipcData = params.ipcData
 
 proc clone*(
@@ -155,7 +155,7 @@ proc rpcPack*[T](res: sink T): SigilParams =
       cloner: clonerFor(T),
     )
 
-when defined(feature.sigils.ipc):
+when defined(features.sigils.ipc):
   proc initIpcParams*(data: sink string): SigilParams =
     ## Build type-erased parameters that generated slots/selectors decode from CBOR.
     when sigilsCborSerdeEnabled:
@@ -203,7 +203,7 @@ proc rpcUnpack*[T](obj: var T, ss: SigilParams) =
     ss.payload.setPosition(0)
     obj = unpack(ss.payload, T)
   else:
-    when defined(feature.sigils.ipc):
+    when defined(features.sigils.ipc):
       if ss.ipcData.len > 0:
         when compiles(cborious.fromCbor("", T)):
           try:

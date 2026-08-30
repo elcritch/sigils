@@ -4,7 +4,7 @@ import threadBase
 
 export threadBase
 
-when defined(feature.sigils.siwin):
+when defined(features.sigils.siwin):
   from siwin/platforms/any/window import
     EventLoopWaker, SiwinGlobals, eventLoopWaker, wake
 

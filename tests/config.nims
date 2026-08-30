@@ -19,7 +19,7 @@
 --passc:
   "-Wno-int-conversion"
 
-when defined(feature.sigils.siwin) and defined(macosx):
+when defined(features.sigils.siwin) and defined(macosx):
   --passc:
     "-Wno-incompatible-function-pointer-types"
   --passc:
