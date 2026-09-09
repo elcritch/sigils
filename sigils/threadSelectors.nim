@@ -113,10 +113,10 @@ method recv*(
 
 method setTimer*(thread: SigilSelectorThreadPtr, timer: SigilTimer) {.gcsafe.} =
   ## Schedule a timer on this selector-backed thread using selector timers.
-  let durMs = max(timer.duration.inMilliseconds(), 1)
+  let durMs = timer.timerMilliseconds()
   let oneshot = (not timer.isRepeat()) and timer.count <= 1
   withLock thread.timerLock:
-    thread.timerHandles[timer] = thread.sel.registerTimer(durMs.int, oneshot, timer)
+    thread.timerHandles[timer] = thread.sel.registerTimer(durMs, oneshot, timer)
 
 proc unregisterTimer(thread: SigilSelectorThreadPtr, timer: SigilTimer, fd: int) =
   withLock thread.timerLock:

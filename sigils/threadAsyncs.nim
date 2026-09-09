@@ -83,7 +83,7 @@ method setTimer*(
       else:
         emit timer.timeout()
         return false
-    asyncdispatch.addTimer(timer.duration.inMilliseconds(), oneshot = false, cb)
+    asyncdispatch.addTimer(timer.timerMilliseconds(), oneshot = false, cb)
   else:
     proc cb(fd: AsyncFD): bool {.closure, gcsafe.} =
       if timer.count == 0 or thread.hasCancelTimer(timer):
@@ -92,9 +92,9 @@ method setTimer*(
       else:
         emit timer.timeout()
         timer.count.dec()
-        asyncdispatch.addTimer(timer.duration.inMilliseconds(), oneshot = true, cb)
+        asyncdispatch.addTimer(timer.timerMilliseconds(), oneshot = true, cb)
         return false
-    asyncdispatch.addTimer(timer.duration.inMilliseconds(), oneshot = true, cb)
+    asyncdispatch.addTimer(timer.timerMilliseconds(), oneshot = true, cb)
 
 proc setupThread*(thread: ptr AsyncSigilThread) =
   if thread[].isReady:

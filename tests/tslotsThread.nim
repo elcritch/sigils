@@ -543,16 +543,19 @@ suite "threaded agent slots":
             emit a.valueChanged(314)
             emit a.valueChanged(271)
 
-            var cnt = 0
-            for i in 1 .. 20:
-              cnt.inc(ct.pollAll())
-              if cnt >= 3:
+            # Control messages can arrive before these two replies. Wait for
+            # the result, with enough time for slower/emulated workers.
+            for attempt in 0 ..< 5_000:
+              discard ct.pollAll()
+              if a.value == 314 + 271:
                 break
               os.sleep(1)
             ct.pollAll()
             check a.value == 314 + 271
             ct.pollAll()
           GC_fullCollect()
+        thread.setRunning(false)
+        thread.join()
       GC_fullCollect()
     GC_fullCollect()
 
@@ -595,5 +598,7 @@ suite "threaded agent slots":
             # check a.value == 271
             ct.pollAll()
           GC_fullCollect()
+        thread.setRunning(false)
+        thread.join()
       GC_fullCollect()
     GC_fullCollect()

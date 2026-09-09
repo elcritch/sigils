@@ -142,6 +142,10 @@ worker for its next call, so store actor state in its fields, rather than in
 thread-local variables. A proxy created inside a pool actor routes its callbacks
 through that actor's queue, preserving the actor's serialization.
 
+Asyncdispatch and selector timer intervals must fit in a native `int` number of
+milliseconds. On 32-bit systems, that is about 24.8 days; longer intervals raise
+`ValueError`. Intervals below one millisecond use a one-millisecond delay.
+
 Keep slots short enough for other queued work to make progress. A slot that waits
 synchronously for a reply needing the same actor or worker can deadlock. Send a
 request, return from the slot, and handle the response in another slot.

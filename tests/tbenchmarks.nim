@@ -28,7 +28,7 @@ Original benchmarks results:
 type
   Emitter* = ref object of Agent
   Counter* = ref object of Agent
-    value: int
+    value: int64
 
 proc bump*(tp: Emitter, val: int) {.signal.}
 
@@ -48,7 +48,7 @@ var
 const n = block:
   when defined(slowbench): 10_000_000
   else: 100_000
-const expectedValue = (n * (n - 1)) div 2
+const expectedValue = (int64(n) * (n - 1)) div 2
 
 suite "benchmarks":
   template runBaseline() =

@@ -7,13 +7,13 @@ import std/monotimes
 type
   Counter* = ref object of Agent
     value: int
-    avg: int
+    avg: int64
 
   Originator* = ref object of Agent
 
   CounterWithDestroy* = ref object of Agent
     value: int
-    avg: int
+    avg: int64
 
 proc `=destroy`*(x: var typeof(CounterWithDestroy()[])) =
   when defined(sigilsDebug):

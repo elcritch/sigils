@@ -314,6 +314,14 @@ template getCurrentSigilThread*(): SigilThreadPtr =
   localSigilThread
 
 ## Timer API
+proc timerMilliseconds*(timer: SigilTimer): int =
+  ## Convert to the native-width interval required by selector/asyncdispatch APIs.
+  ## Intervals below one millisecond become one; oversized intervals raise ValueError.
+  let milliseconds = max(timer.duration.inMilliseconds(), 1)
+  if milliseconds > int64(high(int)):
+    raise newException(ValueError, "timer duration exceeds the native millisecond limit")
+  int(milliseconds)
+
 proc hasCancelTimer*(thread: SigilThreadPtr, timer: SigilTimer): bool =
   timer in thread.toCancel
 
