@@ -2,7 +2,8 @@ import std/[os, osproc, streams, tables, strutils, unittest]
 import threading/atomics
 import sigils
 import sigils/registry
-import sigils/threadSelectors
+when not defined(windows):
+  import sigils/threadSelectors
 
 type
   Source = ref object of Agent
@@ -269,23 +270,26 @@ proc runCase() =
         clientProxy.getRemote()[].peer.inbox.peek()
     doAssert clientReceived.load() == 42, "pool ignored callback proxy readiness"
   of "selector_exception":
-    let worker = newSigilSelectorThread()
-    worker.exceptionHandler = handleExpectedError
-    var counter = Counter()
-    let proxy = counter.moveToThread(worker)
-    let source = Source()
-    connectThreaded(source, ping, proxy, maybeFail)
-    worker.start()
-    emit source.ping(1)
-    emit source.ping(2)
-    for attempt in 0 ..< 2_000:
-      if calls.load() == 1:
-        break
-      sleep(1)
-    doAssert calls.load() == 1
-    doAssert handledErrors.load() == 1
-    worker.stop()
-    worker.join()
+    when not defined(windows):
+      let worker = newSigilSelectorThread()
+      worker.exceptionHandler = handleExpectedError
+      var counter = Counter()
+      let proxy = counter.moveToThread(worker)
+      let source = Source()
+      connectThreaded(source, ping, proxy, maybeFail)
+      worker.start()
+      emit source.ping(1)
+      emit source.ping(2)
+      for attempt in 0 ..< 2_000:
+        if calls.load() == 1:
+          break
+        sleep(1)
+      doAssert calls.load() == 1
+      doAssert handledErrors.load() == 1
+      worker.stop()
+      worker.join()
+    else:
+      quit("selector timers are unavailable on Windows", 2)
   else:
     quit("unknown case", 2)
 
@@ -298,6 +302,9 @@ else:
         "slot_exception", "queued_free",
         "backpressure", "inflight_proxy_free", "pool_reply",
         "selector_exception"]:
+      when defined(windows):
+        if scenario == "selector_exception":
+          continue
       test scenario.replace("_", " "):
         let child = startProcess(getAppFilename(), args = @[scenario],
           options = {poStdErrToStdOut})

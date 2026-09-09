@@ -132,7 +132,7 @@ an existing event loop.
 | --- | --- |
 | `newSigilThread()` | One worker thread processes calls in order. All actors on that scheduler share the worker. |
 | `newSigilThreadPool(workers = 4)` | Several workers can run different actors in parallel. Each actor runs at most one queued call at a time. |
-| `newSigilSelectorThread()` | Integrates messages with selector events and timers. Import `sigils/threadSelectors`. |
+| `newSigilSelectorThread()` | Integrates messages with selector events and timers on POSIX systems. Import `sigils/threadSelectors`. |
 | `AsyncSigilThread` | Integrates with `asyncdispatch`. Import `sigils/threadAsyncs`. |
 | `newSigilChronosThread()` | Integrates with Chronos and sleeps in its dispatcher while idle. Import `sigils/threadChronos`. |
 

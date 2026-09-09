@@ -1,6 +1,7 @@
 import std/[times, unittest]
 import sigils/threadAsyncs
-import sigils/threadSelectors
+when not defined(windows):
+  import sigils/threadSelectors
 
 suite "native timer intervals":
   test "sub-millisecond intervals use a positive delay":
@@ -20,8 +21,9 @@ suite "native timer intervals":
 
       # Rejection must happen before either backend touches its event-loop state.
       var asyncThread: AsyncSigilThread
-      var selectorThread: SigilSelectorThread
       expect ValueError:
         (addr asyncThread).setTimer(timer)
-      expect ValueError:
-        (addr selectorThread).setTimer(timer)
+      when not defined(windows):
+        var selectorThread: SigilSelectorThread
+        expect ValueError:
+          (addr selectorThread).setTimer(timer)
