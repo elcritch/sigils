@@ -2,6 +2,24 @@ import std/[monotimes, os, times, unittest]
 
 import sigils/threadChronos
 
+when defined(windows):
+  import std/winlean
+else:
+  import std/posix
+
+proc processCpuSeconds(): float =
+  # times.cpuTime can measure wall time on Windows or just the calling thread
+  # on Linux. Include the Chronos worker's CPU usage in the idle measurement.
+  when defined(windows):
+    var created, exited, kernel, user: FILETIME
+    doAssert getProcessTimes(getCurrentProcess(), created, exited, kernel,
+        user) != 0
+    result = (rdFileTime(kernel) + rdFileTime(user)).float / 10_000_000.0
+  else:
+    var stamp: Timespec
+    doAssert clock_gettime(CLOCK_PROCESS_CPUTIME_ID, stamp) == 0
+    result = stamp.tv_sec.float + stamp.tv_nsec.float / 1_000_000_000.0
+
 const
   IdleWarmupMilliseconds = 100
   IdleSampleMilliseconds = 750
@@ -19,12 +37,12 @@ suite "Chronos thread idle behavior":
       sleep(IdleWarmupMilliseconds)
 
       let
-        cpuStartedAt = cpuTime()
+        cpuStartedAt = processCpuSeconds()
         wallStartedAt = getMonoTime()
       sleep(IdleSampleMilliseconds)
       idleWallSeconds =
         inNanoseconds(getMonoTime() - wallStartedAt).float / 1_000_000_000.0
-      idleCpuSeconds = cpuTime() - cpuStartedAt
+      idleCpuSeconds = processCpuSeconds() - cpuStartedAt
     finally:
       thread.stop()
       thread.join()

@@ -1,4 +1,4 @@
-import std/[locks, os, sets, unittest]
+import std/[locks, os, unittest]
 import threading/atomics
 
 import sigils
@@ -19,7 +19,9 @@ var inSlot: Atomic[int]
 var maxInSlot: Atomic[int]
 var seenCount: Atomic[int]
 var doneCount: Atomic[int]
-var workerIds: Atomic[int]
+var workerIds: array[8, int]
+var workerCount: int
+var releaseWorkers: Atomic[bool]
 var localValue: Atomic[int]
 var stressLock: Lock
 var stressDone: int
@@ -28,34 +30,44 @@ var stressSum: int
 stressLock.initLock()
 
 proc rememberWorker() =
-  let bit = 1 shl (getThreadId() mod 30)
-  workerIds.store(workerIds.load() or bit)
+  withLock stressLock:
+    let id = getThreadId()
+    for index in 0 ..< workerCount:
+      if workerIds[index] == id:
+        return
+    doAssert workerCount < workerIds.len
+    workerIds[workerCount] = id
+    workerCount.inc()
 
-proc countBits(value: int): int =
-  var bits = value
-  while bits != 0:
-    result.inc(bits and 1)
-    bits = bits shr 1
+proc countWorkers(): int =
+  withLock stressLock:
+    result = workerCount
 
 proc setValue*(self: PoolCounter, value: int) {.slot.} =
-  let now = inSlot.load() + 1
-  inSlot.store(now)
-  if now > maxInSlot.load():
-    maxInSlot.store(now)
+  let now = inSlot.fetchAdd(1) + 1
+  var previous = maxInSlot.load()
+  while previous < now and not maxInSlot.compareExchange(previous, now):
+    discard
   rememberWorker()
   os.sleep(1)
   self.value = value
   seenCount.atomicInc()
-  inSlot.store(inSlot.load() - 1)
+  discard inSlot.fetchSub(1)
   emit self.pong(value)
 
 proc setValueSlow*(self: PoolCounter, value: int) {.slot.} =
-  inSlot.store(inSlot.load() + 1)
+  discard inSlot.fetchAdd(1)
   rememberWorker()
   os.sleep(40)
   self.value = value
   doneCount.atomicInc()
-  inSlot.store(inSlot.load() - 1)
+  discard inSlot.fetchSub(1)
+
+proc waitForRelease(self: PoolCounter, value: int) {.slot.} =
+  rememberWorker()
+  while not releaseWorkers.load():
+    os.sleep(1)
+  doneCount.atomicInc()
 
 proc localDone*(self: PoolCounter, value: int) {.slot.} =
   localValue.store(value)
@@ -79,9 +91,10 @@ suite "thread pool":
     maxInSlot.store(0)
     seenCount.store(0)
     doneCount.store(0)
-    workerIds.store(0)
+    releaseWorkers.store(false)
     localValue.store(0)
     withLock stressLock:
+      workerCount = 0
       stressDone = 0
       stressSum = 0
     startLocalThreadDefault()
@@ -136,7 +149,6 @@ suite "thread pool":
     withLock stressLock:
       check stressDone == TotalActions
       check stressSum == ActorCount * (ActionsPerActor * (ActionsPerActor + 1) div 2)
-    check countBits(workerIds.load()) >= 2
 
     pool.stop()
     pool.join()
@@ -152,15 +164,21 @@ suite "thread pool":
     let proxy1 = counter1.moveToThread(pool)
     let proxy2 = counter2.moveToThread(pool)
 
-    connectThreaded(source1, valueChanged, proxy1, setValueSlow)
-    connectThreaded(source2, valueChanged, proxy2, setValueSlow)
+    connectThreaded(source1, valueChanged, proxy1, waitForRelease)
+    connectThreaded(source2, valueChanged, proxy2, waitForRelease)
 
     emit source1.valueChanged(1)
     emit source2.valueChanged(2)
 
+    # Hold both actors inside their slots so the test requires two workers,
+    # without relying on how quickly the OS schedules a short batch of work.
+    try:
+      waitFor(proc(): bool {.gcsafe.} = countWorkers() == 2)
+      check countWorkers() == 2
+    finally:
+      releaseWorkers.store(true)
     waitFor(proc(): bool {.gcsafe.} = doneCount.load() == 2)
     check doneCount.load() == 2
-    check countBits(workerIds.load()) >= 2
 
     pool.stop()
     pool.join()
@@ -180,7 +198,7 @@ suite "thread pool":
     waitFor(proc(): bool {.gcsafe.} = seenCount.load() == 120)
     check seenCount.load() == 120
     check maxInSlot.load() == 1
-    check countBits(workerIds.load()) >= 1
+    check countWorkers() >= 1
 
     pool.stop()
     pool.join()
