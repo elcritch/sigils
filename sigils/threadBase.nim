@@ -78,9 +78,6 @@ proc `=destroy`*(thread: var SigilThread) =
   # SigilThread
   thread.running.store(false, Relaxed)
 
-proc newSigilChan*(): SigilChan =
-  result = newChan[ThreadSignal](1_000)
-
 proc notifyMessageEnqueued*(thread: SigilThreadPtr) {.inline, gcsafe, raises: [].} =
   ## Scheduler implementation hook called after publishing a destination-queue
   ## message. Registered callbacks run synchronously on the sending thread.
@@ -164,8 +161,11 @@ proc setRunning*(thread: SigilThreadPtr, state: bool, immediate = false) =
 proc gcCollectReferences(thread: SigilThreadPtr) =
   var derefs: HashSet[WeakRef[Agent]]
   for agent in thread.references.keys():
-    if not agent[].hasConnections():
-      derefs.incl(agent)
+    let endpoint = agent[].endpoint()
+    withLock endpoint[].lock:
+      if endpoint[].handles == 0 and not agent[].hasConnections():
+        endpoint[].alive.store(false, Release)
+        derefs.incl(agent)
 
   for agent in derefs:
     debugPrint "\tderef cleanup: ", agent.unsafeWeakRef()
@@ -181,7 +181,7 @@ proc exec*(thread: SigilThreadPtr, sig: sink ThreadSignal) {.gcsafe.} =
   of Move:
     debugPrint "\t threadExec:move: ",
       $sig.item.unsafeWeakRef(), " refcount: ", $sig.item.unsafeGcCount()
-    var item = sig.item
+    var item = move sig.item
     thread.references[item.unsafeWeakRef()] = move item
   of AddSub:
     debugPrint "\t threadExec:subscribe: ",
@@ -215,45 +215,39 @@ proc exec*(thread: SigilThreadPtr, sig: sink ThreadSignal) {.gcsafe.} =
                                             " src: " & $sig.del.src &
                                             " to " & $sig.del.tgt)
     thread.gcCollectReferences()
+  of Release:
+    thread.gcCollectReferences()
   of Deref:
     debugPrint "\t threadExec:deref: ", $sig.deref.unsafeWeakRef()
     if thread.references.contains(sig.deref):
       debugPrint "\t threadExec:run:deref: ", $sig.deref.unsafeWeakRef()
+      sig.deref[].closeEndpoint()
       thread.references.del(sig.deref)
     withLock thread.signaledLock:
       thread.signaled.excl(cast[WeakRef[AgentActor]](sig.deref))
     thread.gcCollectReferences()
   of Call:
-    debugPrint "\t threadExec:call: ", $sig.tgt[].getSigilId()
-    # for item in thread.references.items():
-    #   debugPrint "\t threadExec:refcheck: ", $item.getSigilId(), " rc: ", $item.unsafeGcCount()
-    when defined(sigilsDebug) or defined(debug):
-      if sig.tgt[].freedByThread != 0:
-        echo "exec:call:sig.tgt[].freedByThread:thread: ", $sig.tgt[].freedByThread
-        echo "exec:call:sig.req: ", sig.req.repr
-        echo "exec:call:thr: ", $getThreadId()
-        echo "exec:call: ", $sig.tgt[].getSigilId()
-        echo "exec:call:isUnique: ", sig.tgt[].isUniqueRef
-        # echo "exec:call:has: ", sig.tgt[] in getCurrentSigilThread()[].references
-        # discard c_raise(11.cint)
-      assert sig.tgt[].freedByThread == 0
-    {.cast(gcsafe).}:
-      let res = sig.tgt[].callMethod(ensureMove(sig.req), sig.slot)
-    debugPrint "\t threadExec:tgt: ",
-      $sig.tgt[].getSigilId(), " rc: ", $sig.tgt[].unsafeGcCount()
+    if sig.endpoint.isNil or sig.endpoint.isAlive:
+      {.cast(gcsafe).}:
+        discard sig.tgt[].callMethod(ensureMove(sig.req), sig.slot)
   of Trigger:
     debugPrint "Triggering"
     var signaled: HashSet[WeakRef[AgentActor]]
     withLock thread.signaledLock:
       signaled = move thread.signaled
-    {.cast(gcsafe).}:
-      for signaled in signaled:
-        debugPrint "triggering: ", signaled
+    var remaining = signaled
+    try:
+      for actor in signaled:
         var sig: ThreadSignal
-        debugPrint "triggering:inbox size: ", $signaled[].inbox.peek()
-        while signaled[].inbox.tryRecv(sig):
-          debugPrint "\t threadExec:tgt: ", $sig.tgt, " rc: ", $sig.tgt[].unsafeGcCount()
-          let res = sig.tgt[].callMethod(move(sig.req), sig.slot)
+        while actor[].inbox.tryRecv(sig):
+          thread.exec(move(sig))
+        remaining.excl(actor)
+    finally:
+      if remaining.len > 0:
+        withLock thread.signaledLock:
+          for actor in remaining:
+            thread.signaled.incl(actor)
+        thread.send(ThreadSignal(kind: Trigger))
 
 proc runForever*(thread: SigilThreadPtr) {.gcsafe.} =
   emit thread.agent.started()
@@ -342,3 +336,23 @@ proc start*(timer: SigilTimer, ct: SigilThreadPtr = getCurrentSigilThread()) =
 
 proc cancel*(timer: SigilTimer, ct: SigilThreadPtr = getCurrentSigilThread()) =
   ct.cancelTimer(timer)
+
+# The current actor is distinct from the current scheduler in a worker pool.
+var executingActor* {.threadvar.}: AgentEndpoint
+
+proc dispatchActor(endpoint: AgentEndpoint, req: sink SigilRequest,
+    slot: AgentProc): SigilResponse {.gcsafe.} =
+  if not endpoint.isAlive:
+    return
+  let scheduler = cast[SigilThreadPtr](endpoint[].scheduler)
+  if getCurrentSigilThread() == scheduler and
+      (executingActor.isNil or executingActor[].target == endpoint[].target):
+    {.cast(gcsafe).}:
+      return endpoint[].target[].callMethod(ensureMove(req), slot)
+  scheduler.send(ThreadSignal(kind: Call, tgt: endpoint[].target,
+    endpoint: endpoint, req: ensureMove(req), slot: slot))
+
+proc attachActor*(thread: SigilThreadPtr, actor: Agent) =
+  let endpoint = actor.endpoint()
+  endpoint[].scheduler = cast[pointer](thread)
+  endpoint[].dispatch = dispatchActor

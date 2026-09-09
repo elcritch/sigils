@@ -1,7 +1,9 @@
 import std/locks
 import threading/channels
+import mailboxes
 
 import agents
+export mailboxes
 
 type
   ThreadSignalKind* {.pure.} = enum
@@ -11,6 +13,7 @@ type
     DelSub
     Trigger
     Deref
+    Release
     Exit
 
   ThreadSignal* = object
@@ -19,6 +22,7 @@ type
       slot*: AgentProc
       req*: SigilRequest
       tgt*: WeakRef[Agent]
+      endpoint*: AgentEndpoint
     of Move:
       item*: Agent
     of AddSub:
@@ -27,7 +31,7 @@ type
       del*: ThreadSub
     of Trigger:
       discard
-    of Deref:
+    of Deref, Release:
       deref*: WeakRef[Agent]
     of Exit:
       discard
@@ -38,7 +42,14 @@ type
     tgt*: WeakRef[Agent]
     fn*: AgentProc
 
-  SigilChan* = Chan[ThreadSignal]
+  SigilChan* = Mailbox[ThreadSignal]
+
+proc newSigilChan*(capacity = 1_000): SigilChan =
+  newMailbox[ThreadSignal](capacity)
+
+proc prepareDelivery*(msg: var ThreadSignal) =
+  if msg.kind == Call and msg.endpoint.isNil and not msg.tgt.isNil:
+    msg.endpoint = msg.tgt[].endpoint()
 
 type
   AgentActor* = ref object of Agent
@@ -46,12 +57,24 @@ type
     lock*: Lock
     ready*: bool
 
+proc `=destroy`*(actor: var typeof(AgentActor()[])) =
+  `=destroy`(toAgentObj(cast[AgentActor](addr actor)))
+  `=destroy`(actor.inbox)
+  if actor.ready:
+    deinitLock(actor.lock)
+
 proc ensureActorReady*(self: AgentActor, inbox = 1_000) =
   ## Lazily initialize AgentActor synchronization/storage.
   if not self.ready:
-    self.inbox = newChan[ThreadSignal](inbox)
+    discard self.endpoint()
+    self.inbox = newSigilChan(inbox)
     self.lock.initLock()
     self.ready = true
+
+method hasConnections*(self: AgentActor): bool {.gcsafe, raises: [].} =
+  self.ensureActorReady()
+  withLock self.lock:
+    result = procCall hasConnections(Agent(self))
 
 method removeSubscriptionsFor*(
     self: AgentActor, subscriber: WeakRef[Agent]
@@ -96,10 +119,12 @@ method hasSubscription*(
     result = procCall hasSubscription(Agent(obj), sig, subscription)
 
 method addListener*(obj: AgentActor, tgt: WeakRef[Agent]) {.gcsafe, raises: [].} =
+  obj.ensureActorReady()
   withLock obj.lock:
     obj.listening.incl(tgt)
 
 method delListener*(obj: AgentActor, tgt: WeakRef[Agent]) {.gcsafe, raises: [].} =
+  obj.ensureActorReady()
   withLock obj.lock:
     obj.listening.excl(tgt)
 
@@ -115,6 +140,7 @@ method addSubscription*(
       subscription.envSlot != nil
 
   var added = false
+  let subscription = subscription.prepareSubscription()
   withLock obj.lock:
     if addSubscriptionSorted(obj.subcriptions, sig, subscription):
       added = true
@@ -142,12 +168,37 @@ method delSubscription*(
 ) {.gcsafe, raises: [].} =
   self.ensureActorReady()
 
+  var removed = false
+  var stillListening = false
   withLock self.lock:
-    procCall delSubscription(Agent(self), sig, tgt, slot)
+    for idx in countdown(self.subcriptions.high, 0):
+      let item = self.subcriptions[idx]
+      if item.signal == sig and item.subscription.tgt == tgt and
+          (slot.isNil or item.subscription.packedSlot == slot):
+        item.subscription.invalidateConnectionState()
+        self.subcriptions.delete(idx)
+        removed = true
+    for item in self.subcriptions:
+      if item.subscription.tgt == tgt:
+        stillListening = true
+  if removed and not stillListening:
+    tgt[].delListener(self.unsafeWeakRef().asAgent())
 
 method delSubscription*(
     self: AgentActor, sig: SigilName, subscription: Subscription
 ) {.gcsafe, raises: [].} =
   self.ensureActorReady()
+  var removed = false
+  var stillListening = false
   withLock self.lock:
-    procCall delSubscription(Agent(self), sig, subscription)
+    for idx in countdown(self.subcriptions.high, 0):
+      let item = self.subcriptions[idx]
+      if item.signal == sig and item.subscription.sameSubscription(subscription):
+        item.subscription.invalidateConnectionState()
+        self.subcriptions.delete(idx)
+        removed = true
+    for item in self.subcriptions:
+      if item.subscription.tgt == subscription.tgt:
+        stillListening = true
+  if removed and not stillListening:
+    subscription.tgt[].delListener(self.unsafeWeakRef().asAgent())

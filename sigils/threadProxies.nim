@@ -27,24 +27,26 @@ proc `=destroy`*(obj: var typeof(AgentProxyShared()[])) =
   else:
     let pt: WeakRef[pointer] = WeakRef[pointer](pt: cast[pointer](addr obj))
     let agent = cast[WeakRef[AgentActor]](pt)
-  debugPrint "PROXY Destroy: ", cast[AgentProxyShared](addr(obj)).unsafeWeakRef()
+  let remoteEndpoint =
+    if obj.delivery.isNil: default(AgentEndpoint)
+    else: obj.delivery[].remote
   `=destroy`(toAgentObj(cast[AgentProxyShared](addr obj)))
-
   if not obj.homeThread.isNil:
     withLock obj.homeThread[].signaledLock:
       obj.homeThread[].signaled.excl(agent)
-
-  try:
-    if not obj.remoteThread.isNil:
-      obj.remoteThread.send(ThreadSignal(kind: Deref,
-          deref: agent.toKind(Agent)))
-  except Exception:
-    echo "error sending deref message for proxy"
-
-  `=destroy`(obj.remoteThread)
-  `=destroy`(obj.homeThread)
+  if not remoteEndpoint.isNil:
+    withLock remoteEndpoint[].lock:
+      dec remoteEndpoint[].handles
+    try:
+      if not obj.remoteThread.isNil:
+        obj.remoteThread.send(ThreadSignal(kind: Release,
+          deref: obj.remote.toKind(Agent)))
+    except Exception:
+      discard
+  `=destroy`(obj.inbox)
   `=destroy`(obj.forwarded)
-  `=destroy`(obj.lock) # careful on this one -- should probably figure out a test
+  if obj.ready:
+    deinitLock(obj.lock)
 
 proc getRemote*[T](proxy: AgentProxy[T]): WeakRef[T] =
   proxy.remote.toKind(T)
@@ -62,17 +64,18 @@ proc hasLocalSignal*(proxy: AgentProxyShared, sig: SigilName): bool {.gcsafe,
       return true
 
 template removeForwarded(proxy: AgentProxyShared, sigs: untyped) =
+  var removed: seq[SigilName]
   withLock proxy.lock:
     for sig in sigs:
-      if sig notin proxy.forwarded:
-        continue
-      if proxy.hasLocalSignal(sig):
-        continue
-      proxy.forwarded.excl(sig)
+      if sig in proxy.forwarded and not proxy.hasLocalSignal(sig):
+        proxy.forwarded.excl(sig)
+        removed.add(sig)
   let proxyRef = proxy.unsafeWeakRef().asAgent()
-  for sig in sigs:
-    if proxy.forwardingReady and not proxy.remote.isNil:
-      proxy.remote[].delSubscription(sig, proxyRef, localSlot)
+  let remoteEndpoint = proxy.delivery[].remote
+  withLock remoteEndpoint[].lock:
+    if proxy.forwardingReady and remoteEndpoint.isAlive:
+      for sig in removed:
+        proxy.remote[].delSubscription(sig, proxyRef, localSlot)
 
 proc ensureForwarded(proxy: AgentProxyShared, sig: SigilName) {.gcsafe,
     raises: [].} =
@@ -82,8 +85,10 @@ proc ensureForwarded(proxy: AgentProxyShared, sig: SigilName) {.gcsafe,
     if sig in proxy.forwarded:
       return
     proxy.forwarded.incl(sig)
-  if not proxy.remote.isNil:
-    proxy.remote[].addSubscription(sig, proxy, localSlot)
+  let remoteEndpoint = proxy.delivery[].remote
+  withLock remoteEndpoint[].lock:
+    if remoteEndpoint.isAlive:
+      proxy.remote[].addSubscription(sig, proxy, localSlot)
 
 method hasConnections*(proxy: AgentProxyShared): bool {.gcsafe, raises: [].} =
   withLock proxy.lock:
@@ -112,45 +117,35 @@ method delSubscription*(
   procCall delSubscription(AgentActor(self), sig, tgt, slot)
   self.removeForwarded([sig])
 
+proc dispatchProxy(endpoint: AgentEndpoint, req: sink SigilRequest,
+    slot: AgentProc): SigilResponse {.gcsafe.} =
+  if not endpoint.isAlive:
+    return
+  let home = cast[SigilThreadPtr](endpoint[].scheduler)
+  if getCurrentSigilThread() == home and
+      (endpoint[].owner.isNil or (not executingActor.isNil and
+       executingActor[].target == endpoint[].owner[].target)):
+    {.cast(gcsafe).}:
+      return endpoint[].target[].callMethod(ensureMove(req), slot)
+  home.send(ThreadSignal(kind: Call, tgt: endpoint[].target,
+    endpoint: endpoint, req: ensureMove(req), slot: slot))
+
 method callMethod*(
     proxy: AgentProxyShared, req: sink SigilRequest, slot: AgentProc
 ): SigilResponse {.gcsafe, effectsOf: slot.} =
-  ## Route's an rpc request.
-  debugPrint "callMethod: proxy: ",
-    $proxy.unsafeWeakRef().asAgent(),
-    " refcount: ",
-    proxy.unsafeGcCount(),
-    " slot: ",
-    repr(slot)
+  let endpoint = proxy.delivery
   let ct = getCurrentSigilThread()
-  if not proxy.homeThread.isNil and ct != proxy.homeThread:
-    var msg = isolateRuntime ThreadSignal(
-      kind: Call, slot: slot, req: ensureMove(req),
-      tgt: proxy.unsafeWeakRef().asAgent()
-    )
-    when defined(sigilsDebug) or defined(debug):
-      assert proxy.freedByThread == 0
-    when defined(sigilNonBlockingThreads):
-      discard
-    else:
-      proxy.inbox.send(msg)
-      proxy.homeThread.markReady(proxy.unsafeWeakRef().toKind(AgentActor))
-    return
-
+  if ct != proxy.homeThread or
+      (not endpoint[].owner.isNil and (executingActor.isNil or
+       executingActor[].target != endpoint[].owner[].target)):
+    return dispatchProxy(endpoint, ensureMove(req), slot)
   if slot == localSlot or slot == remoteSlot:
-    debugPrint "\t proxy:callMethod:directSlot: "
     proxy.callSlots(ensureMove(req))
   else:
-    debugPrint "\t callMethod:agentProxy:InitCall:Outbound: ",
-      req.procName, " proxy:remote:obj: ", proxy.remote.getSigilId()
-    var msg = isolateRuntime ThreadSignal(
-      kind: Call, slot: slot, req: ensureMove(req), tgt: proxy.remote.toKind(Agent)
-    )
-    when defined(sigilNonBlockingThreads):
-      discard
-    else:
-      proxy.remote[].inbox.send(msg)
-      proxy.remoteThread.markReady(proxy.remote)
+    let remote = endpoint[].remote
+    if remote.isAlive:
+      proxy.remoteThread.send(ThreadSignal(kind: Call, slot: slot,
+        req: ensureMove(req), tgt: remote[].target, endpoint: remote))
 
 method removeSubscriptionsFor*(
     self: AgentProxyShared, subscriber: WeakRef[Agent]
@@ -186,10 +181,20 @@ proc initProxy*[T](proxy: var AgentProxy[T],
     homeThread: getCurrentSigilThread(),
     forwarded: initHashSet[SigilName](),
     forwardingReady: forwardingReady,
-    inbox: newChan[ThreadSignal](inbox),
+    inbox: newSigilChan(inbox),
   )
   proxy.lock.initLock()
   proxy.ready = true
+  let endpoint = proxy.endpoint()
+  let remoteEndpoint = agent[].endpoint()
+  withLock remoteEndpoint[].lock:
+    if not remoteEndpoint.isAlive:
+      raise newException(ValueError, "remote actor is closed")
+    inc remoteEndpoint[].handles
+  endpoint[].scheduler = cast[pointer](proxy.homeThread)
+  endpoint[].remote = remoteEndpoint
+  endpoint[].owner = executingActor
+  endpoint[].dispatch = dispatchProxy
   when defined(sigilsDebug):
     proxy.debugName = "proxy::" & agent.debugName
 
@@ -262,6 +267,9 @@ proc moveToThread*[T: AgentActor, R: SigilThread](
     )
     hasSubs = true
 
+  thread.toSigilThread().attachActor(agentTy)
+  when defined(gcOrc):
+    GC_runOrc()
   thread.send(ThreadSignal(kind: Move, item: move agentTy))
 
   return localProxy

@@ -21,7 +21,8 @@ var registry: Table[SigilName, AgentLocation]
 var regLock: Lock
 regLock.initLock()
 
-type ProxyCacheKey = tuple[thread: SigilThreadPtr, agent: WeakRef[AgentActor]]
+type ProxyCacheKey = tuple[thread: SigilThreadPtr, agent: WeakRef[AgentActor],
+  owner: pointer]
 
 var proxyCache {.threadVar.}: Table[ProxyCacheKey, AgentProxyShared]
 
@@ -113,7 +114,13 @@ proc removeGlobalName*[T](name: SigilName, proxy: AgentProxy[
                             name: sn"sigils:registryKeepAlive",
                             tgt: proxy.remote.toKind(Agent),
                             fn: keepAlive)
-        loc.thread.send(ThreadSignal(kind: DelSub, del: sub))
+        registry.del(name)
+        var stillRegistered = false
+        for other in registry.values:
+          if other.thread == loc.thread and other.agent == loc.agent:
+            stillRegistered = true
+        if not stillRegistered:
+          loc.thread.send(ThreadSignal(kind: DelSub, del: sub))
         return true
       return false
 
@@ -130,7 +137,10 @@ proc lookupAgentProxyImpl[T](name: SigilName, location: AgentLocation,
   if location.thread.isNil or location.agent.isNil:
     raise newException(KeyError, "could not find agent")
 
-  let key: ProxyCacheKey = (location.thread, location.agent)
+  let owner =
+    if executingActor.isNil: nil
+    else: cast[pointer](addr executingActor[])
+  let key: ProxyCacheKey = (location.thread, location.agent, owner)
   if key in proxyCache:
     let cached = proxyCache[key]
     if not cached.isNil:

@@ -1,211 +1,245 @@
-# Sigils Threading
+# Threading with Sigils
 
-Sigils uses message passing to keep agent state owned by one scheduler at a
-time. A moved agent is not shared between threads. The original ref is moved
-into the destination scheduler, and the caller keeps an `AgentProxy[T]` that
-knows how to send work to the real agent.
+Use Sigils threading when you want an agent to do work in the background and
+send results back to your application. Each moved agent belongs to a scheduler,
+which runs its slots. Your application keeps a **proxy**: a local handle that
+sends messages to that agent.
 
-That design gives the important safety rule:
+The basic flow is:
 
-> Agent methods run on the scheduler that owns the real agent. Other threads
-> talk to that agent through messages and proxies.
+1. Create an `AgentActor` and a worker scheduler.
+2. Move the actor to the worker with `moveToThread`.
+3. Connect signals and slots through the returned `AgentProxy` using
+   `connectThreaded`.
+4. Process the local scheduler's queue to receive replies.
 
-This document focuses on the core mechanics: `AgentProxy`, `Move`, `Deref`,
-per-agent inboxes, and the lifetime rules that keep cross-thread calls safe.
+## A complete example
 
-## The Main Pieces
-
-- `AgentActor` is an agent with a mailbox (`inbox`) and a lock around its
-  subscription lists.
-- `SigilThread` is the scheduler base type. It owns moved agents in
-  `references: Table[WeakRef[Agent], Agent]`.
-- `SigilThreadDefault` is the normal one-worker scheduler. It receives
-  `ThreadSignal`s on `inputs` and executes them serially in `runForever()`.
-- `SigilThreadPool` is a cooperative worker pool. It is still a `SigilThread`,
-  but it leases one actor at a time so one actor is never run by two workers at
-  once.
-- `AgentProxy[T]` is the local handle returned by `moveToThread`. It has:
-  `remote`, `remoteThread`, `homeThread`, and a local subscription list.
-- `ThreadSignal` is the scheduler message type. The important variants are
-  `Move`, `Call`, `Trigger`, `Deref`, `AddSub`, `DelSub`, and `Exit`.
-
-The thread-local current scheduler is available through
-`getCurrentSigilThread()`. Worker threads set this automatically. A main thread
-that receives callbacks from workers must poll its local scheduler with
-`poll()` or `pollAll()`.
-
-## Ownership Model
-
-Moving an agent is a transfer of the strong ref. After `moveToThread`, caller
-code should treat the original variable as gone and use only the returned proxy.
-
-![Move transfers ownership and leaves a proxy behind](assets/threading-move.svg)
-
-The move is implemented by `moveToThread(agent, thread)`:
-
-1. It requires the agent ref to be unique. If the ref is still shared,
-   `moveToThread` raises instead of creating a cross-thread GC alias.
-2. It creates an `AgentProxy[T]` on the current thread.
-3. It rewrites subscriptions so local callers target the proxy and remote
-   signals can be forwarded back to local listeners.
-4. It sends `ThreadSignal(kind: Move, item: move agent)` to the destination.
-5. The destination scheduler stores the moved strong ref in `references`.
-
-The proxy keeps only weak identity for the real agent. The scheduler owns the
-strong ref.
-
-## How A Proxy Sends A Call
-
-A proxy does not call the real agent directly. It packages the slot call as a
-`ThreadSignal(Call)`, puts it in the target actor inbox, and asks the remote
-scheduler to make that actor ready.
-
-![Local proxy sends a call to a remote agent](assets/threading-proxy-call.svg)
-
-For `SigilThreadDefault`, `markReady` records the actor in `signaled` and
-sends `Trigger`. When the scheduler receives `Trigger`, it drains each signaled
-actor inbox and runs the calls serially.
-
-For `SigilThreadPool`, `markReady` puts the actor identity in the pool ready
-queue. A worker leases that actor, runs one call, releases the lease, and
-requeues the actor if more inbox work is waiting. That is what allows many
-actors to run in parallel while preserving single-actor serialization.
-
-## Signals Back To The Home Thread
-
-Remote-to-local delivery uses the same proxy in the opposite direction. When a
-remote agent emits a signal that has local subscribers, the remote agent's
-subscription points at the proxy with the sentinel `localSlot`. Calling that
-proxy from the remote scheduler means "send this back to the proxy's home
-thread."
-
-![Remote signal returns through the proxy home thread](assets/threading-return-signal.svg)
-
-This is why local threads need a scheduler too. If the home thread is a UI or
-main thread, call `getCurrentSigilThread().pollAll()` at appropriate points to
-deliver callbacks.
-
-## Lifetime And Cleanup
-
-The scheduler's `references` table is the strong owner for moved agents. Cross
-thread queues and proxies should carry weak identities and isolated request
-payloads, not long-lived strong refs.
-
-![Move and Deref lifetime flow](assets/threading-lifetime.svg)
-
-`Deref` is a scheduler message, not a direct free from another thread. Its
-meaning is:
-
-- If the scheduler owns a strong ref for that identity, remove it from
-  `references`.
-- Clear stale readiness/signaled state for that identity.
-- Run cleanup that prunes owned agents which no longer have connections.
-- In `SigilThreadPool`, if the actor is currently leased by a worker, mark it
-  `closing` and release the strong ref only after the slot returns.
-
-That last point is important. A worker must never run a slot through a weak ref
-after the scheduler has released the strong owner. The pool separates logical
-close (`closing = true`) from physical release (`references.del(...)`) so
-`Deref` cannot free a currently executing actor.
-
-Global registration is another lifetime case. The registry installs a
-keep-alive subscription with `AddSub` and removes it with `DelSub`. That keeps a
-registered remote agent alive even if a local proxy is short-lived.
-
-## Subscription Rewriting
-
-`moveToThread` also rewrites existing connections so later signal delivery goes
-through the proxy:
-
-- If other agents listened to the moved agent, they now listen to the local
-  proxy.
-- If the moved agent listened to other local agents, those local agents now call
-  the proxy, which forwards to the remote agent.
-- When local code subscribes to a signal on the proxy, the proxy ensures the
-  remote agent has a forwarding subscription back to the proxy using
-  `localSlot`.
-
-The proxy's local subscription list is therefore the stable API surface. Users
-connect to the proxy; the proxy arranges the cross-thread forwarding details.
-
-## Default Thread vs Thread Pool
-
-Both schedulers implement the same `SigilThread` API, so `moveToThread` and
-`AgentProxy` work with either one.
-
-`SigilThreadDefault`:
-
-- One OS thread owns all moved agents for that scheduler.
-- `Trigger` drains every signaled actor inbox serially.
-- It is simple and predictable: no two slots on that scheduler run at once.
-
-`SigilThreadPool`:
-
-- Several OS workers share one scheduler state and one ownership table.
-- The ready queue contains actor identities, not individual calls.
-- A worker leases one actor, executes one call, releases it, and requeues the
-  actor if more work exists.
-- The same actor is never leased by two workers at the same time.
-- Different actors can run on different workers in parallel.
-
-## Practical Example
+Here the application asks a background counter to change its value. The counter
+sends the new value back, and the application waits until it receives that reply.
+`setValue` runs on the worker; `record` runs on the main thread.
 
 ```nim
 import sigils
 import sigils/threads
 
+type
+  App = ref object of Agent
+    received: bool
+    value: int
+  Counter = ref object of AgentActor
+    value: int
+
+proc changeRequested(self: App, value: int) {.signal.}
+proc updated(self: Counter, value: int) {.signal.}
+
+proc setValue(self: Counter, value: int) {.slot.} =
+  self.value = value
+  emit self.updated(value)
+
+proc record(self: App, value: int) {.slot.} =
+  self.value = value
+  self.received = true
+
+startLocalThreadDefault()
+let home = getCurrentSigilThread()
 let worker = newSigilThread()
 worker.start()
 
-let home = getCurrentSigilThread()
+try:
+  # This scope releases the proxy before we stop the worker.
+  block:
+    let app = App()
+    var counter = Counter()
+    let proxy = counter.moveToThread(worker)
 
-var source = SomeAction.new()
-var counter = Counter.new()
-let counterProxy = counter.moveToThread(worker)
+    connectThreaded(app, changeRequested, proxy, setValue)
+    connectThreaded(proxy, updated, app, App.record())
 
-connectThreaded(source, valueChanged, counterProxy, setValue)
-connectThreaded(counterProxy, updated, source, SomeAction.completed())
+    emit app.changeRequested(42)
 
-emit source.valueChanged(42)
-
-# Required if this thread receives callbacks from the worker.
-discard home.pollAll()
-
-worker.setRunning(false)
-worker.join()
+    # Wait for the reply, running local callbacks as they arrive.
+    while not app.received:
+      discard home.poll()
+    doAssert app.value == 42
+finally:
+  worker.setRunning(false)
+  worker.join()
 ```
 
-After `moveToThread`, use `counterProxy` for all cross-thread connections. Do
-not keep using the moved `counter` ref on the source thread.
+Save this as `threading_example.nim` in an Atlas project with Sigils installed,
+then compile and run it with `nim c -r --mm:arc --threads:on threading_example.nim`.
+ORC is supported too.
 
-## Safety Checklist
+Sending a signal queues work; it does not wait for the remote slot to finish.
+The loop above waits for an application-level reply before checking the result
+and stopping the worker. If your worker might fail to reply, use a timeout or an
+error signal in your application's wait logic.
 
-- Move only unique refs. `moveToThread` enforces this with `isUniqueRef`.
-- Treat the returned `AgentProxy[T]` as the handle to the remote agent.
-- Use `connectThreaded` for cross-thread signals and slots.
-- Keep signal payloads thread-safe. Cross-thread `ThreadSignal`s are isolated
-  with `isolateRuntime`.
-- Poll the home scheduler when it needs to receive callbacks.
-- Stop and join worker schedulers in tests and short-lived programs.
-- Use the registry keep-alive helpers when a remote agent must outlive one local
-  proxy.
+## Moving an actor transfers ownership
 
-## Things To Avoid
+An `AgentActor` is an agent that can be moved to a worker. After
+`counter.moveToThread(worker)`, use the returned proxy to talk to the counter.
+The worker now owns the counter's state; reading or calling the original actor
+from another thread would bypass the message queue.
 
-- Do not call methods on the moved agent ref after `moveToThread`.
-- Do not store strong moved-agent refs in worker-local queues. Queue weak actor
-  identities and let the scheduler's `references` table own the agent.
-- Do not assume `Deref` is an immediate cross-thread destructor. It is a
-  scheduler request and may be deferred until a running slot finishes.
-- Do not forget to pump the home thread when expecting remote-to-local signals.
+The actor must have a unique strong reference when it is moved. For example,
+keeping another `let saved = counter` reference prevents the move. Sigils checks
+this and raises `AccessViolationDefect` if the actor itself is shared. Shared
+refs inside the actor can also prevent transfer and raise `IsolationError`.
+Existing signal connections are redirected through the proxy during the move.
 
-## Related Files
+The proxy belongs to the scheduler where it was created, its **home scheduler**.
+Connect to it there. To obtain a handle on another scheduler, use the registry
+helpers rather than sharing the same proxy ref across threads.
 
-- `sigils/threadBase.nim`: scheduler base type, `ThreadSignal`, `Move`,
-  `Deref`, `markReady`, polling, and default execution logic.
-- `sigils/threadDefault.nim`: one-thread scheduler implementation.
-- `sigils/threadPool.nim`: cooperative worker pool scheduler.
-- `sigils/threadProxies.nim`: `AgentProxy`, `moveToThread`, and
-  `connectThreaded`.
-- `sigils/actors.nim`: `AgentActor` inbox and subscription locking.
-- `tests/tslotsThread.nim` and `tests/tthreadPool.nim`: examples and coverage.
+Message arguments also need safe ownership. Prefer values such as numbers,
+strings, and value objects. Do not use a message to share a mutable agent or an
+ordinary `ref` between threads. Heap payloads must be independently owned or
+explicitly transferred using the isolation helpers; isolation is checked when a
+message crosses the thread boundary.
+
+## Receiving replies: `poll` and `pollAll`
+
+A worker runs its own message loop after `start()`. Your main thread usually has
+other work to do, so its local scheduler needs to be serviced by your code.
+`startLocalThreadDefault()` installs that scheduler without starting another OS
+thread.
+
+For the default local scheduler:
+
+| Call | What it does | When to use it |
+| --- | --- | --- |
+| `home.poll()` | Waits for a message, then processes it. | A command-line program waiting for a result. |
+| `home.pollAll()` | Processes queued messages until the queue is empty, then returns. | An application loop that also handles other work. |
+
+**One call to `pollAll()` does not wait for a future reply.** It can return before
+the worker has even started your request. Check an application-level completion
+condition, as in the example, instead of assuming that an empty local queue means
+the worker has finished.
+
+In a GUI, call `pollAll()` from the application thread when the event loop wakes.
+The [Siwin example](../README.md#siwin-application-loop) shows how to wake the
+application when a Sigils message arrives. Avoid a tight loop that repeatedly
+calls `pollAll()` while idle; use a blocking wait or an event-loop wakeup.
+
+## Choosing a scheduler
+
+Start with `newSigilThread()` unless you need parallel actors or integration with
+an existing event loop.
+
+| Scheduler | How it runs work |
+| --- | --- |
+| `newSigilThread()` | One worker thread processes calls in order. All actors on that scheduler share the worker. |
+| `newSigilThreadPool(workers = 4)` | Several workers can run different actors in parallel. Each actor runs at most one queued call at a time. |
+| `newSigilSelectorThread()` | Integrates messages with selector events and timers. Import `sigils/threadSelectors`. |
+| `AsyncSigilThread` | Integrates with `asyncdispatch`. Import `sigils/threadAsyncs`. |
+| `newSigilChronosThread()` | Integrates with Chronos and sleeps in its dispatcher while idle. Import `sigils/threadChronos`. |
+
+A pool does not make one actor's slots run in parallel. Split independent work
+among several actors to use multiple workers. An actor can run on a different
+worker for its next call, so store actor state in its fields, rather than in
+thread-local variables. A proxy created inside a pool actor routes its callbacks
+through that actor's queue, preserving the actor's serialization.
+
+Keep slots short enough for other queued work to make progress. A slot that waits
+synchronously for a reply needing the same actor or worker can deadlock. Send a
+request, return from the slot, and handle the response in another slot.
+
+## Queue growth and overload
+
+Ordinary sends enqueue messages without waiting for spare queue capacity. The
+queue grows when needed. This avoids a request/reply deadlock where the caller
+is stuck sending requests while the worker is stuck sending replies.
+
+This also means **queue capacity is not a memory limit for ordinary sends**. If a
+producer continually runs faster than its consumer, queued work and memory use
+will grow. Limit outstanding requests, send work in batches after acknowledgments,
+or coalesce repeated updates when only the latest value matters.
+
+For code that sends `ThreadSignal` messages directly, the `NonBlocking` send
+option applies the mailbox's admission limit and raises `MessageQueueFullError`
+when it is full. The internal mailbox's `trySend` returns `false` instead. Normal
+`connectThreaded` emissions use ordinary sends; they do not opt into this limit.
+Neither mode waits for the receiving slot to finish, and both synchronize queue
+access with a lock.
+
+## Lifetime and shutdown
+
+Keep a proxy alive for as long as you need its remote actor. Even a proxy used
+only to send requests keeps the actor alive. Dropping one proxy does not
+invalidate other handles to the same actor.
+
+Once the last proxy is gone, the scheduler can collect the actor if it has no
+remaining connections. Global registration can keep an actor available without
+a local proxy; removing one name leaves other names for that actor intact. See
+[`registry.nim`](../sigils/registry.nim) for registration and lookup helpers.
+
+Queued calls do not keep their receiver alive. If a local receiver or proxy is
+destroyed before a queued call runs, that delivery is discarded. This applies to
+`connectQueued` as well as cross-thread delivery. Keep receivers alive until you
+have received the results you care about.
+
+For an orderly shutdown:
+
+1. Stop producing new requests.
+2. Receive any results your application needs. Stopping a scheduler is not a
+   guarantee that all outstanding requests and replies have completed.
+3. Release proxies while their schedulers are still available.
+4. Request worker shutdown, then join it. Use `worker.setRunning(false)` for the
+   default scheduler, or `pool.stop()` for a thread pool, followed by `join()`.
+
+A proxy does not own its scheduler. The scheduler must remain valid while any
+proxy or producer can still send to it. `join()` waits for worker termination; it
+does not process replies waiting on the home scheduler.
+
+## When something appears stuck
+
+- **The worker runs, but the reply never arrives:** check that the proxy's home
+  scheduler is being polled and that the local receiver is still alive.
+- **A result is missing immediately after `pollAll()`:** the reply may not have
+  arrived yet. Wait for a completion signal or condition.
+- **Other work stops while one slot runs:** that slot may be blocking the worker.
+  In a pool, calls to the same actor still wait for the current call to return.
+- **Memory grows under load:** limit the amount of outstanding work. Ordinary
+  sends allow the queue to grow.
+- **Moving an actor raises an isolation error:** check for extra strong refs to
+  the actor or to mutable objects stored inside it.
+
+## How delivery works internally
+
+This section is useful when extending a scheduler or investigating a bug. Normal
+application code can use the proxies and connection helpers above.
+
+The destination scheduler holds the moved actor's strong reference. Queued calls
+and subscription snapshots carry a shared **delivery endpoint**: a small record
+with an actor identity, liveness state, and routing information. They do not hold
+ordinary ARC/ORC references to an actor on another thread. Dispatch checks the
+endpoint before delivering a call. Once closed, that endpoint stays closed even
+if a new object later occupies the same memory address.
+
+Default and event-loop schedulers place calls and control messages in their
+input FIFO. The pool puts calls in the appropriate actor's inbox and gives a
+worker exclusive access to that actor for one call. Proxy callbacks from pool
+actors use the same mechanism. Under ORC, cycle candidates are cleared before
+moving an actor or handing it to another pool worker.
+
+The main scheduler messages are:
+
+| Message | Purpose |
+| --- | --- |
+| `Move` | Transfer an actor into scheduler ownership. |
+| `Call` | Deliver a slot call if its receiver is still alive. |
+| `Release` | Recheck collection after a proxy releases its remote handle. |
+| `Deref` | Explicitly close an actor, even if handles remain. A pool waits for an active call to return before freeing it. |
+| `AddSub` / `DelSub` | Update connections, including registry keepalive connections. |
+| `Trigger` | Process actors marked ready through the lower-level actor-inbox hooks. Unfinished readiness is restored if a slot raises. |
+| `Exit` | Request scheduler shutdown. |
+
+The implementation lives in [`threadBase.nim`](../sigils/threadBase.nim),
+[`threadProxies.nim`](../sigils/threadProxies.nim),
+[`threadPool.nim`](../sigils/threadPool.nim), and
+[`mailboxes.nim`](../sigils/mailboxes.nim). For more executable examples, see
+[`tslotsThread.nim`](../tests/tslotsThread.nim) and
+[`tthreadPool.nim`](../tests/tthreadPool.nim). The failure cases are covered in
+[`tthreadSafety.nim`](../tests/tthreadSafety.nim).

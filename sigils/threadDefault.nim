@@ -23,7 +23,9 @@ method send*(
     thread: SigilThreadDefaultPtr, msg: sink ThreadSignal,
         blocking: BlockingKinds
 ) {.gcsafe.} =
-  var msg = isolateRuntime(msg)
+  var prepared = msg
+  prepared.prepareDelivery()
+  var msg = isolateRuntime(move(prepared))
   case blocking
   of Blocking:
     thread.inputs.send(msg)

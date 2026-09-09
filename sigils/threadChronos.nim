@@ -62,7 +62,9 @@ method send*(
     msg: sink ThreadSignal,
     blocking: BlockingKinds,
 ) {.gcsafe.} =
-  var isolatedMsg = isolateRuntime(msg)
+  var prepared = msg
+  prepared.prepareDelivery()
+  var isolatedMsg = isolateRuntime(move(prepared))
   case blocking
   of Blocking:
     thread.inputs.send(isolatedMsg)

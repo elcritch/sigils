@@ -94,57 +94,74 @@ test "signal / slot types":
 
 ## Threads
 
-Sigils uses a message-passing model: agents are owned by one thread at a time, and cross-thread work is delivered via per-thread schedulers. To move an agent to another thread, it must be an `AgentActor` and you must use `moveToThread`, which returns an `AgentProxy[T]`. Use `connectThreaded(...)` for cross-thread wiring (since v0.18.0, `connect` does not accept proxies). If you expect inbound forwarded events on the local thread, you must `poll()`/`pollAll()` that thread's scheduler.
+Move an `AgentActor` to a worker with `moveToThread`, then use the returned
+`AgentProxy` to send it work. Connect signals and slots with `connectThreaded`.
+The worker owns the actor's state; your application receives replies by
+processing its local scheduler's queue.
 
-`moveToThread` transfers ownership; the agent must be unique (`isUniqueRef`) and the original reference should not be used after the move. Cross-thread signal params must be thread-safe (no shared `ref` fields); use `Isolate[T]` when you need to transfer heap payloads.
-
-Thread implementations:
-- `newSigilThread()` / `SigilThreadDefault`: blocking worker thread (message loop).
-- `newSigilSelectorThread()` / `SigilSelectorThread`: selector-backed thread with timers and fd events.
-- `AsyncSigilThread` (import `sigils/threadAsyncs`): integrates with `asyncdispatch`.
-- `newSigilChronosThread()` / `SigilChronosThread`: uses an OS-backed cross-thread wake signal and sleeps in the Chronos dispatcher while idle. Enable the `chronos` package feature or import `sigils/threadChronos` directly.
-- `installSiwinEventLoopWaker()` (from `sigils/threadExtras`): makes sends to an existing application-thread scheduler wake Siwin, without replacing that scheduler. Enable the `siwin` package feature.
+This complete example sends a value to a background counter and waits for its
+reply before shutting down:
 
 ```nim
 import sigils
 import sigils/threads
 
 type
+  App = ref object of Agent
+    received: bool
+    value: int
   Counter = ref object of AgentActor
     value: int
-  Sink = ref object of AgentActor
-    seen: int
 
-proc valueChanged(self: Counter, value: int) {.signal.}
+proc changeRequested(self: App, value: int) {.signal.}
+proc updated(self: Counter, value: int) {.signal.}
 
 proc setValue(self: Counter, value: int) {.slot.} =
   self.value = value
-  emit self.valueChanged(value)
+  emit self.updated(value)
 
-proc record(self: Sink, value: int) {.slot.} =
-  self.seen = value
+proc record(self: App, value: int) {.slot.} =
+  self.value = value
+  self.received = true
 
-var
-  src = Counter()
-  dst = Counter()
-  sink = Sink()
-
+startLocalThreadDefault()
+let home = getCurrentSigilThread()
 let worker = newSigilThread()
 worker.start()
-startLocalThreadDefault()
 
-let proxy: AgentProxy[Counter] = dst.moveToThread(worker)
+try:
+  # This scope releases the proxy before we stop the worker.
+  block:
+    let app = App()
+    var counter = Counter()
+    let proxy = counter.moveToThread(worker)
 
-connectThreaded(src, valueChanged, proxy, setValue)  # local -> remote
-connectThreaded(proxy, valueChanged, sink, record)   # remote -> local
+    connectThreaded(app, changeRequested, proxy, setValue)
+    connectThreaded(proxy, updated, app, App.record())
 
-emit src.valueChanged(42)
+    emit app.changeRequested(42)
 
-let ct = getCurrentSigilThread()
-discard ct.pollAll() # deliver forwarded events to local thread
-
-doAssert sink.seen == 42
+    # Wait for the reply, running local callbacks as they arrive.
+    while not app.received:
+      discard home.poll()
+    doAssert app.value == 42
+finally:
+  worker.setRunning(false)
+  worker.join()
 ```
+
+Compile with `--mm:arc --threads:on` (ORC also works). The actor must have a unique
+strong reference when moved. After the move, use its proxy for communication.
+
+`poll()` waits for a message; `pollAll()` processes messages until the queue is
+empty and returns. In a GUI, use `pollAll()` when the application loop wakes.
+Calling it once immediately after sending a request does not guarantee that the
+reply has arrived.
+
+Live proxies keep their remote actors alive. Ordinary sends let queues grow;
+limit outstanding work if a producer can outpace its worker. For ownership,
+queue limits, shutdown, and choosing between a single worker, a thread pool,
+selectors, asyncdispatch, or Chronos, see the [threading guide](docs/threading.md).
 
 ### Siwin application loop
 

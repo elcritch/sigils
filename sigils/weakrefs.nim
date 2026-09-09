@@ -21,7 +21,7 @@ proc `==`*[T](x, y: WeakRef[T]): bool =
 
 proc `[]`*[T](r: WeakRef[T]): lent T {.inline.} =
   when defined(sigilsWeakRefPointer):
-    cast[T](r.pt)
+    cast[ptr T](unsafeAddr r.pt)[]
   else:
     r.pt
 

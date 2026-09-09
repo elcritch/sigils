@@ -1,3 +1,5 @@
+- `v0.28.0` - fix threading and proxy lifetime bugs, actor collection races, self-unsubscription deadlocks, pool callback routing and reclamation, and exception recovery; add concurrency regression tests and rewrite the threading guide with a complete request/reply example
+- `v0.28.0` - change queue admission: ordinary sends now let the FIFO grow to avoid request/reply deadlocks; capacity is no longer a hard limit for ordinary sends, while explicit `NonBlocking` scheduler sends still reject full queues
 - Unreleased - add generic per-scheduler wake callbacks plus an optional Siwin adapter for default, selector-, asyncdispatch-, and Chronos-backed application schedulers, allowing efficient `waitEvents`/`pollAll` integration
 - Unreleased - reject implicit deep cloning of Agents, retain their identity for RC deliveries, and support explicit clone overloads for independently cloneable Agent types
 - `v0.27.0` - restore type-aware Variant payload ownership; move single-recipient calls directly, recursively clone ARC/ORC thread fanout, retain references for local queues and Atomic ARC, and traverse subscription fanout once using an owned lookahead

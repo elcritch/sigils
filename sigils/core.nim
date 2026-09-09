@@ -59,38 +59,36 @@ template checkSlotResponse(res: SigilResponse) =
     else:
       discard
 
+proc deliverSubscription*(sub: Subscription,
+    req: sink SigilRequest): SigilResponse =
+  if not sub.endpoint.isNil:
+    if not sub.endpoint.isAlive:
+      return
+    if not sub.endpoint[].dispatch.isNil:
+      return sub.endpoint[].dispatch(sub.endpoint, ensureMove(req),
+          sub.packedSlot)
+  when sigilsSlotEnvDisabled:
+    result = sub.tgt[].callMethod(ensureMove(req), sub.packedSlot)
+  else:
+    result = sub.tgt[].callMethod(ensureMove(req), sub)
+
 template callSlotsImpl(obj: Agent, req: SigilRequest, subsIter: untyped) =
   template callSubscription(sub: Subscription, isLast: bool) =
     {.cast(gcsafe).}:
-      when defined(sigilsDebug):
-        if sub.tgt[].freedByThread != 0:
-          debugPrint "exec:call:thread: ", $getThreadId()
-          debugPrint "exec:call:sub.tgt[].freed:thread: ", $sub.tgt[].freedByThread
-          debugPrint "exec:call:sub.tgt[]:id: ", $sub.tgt[].getSigilId()
-          debugPrint "exec:call:sub.req: ", req.repr
-          debugPrint "exec:call:obj:id: ", $obj.getSigilId()
-          discard c_raise(11.cint)
-        assert sub.tgt[].freedByThread == 0
       var subReq =
         if isLast:
           move(req)
         else:
           req.clone(sub.cloneMode)
-      when sigilsSlotEnvDisabled:
-        var res: SigilResponse = sub.tgt[].callMethod(
-          ensureMove(subReq), sub.packedSlot
-        )
-      else:
-        var res: SigilResponse = sub.tgt[].callMethod(ensureMove(subReq), sub)
-
+      let res = deliverSubscription(sub, ensureMove(subReq))
       checkSlotResponse(res)
 
   var
-    pendingSubscription {.cursor.}: Subscription
+    pendingSubscription: Subscription
     hasPendingSubscription = false
   for subscription in subsIter:
     # Snapshot the lookahead before the pending slot can mutate the source sequence.
-    let nextSubscription {.cursor.} = subscription
+    let nextSubscription = subscription
     if hasPendingSubscription:
       callSubscription(pendingSubscription, false)
     pendingSubscription = nextSubscription
@@ -108,8 +106,10 @@ template callSlotsLocalImpl(
 ) =
   template callSubscription(sub: Subscription, isLast: bool) =
     {.cast(gcsafe).}:
-      if not sub.directSlot.isNil:
-        sub.directSlot(sub.tgt[], addr args)
+      if not sub.directSlot.isNil and
+          (sub.endpoint.isNil or sub.endpoint[].dispatch.isNil):
+        if sub.endpoint.isNil or sub.endpoint.isAlive:
+          sub.directSlot(sub.tgt[], addr args)
       else:
         var req =
           if isLast:
@@ -124,20 +124,15 @@ template callSlotsLocalImpl(
               args = args.cloneForDelivery(sub.cloneMode),
               origin = origin,
             )
-        when sigilsSlotEnvDisabled:
-          var res: SigilResponse = sub.tgt[].callMethod(
-            ensureMove(req), sub.packedSlot
-          )
-        else:
-          var res: SigilResponse = sub.tgt[].callMethod(ensureMove(req), sub)
+        let res = deliverSubscription(sub, ensureMove(req))
         checkSlotResponse(res)
 
   var
-    pendingSubscription {.cursor.}: Subscription
+    pendingSubscription: Subscription
     hasPendingSubscription = false
   for subscription in subsIter:
     # Snapshot the lookahead before the pending slot can mutate the source sequence.
-    let nextSubscription {.cursor.} = subscription
+    let nextSubscription = subscription
     if hasPendingSubscription:
       callSubscription(pendingSubscription, false)
     pendingSubscription = nextSubscription
