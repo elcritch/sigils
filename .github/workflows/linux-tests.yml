@@ -1,0 +1,54 @@
+name: Linux tests
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Linux (${{ matrix.cc }}, Nim ${{ matrix.nimversion }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        nimversion: ['2.2.6']
+        cc: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: iffy/install-nim@v4
+        with:
+          version: ${{ matrix.nimversion }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install C compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ matrix.cc }}
+          ${{ matrix.cc }} --version
+
+      - name: Check out Atlas
+        uses: actions/checkout@v4
+        with:
+          repository: nim-lang/atlas
+          # Same Atlas revision used for local validation; includes atlas-run.
+          ref: 6d6d24c25a466cc19b4230be0e18200ef663b210
+          path: .ci/atlas
+
+      - name: Build Atlas
+        working-directory: .ci/atlas
+        run: |
+          nim buildRelease
+          echo "$GITHUB_WORKSPACE/.ci/atlas/bin" >> "$GITHUB_PATH"
+
+      - name: Install dependencies
+        run: |
+          atlas init
+          atlas install
+
+      - name: Run tests
+        run: atlas-run tests --jobs:2 --only-errors -- --cc:${{ matrix.cc }}

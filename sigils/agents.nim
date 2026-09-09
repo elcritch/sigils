@@ -123,6 +123,10 @@ proc endpoint*(agent: Agent): AgentEndpoint {.gcsafe, raises: [].} =
 proc isAlive*(endpoint: AgentEndpoint): bool {.inline.} =
   not endpoint.isNil and endpoint[].alive.load(Acquire)
 
+proc `$`*(endpoint: AgentEndpoint): string =
+  ## Avoid inspecting native locks or recursively following remote endpoints.
+  "AgentEndpoint(alive: " & $endpoint.isAlive() & ")"
+
 proc closeEndpoint*(agent: Agent) =
   if not agent.delivery.isNil:
     withLock agent.delivery[].lock:
