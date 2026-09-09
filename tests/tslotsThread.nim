@@ -2,6 +2,7 @@ import std/isolation
 import std/unittest
 import std/os
 import std/sequtils
+import std/[monotimes, times]
 import threading/atomics
 
 import sigils
@@ -68,6 +69,14 @@ proc waitFor(flag: var Atomic[bool], timeoutMs = 1_000): bool =
       return true
     os.sleep(1)
   flag.load()
+
+proc waitFor(value: var Atomic[int], expected: int, timeoutMs = 5_000): bool =
+  let deadline = getMonoTime() + initDuration(milliseconds = timeoutMs)
+  while value.load() != expected:
+    if getMonoTime() >= deadline:
+      return false
+    os.sleep(1)
+  true
 
 var globalCounter: Atomic[int]
 globalCounter.store(0)
@@ -186,6 +195,13 @@ suite "threaded agent slots":
 
   test "agent connect a->b then moveToThread then destroy proxy":
     # debugPrintQuiet = true
+    globalCounter.store(0)
+    globalLastInnerCDestroyed.store(0)
+    let thread = newSigilThread()
+    thread.start()
+    defer:
+      thread.setRunning(false)
+      thread.join()
     var a = SomeAction.new()
     when defined(sigilsDebug):
       a.debugName = "A"
@@ -200,9 +216,6 @@ suite "threaded agent slots":
       brightPrint "thread runner!", &" (th: {getThreadId()})"
       brightPrint "obj a: ", $a.unsafeWeakRef()
       brightPrint "obj b: ", $b.unsafeWeakRef()
-      let thread = newSigilThread()
-      thread.start()
-
       connect(a, valueChanged, b, setValueGlobal)
       printConnections(a)
       printConnections(b)
@@ -227,8 +240,8 @@ suite "threaded agent slots":
       #check bp[].remote[].listening.len() == 1
 
       emit a.valueChanged(568)
-      os.sleep(1)
-      check globalCounter.load() == 568
+      # Keep the proxy alive until delivery completes, even on a busy runner.
+      check globalCounter.waitFor(568)
     echo "block done"
     # printConnections(a)
 
@@ -237,11 +250,7 @@ suite "threaded agent slots":
     emit a.valueChanged(111)
     check globalCounter.load() == 568
 
-    for i in 1 .. 10:
-      if globalLastInnerCDestroyed.load == 2020:
-        break
-      os.sleep(1)
-    check globalLastInnerCDestroyed.load == 2020
+    check globalLastInnerCDestroyed.waitFor(2020)
 
   test "agent connect b->a then moveToThread then destroy proxy":
     when defined(sigilsDebugPrint):
