@@ -18,10 +18,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {os: ubuntu-latest, cc: gcc, nimversion: '2.2.6'}
-          - {os: ubuntu-latest, cc: clang, nimversion: '2.2.6'}
-          - {os: macos-latest, cc: clang, nimversion: '2.2.6'}
-          - {os: windows-latest, cc: gcc, nimversion: '2.2.6'}
+          - {os: ubuntu-latest, cc: gcc, nimversion: '2.2.10'}
+          - {os: ubuntu-latest, cc: clang, nimversion: '2.2.10'}
+          - {os: macos-latest, cc: clang, nimversion: '2.2.10'}
+          - {os: windows-latest, cc: gcc, nimversion: '2.2.10'}
     steps:
       - uses: actions/checkout@v4
 
