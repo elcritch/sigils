@@ -168,6 +168,20 @@ proc callSlotsLocal*[A](
         subs.add(sub)
     callSlotsLocalImpl(Agent(actor), procName, origin, args, subs.items)
   else:
+    # A sole local slot needs no lookahead snapshot. Borrow its entry only until
+    # the call: a slot may disconnect itself or destroy the receiver, so nothing
+    # in this entry may be read after invoking it. Actors and proxy dispatch keep
+    # the owning snapshots used by the general delivery path.
+    if obj.subcriptions.len == 1:
+      let entry {.cursor.} = obj.subcriptions[0]
+      if entry.signal == procName or entry.signal == AnySigilName:
+        let sub {.cursor.} = entry.subscription
+        if not sub.directSlot.isNil and
+            (sub.endpoint.isNil or sub.endpoint[].dispatch.isNil):
+          if sub.endpoint.isNil or sub.endpoint.isAlive:
+            {.cast(gcsafe).}:
+              sub.directSlot(sub.tgt[], addr args)
+          return
     callSlotsLocalImpl(obj, procName, origin, args, obj.getSubscriptions(procName))
 
 proc emit*(call: (Agent | WeakRef[Agent], SigilRequest)) =
