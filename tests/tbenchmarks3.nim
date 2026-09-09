@@ -9,7 +9,7 @@ import sigils/core
 type
   Emitter = ref object of Agent
   Sink = ref object of Agent
-    value: int
+    value: int64
 
 proc signal0(tp: Emitter, val: int) {.signal.}
 proc signal1(tp: Emitter, val: int) {.signal.}
@@ -81,7 +81,7 @@ const
     else: 100_000
   emitCount = n * signalCount
   slotCallCount = n * subscriptionCount
-  expectedValue = subscriptionCount * (n * (n - 1) div 2)
+  expectedValue = subscriptionCount * (int64(n) * (n - 1) div 2)
 
 var
   durationMicrosDirectProc: float
@@ -95,11 +95,11 @@ proc newAgentSinks(): array[slotsPerSignal, Agent] =
   for idx in 0 ..< slotsPerSignal:
     result[idx] = Sink()
 
-proc totalValue(sinks: array[slotsPerSignal, Sink]): int =
+proc totalValue(sinks: array[slotsPerSignal, Sink]): int64 =
   for sink in sinks:
     result += sink.value
 
-proc totalAgentValue(sinks: array[slotsPerSignal, Agent]): int =
+proc totalAgentValue(sinks: array[slotsPerSignal, Agent]): int64 =
   for sink in sinks:
     result += Sink(sink).value
 

@@ -4,28 +4,28 @@ import sigils/selectors
 
 type
   SelectorBenchAgent = ref object of DynamicAgent
-    value: int
+    value: int64
 
-method addSelector(amount: int): int {.selector.}
-method pingSelector(): int {.selector.}
+method addSelector(amount: int): int64 {.selector.}
+method pingSelector(): int64 {.selector.}
 
-proc addDirect(self: SelectorBenchAgent, amount: int): int =
+proc addDirect(self: SelectorBenchAgent, amount: int): int64 =
   self.value += amount
   self.value
 
-method addMethodBaseline(self: DynamicAgent, amount: int): int {.base.} =
+method addMethodBaseline(self: DynamicAgent, amount: int): int64 {.base.} =
   discard
 
-method addMethodBaseline(self: SelectorBenchAgent, amount: int): int =
+method addMethodBaseline(self: SelectorBenchAgent, amount: int): int64 =
   self.value += amount
   self.value
 
 method addSelectorImpl(self: SelectorBenchAgent,
-    amount: int): int {.selector.} =
+    amount: int): int64 {.selector.} =
   self.value += amount
   self.value
 
-method pingSelectorImpl(self: SelectorBenchAgent): int {.selector.} =
+method pingSelectorImpl(self: SelectorBenchAgent): int64 {.selector.} =
   inc self.value
   self.value
 
@@ -38,7 +38,7 @@ const
   largeLookupIterations = block:
     when defined(slowbench): 1_000_000
     else: 10_000
-  expectedValue = (n * (n - 1)) div 2
+  expectedValue = (int64(n) * (n - 1)) div 2
 
 var
   directProcMicros: float
@@ -73,7 +73,7 @@ proc newSelectorBenchAgent(): SelectorBenchAgent =
 
 proc measureDirectProcBaseline(): float =
   let target = SelectorBenchAgent()
-  var last = 0
+  var last = 0'i64
 
   let us = timed:
     for i in 0 ..< n:
@@ -86,7 +86,7 @@ proc measureDirectProcBaseline(): float =
 proc measureMethodBaseline(): float =
   let target = SelectorBenchAgent()
   var receiver: DynamicAgent = target
-  var last = 0
+  var last = 0'i64
 
   let us = timed:
     for i in 0 ..< n:
@@ -96,15 +96,15 @@ proc measureMethodBaseline(): float =
   check last == expectedValue
   us
 
-proc protocolSelector(prefix: string, idx: int): Selector[int, int] =
-  selector[int, int](prefix & $idx)
+proc protocolSelector(prefix: string, idx: int): Selector[int, int64] =
+  selector[int, int64](prefix & $idx)
 
-proc protocolSelectors(prefix: string, count: int): seq[Selector[int, int]] =
+proc protocolSelectors(prefix: string, count: int): seq[Selector[int, int64]] =
   for idx in 0 ..< count:
     result.add protocolSelector(prefix, idx)
 
 proc protocolImplementation(
-    name: string, selectors: openArray[Selector[int, int]]
+    name: string, selectors: openArray[Selector[int, int64]]
 ): ProtocolImplementation =
   result.protocol = SigilProtocol(name: toSigilName(name))
   for selector in selectors:
@@ -113,7 +113,7 @@ proc protocolImplementation(
 
 proc newProtocolBenchAgent(
     prefix: string, count: int
-): tuple[target: SelectorBenchAgent, selectors: seq[Selector[int, int]]] =
+): tuple[target: SelectorBenchAgent, selectors: seq[Selector[int, int64]]] =
   result.target = SelectorBenchAgent()
   result.selectors = protocolSelectors(prefix, count)
   let implementation = protocolImplementation(prefix, result.selectors)
@@ -139,7 +139,7 @@ suite "selector benchmarks":
 
   test "required selector send":
     let target = newSelectorBenchAgent()
-    var last = 0
+    var last = 0'i64
 
     let us = timed:
       for i in 0 ..< n:
@@ -158,7 +158,7 @@ suite "selector benchmarks":
 
   test "perform with var result":
     let target = newSelectorBenchAgent()
-    var last = 0
+    var last = 0'i64
 
     let us = timed:
       for i in 0 ..< n:
@@ -177,7 +177,7 @@ suite "selector benchmarks":
 
   test "performLocal with var result":
     let target = newSelectorBenchAgent()
-    var last = 0
+    var last = 0'i64
 
     let us = timed:
       for i in 0 ..< n:
@@ -198,7 +198,7 @@ suite "selector benchmarks":
     let target = newSelectorBenchAgent()
     var
       handled = 0
-      last = 0
+      last = 0'i64
 
     let us = timed:
       for i in 0 ..< n:
@@ -241,7 +241,7 @@ suite "selector benchmarks":
 
   test "zero argument required selector send":
     let target = newSelectorBenchAgent()
-    var last = 0
+    var last = 0'i64
 
     let us = timed:
       for _ in 0 ..< n:
@@ -263,7 +263,7 @@ suite "selector benchmarks":
       child = SelectorBenchAgent()
       parent = newSelectorBenchAgent()
     child.setNextResponder(parent)
-    var last = 0
+    var last = 0'i64
 
     let us = timed:
       for i in 0 ..< n:
@@ -310,7 +310,7 @@ suite "selector benchmarks":
   test "single-method protocol perform":
     let bench = newProtocolBenchAgent("selectorBenchSingleProtocol", 1)
     let selector = bench.selectors[0]
-    var last = 0
+    var last = 0'i64
 
     let us = timed:
       for i in 0 ..< n:
@@ -347,7 +347,7 @@ suite "selector benchmarks":
       largeProtocolMethodCount,
     )
     let selector = bench.selectors[^1]
-    var last = 0
+    var last = 0'i64
 
     let us = timed:
       for i in 0 ..< n:

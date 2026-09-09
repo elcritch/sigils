@@ -151,12 +151,13 @@ suite "connectQueued to local thread":
 
     connect(timer, timeout, a, Counter.timerRun())
 
+    check a.value == 0
     start(timer)
 
+    # The timer may already be due when this nonblocking poll runs.
     ct.poll(NonBlocking)
-    check a.value == 0
 
-    for i in 1 .. 10:
+    while a.value < 10:
       ct.poll()
     check a.value == 10
 

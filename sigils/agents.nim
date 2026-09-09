@@ -1,4 +1,6 @@
 import std/[hashes, options, sets, strformat, tables]
+import std/[isolation, locks]
+import threading/[atomics, smartptrs]
 import protocol
 import weakrefs
 import debugs
@@ -19,6 +21,7 @@ else:
   import svariant
 
 export sets, options, svariant, weakrefs, protocol
+export smartptrs
 
 when defined(sigilsDebugPrint):
   import std/terminal
@@ -53,8 +56,22 @@ type
     context: Agent, params: SigilParams, env: SlotEnv
   ) {.nimcall.}
 
+  AgentEndpoint* = SharedPtr[AgentDelivery]
+  AgentDelivery* = object
+    ## Stable identity shared by deliveries, never a strong cross-thread Agent ref.
+    lock*: Lock
+    alive*: Atomic[bool]
+    handles*: int # protected by lock
+    target*: WeakRef[Agent]
+    dispatch*: proc(endpoint: AgentEndpoint, req: sink SigilRequest,
+      slot: AgentProc): SigilResponse {.nimcall, gcsafe.}
+    scheduler*: pointer
+    remote*: AgentEndpoint
+    owner*: AgentEndpoint
+
   Subscription* = object
     tgt*: WeakRef[Agent]
+    endpoint*: AgentEndpoint
     packedSlot*: AgentProc
     directSlot*: LocalAgentProc
     cloneMode*: CloneMode
@@ -64,6 +81,7 @@ type
       connectionState*: SlotConnectionState
 
   AgentObj = object of RootObj
+    delivery*: AgentEndpoint
     subcriptions*: seq[tuple[signal: SigilName, subscription: Subscription]]
       ## agents listening to me
     listening*: HashSet[WeakRef[Agent]] ## agents I'm listening to
@@ -85,6 +103,40 @@ type
 
 type SubscriptionEntry* = tuple[signal: SigilName, subscription: Subscription]
 
+proc `=destroy`*(delivery: var AgentDelivery) =
+  `=destroy`(delivery.remote)
+  `=destroy`(delivery.owner)
+  deinitLock(delivery.lock)
+
+var endpointInitLock: Lock
+initLock(endpointInitLock)
+
+proc endpoint*(agent: Agent): AgentEndpoint {.gcsafe, raises: [].} =
+  withLock endpointInitLock:
+    if agent.delivery.isNil:
+      agent.delivery = newSharedPtr(unsafeIsolate(AgentDelivery(
+          target: agent.unsafeWeakRef())))
+      initLock(agent.delivery[].lock)
+      agent.delivery[].alive.store(true, Release)
+    result = agent.delivery
+
+proc isAlive*(endpoint: AgentEndpoint): bool {.inline.} =
+  not endpoint.isNil and endpoint[].alive.load(Acquire)
+
+proc `$`*(endpoint: AgentEndpoint): string =
+  ## Avoid inspecting native locks or recursively following remote endpoints.
+  "AgentEndpoint(alive: " & $endpoint.isAlive() & ")"
+
+proc closeEndpoint*(agent: Agent) =
+  if not agent.delivery.isNil:
+    withLock agent.delivery[].lock:
+      agent.delivery[].alive.store(false, Release)
+
+proc prepareSubscription*(subscription: Subscription): Subscription =
+  result = subscription
+  if result.endpoint.isNil and not result.tgt.isNil:
+    result.endpoint = result.tgt[].endpoint()
+
 proc clone*[T: Agent](value: T): T {.gcsafe.} =
   ## Agents have identity and cannot be deep-cloned implicitly. Agent subtypes
   ## that support independent duplication must provide a more specific overload.
@@ -95,7 +147,7 @@ proc clone*[T: Agent](value: T): T {.gcsafe.} =
     "deep cloning an Agent requires an explicit clone overload",
   )
 
-proc invalidateConnectionState(subscription: Subscription) {.inline.} =
+proc invalidateConnectionState*(subscription: Subscription) {.inline.} =
   when not sigilsSlotEnvDisabled:
     if not subscription.connectionState.isNil:
       subscription.connectionState.alive = false
@@ -172,6 +224,7 @@ template removeSubscriptions*(
 
 proc destroyAgent*(agentObj: AgentObj) {.forbids: [DestructorUnsafe].} =
   let agent: WeakRef[Agent] = unsafeWeakRef(cast[Agent](addr(agentObj)))
+  agent[].closeEndpoint()
 
   debugPrint &"destroy: agent: ",
     &" pt: {$agent}",
@@ -188,6 +241,7 @@ proc destroyAgent*(agentObj: AgentObj) {.forbids: [DestructorUnsafe].} =
 
   `=destroy`(agent[].subcriptions)
   `=destroy`(agent[].listening)
+  `=destroy`(agent[].delivery)
   debugPrint "\tfinished destroy: agent: ", " pt: ", $agent
   when defined(sigilsDebug):
     `=destroy`(agent[].debugName)
@@ -350,7 +404,7 @@ proc sameHandler(a, b: Subscription): bool =
   when not sigilsSlotEnvDisabled:
     result = result and a.envSlot == b.envSlot and a.env == b.env
 
-proc sameSubscription(a, b: Subscription): bool =
+proc sameSubscription*(a, b: Subscription): bool =
   a.tgt == b.tgt and sameHandler(a, b)
 
 method hasSubscription*(
@@ -391,7 +445,8 @@ method addSubscription*(
   doAssert not obj.isNil(), "agent is nil!"
   assert subscription.hasCallable
 
-  if addSubscriptionSorted(obj.subcriptions, sig, subscription):
+  if addSubscriptionSorted(obj.subcriptions, sig,
+      subscription.prepareSubscription()):
     subscription.tgt[].addListener(obj.unsafeWeakRef().asAgent())
 
 method addSubscription*(

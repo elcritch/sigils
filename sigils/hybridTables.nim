@@ -138,12 +138,10 @@ proc valuesLen*[Value](
   of hstSmall:
     let idx = entryIndex(table.small, key)
     if idx >= 0:
-      table.small[idx].values.len
-    else:
-      0
+      result = table.small[idx].values.len
   of hstLarge:
-    table.large.withValue(key, bucket):
-      result = bucket.len
+    # Nim 2.2.4's read-only withValue skips a key in hash bucket zero.
+    result = table.large.getOrDefault(key).len
 
 proc valuesCopy*[Value](
     table: HybridSigilTable[Value], key: SigilName
@@ -154,8 +152,7 @@ proc valuesCopy*[Value](
     if idx >= 0:
       result = table.small[idx].values
   of hstLarge:
-    table.large.withValue(key, bucket):
-      result = bucket
+    result = table.large.getOrDefault(key)
 
 proc topValue*[Value](
     table: HybridSigilTable[Value], key: SigilName
@@ -166,9 +163,9 @@ proc topValue*[Value](
     if idx >= 0 and table.small[idx].values.len > 0:
       result = table.small[idx].values[^1]
   of hstLarge:
-    table.large.withValue(key, bucket):
-      if bucket.len > 0:
-        result = bucket[^1]
+    let bucket = table.large.getOrDefault(key)
+    if bucket.len > 0:
+      result = bucket[^1]
 
 iterator valuesForKey*[Value](
     table: var HybridSigilTable[Value], key: SigilName

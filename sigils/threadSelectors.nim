@@ -84,7 +84,9 @@ method send*(
     thread: SigilSelectorThreadPtr, msg: sink ThreadSignal,
         blocking: BlockingKinds
 ) {.gcsafe.} =
-  var msg = isolateRuntime(msg)
+  var prepared = msg
+  prepared.prepareDelivery()
+  var msg = isolateRuntime(move(prepared))
   case blocking
   of Blocking:
     thread.inputs.send(msg)
@@ -111,10 +113,10 @@ method recv*(
 
 method setTimer*(thread: SigilSelectorThreadPtr, timer: SigilTimer) {.gcsafe.} =
   ## Schedule a timer on this selector-backed thread using selector timers.
-  let durMs = max(timer.duration.inMilliseconds(), 1)
+  let durMs = timer.timerMilliseconds()
   let oneshot = (not timer.isRepeat()) and timer.count <= 1
   withLock thread.timerLock:
-    thread.timerHandles[timer] = thread.sel.registerTimer(durMs.int, oneshot, timer)
+    thread.timerHandles[timer] = thread.sel.registerTimer(durMs, oneshot, timer)
 
 proc unregisterTimer(thread: SigilSelectorThreadPtr, timer: SigilTimer, fd: int) =
   withLock thread.timerLock:
@@ -200,22 +202,32 @@ proc runSelectorThread*(targ: SigilSelectorThreadPtr) {.thread.} =
     doAssert not hasLocalSigilThread()
     setLocalSigilThread(targ)
     targ[].threadId.store(getThreadId(), Relaxed)
-    emit targ[].agent.started()
-    # Run until stopped; use selector timers to provide a light sleep between polls.
-    while targ.isRunning():
-      targ.pumpTimers(0)
-      # drain any queued signals first
-      while targ.poll(NonBlocking):
-        discard
-      # brief wait so we're not busy-spinning
-      targ.pumpTimers(5)
-    # final drain if requested (mirrors async variant's behavior)
     try:
-      if targ.drain.load(Relaxed):
-        while targ.poll(NonBlocking):
+      emit targ[].agent.started()
+    except Exception as error:
+      if targ.exceptionHandler.isNil:
+        raise
+      targ.exceptionHandler(error)
+    while targ.isRunning():
+      try:
+        targ.pumpTimers(0)
+        while targ.isRunning() and targ.poll(NonBlocking):
           discard
-    except CatchableError:
-      discard
+        if targ.isRunning():
+          targ.pumpTimers(5)
+      except Exception as error:
+        if targ.exceptionHandler.isNil:
+          raise
+        targ.exceptionHandler(error)
+    if targ.drain.load(Relaxed):
+      var pending = true
+      while pending:
+        try:
+          pending = targ.poll(NonBlocking)
+        except Exception as error:
+          if targ.exceptionHandler.isNil:
+            raise
+          targ.exceptionHandler(error)
 
 proc start*(thread: ptr SigilSelectorThread) =
   if thread[].exceptionHandler.isNil:

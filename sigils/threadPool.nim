@@ -36,26 +36,21 @@ proc actorRef(sig: ThreadSignal): WeakRef[AgentActor] =
 proc hasReference(pool: SigilThreadPoolPtr, actor: WeakRef[AgentActor]): bool =
   actor.actorRef in pool[].references
 
-proc removeActor(pool: SigilThreadPoolPtr, actor: WeakRef[AgentActor]) =
+proc removeActorLocked(pool: SigilThreadPoolPtr,
+    actor: WeakRef[AgentActor]): Agent =
+  ## Return the strong owner so its destructor runs after queueLock is released.
   pool[].states.del(actor)
-  pool[].references.del(actor.actorRef)
-  withLock pool[].signaledLock:
-    pool[].signaled.excl(actor)
+  if actor.actorRef in pool[].references:
+    pool[].references[actor.actorRef].closeEndpoint()
+    result = move pool[].references[actor.actorRef]
+    pool[].references.del(actor.actorRef)
 
-proc delSelfSubscription(actor: WeakRef[AgentActor], sub: ThreadSub) =
-  withLock actor[].lock:
-    var subsFound = 0
-    var subsDeleted = 0
-    for idx in countdown(actor[].subcriptions.len() - 1, 0):
-      if actor[].subcriptions[idx].signal == sub.name and
-          actor[].subcriptions[idx].subscription.tgt == sub.tgt:
-        subsFound.inc()
-        if sub.fn == nil or actor[].subcriptions[idx].subscription.packedSlot ==
-            sub.fn:
-          subsDeleted.inc()
-          actor[].subcriptions.delete(idx)
-    if subsFound == subsDeleted:
-      actor[].listening.excl(actor.actorRef)
+proc unusedActor(actor: WeakRef[AgentActor]): bool =
+  let endpoint = actor[].delivery
+  withLock endpoint[].lock:
+    result = endpoint[].handles == 0 and not actor[].hasConnections()
+    if result:
+      endpoint[].alive.store(false, Release)
 
 proc enqueueReadyLocked(pool: SigilThreadPoolPtr, actor: WeakRef[AgentActor]) =
   if actor notin pool[].states:
@@ -104,13 +99,14 @@ proc leaseActor(
     result = true
 
 proc releaseActor(pool: SigilThreadPoolPtr, actor: WeakRef[AgentActor]) =
+  var released: Agent
   withLock pool[].queueLock:
     if actor notin pool[].states:
       return
     var state = pool[].states[actor]
     state.running = false
     if state.closing:
-      pool.removeActor(actor)
+      released = pool.removeActorLocked(actor)
     else:
       let hasInboxWork = actor[].inbox.peek() > 0
       if hasInboxWork or state.queued:
@@ -149,8 +145,14 @@ proc runPoolWorker(pool: SigilThreadPoolPtr) {.thread.} =
         discard
       elif pool.leaseActor(actor):
         try:
+          executingActor = actor[].delivery
           pool.runActorSignal(actor)
         finally:
+          when defined(gcOrc):
+            # ORC's candidate roots belong to an OS thread. Clear them while
+            # this worker still owns the lease, before another worker can run it.
+            GC_runOrc()
+          reset(executingActor)
           pool.releaseActor(actor)
 
 proc newSigilThreadPool*(
@@ -183,7 +185,7 @@ method send*(
   of Move:
     if not (sig.item of AgentActor):
       raise newException(ValueError, "thread pool can only move AgentActor instances")
-    var item = sig.item
+    var item = move sig.item
     let actor = item.unsafeWeakRef().toKind(AgentActor)
     AgentActor(item).ensureActorReady(pool[].inboxSize)
     withLock pool[].queueLock:
@@ -191,13 +193,23 @@ method send*(
       if actor notin pool[].states:
         pool[].states[actor] = PoolActorState()
   of Call:
-    if sig.tgt.isNil or not (sig.tgt[] of AgentActor):
-      raise newException(ValueError, "thread pool direct Call requires an AgentActor target")
-    let actor = sig.actorRef()
-    actor[].ensureActorReady(pool[].inboxSize)
-    var callSig = isolateRuntime(sig)
-    actor[].inbox.send(callSig)
-    pool.markReady(actor)
+    sig.prepareDelivery()
+    if not sig.endpoint.isAlive:
+      return
+    let owner =
+      if sig.endpoint[].owner.isNil: sig.endpoint
+      else: sig.endpoint[].owner
+    let actor = owner[].target.toKind(AgentActor)
+    var callSig = isolateRuntime(move(sig))
+    withLock pool[].queueLock:
+      if not pool.hasReference(actor) or pool[].states[actor].closing:
+        return
+      if blocking == NonBlocking:
+        if not actor[].inbox.trySend(move(callSig)):
+          raise newException(MessageQueueFullError, "actor mailbox is full")
+      else:
+        actor[].inbox.send(move(callSig))
+      pool.enqueueReadyLocked(actor)
   of AddSub:
     if sig.add.src.isNil:
       raise newException(UnableToSubscribe, "unable to subscribe nil src: " &
@@ -221,25 +233,26 @@ method send*(
       canSubscribe = sig.del.src in pool[].references and
           sig.del.tgt in pool[].references
     if canSubscribe:
-      if sig.del.src == sig.del.tgt and sig.del.src[] of AgentActor:
-        sig.del.src.toKind(AgentActor).delSelfSubscription(sig.del)
-      else:
-        sig.del.src[].delSubscription(sig.del.name, sig.del.tgt, sig.del.fn)
+      sig.del.src[].delSubscription(sig.del.name, sig.del.tgt, sig.del.fn)
+      pool.send(ThreadSignal(kind: Release, deref: sig.del.src))
     else:
       raise newException(UnableToSubscribe, "unable to subscribe to missing" &
                                             " src: " & $sig.del.src &
                                             " to " & $sig.del.tgt)
-  of Deref:
+  of Deref, Release:
     let actor = sig.deref.toKind(AgentActor)
+    var released: Agent
     withLock pool[].queueLock:
-      if actor in pool[].states:
+      if actor in pool[].states and
+          (sig.kind == Deref or actor.unusedActor()):
+        actor[].closeEndpoint()
         var state = pool[].states[actor]
         if state.running:
           state.closing = true
           state.queued = false
           pool[].states[actor] = state
         else:
-          pool.removeActor(actor)
+          released = pool.removeActorLocked(actor)
   of Trigger:
     discard
   of Exit:
