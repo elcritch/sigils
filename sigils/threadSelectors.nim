@@ -14,6 +14,9 @@ import std/tables
 import std/net
 import std/nativesockets
 
+when defined(windows):
+  import std/monotimes
+
 import agents
 import threadBase
 import threadDefault
@@ -32,6 +35,8 @@ type
     thr*: Thread[ptr SigilSelectorThread]
     timerLock*: Lock
     timerHandles*: Table[SigilTimer, int]
+    when defined(windows):
+      timerDeadlines: Table[SigilTimer, MonoTime]
 
   SigilSelectorThreadPtr* = ptr SigilSelectorThread
 
@@ -108,6 +113,8 @@ proc newSigilSelectorThread*(): ptr SigilSelectorThread =
   result[].signaledLock.initLock()
   result[].timerLock.initLock()
   result[].timerHandles = initTable[SigilTimer, int]()
+  when defined(windows):
+    result[].timerDeadlines = initTable[SigilTimer, MonoTime]()
   result[].inputs = newSigilChan()
   result[].running.store(true, Relaxed)
   result[].drain.store(true, Relaxed)
@@ -147,25 +154,42 @@ method recv*(
 method setTimer*(thread: SigilSelectorThreadPtr, timer: SigilTimer) {.gcsafe.} =
   ## Schedule a timer on this selector-backed thread using selector timers.
   let durMs = timer.timerMilliseconds()
-  let oneshot = (not timer.isRepeat()) and timer.count <= 1
-  withLock thread.timerLock:
-    thread.timerHandles[timer] = thread.sel.registerTimer(durMs, oneshot, timer)
+  when defined(windows):
+    ## The Windows ``std/selectors`` backend has no ``registerTimer`` API.
+    ## Keep deadlines alongside the selector and let ``pumpTimers`` wake for
+    ## the nearest one.
+    let deadline = getMonoTime() + initDuration(milliseconds = durMs)
+    withLock thread.timerLock:
+      thread.timerHandles[timer] = -1
+      thread.timerDeadlines[timer] = deadline
+  else:
+    let oneshot = (not timer.isRepeat()) and timer.count <= 1
+    withLock thread.timerLock:
+      thread.timerHandles[timer] = thread.sel.registerTimer(durMs, oneshot, timer)
 
 proc unregisterTimer(thread: SigilSelectorThreadPtr, timer: SigilTimer, fd: int) =
   withLock thread.timerLock:
-    if fd >= 0 and thread.sel.contains(fd):
-      thread.sel.unregister(fd)
+    when defined(windows):
+      thread.timerDeadlines.del(timer)
+    else:
+      if fd >= 0 and thread.sel.contains(fd):
+        thread.sel.unregister(fd)
     thread.timerHandles.del(timer)
 
 proc unregisterAllTimers(thread: SigilSelectorThreadPtr) =
-  var fds: seq[int]
-  withLock thread.timerLock:
-    for _, fd in thread.timerHandles.pairs:
-      fds.add fd
-    thread.timerHandles.clear()
-  for fd in fds:
-    if fd >= 0 and thread.sel.contains(fd):
-      thread.sel.unregister(fd)
+  when defined(windows):
+    withLock thread.timerLock:
+      thread.timerDeadlines.clear()
+      thread.timerHandles.clear()
+  else:
+    var fds: seq[int]
+    withLock thread.timerLock:
+      for _, fd in thread.timerHandles.pairs:
+        fds.add fd
+      thread.timerHandles.clear()
+    for fd in fds:
+      if fd >= 0 and thread.sel.contains(fd):
+        thread.sel.unregister(fd)
 
 proc closeSelectorThread*(thread: SigilSelectorThreadPtr) =
   if thread.isNil:
@@ -174,10 +198,62 @@ proc closeSelectorThread*(thread: SigilSelectorThreadPtr) =
   thread.sel.close()
   thread.inputWake.close()
 
+when defined(windows):
+  proc timerWaitTimeout(thread: SigilSelectorThreadPtr, requested: int): int =
+    ## Bound a selector wait by the nearest manually tracked deadline.
+    result = requested
+    let now = getMonoTime()
+    withLock thread.timerLock:
+      for deadline in thread.timerDeadlines.values:
+        let remaining = (deadline - now).inMilliseconds
+        let waitMs = max(remaining, 1'i64).int
+        if result < 0 or waitMs < result:
+          result = waitMs
+
+  proc fireDueTimers(thread: SigilSelectorThreadPtr) =
+    let now = getMonoTime()
+    var due: seq[SigilTimer]
+    withLock thread.timerLock:
+      for timer, deadline in thread.timerDeadlines.pairs:
+        if deadline <= now:
+          due.add(timer)
+
+    for timer in due:
+      if thread.hasCancelTimer(timer):
+        withLock thread.timerLock:
+          thread.timerDeadlines.del(timer)
+          thread.timerHandles.del(timer)
+        thread.removeTimer(timer)
+        continue
+
+      emit timer.timeout()
+      if not timer.isRepeat():
+        if timer.count > 0:
+          timer.count.dec()
+        if timer.count == 0:
+          withLock thread.timerLock:
+            thread.timerDeadlines.del(timer)
+            thread.timerHandles.del(timer)
+        else:
+          withLock thread.timerLock:
+            thread.timerDeadlines[timer] =
+              getMonoTime() + initDuration(
+                  milliseconds = timer.timerMilliseconds())
+      else:
+        withLock thread.timerLock:
+          if thread.timerDeadlines.hasKey(timer):
+            thread.timerDeadlines[timer] =
+              getMonoTime() + initDuration(
+                  milliseconds = timer.timerMilliseconds())
+
 proc pumpTimers(thread: SigilSelectorThreadPtr, timeoutMs: int) {.gcsafe.} =
   ## Wait up to timeoutMs and deliver any due timers via selector events.
+  when defined(windows):
+    let waitTimeout = thread.timerWaitTimeout(timeoutMs)
+  else:
+    let waitTimeout = timeoutMs
   var keys = newSeq[ReadyKey](32)
-  let n = thread.sel.selectInto(timeoutMs, keys)
+  let n = thread.sel.selectInto(waitTimeout, keys)
   for i in 0 ..< n:
     let k = keys[i]
     # Each key corresponds to a fired selector event with associated
@@ -212,6 +288,8 @@ proc pumpTimers(thread: SigilSelectorThreadPtr, timeoutMs: int) {.gcsafe.} =
       # Forward selector events into the Sigils signal system.
       emit se.selectEvent()
       emit se.selectReady()
+  when defined(windows):
+    thread.fireDueTimers()
 
 method poll*(
     thread: SigilSelectorThreadPtr, blocking: BlockingKinds = Blocking
