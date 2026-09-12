@@ -8,3 +8,6 @@ const
     defined(sigils.closures) or
     defined(features.sigils.closures)
   sigilsCborSerdeEnabled* = defined(sigilsCborSerde)
+  sigilsCborRpcEnabled* =
+    defined(features.sigils.cbor) or
+    defined(features.sigils.ipc)

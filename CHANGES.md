@@ -1,3 +1,4 @@
+- `v0.29.0` - add generic CBOR-RPC and reorganize the import-driven JSON-RPC interfaces under `sigils/rpcs`
 - `v0.28.1` - speed up emission to a sole direct local slot by borrowing its subscription for the call; retain endpoint liveness checks and the existing snapshots for actors, proxies, and fanout
 - `v0.28.0` - fix threading and proxy lifetime bugs, actor collection races, self-unsubscription deadlocks, pool callback routing and reclamation, and exception recovery; add concurrency regression tests and rewrite the threading guide with a complete request/reply example
 - `v0.28.0` - change queue admission: ordinary sends now let the FIFO grow to avoid request/reply deadlocks; capacity is no longer a hard limit for ordinary sends, while explicit `NonBlocking` scheduler sends still reject full queues
@@ -5,6 +6,8 @@
 - `v0.28.0` - fix 32-bit asyncdispatch timer compilation, reject overflowing native timer intervals, work around skipped selector lookups in Nim 2.2.4, and remove native-integer overflow and timing assumptions from tests
 - Unreleased - add generic per-scheduler wake callbacks plus an optional Siwin adapter for default, selector-, asyncdispatch-, and Chronos-backed application schedulers, allowing efficient `waitEvents`/`pollAll` integration
 - Unreleased - reject implicit deep cloning of Agents, retain their identity for RC deliveries, and support explicit clone overloads for independently cloneable Agent types
+- Unreleased - move transport-independent RPC routing and the main JSON-RPC interface into `sigils/rpcs`, add import-driven `jr*` transport modules, provide newline-delimited TCP wiring for local selector, selector helper, and Chronos helper schedulers, and add LSP-compatible Content-Length framing plus stdin/stdout support
+- Unreleased - add generic CBOR-RPC routing under `sigils/rpcs`, with transport-neutral framing and I/O agents for local selectors, selector helper threads, Chronos helper threads, and custom transports; retain `sigils/ipc` compatibility names
 - `v0.27.0` - restore type-aware Variant payload ownership; move single-recipient calls directly, recursively clone ARC/ORC thread fanout, retain references for local queues and Atomic ARC, and traverse subscription fanout once using an owned lookahead
 - Unreleased - add the optional Chronos-backed Sigils thread with OS-dispatched wakeups and Chronos timers; add CBOR IPC over Chronos TCP, Unix sockets, and Windows named pipes with slots, signals, selectors, and protocol allowlists
 - `v0.25.3` - add the protocol-level `setterStyle: nim` pragma for generating Nim-style `field=` property setters instead of `setField`
