@@ -67,7 +67,12 @@ proc newSigilSocketEvent*(
   result.new()
   result.fd = fd
   result.events = events
-  registerHandle(thread.sel, fd, events, SigilThreadEvent(result))
+  when defined(windows):
+    # ``std/selectors`` expects a Winsock descriptor on Windows;
+    # ``SigilSocketEvent.fd`` remains an ``int`` for the public API.
+    registerHandle(thread.sel, SocketHandle(fd), events, SigilThreadEvent(result))
+  else:
+    registerHandle(thread.sel, fd, events, SigilThreadEvent(result))
 
 proc setEvents*(
     event: SigilSocketEvent,
