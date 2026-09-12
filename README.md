@@ -27,7 +27,7 @@ Connecting signals and slots is accomplished using `connect`. Note that `connect
 - String sigil names: enable `-d:sigilsSigilNameString`, `-d:sigils.sigNameAsString`, or the `sigNameAsString` package feature to use plain `string` for `SigilName` instead of the default fixed-size `StackString[48]`. The performance profile differs.
 - Chronos threads: enable the `chronos` package feature to make `SigilChronosThread` available through `sigils/threads`.
 - CBOR-RPC: enable the `cbor` or `ipc` package feature, import `sigils/rpcs/cborRpc`, and choose a selector or Chronos transport. The Chronos transport also requires the `chronos` feature.
-- JSON-RPC: import `sigils/rpcs/jsonrpc` and a desired `sigils/rpcs/json/jr*` transport module directly; no package feature or compile-time define is required.
+- JSON-RPC: import `sigils/rpcs/jsonrpc` and a desired `sigils/rpcs/json/jr*` transport module directly; `jrStdio` and `jrFraming` provide LSP-compatible stdin/stdout framing; no package feature or compile-time define is required.
 - Package features can be requested by dependents with `requires "sigils[sigNameAsString, closures, chronos, ipc]"`.
 
 ## Examples
@@ -165,7 +165,8 @@ queue limits, shutdown, and choosing between a single worker, a thread pool,
 selectors, asyncdispatch, or Chronos, see the [threading guide](docs/threading.md).
 
 For exposing protocols through JSON-RPC 2.0 on a local selector scheduler, a
-selector helper thread, or a Chronos helper thread, see the
+selector helper thread, a Chronos helper thread, or an LSP-style stdin/stdout
+transport, see the
 [JSON-RPC adapter guide](docs/jsonrpc.md).
 
 ### Siwin application loop

@@ -1,11 +1,13 @@
 ## Sigils agents used to bridge JSON-RPC I/O and protocol dispatch schedulers.
 
-import std/options
+import std/[json, options]
 
 import ../../[agents, core, threads]
 import ../jsonrpc
 
 export jsonrpc
+
+const JsonRpcDefaultConnectionId* = 1'u64
 
 type
   JsonRpcRequest* = object
@@ -14,7 +16,7 @@ type
     data*: string
 
   JsonRpcResponse* = object
-    ## One framed response destined for a transport connection.
+    ## One framed JSON-RPC message sent to or received from a connection.
     connectionId*: uint64
     data*: string
 
@@ -29,6 +31,9 @@ type
 
 proc jsonRpcRequestReceived*(
     source: JsonRpcIoAgent, request: JsonRpcRequest
+) {.signal.}
+proc jsonRpcResponseReceived*(
+    source: JsonRpcDispatcher, response: JsonRpcResponse
 ) {.signal.}
 proc jsonRpcResponseReady*(
     source: JsonRpcDispatcher, response: JsonRpcResponse
@@ -63,12 +68,58 @@ proc sendJsonRpcResponse*(
 proc dispatchJsonRpcRequest*(
     self: JsonRpcDispatcher, request: JsonRpcRequest
 ) {.slot.} =
+  if isJsonRpcResponse(request.data):
+    # The adapter intentionally leaves response correlation to the
+    # application. Preserve the complete response for a caller-owned table.
+    emit self.jsonRpcResponseReceived(JsonRpcResponse(
+      connectionId: request.connectionId,
+      data: request.data,
+    ))
+    return
   let response = self.adapter.handleJsonRpc(request.data)
   if response.isSome():
     emit self.jsonRpcResponseReady(JsonRpcResponse(
       connectionId: request.connectionId,
       data: response.get(),
     ))
+
+proc sendJsonRpcMessage*(
+    self: JsonRpcDispatcher,
+    data: sink string,
+    connectionId = JsonRpcDefaultConnectionId,
+) =
+  ## Queue an already encoded outbound JSON-RPC message on the I/O transport.
+  if self.isNil:
+    raise newException(ValueError, "JSON-RPC dispatcher must not be nil")
+  emit self.jsonRpcResponseReady(JsonRpcResponse(
+    connectionId: connectionId,
+    data: move(data),
+  ))
+
+proc sendJsonRpcRequest*(
+    self: JsonRpcDispatcher,
+    id: JsonNode,
+    methodName: string,
+    params: JsonNode = nil,
+    connectionId = JsonRpcDefaultConnectionId,
+) =
+  ## Send an outbound JSON-RPC request to the connected peer.
+  self.sendJsonRpcMessage(
+    encodeJsonRpcRequest(id, methodName, params),
+    connectionId,
+  )
+
+proc sendJsonRpcNotification*(
+    self: JsonRpcDispatcher,
+    methodName: string,
+    params: JsonNode = nil,
+    connectionId = JsonRpcDefaultConnectionId,
+) =
+  ## Send an outbound JSON-RPC notification to the connected peer.
+  self.sendJsonRpcMessage(
+    encodeJsonRpcNotification(methodName, params),
+    connectionId,
+  )
 
 proc recordJsonRpcStarted*(
     self: JsonRpcDispatcher, address: string

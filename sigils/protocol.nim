@@ -1,4 +1,4 @@
-import std/[json, jsonutils, tables, strutils]
+import std/[json, jsonutils, strutils, syncio, tables]
 import cloneutils
 import features
 
@@ -296,7 +296,7 @@ proc wrapResponse*(id: SigilId, resp: SigilParams,
   result.result = resp
 
 proc wrapResponseError*(id: SigilId, err: SigilError): SigilResponse =
-  echo "WRAP ERROR: ", id, " err: ", err.repr
+  stderr.writeLine("WRAP ERROR: ", id, " err: ", err.repr)
   result.kind = Error
   result.id = id.int
   result.result = rpcPack(err)

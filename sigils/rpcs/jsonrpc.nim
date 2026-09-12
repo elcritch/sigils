@@ -5,11 +5,12 @@ import std/[json, options, strutils, tables]
 import ../[agents, core, selectors]
 import router
 
-export options, router
+export json, options, router
 
 const
   JsonRpcVersion* = "2.0"
   JsonRpcParseError* = -32700'i32
+  JsonRpcUntargetedTarget = "\x00sigils.jsonrpc"
 
 type
   JsonRpcMethodKind {.pure.} = enum
@@ -44,13 +45,25 @@ proc router*(adapter: JsonRpcAdapter): RpcRouter =
     return nil
   adapter.rpcRouter
 
+proc validateJsonRpcMethodName(methodName: string): string =
+  if methodName.len == 0:
+    raise newException(ValueError, "JSON-RPC method name must not be empty")
+  if methodName.startsWith("rpc."):
+    raise newException(
+      ValueError,
+      "JSON-RPC method names beginning with rpc. are reserved",
+    )
+  methodName
+
 proc jsonRpcMethodName*(target, name: string): string =
   ## Compose the public JSON-RPC method name for a target and Sigils name.
   if target.len == 0 or name.len == 0:
     raise newException(ValueError, "JSON-RPC target and name must not be empty")
-  result = target & "." & name
-  if result.startsWith("rpc."):
-    raise newException(ValueError, "JSON-RPC method names beginning with rpc. are reserved")
+  result = validateJsonRpcMethodName(target & "." & name)
+
+proc jsonRpcMethodName*(methodName: string): string =
+  ## Validate a JSON-RPC method name without adding a Sigils target prefix.
+  validateJsonRpcMethodName(methodName)
 
 proc requireAdapter(adapter: JsonRpcAdapter) =
   if adapter.isNil:
@@ -93,6 +106,23 @@ proc registerSelector*[A, R](
     JsonRpcMethodKind.Selector,
   )
 
+proc registerSelectorMethod*[A, R](
+    adapter: JsonRpcAdapter,
+    methodName: string,
+    receiver: DynamicAgent,
+    selector: Selector[A, R],
+) =
+  ## Expose one selector under its exact JSON-RPC method name.
+  let wireName = jsonRpcMethodName(methodName)
+  adapter.requireAvailable([wireName])
+  adapter.rpcRouter.registerSelector(JsonRpcUntargetedTarget, receiver, selector)
+  adapter.addRoute(
+    wireName,
+    JsonRpcUntargetedTarget,
+    $selector.name,
+    JsonRpcMethodKind.Selector,
+  )
+
 proc registerProtocol*(
     adapter: JsonRpcAdapter,
     target: string,
@@ -113,6 +143,25 @@ proc registerProtocol*(
       JsonRpcMethodKind.Selector,
     )
 
+proc registerProtocolMethods*(
+    adapter: JsonRpcAdapter,
+    receiver: DynamicAgent,
+    protocol: SigilProtocol,
+) =
+  ## Expose a protocol's selectors under their exact JSON-RPC method names.
+  var methodNames = newSeqOfCap[string](protocol.requirements.len)
+  for requirement in protocol.requirements:
+    methodNames.add(jsonRpcMethodName($requirement.selector))
+  adapter.requireAvailable(methodNames)
+  adapter.rpcRouter.registerProtocol(JsonRpcUntargetedTarget, receiver, protocol)
+  for index, requirement in protocol.requirements:
+    adapter.addRoute(
+      methodNames[index],
+      JsonRpcUntargetedTarget,
+      $requirement.selector,
+      JsonRpcMethodKind.Selector,
+    )
+
 proc registerSlot*(
     adapter: JsonRpcAdapter,
     target, name: string,
@@ -125,6 +174,28 @@ proc registerSlot*(
   adapter.rpcRouter.registerSlot(target, name, receiver, implementation)
   adapter.addRoute(methodName, target, name, JsonRpcMethodKind.Slot)
 
+proc registerSlotMethod*(
+    adapter: JsonRpcAdapter,
+    methodName: string,
+    receiver: Agent,
+    implementation: AgentProc,
+) =
+  ## Expose one generated slot under its exact JSON-RPC method name.
+  let wireName = jsonRpcMethodName(methodName)
+  adapter.requireAvailable([wireName])
+  adapter.rpcRouter.registerSlot(
+    JsonRpcUntargetedTarget,
+    wireName,
+    receiver,
+    implementation,
+  )
+  adapter.addRoute(
+    wireName,
+    JsonRpcUntargetedTarget,
+    wireName,
+    JsonRpcMethodKind.Slot,
+  )
+
 proc registerSignal*(
     adapter: JsonRpcAdapter,
     target: string,
@@ -136,6 +207,23 @@ proc registerSignal*(
   adapter.requireAvailable([methodName])
   adapter.rpcRouter.registerSignal(target, source, name)
   adapter.addRoute(methodName, target, $name, JsonRpcMethodKind.Signal)
+
+proc registerSignalMethod*(
+    adapter: JsonRpcAdapter,
+    methodName: string,
+    source: Agent,
+    name: SigilName,
+) =
+  ## Expose one signal notification under its exact JSON-RPC method name.
+  let wireName = jsonRpcMethodName(methodName)
+  adapter.requireAvailable([wireName])
+  adapter.rpcRouter.registerSignal(JsonRpcUntargetedTarget, source, name)
+  adapter.addRoute(
+    wireName,
+    JsonRpcUntargetedTarget,
+    $name,
+    JsonRpcMethodKind.Signal,
+  )
 
 proc registerSignalProtocol*(
     adapter: JsonRpcAdapter,
@@ -153,6 +241,29 @@ proc registerSignalProtocol*(
     adapter.addRoute(
       methodNames[index],
       target,
+      $signal.name,
+      JsonRpcMethodKind.Signal,
+    )
+
+proc registerSignalProtocolMethods*(
+    adapter: JsonRpcAdapter,
+    source: Agent,
+    protocol: SigilProtocol,
+) =
+  ## Expose a protocol's signals under their exact JSON-RPC method names.
+  var methodNames = newSeqOfCap[string](protocol.signals.len)
+  for signal in protocol.signals:
+    methodNames.add(jsonRpcMethodName($signal.name))
+  adapter.requireAvailable(methodNames)
+  adapter.rpcRouter.registerSignalProtocol(
+    JsonRpcUntargetedTarget,
+    source,
+    protocol,
+  )
+  for index, signal in protocol.signals:
+    adapter.addRoute(
+      methodNames[index],
+      JsonRpcUntargetedTarget,
       $signal.name,
       JsonRpcMethodKind.Signal,
     )
@@ -188,6 +299,74 @@ proc errorNode(code: int32, id: JsonNode): JsonNode =
 proc validId(node: JsonNode): bool =
   node.kind in {JNull, JInt, JFloat, JString}
 
+proc isJsonRpcResponseNode(node: JsonNode): bool =
+  node.kind == JObject and
+    node.hasKey("jsonrpc") and node["jsonrpc"].kind == JString and
+    node["jsonrpc"].getStr() == JsonRpcVersion and node.hasKey("id") and
+    node["id"].validId() and not node.hasKey("method") and
+    ((node.hasKey("result") and not node.hasKey("error")) or
+      (node.hasKey("error") and not node.hasKey("result")))
+
+proc isJsonRpcResponse*(data: string): bool =
+  ## Return whether encoded data contains a JSON-RPC response message.
+  try:
+    let root = parseJson(data)
+    if root.kind == JObject:
+      return root.isJsonRpcResponseNode()
+    if root.kind != JArray or root.len == 0:
+      return false
+    for item in root:
+      if not item.isJsonRpcResponseNode():
+        return false
+    true
+  except JsonParsingError:
+    false
+
+proc newJsonRpcRequest*(
+    id: JsonNode,
+    methodName: string,
+    params: JsonNode = nil,
+): JsonNode =
+  ## Build a JSON-RPC request for an outbound server-to-client call.
+  if id.isNil or not id.validId():
+    raise newException(ValueError, "JSON-RPC request id must be a scalar value")
+  result = newJObject()
+  result["jsonrpc"] = %JsonRpcVersion
+  result["method"] = %jsonRpcMethodName(methodName)
+  if not params.isNil:
+    if params.kind notin {JArray, JObject}:
+      raise newException(ValueError, "JSON-RPC params must be an array or object")
+    result["params"] = params
+  result["id"] = id
+
+proc newJsonRpcNotification*(
+    methodName: string,
+    params: JsonNode = nil,
+): JsonNode =
+  ## Build a JSON-RPC notification for an outbound server-to-client event.
+  result = newJObject()
+  result["jsonrpc"] = %JsonRpcVersion
+  result["method"] = %jsonRpcMethodName(methodName)
+  if not params.isNil:
+    if params.kind notin {JArray, JObject}:
+      raise newException(ValueError, "JSON-RPC params must be an array or object")
+    result["params"] = params
+
+proc encodeJsonRpcRequest*(
+    id: JsonNode,
+    methodName: string,
+    params: JsonNode = nil,
+): string =
+  ## Encode an outbound JSON-RPC request as compact JSON.
+  $newJsonRpcRequest(id, methodName, params)
+
+proc encodeJsonRpcNotification*(
+    methodName: string,
+    params: JsonNode = nil,
+): string =
+  ## Encode an outbound JSON-RPC notification as compact JSON.
+  $newJsonRpcNotification(methodName, params)
+
 proc requestId(node: JsonNode): JsonNode =
   if node.kind == JObject and node.hasKey("id") and node["id"].validId():
     result = node["id"]
@@ -198,6 +377,10 @@ proc handleRequest(adapter: JsonRpcAdapter, node: JsonNode): JsonNode =
   let id = node.requestId()
   if node.kind != JObject:
     return errorNode(RpcInvalidRequest, id)
+  if node.isJsonRpcResponseNode():
+    # Responses to server-initiated requests are consumed by the dispatcher;
+    # they are not requests that should receive another response.
+    return nil
   if not node.hasKey("jsonrpc") or node["jsonrpc"].kind != JString or
       node["jsonrpc"].getStr() != JsonRpcVersion:
     return errorNode(RpcInvalidRequest, id)
@@ -242,8 +425,11 @@ proc handleRequest(adapter: JsonRpcAdapter, node: JsonNode): JsonNode =
     )
     if notification:
       return nil
-    if not resultParams.hasRpcData() or
-        resultParams.wireFormat != RpcWireFormat.Json:
+    if not resultParams.hasRpcData():
+      # A void selector/slot is a valid JSON-RPC result. LSP uses this for
+      # requests such as ``shutdown``, whose result is JSON null.
+      return responseNode(id, newJNull())
+    if resultParams.wireFormat != RpcWireFormat.Json:
       return errorNode(RpcInternalError, id)
     result = responseNode(id, parseJson(resultParams.rpcData()))
   except RpcRouteError as error:

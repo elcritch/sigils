@@ -2,6 +2,7 @@ import std/sets
 import std/isolation
 import std/options
 import std/locks
+import std/syncio
 import std/tables
 import threading/smartptrs
 import threading/channels
@@ -276,9 +277,12 @@ proc pollAll*(thread: SigilThreadPtr, blocking: BlockingKinds = NonBlocking): in
   while thread.poll(blocking):
     result.inc()
 
-proc defaultExceptionHandler*(e: ref Exception) =
-  echo "Sigil thread unhandled exception: ", e.msg, " ", e.name
-  echo "Sigil thread unhandled stack trace: ", e.getStackTrace()
+proc defaultExceptionHandler*(e: ref Exception) {.raises: [].} =
+  try:
+    stderr.writeLine("Sigil thread unhandled exception: ", e.msg, " ", e.name)
+    stderr.writeLine("Sigil thread unhandled stack trace: ", e.getStackTrace())
+  except IOError:
+    discard
 
 proc setExceptionHandler*(
     thread: var SigilThread,

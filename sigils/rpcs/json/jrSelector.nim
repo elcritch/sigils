@@ -4,12 +4,9 @@ import std/[net, nativesockets, os, selectors, strutils, tables]
 
 import ../../[agents, core, threadBase, threadSelectors]
 import jrAgents
+import jrFraming
 
-export jrAgents
-
-const
-  DefaultJsonRpcMaxMessageSize* = 1024 * 1024
-  JsonRpcReadSize = 16 * 1024
+export jrAgents, jrFraming
 
 type
   JsonRpcSelectorClient = ref object
@@ -126,7 +123,7 @@ proc processFrames(self: JsonRpcSelectorIo, client: JsonRpcSelectorClient) =
     self.closeClient(client.event.fd)
 
 proc readClient(self: JsonRpcSelectorIo, client: JsonRpcSelectorClient) =
-  var chunk = newString(JsonRpcReadSize)
+  var chunk = newString(JsonRpcFrameReadSize)
   let count = client.socket.recv(addr chunk[0], chunk.len)
   if count == 0:
     self.closeClient(client.event.fd)
