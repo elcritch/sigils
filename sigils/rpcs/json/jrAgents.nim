@@ -3,7 +3,9 @@
 import std/options
 
 import ../../[agents, core, threads]
-import jsonrpc
+import ../jsonrpc
+
+export jsonrpc
 
 type
   JsonRpcRequest* = object

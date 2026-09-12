@@ -3,9 +3,9 @@
 import std/[net, nativesockets, os, selectors, strutils, tables]
 
 import ../../[agents, core, threadBase, threadSelectors]
-import jsonrpcAgents
+import jrAgents
 
-export jsonrpcAgents
+export jrAgents
 
 const
   DefaultJsonRpcMaxMessageSize* = 1024 * 1024

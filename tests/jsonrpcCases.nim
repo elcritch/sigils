@@ -2,7 +2,8 @@ import std/[json, net, options, parseutils, strutils, unittest]
 
 import sigils
 import sigils/threadSelectors
-import sigils/rpcs/json/[jsonrpc, jsonrpcAgents, jsonrpcSelector]
+import sigils/rpcs/jsonrpc
+import sigils/rpcs/json/[jrAgents, jrSelector]
 
 type
   Counter = ref object of Agent

@@ -5,7 +5,7 @@ define:
 
 ```nim
 import sigils
-import sigils/rpcs/json/jsonrpc
+import sigils/rpcs/jsonrpc
 ```
 
 The adapter exposes registered Sigils endpoints as JSON-RPC 2.0 methods. A
@@ -49,7 +49,7 @@ Use this topology when the application thread can poll a
 
 ```nim
 import sigils/threadSelectors
-import sigils/rpcs/json/jsonrpcSelector
+import sigils/rpcs/json/jrSelector
 
 let scheduler = newSigilSelectorThread()
 setLocalSigilThread(scheduler)
@@ -76,7 +76,7 @@ the application scheduler so requests can be dispatched and responses returned:
 
 ```nim
 import sigils/threadSelectors
-import sigils/rpcs/json/jsonrpcSelector
+import sigils/rpcs/json/jrSelector
 
 startLocalThreadDefault()
 let
@@ -111,7 +111,7 @@ I/O constructor change:
 
 ```nim
 import sigils/threadChronos
-import sigils/rpcs/json/jsonrpcChronos
+import sigils/rpcs/json/jrChronos
 
 startLocalThreadDefault()
 let

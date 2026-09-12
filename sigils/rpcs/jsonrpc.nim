@@ -2,8 +2,8 @@
 
 import std/[json, options, strutils, tables]
 
-import ../../[agents, core, selectors]
-import ../router
+import ../[agents, core, selectors]
+import router
 
 export options, router
 

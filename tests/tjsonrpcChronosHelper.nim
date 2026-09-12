@@ -2,7 +2,8 @@ import std/[json, net, parseutils, strutils, unittest]
 
 import sigils
 import sigils/threadChronos
-import sigils/rpcs/json/[jsonrpc, jsonrpcAgents, jsonrpcChronos]
+import sigils/rpcs/jsonrpc
+import sigils/rpcs/json/[jrAgents, jrChronos]
 
 type AddArgs = tuple[left: int, right: int]
 

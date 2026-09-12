@@ -5,9 +5,9 @@ import std/tables
 import chronos
 
 import ../../[core, threadBase, threadChronos]
-import jsonrpcAgents
+import jrAgents
 
-export jsonrpcAgents
+export jrAgents
 
 const DefaultJsonRpcChronosMaxMessageSize * = 1024 * 1024
 
