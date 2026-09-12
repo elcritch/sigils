@@ -27,6 +27,7 @@ Connecting signals and slots is accomplished using `connect`. Note that `connect
 - String sigil names: enable `-d:sigilsSigilNameString`, `-d:sigils.sigNameAsString`, or the `sigNameAsString` package feature to use plain `string` for `SigilName` instead of the default fixed-size `StackString[48]`. The performance profile differs.
 - Chronos threads: enable the `chronos` package feature to make `SigilChronosThread` available through `sigils/threads`.
 - Chronos IPC: enable the `chronos` and `ipc` package features for CBOR RPC over TCP, Unix-domain sockets, or Windows named pipes.
+- JSON-RPC: import `sigils/rpcs/json/jsonrpc` and the desired transport module directly; no package feature or compile-time define is required.
 - Package features can be requested by dependents with `requires "sigils[sigNameAsString, closures, chronos, ipc]"`.
 
 ## Examples
@@ -162,6 +163,10 @@ Live proxies keep their remote actors alive. Ordinary sends let queues grow;
 limit outstanding work if a producer can outpace its worker. For ownership,
 queue limits, shutdown, and choosing between a single worker, a thread pool,
 selectors, asyncdispatch, or Chronos, see the [threading guide](docs/threading.md).
+
+For exposing protocols through JSON-RPC 2.0 on a local selector scheduler, a
+selector helper thread, or a Chronos helper thread, see the
+[JSON-RPC adapter guide](docs/jsonrpc.md).
 
 ### Siwin application loop
 

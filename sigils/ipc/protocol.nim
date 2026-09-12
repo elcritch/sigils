@@ -1,13 +1,14 @@
 ## CBOR wire messages shared by all Sigils IPC transports.
 
 import cborious
+import ../rpcs/router
 
 const
-  IpcProtocolVersion* = 1'u8      ## Current Sigils IPC envelope version.
-  IpcInvalidRequest* = -32600'i32 ## The incoming request was malformed.
-  IpcMethodNotFound* = -32601'i32 ## The target or method is not exposed.
-  IpcInvalidParams* = -32602'i32  ## The request parameters could not be decoded.
-  IpcInternalError* = -32603'i32  ## The exposed handler failed internally.
+  IpcProtocolVersion* = 1'u8             ## Current Sigils IPC envelope version.
+  IpcInvalidRequest* = RpcInvalidRequest ## The incoming request was malformed.
+  IpcMethodNotFound* = RpcMethodNotFound ## The target or method is not exposed.
+  IpcInvalidParams* = RpcInvalidParams   ## Request parameters could not be decoded.
+  IpcInternalError* = RpcInternalError   ## The exposed handler failed internally.
 
 type
   IpcProtocolError* = object of CatchableError ## Invalid CBOR or wire envelope.

@@ -5,6 +5,7 @@
 - `v0.28.0` - fix 32-bit asyncdispatch timer compilation, reject overflowing native timer intervals, work around skipped selector lookups in Nim 2.2.4, and remove native-integer overflow and timing assumptions from tests
 - Unreleased - add generic per-scheduler wake callbacks plus an optional Siwin adapter for default, selector-, asyncdispatch-, and Chronos-backed application schedulers, allowing efficient `waitEvents`/`pollAll` integration
 - Unreleased - reject implicit deep cloning of Agents, retain their identity for RC deliveries, and support explicit clone overloads for independently cloneable Agent types
+- Unreleased - move transport-independent RPC routing into `sigils/rpcs`, add an import-driven JSON-RPC 2.0 adapter, and provide newline-delimited TCP wiring for local selector, selector helper, and Chronos helper schedulers
 - `v0.27.0` - restore type-aware Variant payload ownership; move single-recipient calls directly, recursively clone ARC/ORC thread fanout, retain references for local queues and Atomic ARC, and traverse subscription fanout once using an owned lookahead
 - Unreleased - add the optional Chronos-backed Sigils thread with OS-dispatched wakeups and Chronos timers; add CBOR IPC over Chronos TCP, Unix sockets, and Windows named pipes with slots, signals, selectors, and protocol allowlists
 - `v0.25.3` - add the protocol-level `setterStyle: nim` pragma for generating Nim-style `field=` property setters instead of `setField`

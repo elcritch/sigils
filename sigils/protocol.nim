@@ -1,4 +1,4 @@
-import std/[tables, strutils]
+import std/[json, jsonutils, tables, strutils]
 import cloneutils
 import features
 
@@ -25,13 +25,20 @@ when sigilsSigilNameStringEnabled:
 else:
   type SigilName* = StackString[48]
 
+type
+  SigilRpcEncodeError* = object of CatchableError ## Remote RPC encode failure.
+  SigilRpcDecodeError* = object of CatchableError ## Remote RPC decode failure.
+
+  RpcWireFormat* {.pure.} = enum
+    Cbor
+    Json
+
 when defined(features.sigils.ipc):
   type
-    SigilIpcEncodeError* = object of CatchableError ## IPC CBOR encode failure.
-    SigilIpcDecodeError* = object of CatchableError ## IPC CBOR decode failure.
+    SigilIpcEncodeError* = SigilRpcEncodeError
+    SigilIpcDecodeError* = SigilRpcDecodeError
 
 when defined(nimscript) or defined(useJsonSerde) or defined(sigilsJsonSerde):
-  import std/json
   export json
 elif sigilsCborSerdeEnabled:
   import cborious
@@ -45,7 +52,6 @@ else:
     # Cborious serialization generics resolve their packers at instantiation.
     export cborious
 
-
 type SigilParams* {.acyclic.} = object ## Implementation-specific call payload.
   when defined(nimscript) or defined(useJsonSerde) or defined(sigilsJsonSerde):
     payload*: JsonNode
@@ -54,8 +60,8 @@ type SigilParams* {.acyclic.} = object ## Implementation-specific call payload.
   else:
     payload*: Variant
     cloner*: VariantCloner
-    when defined(features.sigils.ipc):
-      ipcData*: string
+  wireFormat*: RpcWireFormat
+  wireData*: string
 
 type
   RequestType* {.size: sizeof(uint8).} = enum
@@ -120,8 +126,8 @@ proc clone*(
         params.payload, deliveryCloneMode(mode)
       )
       result.cloner = params.cloner
-    when defined(features.sigils.ipc):
-      result.ipcData = params.ipcData
+  result.wireFormat = params.wireFormat
+  result.wireData = params.wireData
 
 proc clone*(
     req: SigilRequest, mode: CloneMode = defaultCloneMode
@@ -140,7 +146,7 @@ proc rpcPack*(res: SigilParams): SigilParams {.inline.} =
   result = res
 
 proc rpcPack*[T](res: sink T): SigilParams =
-  when defined(nimscript) or defined(sigilsJsonSerde):
+  when defined(nimscript) or defined(useJsonSerde) or defined(sigilsJsonSerde):
     let jn = toJson(res)
     result = SigilParams(payload: jn)
   elif sigilsCborSerdeEnabled:
@@ -155,72 +161,132 @@ proc rpcPack*[T](res: sink T): SigilParams =
       cloner: clonerFor(T),
     )
 
-when defined(features.sigils.ipc):
-  proc initIpcParams*(data: sink string): SigilParams =
-    ## Build type-erased parameters that generated slots/selectors decode from CBOR.
-    when sigilsCborSerdeEnabled:
-      result = SigilParams(payload: CborStream.init(data))
-    else:
-      result = SigilParams(ipcData: data)
+proc initRpcParams*(format: RpcWireFormat, data: sink string): SigilParams =
+  ## Build type-erased parameters decoded by generated slots and selectors.
+  result = SigilParams(wireFormat: format, wireData: data)
 
-  proc hasIpcData*(params: SigilParams): bool =
-    when sigilsCborSerdeEnabled:
-      not params.payload.isNil
-    else:
-      params.ipcData.len > 0
+proc hasRpcData*(params: SigilParams): bool =
+  params.wireData.len > 0
 
-  proc ipcData*(params: SigilParams): string =
-    when sigilsCborSerdeEnabled:
-      if not params.payload.isNil:
-        result = params.payload.data
-    else:
-      result = params.ipcData
+proc rpcData*(params: SigilParams): string =
+  params.wireData
 
-  proc rpcPackIpc*[T](res: sink T): SigilParams =
-    ## Preserve the local representation and attach CBOR for an IPC response.
-    when sigilsCborSerdeEnabled:
-      result = rpcPack(ensureMove res)
-    else:
+proc unpackJsonTuple[T](node: JsonNode): T =
+  if node.kind != JArray:
+    return jsonTo(node, T)
+
+  var fieldCount = 0
+  for _ in fields(result):
+    fieldCount.inc()
+  if node.len != fieldCount:
+    raise newException(
+      ValueError,
+      "JSON parameter count mismatch: expected " & $fieldCount &
+        ", got " & $node.len,
+    )
+
+  var index = 0
+  for field in fields(result):
+    fromJson(field, node[index])
+    index.inc()
+
+proc rpcPackRemote*[T](
+    res: sink T, format: RpcWireFormat
+): SigilParams =
+  ## Preserve the local representation and attach a remote wire encoding.
+  case format
+  of RpcWireFormat.Cbor:
+    when defined(features.sigils.ipc):
       when compiles(cborious.toCbor(res)):
         let encoded =
           try:
             cborious.toCbor(res)
           except CatchableError as error:
-            raise newException(SigilIpcEncodeError, error.msg)
-        result = rpcPack(ensureMove res)
-        result.ipcData = encoded
+            raise newException(SigilRpcEncodeError, error.msg)
+        result = rpcPack(ensureMove(res))
+        result.wireFormat = format
+        result.wireData = encoded
       else:
         raise newException(
-          SigilIpcEncodeError,
-          "type cannot be encoded as IPC CBOR",
+          SigilRpcEncodeError,
+          "type cannot be encoded as RPC CBOR",
         )
+    else:
+      raise newException(SigilRpcEncodeError, "CBOR RPC support is disabled")
+  of RpcWireFormat.Json:
+    when compiles(toJson(res)):
+      let encoded =
+        try:
+          $toJson(res)
+        except CatchableError as error:
+          raise newException(SigilRpcEncodeError, error.msg)
+      result = rpcPack(ensureMove(res))
+      result.wireFormat = format
+      result.wireData = encoded
+    else:
+      raise newException(
+        SigilRpcEncodeError,
+        "type cannot be encoded as RPC JSON",
+      )
+
+when defined(features.sigils.ipc):
+  proc initIpcParams*(data: sink string): SigilParams =
+    ## Build type-erased parameters that generated slots/selectors decode from CBOR.
+    initRpcParams(RpcWireFormat.Cbor, data)
+
+  proc hasIpcData*(params: SigilParams): bool =
+    params.hasRpcData() and params.wireFormat == RpcWireFormat.Cbor
+
+  proc ipcData*(params: SigilParams): string =
+    if params.hasIpcData():
+      result = params.rpcData()
+
+  proc rpcPackIpc*[T](res: sink T): SigilParams =
+    ## Preserve the local representation and attach CBOR for an IPC response.
+    rpcPackRemote(ensureMove(res), RpcWireFormat.Cbor)
 
 proc rpcUnpack*[T](obj: var T, ss: SigilParams) =
-  when defined(nimscript) or defined(useJsonSerde):
+  if ss.hasRpcData():
+    case ss.wireFormat
+    of RpcWireFormat.Cbor:
+      when defined(features.sigils.ipc):
+        when compiles(cborious.fromCbor("", T)):
+          try:
+            obj = cborious.fromCbor(ss.wireData, T)
+          except CatchableError as error:
+            raise newException(SigilRpcDecodeError, error.msg)
+        else:
+          raise newException(
+            SigilRpcDecodeError,
+            "type cannot be decoded from RPC CBOR",
+          )
+      else:
+        raise newException(SigilRpcDecodeError, "CBOR RPC support is disabled")
+    of RpcWireFormat.Json:
+      when compiles(jsonTo(parseJson("null"), T)):
+        try:
+          let node = parseJson(ss.wireData)
+          when T is tuple:
+            obj = unpackJsonTuple[T](node)
+          else:
+            obj = jsonTo(node, T)
+        except CatchableError as error:
+          raise newException(SigilRpcDecodeError, error.msg)
+      else:
+        raise newException(
+          SigilRpcDecodeError,
+          "type cannot be decoded from RPC JSON",
+        )
+    return
+
+  when defined(nimscript) or defined(useJsonSerde) or defined(sigilsJsonSerde):
     obj.fromJson(ss.payload)
-    discard
   elif sigilsCborSerdeEnabled:
     ss.payload.setPosition(0)
     obj = unpack(ss.payload, T)
   else:
-    when defined(features.sigils.ipc):
-      if ss.ipcData.len > 0:
-        when compiles(cborious.fromCbor("", T)):
-          try:
-            obj = cborious.fromCbor(ss.ipcData, T)
-          except CatchableError as error:
-            raise newException(SigilIpcDecodeError, error.msg)
-        else:
-          raise newException(
-            SigilIpcDecodeError,
-            "type cannot be decoded from IPC CBOR",
-          )
-      else:
-        assert not ss.payload.isNil
-        obj = ss.payload.get(T)
-    else:
-      assert not ss.payload.isNil
-      obj = ss.payload.get(T)
+    assert not ss.payload.isNil
+    obj = ss.payload.get(T)
 
 proc wrapResponse*(id: SigilId, resp: SigilParams,
     kind = Response): SigilResponse =
