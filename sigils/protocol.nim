@@ -45,10 +45,10 @@ elif sigilsCborSerdeEnabled:
   export cborious
 else:
   import svariant
-  when defined(features.sigils.ipc):
+  when sigilsCborRpcEnabled:
     import cborious
   export svariant
-  when defined(features.sigils.ipc):
+  when sigilsCborRpcEnabled:
     # Cborious serialization generics resolve their packers at instantiation.
     export cborious
 
@@ -196,7 +196,7 @@ proc rpcPackRemote*[T](
   ## Preserve the local representation and attach a remote wire encoding.
   case format
   of RpcWireFormat.Cbor:
-    when defined(features.sigils.ipc):
+    when sigilsCborRpcEnabled:
       when compiles(cborious.toCbor(res)):
         let encoded =
           try:
@@ -249,7 +249,7 @@ proc rpcUnpack*[T](obj: var T, ss: SigilParams) =
   if ss.hasRpcData():
     case ss.wireFormat
     of RpcWireFormat.Cbor:
-      when defined(features.sigils.ipc):
+      when sigilsCborRpcEnabled:
         when compiles(cborious.fromCbor("", T)):
           try:
             obj = cborious.fromCbor(ss.wireData, T)

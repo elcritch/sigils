@@ -26,7 +26,7 @@ Connecting signals and slots is accomplished using `connect`. Note that `connect
 - Closure slots: enable `-d:sigilsClosures`, `-d:sigils.closures`, or the `closures` package feature, then import `sigils/closures` to use `connectTo(...) do:`.
 - String sigil names: enable `-d:sigilsSigilNameString`, `-d:sigils.sigNameAsString`, or the `sigNameAsString` package feature to use plain `string` for `SigilName` instead of the default fixed-size `StackString[48]`. The performance profile differs.
 - Chronos threads: enable the `chronos` package feature to make `SigilChronosThread` available through `sigils/threads`.
-- Chronos IPC: enable the `chronos` and `ipc` package features for CBOR RPC over TCP, Unix-domain sockets, or Windows named pipes.
+- CBOR-RPC: enable the `cbor` or `ipc` package feature, import `sigils/rpcs/cborRpc`, and choose a selector or Chronos transport. The Chronos transport also requires the `chronos` feature.
 - JSON-RPC: import `sigils/rpcs/json/jsonrpc` and the desired transport module directly; no package feature or compile-time define is required.
 - Package features can be requested by dependents with `requires "sigils[sigNameAsString, closures, chronos, ipc]"`.
 
@@ -210,11 +210,18 @@ Producers may use the scheduler from worker threads, but install the waker
 before starting them. The Siwin globals and native event pump stay on the
 application thread.
 
-## IPC
+## CBOR RPC and IPC
 
-The optional IPC layer carries typed selectors, slots, and signal notifications
-over Chronos. Runtime protocols act as the remote allowlist, and `cborious`
-encodes arguments and results. A Unix-family Chronos address uses a Unix-domain
+The generic CBOR-RPC layer carries typed selectors, slots, and signal
+notifications. Runtime protocols act as the remote allowlist, and `cborious`
+encodes arguments and results. Import `sigils/rpcs/cborRpc` for routing, then
+import `sigils/rpcs/cbor/crSelector` or `sigils/rpcs/cbor/crChronos` for the
+desired scheduler. `CborRpcIoAgent` is the extension point for other transports.
+Selector I/O can run locally or on a helper selector thread; Chronos I/O runs on
+a helper Chronos thread.
+
+The existing `sigils/ipc` module remains as a compatibility interface for the
+bidirectional Chronos peer API. A Unix-family Chronos address uses a Unix-domain
 socket on POSIX and a named pipe on Windows.
 
 ```nim
