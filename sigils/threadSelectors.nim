@@ -12,6 +12,7 @@ import std/selectors
 import std/times
 import std/tables
 import std/net
+import std/nativesockets
 
 import agents
 import threadBase
@@ -71,7 +72,12 @@ proc setEvents*(
   ## Replace the readiness events watched for a registered descriptor.
   if event.isNil or thread.isNil:
     raise newException(ValueError, "selector socket event must not be nil")
-  thread.sel.updateHandle(event.fd, events)
+  when defined(windows):
+    # ``std/selectors`` stores Winsock descriptors as ``SocketHandle``;
+    # ``SigilSocketEvent.fd`` remains an ``int`` for the public readiness API.
+    thread.sel.updateHandle(SocketHandle(event.fd), events)
+  else:
+    thread.sel.updateHandle(event.fd, events)
   event.events = events
 
 proc unregister*(event: SigilSocketEvent, thread: SigilSelectorThreadPtr) =
