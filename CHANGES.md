@@ -1,3 +1,4 @@
+- Unreleased - instantiate JSON and CBOR codecs only for explicitly registered remote selectors, slots, and signals, keeping local protocol payloads independent of RPC serialization
 - `v0.29.0` - add generic CBOR-RPC and reorganize the import-driven JSON-RPC interfaces under `sigils/rpcs`
 - `v0.28.2` - support `sink` signal and slot payloads while exposing their underlying value type for connection checks, enabling single-owner payload handoffs
 - `v0.28.1` - speed up emission to a sole direct local slot by borrowing its subscription for the call; retain endpoint liveness checks and the existing snapshots for actors, proxies, and fanout

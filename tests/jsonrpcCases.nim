@@ -13,6 +13,11 @@ type
 
   AddArgs = tuple[left: int, right: int]
 
+  Callback = proc(value: int): int {.closure.}
+
+  CallbackPayload = object
+    callback: Callback
+
 proc setValue(self: Counter, value: int) {.slot.} =
   self.value = value
 
@@ -20,12 +25,16 @@ proc valueChanged(self: CounterSource, value: int) {.signal.}
 
 let addNumbers = selector[AddArgs, int]("addNumbers")
 let currentAnswer = selector[tuple[], int]("currentAnswer")
+let currentCallback = selector[tuple[], CallbackPayload]("currentCallback")
 
 proc addImpl(self: DynamicAgent, args: AddArgs): int =
   args.left + args.right
 
 proc answerImpl(self: DynamicAgent, args: tuple[]): int =
   42
+
+proc callbackImpl(self: DynamicAgent, args: tuple[]): CallbackPayload =
+  CallbackPayload(callback: proc(value: int): int = value + 1)
 
 proc response(adapter: JsonRpcAdapter, request: string): JsonNode =
   let encoded = adapter.handleJsonRpc(request)
@@ -41,15 +50,11 @@ proc initAdapter(
     calculator = DynamicAgent()
   discard calculator.addMethod(addNumbers, toDynamicMethod(addImpl))
   discard calculator.addMethod(currentAnswer, toDynamicMethod(answerImpl))
-  let calculatorProtocol = initProtocol(
-    "Calculator",
-    [requirement(addNumbers), requirement(currentAnswer)],
-  )
-
   result = newJsonRpcAdapter()
-  result.registerProtocol("calculator", calculator, calculatorProtocol)
+  result.registerSelector("calculator", calculator, addNumbers)
+  result.registerSelector("calculator", calculator, currentAnswer)
   result.registerSlot("counter", "setValue", counter, Counter.setValue())
-  result.registerSignal("events", source, toSigilName("valueChanged"))
+  result.registerSignal("events", source, CounterSource.valueChanged())
   connect(source, valueChanged, sink, setValue)
 
 proc splitAddress(address: string): tuple[host: string, port: Port] =
@@ -125,6 +130,19 @@ suite "JSON-RPC protocol adapter":
     let parseFailure = adapter.response("{")
     check parseFailure["error"]["code"].getInt() == JsonRpcParseError
     check parseFailure["id"].kind == JNull
+
+  test "registered JSON selectors reject procedure payloads cleanly":
+    let
+      calculator = DynamicAgent()
+      adapter = newJsonRpcAdapter()
+    discard calculator.addMethod(currentCallback, toDynamicMethod(callbackImpl))
+    adapter.registerSelector("calculator", calculator, currentCallback)
+
+    let reply = adapter.response(
+      """{"jsonrpc":"2.0","method":"calculator.currentCallback","id":1}"""
+    )
+
+    check reply["error"]["code"].getInt() == RpcInternalError
 
   test "batches omit notification responses":
     let

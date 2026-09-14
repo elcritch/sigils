@@ -46,6 +46,10 @@ type
     origin*: SigilId
     args*: A
 
+  SignalDescriptor*[A] = object
+    ## A generated signal name paired with its argument tuple type.
+    name*: SigilName
+
   SlotEnv* = ref object of RootObj
     ## Owned environment for receiver-bound closure slots.
 

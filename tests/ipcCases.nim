@@ -48,18 +48,14 @@ proc initIpcFixture(): IpcFixture =
   result.counter = Counter()
   result.sink = Counter()
   discard calculator.addMethod(addNumbers, toDynamicMethod(addImpl))
-  let calculatorProtocol = initProtocol(
-    "Calculator",
-    [requirement(addNumbers)],
-  )
-  router.registerProtocol("calculator", calculator, calculatorProtocol)
+  router.registerSelector("calculator", calculator, addNumbers)
   router.registerSlot(
     "counter",
     "setValue",
     result.counter,
     Counter.setValue(),
   )
-  router.registerSignal("events", source, toSigilName("valueChanged"))
+  router.registerSignal("events", source, CounterSource.valueChanged())
   connect(source, valueChanged, result.sink, setValue)
   result.server = createIpcServer(result.local.address, router)
   result.server.start()

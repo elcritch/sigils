@@ -8,10 +8,10 @@ import std/options
 
 import cborious
 
-import ../protocol
+import ../[agents, protocol, selectors]
 import router
 
-export options, router
+export cborious, options, router
 
 const
   CborRpcProtocolVersion* = 1'u8
@@ -48,6 +48,65 @@ proc newCborRpcRouter*(): CborRpcRouter =
   ## Create an empty endpoint router for CBOR RPC.
   newRpcRouter()
 
+proc decodeCborParams[T](data: string): SigilParams =
+  try:
+    result = rpcPack(cborious.fromCbor(data, T))
+  except CatchableError as error:
+    raise newException(SigilRpcDecodeError, error.msg)
+
+proc encodeCborResult[T](params: sink SigilParams): string =
+  var value: T
+  rpcUnpack(value, params)
+  try:
+    result = cborious.toCbor(value)
+  except CatchableError as error:
+    raise newException(SigilRpcEncodeError, error.msg)
+
+proc registerSelector*[A, R](
+    router: CborRpcRouter,
+    target: string,
+    receiver: DynamicAgent,
+    selector: Selector[A, R],
+) =
+  ## Expose one typed selector using CBOR argument and result codecs.
+  router.registerSelectorRoute(
+    target,
+    receiver,
+    selector.name,
+    decodeCborParams[A],
+    encodeCborResult[R],
+  )
+
+proc registerSlot*[A](
+    router: CborRpcRouter,
+    target, name: string,
+    receiver: Agent,
+    implementation: AgentProcTy[A],
+) =
+  ## Expose one generated slot using its typed CBOR argument codec.
+  router.registerSlotRoute(
+    target,
+    name,
+    receiver,
+    implementation,
+    decodeCborParams[A],
+    encodeCborResult[bool],
+  )
+
+proc registerSignal*[A](
+    router: CborRpcRouter,
+    target: string,
+    source: Agent,
+    signal: SignalDescriptor[A],
+) =
+  ## Expose one signal using its typed CBOR argument codec.
+  router.registerSignalRoute(
+    target,
+    source,
+    signal.name,
+    decodeCborParams[A],
+  )
+
 proc bytesToString*(data: openArray[byte]): string =
   ## Copy binary bytes into Nim's binary-safe string representation.
   result = newString(data.len)
@@ -62,36 +121,24 @@ proc stringToBytes*(data: string): seq[byte] =
 
 proc packCborRpcPayload*[T](value: T): seq[byte] =
   ## Encode a typed RPC argument or result as nested CBOR bytes.
-  when compiles(cborious.toCbor(value)):
-    try:
-      result = stringToBytes(cborious.toCbor(value))
-    except CatchableError as error:
-      raise newException(
-        CborRpcProtocolError,
-        "could not encode CBOR payload: " & error.msg,
-      )
-  else:
+  try:
+    result = stringToBytes(cborious.toCbor(value))
+  except CatchableError as error:
     raise newException(
       CborRpcProtocolError,
-      "type cannot be encoded as CBOR RPC",
+      "could not encode CBOR payload: " & error.msg,
     )
 
 proc unpackCborRpcPayload*[T](
     payload: openArray[byte], _: typedesc[T]
 ): T =
   ## Decode a typed RPC argument or result from nested CBOR bytes.
-  when compiles(cborious.fromCbor("", T)):
-    try:
-      result = cborious.fromCbor(bytesToString(payload), T)
-    except CatchableError as error:
-      raise newException(
-        CborRpcProtocolError,
-        "invalid CBOR payload: " & error.msg,
-      )
-  else:
+  try:
+    result = cborious.fromCbor(bytesToString(payload), T)
+  except CatchableError as error:
     raise newException(
       CborRpcProtocolError,
-      "type cannot be decoded from CBOR RPC",
+      "invalid CBOR payload: " & error.msg,
     )
 
 proc encodeCborRpcEnvelope*(envelope: CborRpcEnvelope): string =
@@ -189,40 +236,23 @@ proc cborRpcErrorEnvelope*(
     errorMessage: message,
   )
 
-proc payloadFromParams(params: SigilParams): seq[byte] =
-  let data = params.rpcData()
-  if not params.hasRpcData() or params.wireFormat != RpcWireFormat.Cbor:
-    let error = newException(
-      RpcRouteError,
-      "RPC handler did not encode a CBOR result",
-    )
-    error.code = CborRpcInternalError
-    raise error
-  stringToBytes(data)
-
 proc handleRequest*(
     router: CborRpcRouter, envelope: CborRpcEnvelope
 ): CborRpcEnvelope =
   ## Dispatch a CBOR RPC request and produce its response envelope.
-  let resultParams = router.dispatchRequest(
+  let resultData = router.dispatchRequest(
     envelope.target,
     envelope.name,
-    initRpcParams(
-      RpcWireFormat.Cbor,
-      bytesToString(envelope.payload),
-    ),
+    bytesToString(envelope.payload),
   )
-  cborRpcResponseEnvelope(envelope.id, payloadFromParams(resultParams))
+  cborRpcResponseEnvelope(envelope.id, stringToBytes(resultData))
 
 proc handleNotify*(router: CborRpcRouter, envelope: CborRpcEnvelope) =
   ## Dispatch a CBOR RPC notification to a registered signal.
   router.dispatchNotify(
     envelope.target,
     envelope.name,
-    initRpcParams(
-      RpcWireFormat.Cbor,
-      bytesToString(envelope.payload),
-    ),
+    bytesToString(envelope.payload),
   )
 
 proc handleCborRpc*(

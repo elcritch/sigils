@@ -85,9 +85,9 @@ jobs:
       - name: Install dependencies
         run: |
           atlas init
-          atlas --feature=chronos install
+          atlas --feature=chronos --feature=ipc install
 
-      - name: Run tests including Chronos
+      - name: Run tests including Chronos and IPC
         run: |
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             # Nim's Windows selector backend has no native timer support.

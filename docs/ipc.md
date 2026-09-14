@@ -1,6 +1,6 @@
 # Chronos IPC design
 
-Sigils IPC carries slots, signals, selectors, and runtime protocols across a
+Sigils IPC carries slots, signals, and typed selectors across a
 Chronos stream. The first transport is deliberately small: CBOR messages inside
 a bounded length frame. On POSIX, a Chronos `AddressFamily.Unix` endpoint is a
 Unix-domain socket. On Windows, Chronos maps that same address family to a named
@@ -21,8 +21,8 @@ The RPC envelope is CBOR with these fields:
 - error code and message.
 
 Selectors and slots use request/response. Signals use one-way notifications.
-Registering a `SigilProtocol` exposes only the selectors declared by that
-protocol and checks that the receiver conforms before the server starts.
+Each explicit endpoint registration installs CBOR codecs for that endpoint's
+argument and result types.
 
 The native stream frame is:
 
@@ -50,9 +50,9 @@ such as closures and agent references.
 
 - `newIpcRouter()` creates an endpoint registry.
 - `registerSlot` exposes a generated slot.
-- `registerSignal` and `registerSignalProtocol` allow incoming notifications.
+- `registerSignal` accepts a generated typed signal descriptor and allows
+  incoming notifications.
 - `registerSelector` exposes one typed selector.
-- `registerProtocol` exposes a conforming protocol's selector surface.
 - `createIpcServer` binds a Chronos TCP, Unix-socket, or named-pipe endpoint.
 - `connectIpc` creates a bidirectional peer.
 - `callSlot`, `callSelector`, and `notifySignal` are the typed client operations.

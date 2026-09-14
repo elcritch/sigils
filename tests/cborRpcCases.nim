@@ -33,7 +33,7 @@ proc initRouter(counter, sink: Counter): CborRpcRouter =
   result = newCborRpcRouter()
   result.registerSelector("calculator", calculator, addNumbers)
   result.registerSlot("counter", "setValue", counter, Counter.setValue())
-  result.registerSignal("events", source, toSigilName("valueChanged"))
+  result.registerSignal("events", source, CounterSource.valueChanged())
   connect(source, valueChanged, sink, setValue)
 
 suite "CBOR-RPC protocol adapter":

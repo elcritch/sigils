@@ -10,14 +10,15 @@ import sigils/rpcs/jsonrpc
 
 The adapter exposes registered Sigils endpoints as JSON-RPC 2.0 methods. A
 target and selector, slot, or signal name become `target.name` on the wire.
-Protocol registration keeps the protocol's selector allowlist and verifies
-conformance before the endpoint is exposed.
+Each explicit registration installs JSON codecs only for that endpoint's
+argument and result types. Local selectors and CBOR-only endpoints do not
+instantiate `jsonutils`.
 
 ```nim
 let adapter = newJsonRpcAdapter()
-adapter.registerProtocol("calculator", calculator, calculatorProtocol)
+adapter.registerSelector("calculator", calculator, addNumbers)
 adapter.registerSlot("counter", "setValue", counter, Counter.setValue())
-adapter.registerSignal("events", source, toSigilName("valueChanged"))
+adapter.registerSignal("events", source, CounterSource.valueChanged())
 ```
 
 Selectors and slots accept JSON-RPC requests or notifications. Registered
