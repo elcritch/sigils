@@ -11,6 +11,9 @@ type
 
   Originator* = ref object of Agent
 
+  OwnedPayload = object
+    value: int
+
   CounterWithDestroy* = ref object of Agent
     value: int
     avg: int64
@@ -21,6 +24,7 @@ proc `=destroy`*(x: var typeof(CounterWithDestroy()[])) =
   destroyAgent(x)
 
 proc change*(tp: Originator, val: int) {.signal.}
+proc payloadChanged*(tp: Originator, payload: sink OwnedPayload) {.signal.}
 
 proc valueChanged*(tp: Counter, val: int) {.signal.}
 proc valueChanged*(tp: CounterWithDestroy, val: int) {.signal.}
@@ -34,6 +38,9 @@ proc setValue*(self: Counter, value: int) {.slot.} =
   if self.value != value:
     self.value = value
     emit self.valueChanged(value)
+
+proc setPayload*(self: Counter, payload: OwnedPayload) {.slot.} =
+  self.value = payload.value
 
 proc setValue*(self: CounterWithDestroy, value: int) {.slot.} =
   echo "setValue! ", value
@@ -95,6 +102,15 @@ when isMainModule:
       echo "someChange: ", SignalTypes.someChange(Counter).typeof.repr
       check SignalTypes.someChange(Counter) is tuple[]
       check SignalTypes.setValue(Counter) is (int, )
+      check SignalTypes.payloadChanged(Originator) is (OwnedPayload, )
+
+    test "sink signal payloads expose their value type":
+      connect(o, payloadChanged, b, setPayload)
+      var payload = OwnedPayload(value: 42)
+
+      emit o.payloadChanged(move payload)
+
+      check b.value == 42
 
     test "signal connect":
       echo "Counter.setValue: ", Counter.setValue().repr

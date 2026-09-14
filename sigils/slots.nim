@@ -22,6 +22,12 @@ iterator paramsIter(params: NimNode): tuple[name, ntype: NimNode] =
     for j in 0 ..< arg.len - 2:
       yield (arg[j], argType)
 
+proc signalValueType(paramType: NimNode): NimNode =
+  if paramType.len == 2 and paramType[0].eqIdent("sink"):
+    result = paramType[1].copyNimTree()
+  else:
+    result = paramType.copyNimTree()
+
 proc mkParamsVars*(paramsIdent, paramsType, params: NimNode): NimNode =
   ## Create local variables for each parameter in the actual RPC call proc
   if params.isNil:
@@ -157,7 +163,7 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
 
   var signalTyp = nnkTupleConstr.newTree()
   for i in 2 ..< params.len:
-    signalTyp.add params[i][1]
+    signalTyp.add params[i][1].signalValueType()
   if params.len == 2:
     # signalTyp = bindSym"void"
     signalTyp = quote:
