@@ -1,4 +1,4 @@
-- Unreleased - support `sink` signal payloads while exposing their underlying value type for connection checks, enabling single-owner payload handoffs
+- Unreleased - support `sink` signal and slot payloads while exposing their underlying value type for connection checks, enabling single-owner payload handoffs
 - `v0.28.1` - speed up emission to a sole direct local slot by borrowing its subscription for the call; retain endpoint liveness checks and the existing snapshots for actors, proxies, and fanout
 - `v0.28.0` - fix threading and proxy lifetime bugs, actor collection races, self-unsubscription deadlocks, pool callback routing and reclamation, and exception recovery; add concurrency regression tests and rewrite the threading guide with a complete request/reply example
 - `v0.28.0` - change queue admission: ordinary sends now let the FIFO grow to avoid request/reply deadlocks; capacity is no longer a hard limit for ordinary sends, while explicit `NonBlocking` scheduler sends still reject full queues

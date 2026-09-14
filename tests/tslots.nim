@@ -39,7 +39,7 @@ proc setValue*(self: Counter, value: int) {.slot.} =
     self.value = value
     emit self.valueChanged(value)
 
-proc setPayload*(self: Counter, payload: OwnedPayload) {.slot.} =
+proc setPayload*(self: Counter, payload: sink OwnedPayload) {.slot.} =
   self.value = payload.value
 
 proc setValue*(self: CounterWithDestroy, value: int) {.slot.} =
@@ -103,8 +103,9 @@ when isMainModule:
       check SignalTypes.someChange(Counter) is tuple[]
       check SignalTypes.setValue(Counter) is (int, )
       check SignalTypes.payloadChanged(Originator) is (OwnedPayload, )
+      check SignalTypes.setPayload(Counter) is (OwnedPayload, )
 
-    test "sink signal payloads expose their value type":
+    test "sink signal and slot payloads expose their value type":
       connect(o, payloadChanged, b, setPayload)
       var payload = OwnedPayload(value: 42)
 
