@@ -35,7 +35,8 @@ proc clone(value: CloneProbe): CloneProbe {.gcsafe.} =
   cloneCalls.atomicInc()
   value
 
-proc payloadChanged(source: PayloadSource, payload: ManagedPayload) {.signal.}
+proc payloadChanged(source: PayloadSource,
+    payload: sink ManagedPayload) {.signal.}
 
 proc valid(payload: ManagedPayload): bool =
   if int(payload.probe) != payload.id:
@@ -50,7 +51,7 @@ proc valid(payload: ManagedPayload): bool =
     payload.numbers == @[payload.id, payload.id + 1, payload.id + 2]
 
 proc receivePayload(receiver: PayloadReceiver,
-    payload: ManagedPayload) {.slot.} =
+    payload: sink ManagedPayload) {.slot.} =
   if not payload.valid():
     invalidPayloads.atomicInc()
   receivedPayloads[receiver.receiverId].atomicInc()
