@@ -28,8 +28,8 @@ proc debugPrintImpl*(msgs: varargs[string, `$`]) {.raises: [].} =
           var msg = ""
           for m in msgs:
             msg &= m
-          stdout.styledWriteLine color, msg, {styleBright}, &" [th: {$tid}]"
-          stdout.flushFile()
+          stderr.styledWriteLine color, msg, {styleBright}, &" [th: {$tid}]"
+          stderr.flushFile()
       except IOError:
         discard
 
@@ -46,7 +46,7 @@ template debugQueuePrint*(msgs: varargs[untyped]) =
 proc brightPrint*(color: ForegroundColor, msg, value: string, msg2 = "", value2 = "") =
   when defined(sigilsDebugPrint):
     if not debugPrintQuiet:
-      stdout.styledWriteLine color,
+      stderr.styledWriteLine color,
         msg,
         {styleBright, styleItalic},
         value,
