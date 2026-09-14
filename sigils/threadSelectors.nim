@@ -167,6 +167,7 @@ method setTimer*(thread: SigilSelectorThreadPtr, timer: SigilTimer) {.gcsafe.} =
     withLock thread.timerLock:
       thread.timerHandles[timer] = -1
       thread.timerDeadlines[timer] = deadline
+    thread.inputWake.trigger()
   else:
     let oneshot = (not timer.isRepeat()) and timer.count <= 1
     withLock thread.timerLock:
@@ -204,14 +205,21 @@ proc closeSelectorThread*(thread: SigilSelectorThreadPtr) =
   thread.inputWake.close()
 
 when defined(windows):
+  const MaxSelectorWaitMs = high(int32)
+
   proc timerWaitTimeout(thread: SigilSelectorThreadPtr, requested: int): int =
     ## Bound a selector wait by the nearest manually tracked deadline.
     result = requested
+    if result > MaxSelectorWaitMs:
+      result = MaxSelectorWaitMs
     let now = getMonoTime()
     withLock thread.timerLock:
       for deadline in thread.timerDeadlines.values:
         let remaining = (deadline - now).inMilliseconds
-        let waitMs = max(remaining, 1'i64).int
+        let waitMs = min(
+          max(remaining, 1'i64),
+          int64(MaxSelectorWaitMs),
+        ).int
         if result < 0 or waitMs < result:
           result = waitMs
 

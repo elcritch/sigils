@@ -188,3 +188,29 @@ suite "JSON-RPC protocol adapter":
       socket.close()
       emit dispatcher.jsonRpcStopRequested()
       thread.closeSelectorThread()
+
+  test "exact method routes keep independent internal targets":
+    startLocalThreadDefault()
+    let
+      selectorAgent = DynamicAgent()
+      slotAgent = Counter()
+      adapter = newJsonRpcAdapter()
+      hover = selector[tuple[], int]("hover")
+
+    proc hoverImpl(self: DynamicAgent, args: tuple[]): int =
+      2
+
+    discard selectorAgent.addMethod(hover, toDynamicMethod(hoverImpl))
+    adapter.registerSelectorMethod("textDocument/hover", selectorAgent, hover)
+    adapter.registerSlotMethod("hover", slotAgent, Counter.setValue())
+
+    let hoverReply = adapter.response(
+      """{"jsonrpc":"2.0","method":"textDocument/hover","id":1}"""
+    )
+    check hoverReply["result"].getInt() == 2
+
+    let slotReply = adapter.response(
+      """{"jsonrpc":"2.0","method":"hover","params":[73],"id":2}"""
+    )
+    check slotReply["result"].getBool()
+    check slotAgent.value == 73

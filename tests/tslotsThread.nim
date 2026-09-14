@@ -305,10 +305,9 @@ suite "threaded agent slots":
 
       thread.start()
 
-      for i in 1 .. 3:
-        if globalLastTicker.load != 3:
-          os.sleep(1)
-      check globalLastTicker.load == 3
+      # Worker startup and scheduling can take longer than a few milliseconds,
+      # especially on Windows.
+      check globalLastTicker.waitFor(3)
       ct.poll()
       let polled = ct.pollAll()
       echo "polled: ", polled

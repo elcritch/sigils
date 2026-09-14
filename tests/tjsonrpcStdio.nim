@@ -87,7 +87,8 @@ suite "JSON-RPC Content-Length framing":
   test "keeps exact method names for LSP-style registration":
     startLocalThreadDefault()
     let
-      agent = DynamicAgent()
+      initializeAgent = DynamicAgent()
+      hoverAgent = DynamicAgent()
       adapter = newJsonRpcAdapter()
       initialize = selector[tuple[], int]("initialize")
       hover = selector[tuple[], int]("hover")
@@ -98,10 +99,10 @@ suite "JSON-RPC Content-Length framing":
     proc hoverImpl(self: DynamicAgent, args: tuple[]): int =
       2
 
-    discard agent.addMethod(initialize, toDynamicMethod(initializeImpl))
-    discard agent.addMethod(hover, toDynamicMethod(hoverImpl))
-    adapter.registerSelectorMethod("initialize", agent, initialize)
-    adapter.registerSelectorMethod("textDocument/hover", agent, hover)
+    discard initializeAgent.addMethod(initialize, toDynamicMethod(initializeImpl))
+    discard hoverAgent.addMethod(hover, toDynamicMethod(hoverImpl))
+    adapter.registerSelectorMethod("initialize", initializeAgent, initialize)
+    adapter.registerSelectorMethod("textDocument/hover", hoverAgent, hover)
 
     let initializeReply = adapter.handleJsonRpc(
       """{"jsonrpc":"2.0","method":"initialize","id":1}"""

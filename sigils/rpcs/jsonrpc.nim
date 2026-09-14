@@ -10,7 +10,9 @@ export json, options, router
 const
   JsonRpcVersion* = "2.0"
   JsonRpcParseError* = -32700'i32
-  JsonRpcUntargetedTarget = "\x00sigils.jsonrpc"
+  JsonRpcExactSelectorTargetPrefix = "\x00sigils.jsonrpc.selector."
+  JsonRpcExactSlotTargetPrefix = "\x00sigils.jsonrpc.slot."
+  JsonRpcExactSignalTargetPrefix = "\x00sigils.jsonrpc.signal."
 
 type
   JsonRpcMethodKind {.pure.} = enum
@@ -65,6 +67,15 @@ proc jsonRpcMethodName*(methodName: string): string =
   ## Validate a JSON-RPC method name without adding a Sigils target prefix.
   validateJsonRpcMethodName(methodName)
 
+proc exactSelectorTarget(methodName: string): string =
+  JsonRpcExactSelectorTargetPrefix & methodName
+
+proc exactSlotTarget(methodName: string): string =
+  JsonRpcExactSlotTargetPrefix & methodName
+
+proc exactSignalTarget(methodName: string): string =
+  JsonRpcExactSignalTargetPrefix & methodName
+
 proc requireAdapter(adapter: JsonRpcAdapter) =
   if adapter.isNil:
     raise newException(ValueError, "JSON-RPC adapter must not be nil")
@@ -114,11 +125,12 @@ proc registerSelectorMethod*[A, R](
 ) =
   ## Expose one selector under its exact JSON-RPC method name.
   let wireName = jsonRpcMethodName(methodName)
+  let target = exactSelectorTarget(wireName)
   adapter.requireAvailable([wireName])
-  adapter.rpcRouter.registerSelector(JsonRpcUntargetedTarget, receiver, selector)
+  adapter.rpcRouter.registerSelector(target, receiver, selector)
   adapter.addRoute(
     wireName,
-    JsonRpcUntargetedTarget,
+    target,
     $selector.name,
     JsonRpcMethodKind.Selector,
   )
@@ -153,11 +165,16 @@ proc registerProtocolMethods*(
   for requirement in protocol.requirements:
     methodNames.add(jsonRpcMethodName($requirement.selector))
   adapter.requireAvailable(methodNames)
-  adapter.rpcRouter.registerProtocol(JsonRpcUntargetedTarget, receiver, protocol)
+  let target =
+    if methodNames.len == 0:
+      exactSelectorTarget($protocol.name)
+    else:
+      exactSelectorTarget(methodNames[0])
+  adapter.rpcRouter.registerProtocol(target, receiver, protocol)
   for index, requirement in protocol.requirements:
     adapter.addRoute(
       methodNames[index],
-      JsonRpcUntargetedTarget,
+      target,
       $requirement.selector,
       JsonRpcMethodKind.Selector,
     )
@@ -182,16 +199,17 @@ proc registerSlotMethod*(
 ) =
   ## Expose one generated slot under its exact JSON-RPC method name.
   let wireName = jsonRpcMethodName(methodName)
+  let target = exactSlotTarget(wireName)
   adapter.requireAvailable([wireName])
   adapter.rpcRouter.registerSlot(
-    JsonRpcUntargetedTarget,
+    target,
     wireName,
     receiver,
     implementation,
   )
   adapter.addRoute(
     wireName,
-    JsonRpcUntargetedTarget,
+    target,
     wireName,
     JsonRpcMethodKind.Slot,
   )
@@ -216,11 +234,12 @@ proc registerSignalMethod*(
 ) =
   ## Expose one signal notification under its exact JSON-RPC method name.
   let wireName = jsonRpcMethodName(methodName)
+  let target = exactSignalTarget(wireName)
   adapter.requireAvailable([wireName])
-  adapter.rpcRouter.registerSignal(JsonRpcUntargetedTarget, source, name)
+  adapter.rpcRouter.registerSignal(target, source, name)
   adapter.addRoute(
     wireName,
-    JsonRpcUntargetedTarget,
+    target,
     $name,
     JsonRpcMethodKind.Signal,
   )
@@ -255,15 +274,16 @@ proc registerSignalProtocolMethods*(
   for signal in protocol.signals:
     methodNames.add(jsonRpcMethodName($signal.name))
   adapter.requireAvailable(methodNames)
-  adapter.rpcRouter.registerSignalProtocol(
-    JsonRpcUntargetedTarget,
-    source,
-    protocol,
-  )
+  let target =
+    if methodNames.len == 0:
+      exactSignalTarget($protocol.name)
+    else:
+      exactSignalTarget(methodNames[0])
+  adapter.rpcRouter.registerSignalProtocol(target, source, protocol)
   for index, signal in protocol.signals:
     adapter.addRoute(
       methodNames[index],
-      JsonRpcUntargetedTarget,
+      target,
       $signal.name,
       JsonRpcMethodKind.Signal,
     )
