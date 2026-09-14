@@ -22,6 +22,12 @@ iterator paramsIter(params: NimNode): tuple[name, ntype: NimNode] =
     for j in 0 ..< arg.len - 2:
       yield (arg[j], argType)
 
+proc rpcValueType(paramType: NimNode): NimNode =
+  if paramType.len == 2 and paramType[0].eqIdent("sink"):
+    result = paramType[1].copyNimTree()
+  else:
+    result = paramType.copyNimTree()
+
 proc mkParamsVars*(paramsIdent, paramsType, params: NimNode): NimNode =
   ## Create local variables for each parameter in the actual RPC call proc
   if params.isNil:
@@ -33,7 +39,7 @@ proc mkParamsVars*(paramsIdent, paramsType, params: NimNode): NimNode =
   for paramid, paramType in paramsIter(params):
     let idx = newIntLitNode(cnt)
     let vars = quote:
-      var `paramid`: `paramType` = `paramsIdent`[`idx`]
+      var `paramid`: `paramType.rpcValueType()` = `paramsIdent`[`idx`]
     varList.add vars
     cnt.inc()
   result.add varList
@@ -62,7 +68,7 @@ proc mkParamsType*(paramsIdent, paramsType, params,
     type `paramsType` = tuple[]
   for paramIdent, paramType in paramsIter(params):
     # processing multiple variables of one type
-    tup[0][2].add newIdentDefs(paramIdent, paramType)
+    tup[0][2].add newIdentDefs(paramIdent, paramType.rpcValueType())
   result = tup
   result[0][1] = genericParams.copyNimTree()
   # echo "mkParamsType: ", genericParams.treeRepr
@@ -157,7 +163,7 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
 
   var signalTyp = nnkTupleConstr.newTree()
   for i in 2 ..< params.len:
-    signalTyp.add params[i][1]
+    signalTyp.add params[i][1].rpcValueType()
   if params.len == 2:
     # signalTyp = bindSym"void"
     signalTyp = quote:
