@@ -256,18 +256,21 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
       localArgIdx.inc()
 
     let rawArgsIdent = genSym(nskLet, "sigilsRawSlotArgs")
-    let clonedArgsIdent = genSym(nskVar, "sigilsClonedSlotArgs")
     let cloneModeIdent = ident("cloneMode")
-    var cloneConstruct = nnkTupleConstr.newTree()
+    let copyMcall = nnkCall.newTree(rpcMethod, objId)
+    var dupConstruct = nnkTupleConstr.newTree()
     var cloneArgIdx = 0
     for _, paramType in paramsIter(parameters):
       let field = nnkBracketExpr.newTree(
         nnkBracketExpr.newTree(rawArgsIdent), newIntLitNode(cloneArgIdx)
       )
+      copyMcall.add field.copyNimTree()
       if paramType.isSinkType():
-        cloneConstruct.add newCall(ident"cloneRc", field)
+        # Probe the hook itself: compiles(cloneRc(field)) can succeed before
+        # the compiler discovers a forbidden copy in that generic's body.
+        dupConstruct.add newCall(ident"=dup", field)
       else:
-        cloneConstruct.add field
+        dupConstruct.add field
       cloneArgIdx.inc()
 
     let agentSlotImpl = quote:
@@ -322,10 +325,12 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
         when `tupTyp` isnot tuple[]:
           let `rawArgsIdent` = cast[ptr `tupTyp`](rawArgs)
           discard `cloneModeIdent`
-          when compiles(`cloneConstruct`):
-            var `clonedArgsIdent` = `cloneConstruct`
-            let `localArgsIdent` = addr `clonedArgsIdent`
-            `localMcall`
+          when compiles(`dupConstruct`):
+            # Borrow non-final arguments. Nim duplicates sink fields directly
+            # into fresh storage (=dup), avoiding =copy's zero-fill then copy
+            # for sequences. Non-sink fields keep their ordinary borrow/identity
+            # semantics; only the final directSlot explicitly moves fields.
+            `copyMcall`
           else:
             raise
               newException(ValueError, "sink payload cannot be copied for local fanout")

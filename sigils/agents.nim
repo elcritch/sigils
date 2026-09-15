@@ -467,12 +467,10 @@ proc addSubscriptionSorted*(
   var idx = lowerBoundSubscription(subs, sig)
   while idx < subs.len and subs[idx].signal == sig:
     if subs[idx].subscription.sameSubscription(subscription):
-      var existing = subs[idx].subscription
       # Delivery-specific entry points are optimizations of the same logical
-      # handler. Merge newly discovered fast paths rather than duplicating the
-      # connection.
-      existing.mergeDeliveryMetadata(subscription)
-      subs[idx].subscription = existing
+      # handler. Merge in place: reconnecting a reactive dependency must not
+      # copy its endpoint and closure ownership just to retain the same paths.
+      subs[idx].subscription.mergeDeliveryMetadata(subscription)
       return false
     idx.inc()
   subs.insert((sig, subscription), idx)
