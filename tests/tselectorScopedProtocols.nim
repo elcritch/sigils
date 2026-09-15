@@ -63,7 +63,9 @@ suite "scoped protocol selectors":
         "tooLongScopedSelectorSource.nim"
 
     let (output, exitCode) = execCmdEx(
-      "nim check --hints:off --warnings:off --path:" & quoteShell(repoRoot) &
+      "nim check --hints:off --warnings:off" &
+        " -u:sigilsSigilNameString -u:sigils.sigNameAsString" &
+        " -u:features.sigils.sigNameAsString --path:" & quoteShell(repoRoot) &
         " " & quoteShell(sourcePath),
       options = {poStdErrToStdOut, poUsePath},
       workingDir = repoRoot,

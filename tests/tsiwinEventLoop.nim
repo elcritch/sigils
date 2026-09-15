@@ -27,12 +27,18 @@ when defined(features.sigils.siwin):
     {.cast(gcsafe).}:
       queueDepthAtWake.store(wakeDestination.peek())
 
+  proc recordWake(data: pointer) {.gcsafe, raises: [].} =
+    recordWake()
+
   proc enqueueFromWorker(request: ProducerRequest) {.thread.} =
     for _ in 0 ..< messageCount:
       request.destination.send(ThreadSignal(kind: Trigger))
 
   proc countWake() {.gcsafe, raises: [].} =
     discard wakeCount.fetchAdd(1)
+
+  proc countWake(data: pointer) {.gcsafe, raises: [].} =
+    countWake()
 
   proc checkSchedulerWake(destination: SigilThreadPtr) =
     wakeCount.store(0)
