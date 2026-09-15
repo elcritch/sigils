@@ -164,7 +164,7 @@ limit outstanding work if a producer can outpace its worker. For ownership,
 queue limits, shutdown, and choosing between a single worker, a thread pool,
 selectors, asyncdispatch, or Chronos, see the [threading guide](docs/threading.md).
 
-For exposing protocols through JSON-RPC 2.0 on a local selector scheduler, a
+For exposing typed selectors through JSON-RPC 2.0 on a local selector scheduler, a
 selector helper thread, a Chronos helper thread, or an LSP-style stdin/stdout
 transport, see the
 [JSON-RPC adapter guide](docs/jsonrpc.md).
@@ -214,8 +214,9 @@ application thread.
 ## CBOR RPC and IPC
 
 The generic CBOR-RPC layer carries typed selectors, slots, and signal
-notifications. Runtime protocols act as the remote allowlist, and `cborious`
-encodes arguments and results. Import `sigils/rpcs/cborRpc` for routing, then
+notifications. Registering an endpoint installs CBOR codecs for that endpoint's
+argument and result types; local selectors never instantiate those codecs.
+Import `sigils/rpcs/cborRpc` for routing, then
 import `sigils/rpcs/cbor/crSelector` or `sigils/rpcs/cbor/crChronos` for the
 desired scheduler. `CborRpcIoAgent` is the extension point for other transports.
 Selector I/O can run locally or on a helper selector thread; Chronos I/O runs on
@@ -235,7 +236,7 @@ protocol CalculatorService of Calculator:
 
 let calculator = DynamicAgent().withProtocol(CalculatorService)
 let router = newIpcRouter()
-router.registerProtocol("calculator", calculator, Calculator)
+router.registerSelector("calculator", calculator, addNumbers)
 ```
 
 `createIpcServer`, `connectIpc`, and `callSelector` complete the Chronos side of

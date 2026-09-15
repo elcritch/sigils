@@ -29,7 +29,7 @@ proc createCalculatorServer(address: TransportAddress): IpcServer =
     calculator = DynamicAgent().withProtocol(CalculatorService)
     router = newIpcRouter()
 
-  router.registerProtocol("calculator", calculator, Calculator)
+  router.registerSelector("calculator", calculator, addNumbers)
   result = createIpcServer(address, router)
   result.start()
 

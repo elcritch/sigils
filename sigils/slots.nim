@@ -322,6 +322,12 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
       ): `signalTyp` =
         discard
 
+    result.add quote do:
+      proc `rpcMethod`(
+          `tp`: typedesc[`contextType`]
+      ): SignalDescriptor[`signalTyp`] =
+        SignalDescriptor[`signalTyp`](name: toSigilName(`signalName`))
+
     result.updateProcsSig(isPublic, genericParams, procLineInfo)
 
   var gens: seq[string]

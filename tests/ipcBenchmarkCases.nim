@@ -74,8 +74,10 @@ proc createIpcBenchServer(address: TransportAddress): IpcServer =
     router = newIpcRouter()
 
   connect(service, notified, service, recordNotification)
-  router.registerProtocol("bench", service, IpcBenchProtocol)
-  router.registerSignal("events", service, toSigilName("notified"))
+  router.registerSelector("bench", service, addNumbers)
+  router.registerSelector("bench", service, notificationCount)
+  router.registerSelector("bench", service, serverPid)
+  router.registerSignal("events", service, IpcBenchService.notified())
 
   result = createIpcServer(address, router)
   result.start()

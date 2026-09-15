@@ -1,6 +1,6 @@
 ## Transport-independent routing between remote RPC calls and Sigils.
 
-import std/[sets, tables]
+import std/tables
 
 import ../[agents, core, selectors]
 
@@ -15,23 +15,34 @@ type
     ## A transport-independent RPC routing failure.
     code*: int32
 
+  RpcParamsDecoder* = proc(data: string): SigilParams {.nimcall.}
+    ## Decode transport bytes into a local Sigils payload.
+
+  RpcResultEncoder* = proc(params: sink SigilParams): string {.nimcall.}
+    ## Encode a local Sigils result into transport bytes.
+
   RpcSlotRoute = object
     receiver: Agent
     implementation: AgentProc
+    decodeParams: RpcParamsDecoder
+    encodeResult: RpcResultEncoder
 
-  RpcSelectorEndpoint = object
+  RpcSelectorRoute = object
     receiver: DynamicAgent
-    allowed: HashSet[string]
+    selector: SigilName
+    decodeParams: RpcParamsDecoder
+    encodeResult: RpcResultEncoder
 
-  RpcSignalEndpoint = object
+  RpcSignalRoute = object
     source: Agent
-    allowed: HashSet[string]
+    name: SigilName
+    decodeParams: RpcParamsDecoder
 
   RpcRouter* = ref object
     ## Registry of named local Sigils endpoints.
     slots: Table[(string, string), RpcSlotRoute]
-    selectors: Table[string, RpcSelectorEndpoint]
-    signals: Table[string, RpcSignalEndpoint]
+    selectors: Table[(string, string), RpcSelectorRoute]
+    signals: Table[(string, string), RpcSignalRoute]
 
 proc routeError(code: int32, message: string): ref RpcRouteError =
   result = newException(RpcRouteError, message)
@@ -49,121 +60,84 @@ proc newRpcRouter*(): RpcRouter =
   ## Create an empty remote endpoint router.
   RpcRouter(
     slots: initTable[(string, string), RpcSlotRoute](),
-    selectors: initTable[string, RpcSelectorEndpoint](),
-    signals: initTable[string, RpcSignalEndpoint](),
+    selectors: initTable[(string, string), RpcSelectorRoute](),
+    signals: initTable[(string, string), RpcSignalRoute](),
   )
 
-proc registerSlot*(
+proc registerSlotRoute*(
     router: RpcRouter,
     target: string,
     name: string,
     receiver: Agent,
     implementation: AgentProc,
+    decodeParams: RpcParamsDecoder,
+    encodeResult: RpcResultEncoder,
 ) =
-  ## Expose one generated Sigils slot under a remote target and name.
-  if router.isNil or receiver.isNil or implementation.isNil:
+  ## Register a generated slot with transport-specific codecs.
+  if router.isNil or receiver.isNil or implementation.isNil or
+      decodeParams.isNil or encodeResult.isNil:
     raise newException(ValueError, "RPC slot registration must not be nil")
   if target.len == 0 or name.len == 0:
     raise newException(ValueError, "RPC slot target and name must not be empty")
   router.slots[(target, name)] = RpcSlotRoute(
     receiver: receiver,
     implementation: implementation,
+    decodeParams: decodeParams,
+    encodeResult: encodeResult,
   )
 
-proc registerSelector*[A, R](
+proc registerSelectorRoute*(
     router: RpcRouter,
     target: string,
     receiver: DynamicAgent,
-    selector: Selector[A, R],
+    selector: SigilName,
+    decodeParams: RpcParamsDecoder,
+    encodeResult: RpcResultEncoder,
 ) =
-  ## Expose one typed selector on a dynamic agent.
-  if router.isNil or receiver.isNil:
+  ## Register a dynamic selector with transport-specific codecs.
+  if router.isNil or receiver.isNil or decodeParams.isNil or encodeResult.isNil:
     raise newException(ValueError, "RPC selector registration must not be nil")
   if target.len == 0:
     raise newException(ValueError, "RPC selector target must not be empty")
   if not receiver.respondsTo(selector):
     raise newException(
       ValueError,
-      "receiver does not handle selector " & $selector.name,
+      "receiver does not handle selector " & $selector,
     )
-  var endpoint = router.selectors.getOrDefault(target)
-  if not endpoint.receiver.isNil and endpoint.receiver != receiver:
-    raise newException(ValueError, "RPC selector target already has a receiver")
-  endpoint.receiver = receiver
-  endpoint.allowed.incl($selector.name)
-  router.selectors[target] = endpoint
+  router.selectors[(target, $selector)] = RpcSelectorRoute(
+    receiver: receiver,
+    selector: selector,
+    decodeParams: decodeParams,
+    encodeResult: encodeResult,
+  )
 
-proc registerProtocol*(
-    router: RpcRouter,
-    target: string,
-    receiver: DynamicAgent,
-    protocol: SigilProtocol,
-) =
-  ## Expose only the selectors declared by a conforming runtime protocol.
-  if router.isNil or receiver.isNil:
-    raise newException(ValueError, "RPC protocol registration must not be nil")
-  if target.len == 0:
-    raise newException(ValueError, "RPC protocol target must not be empty")
-  if not receiver.conformsTo(protocol):
-    raise newException(
-      ProtocolConformanceError,
-      "receiver does not conform to protocol " & $protocol.name,
-    )
-
-  var endpoint = router.selectors.getOrDefault(target)
-  if not endpoint.receiver.isNil and endpoint.receiver != receiver:
-    raise newException(ValueError, "RPC selector target already has a receiver")
-  endpoint.receiver = receiver
-  for requirement in protocol.requirements:
-    endpoint.allowed.incl($requirement.selector)
-  router.selectors[target] = endpoint
-
-proc registerSignal*(
+proc registerSignalRoute*(
     router: RpcRouter,
     target: string,
     source: Agent,
     name: SigilName,
+    decodeParams: RpcParamsDecoder,
 ) =
-  ## Allow one incoming notification to be emitted through a local signal.
-  if router.isNil or source.isNil:
+  ## Register a signal with a transport-specific argument decoder.
+  if router.isNil or source.isNil or decodeParams.isNil:
     raise newException(ValueError, "RPC signal registration must not be nil")
   if target.len == 0:
     raise newException(ValueError, "RPC signal target must not be empty")
   if ($name).len == 0:
     raise newException(ValueError, "RPC signal name must not be empty")
-  var endpoint = router.signals.getOrDefault(target)
-  if not endpoint.source.isNil and endpoint.source != source:
-    raise newException(ValueError, "RPC signal target already has a source")
-  endpoint.source = source
-  endpoint.allowed.incl($name)
-  router.signals[target] = endpoint
-
-proc registerSignalProtocol*(
-    router: RpcRouter,
-    target: string,
-    source: Agent,
-    protocol: SigilProtocol,
-) =
-  ## Allow incoming notifications for the signals declared by a protocol.
-  if router.isNil or source.isNil:
-    raise newException(ValueError, "RPC signal registration must not be nil")
-  if target.len == 0:
-    raise newException(ValueError, "RPC signal target must not be empty")
-  var endpoint = router.signals.getOrDefault(target)
-  if not endpoint.source.isNil and endpoint.source != source:
-    raise newException(ValueError, "RPC signal target already has a source")
-  endpoint.source = source
-  for signal in protocol.signals:
-    endpoint.allowed.incl($signal.name)
-  router.signals[target] = endpoint
+  router.signals[(target, $name)] = RpcSignalRoute(
+    source: source,
+    name: name,
+    decodeParams: decodeParams,
+  )
 
 proc dispatchRequest*(
     router: RpcRouter,
     target: string,
     name: string,
-    params: sink SigilParams,
-): SigilParams =
-  ## Dispatch a remote request to a registered slot or selector.
+    data: string,
+): string =
+  ## Decode and dispatch a registered request, then encode its result.
   if router.isNil:
     raise routeError(RpcMethodNotFound, "peer has no RPC router")
   validateRpcName(name)
@@ -171,55 +145,57 @@ proc dispatchRequest*(
   let slotKey = (target, name)
   if router.slots.hasKey(slotKey):
     let route = router.slots[slotKey]
-    let format = params.wireFormat
-    let request = SigilRequest(
-      kind: Request,
-      origin: SigilId(-1),
-      procName: toSigilName(name),
-      params: params,
-    )
     try:
-      discard route.receiver.callMethod(ensureMove(request),
-          route.implementation)
+      let request = SigilRequest(
+        kind: Request,
+        origin: SigilId(-1),
+        procName: toSigilName(name),
+        params: route.decodeParams(data),
+      )
+      discard route.receiver.callMethod(
+        ensureMove(request),
+        route.implementation,
+      )
     except SigilRpcDecodeError as error:
       raise routeError(RpcInvalidParams, error.msg)
-    return rpcPackRemote(true, format)
+    return route.encodeResult(rpcPack(true))
 
-  if not router.selectors.hasKey(target):
-    raise routeError(RpcMethodNotFound, "unknown RPC target: " & target)
-  let endpoint = router.selectors[target]
-  if name notin endpoint.allowed:
+  let selectorKey = (target, name)
+  if not router.selectors.hasKey(selectorKey):
     raise routeError(RpcMethodNotFound, "selector is not exposed: " & name)
+  let route = router.selectors[selectorKey]
 
   var invocation = Invocation(
-    selector: toSigilName(name),
-    params: params,
+    selector: route.selector,
   )
   try:
-    if not endpoint.receiver.dispatch(invocation):
+    invocation.params = route.decodeParams(data)
+    if not route.receiver.dispatch(invocation):
       raise routeError(RpcMethodNotFound, "selector was not handled: " & name)
   except SigilRpcDecodeError as error:
     raise routeError(RpcInvalidParams, error.msg)
-  result = ensureMove(invocation.result)
+  result = route.encodeResult(ensureMove(invocation.result))
 
 proc dispatchNotify*(
     router: RpcRouter,
     target: string,
     name: string,
-    params: sink SigilParams,
+    data: string,
 ) =
-  ## Emit an incoming notification through a registered local signal source.
-  if router.isNil or not router.signals.hasKey(target):
+  ## Decode and emit an incoming notification through a registered signal.
+  let signalKey = (target, name)
+  if router.isNil or not router.signals.hasKey(signalKey):
     raise routeError(RpcMethodNotFound, "unknown RPC signal target: " & target)
   validateRpcName(name)
-  let endpoint = router.signals[target]
-  if name notin endpoint.allowed:
-    raise routeError(RpcMethodNotFound, "signal is not exposed: " & name)
+  let route = router.signals[signalKey]
 
-  let request = SigilRequest(
-    kind: Notify,
-    origin: SigilId(-1),
-    procName: toSigilName(name),
-    params: params,
-  )
-  endpoint.source.callSlots(ensureMove(request))
+  try:
+    let request = SigilRequest(
+      kind: Notify,
+      origin: SigilId(-1),
+      procName: route.name,
+      params: route.decodeParams(data),
+    )
+    route.source.callSlots(ensureMove(request))
+  except SigilRpcDecodeError as error:
+    raise routeError(RpcInvalidParams, error.msg)

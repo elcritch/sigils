@@ -1,4 +1,4 @@
-import std/[json, jsonutils, strutils, syncio, tables]
+import std/[strutils, syncio, tables]
 import cloneutils
 import features
 
@@ -29,28 +29,20 @@ type
   SigilRpcEncodeError* = object of CatchableError ## Remote RPC encode failure.
   SigilRpcDecodeError* = object of CatchableError ## Remote RPC decode failure.
 
-  RpcWireFormat* {.pure.} = enum
-    Cbor
-    Json
-
 when defined(features.sigils.ipc):
   type
     SigilIpcEncodeError* = SigilRpcEncodeError
     SigilIpcDecodeError* = SigilRpcDecodeError
 
 when defined(nimscript) or defined(useJsonSerde) or defined(sigilsJsonSerde):
+  import std/[json, jsonutils]
   export json
 elif sigilsCborSerdeEnabled:
   import cborious
   export cborious
 else:
   import svariant
-  when sigilsCborRpcEnabled:
-    import cborious
   export svariant
-  when sigilsCborRpcEnabled:
-    # Cborious serialization generics resolve their packers at instantiation.
-    export cborious
 
 type SigilParams* {.acyclic.} = object ## Implementation-specific call payload.
   when defined(nimscript) or defined(useJsonSerde) or defined(sigilsJsonSerde):
@@ -60,8 +52,6 @@ type SigilParams* {.acyclic.} = object ## Implementation-specific call payload.
   else:
     payload*: Variant
     cloner*: VariantCloner
-  wireFormat*: RpcWireFormat
-  wireData*: string
 
 type
   RequestType* {.size: sizeof(uint8).} = enum
@@ -126,8 +116,6 @@ proc clone*(
         params.payload, deliveryCloneMode(mode)
       )
       result.cloner = params.cloner
-  result.wireFormat = params.wireFormat
-  result.wireData = params.wireData
 
 proc clone*(
     req: SigilRequest, mode: CloneMode = defaultCloneMode
@@ -161,124 +149,7 @@ proc rpcPack*[T](res: sink T): SigilParams =
       cloner: clonerFor(T),
     )
 
-proc initRpcParams*(format: RpcWireFormat, data: sink string): SigilParams =
-  ## Build type-erased parameters decoded by generated slots and selectors.
-  result = SigilParams(wireFormat: format, wireData: data)
-
-proc hasRpcData*(params: SigilParams): bool =
-  params.wireData.len > 0
-
-proc rpcData*(params: SigilParams): string =
-  params.wireData
-
-proc unpackJsonTuple[T](node: JsonNode): T =
-  if node.kind != JArray:
-    return jsonTo(node, T)
-
-  var fieldCount = 0
-  for _ in fields(result):
-    fieldCount.inc()
-  if node.len != fieldCount:
-    raise newException(
-      ValueError,
-      "JSON parameter count mismatch: expected " & $fieldCount &
-        ", got " & $node.len,
-    )
-
-  var index = 0
-  for field in fields(result):
-    fromJson(field, node[index])
-    index.inc()
-
-proc rpcPackRemote*[T](
-    res: sink T, format: RpcWireFormat
-): SigilParams =
-  ## Preserve the local representation and attach a remote wire encoding.
-  case format
-  of RpcWireFormat.Cbor:
-    when sigilsCborRpcEnabled:
-      when compiles(cborious.toCbor(res)):
-        let encoded =
-          try:
-            cborious.toCbor(res)
-          except CatchableError as error:
-            raise newException(SigilRpcEncodeError, error.msg)
-        result = rpcPack(ensureMove(res))
-        result.wireFormat = format
-        result.wireData = encoded
-      else:
-        raise newException(
-          SigilRpcEncodeError,
-          "type cannot be encoded as RPC CBOR",
-        )
-    else:
-      raise newException(SigilRpcEncodeError, "CBOR RPC support is disabled")
-  of RpcWireFormat.Json:
-    when compiles(toJson(res)):
-      let encoded =
-        try:
-          $toJson(res)
-        except CatchableError as error:
-          raise newException(SigilRpcEncodeError, error.msg)
-      result = rpcPack(ensureMove(res))
-      result.wireFormat = format
-      result.wireData = encoded
-    else:
-      raise newException(
-        SigilRpcEncodeError,
-        "type cannot be encoded as RPC JSON",
-      )
-
-when defined(features.sigils.ipc):
-  proc initIpcParams*(data: sink string): SigilParams =
-    ## Build type-erased parameters that generated slots/selectors decode from CBOR.
-    initRpcParams(RpcWireFormat.Cbor, data)
-
-  proc hasIpcData*(params: SigilParams): bool =
-    params.hasRpcData() and params.wireFormat == RpcWireFormat.Cbor
-
-  proc ipcData*(params: SigilParams): string =
-    if params.hasIpcData():
-      result = params.rpcData()
-
-  proc rpcPackIpc*[T](res: sink T): SigilParams =
-    ## Preserve the local representation and attach CBOR for an IPC response.
-    rpcPackRemote(ensureMove(res), RpcWireFormat.Cbor)
-
 proc rpcUnpack*[T](obj: var T, ss: SigilParams) =
-  if ss.hasRpcData():
-    case ss.wireFormat
-    of RpcWireFormat.Cbor:
-      when sigilsCborRpcEnabled:
-        when compiles(cborious.fromCbor("", T)):
-          try:
-            obj = cborious.fromCbor(ss.wireData, T)
-          except CatchableError as error:
-            raise newException(SigilRpcDecodeError, error.msg)
-        else:
-          raise newException(
-            SigilRpcDecodeError,
-            "type cannot be decoded from RPC CBOR",
-          )
-      else:
-        raise newException(SigilRpcDecodeError, "CBOR RPC support is disabled")
-    of RpcWireFormat.Json:
-      when compiles(jsonTo(parseJson("null"), T)):
-        try:
-          let node = parseJson(ss.wireData)
-          when T is tuple:
-            obj = unpackJsonTuple[T](node)
-          else:
-            obj = jsonTo(node, T)
-        except CatchableError as error:
-          raise newException(SigilRpcDecodeError, error.msg)
-      else:
-        raise newException(
-          SigilRpcDecodeError,
-          "type cannot be decoded from RPC JSON",
-        )
-    return
-
   when defined(nimscript) or defined(useJsonSerde) or defined(sigilsJsonSerde):
     obj.fromJson(ss.payload)
   elif sigilsCborSerdeEnabled:

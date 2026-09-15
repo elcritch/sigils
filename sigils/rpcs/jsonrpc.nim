@@ -1,6 +1,6 @@
-## JSON-RPC 2.0 adaptation for runtime Sigils protocols.
+## JSON-RPC 2.0 adaptation for explicitly registered Sigils endpoints.
 
-import std/[json, options, strutils, tables]
+import std/[json, jsonutils, macros, options, strutils, tables]
 
 import ../[agents, core, selectors]
 import router
@@ -29,15 +29,10 @@ type
     rpcRouter: RpcRouter
     routes: Table[string, JsonRpcRoute]
 
-proc newJsonRpcAdapter*(router: RpcRouter = nil): JsonRpcAdapter =
-  ## Create a JSON-RPC adapter, optionally sharing an existing RPC router.
-  let resolvedRouter =
-    if router.isNil:
-      newRpcRouter()
-    else:
-      router
+proc newJsonRpcAdapter*(): JsonRpcAdapter =
+  ## Create a JSON-RPC adapter with its own JSON-specific route codecs.
   JsonRpcAdapter(
-    rpcRouter: resolvedRouter,
+    rpcRouter: newRpcRouter(),
     routes: initTable[string, JsonRpcRoute](),
   )
 
@@ -100,6 +95,103 @@ proc addRoute(
     kind: kind,
   )
 
+# jsonutils rejects procedure fields with a compile-time AssertionDefect. Keep
+# that probe inside the JSON adapter so local and CBOR-only selectors never
+# instantiate jsonutils.
+proc containsProcedureType(
+    node: NimNode, seen: var seq[string], depth = 0
+): bool {.compileTime.} =
+  if depth >= 64:
+    return
+
+  if node.kind == nnkProcTy or node.kind == nnkIteratorTy:
+    return true
+
+  if node.kind == nnkSym:
+    if node.symKind notin {nskGenericParam, nskType}:
+      return
+    let signature = node.signatureHash()
+    for visited in seen:
+      if visited == signature:
+        return
+    seen.add(signature)
+
+    let implementation = node.getTypeImpl()
+    if implementation != node:
+      return implementation.containsProcedureType(seen, depth + 1)
+    return
+
+  for child in node:
+    if child.containsProcedureType(seen, depth + 1):
+      return true
+
+macro containsProcedureType(value: typed): untyped =
+  var seen: seq[string]
+  newLit(value.getTypeInst().containsProcedureType(seen))
+
+proc unpackJsonTuple[T](node: JsonNode): T =
+  if node.kind != JArray:
+    return jsonTo(node, T)
+
+  var fieldCount = 0
+  for _ in fields(result):
+    fieldCount.inc()
+  if node.len != fieldCount:
+    raise newException(
+      ValueError,
+      "JSON parameter count mismatch: expected " & $fieldCount &
+        ", got " & $node.len,
+    )
+
+  var index = 0
+  for field in fields(result):
+    fromJson(field, node[index])
+    index.inc()
+
+proc decodeJsonParams[T](data: string): SigilParams =
+  var value: T
+  when not containsProcedureType(value):
+    when compiles(jsonTo(parseJson("null"), T)):
+      try:
+        let node = parseJson(data)
+        when T is tuple:
+          value = unpackJsonTuple[T](node)
+        else:
+          value = jsonTo(node, T)
+      except CatchableError as error:
+        raise newException(SigilRpcDecodeError, error.msg)
+      result = rpcPack(ensureMove(value))
+    else:
+      raise newException(
+        SigilRpcDecodeError,
+        "type cannot be decoded from RPC JSON",
+      )
+  else:
+    raise newException(
+      SigilRpcDecodeError,
+      "type cannot be decoded from RPC JSON",
+    )
+
+proc encodeJsonResult[T](params: sink SigilParams): string =
+  var value: T
+  rpcUnpack(value, params)
+  when not containsProcedureType(value):
+    when compiles(toJson(value)):
+      try:
+        result = $toJson(value)
+      except CatchableError as error:
+        raise newException(SigilRpcEncodeError, error.msg)
+    else:
+      raise newException(
+        SigilRpcEncodeError,
+        "type cannot be encoded as RPC JSON",
+      )
+  else:
+    raise newException(
+      SigilRpcEncodeError,
+      "type cannot be encoded as RPC JSON",
+    )
+
 proc registerSelector*[A, R](
     adapter: JsonRpcAdapter,
     target: string,
@@ -109,7 +201,13 @@ proc registerSelector*[A, R](
   ## Expose one selector as ``target.selector``.
   let methodName = jsonRpcMethodName(target, $selector.name)
   adapter.requireAvailable([methodName])
-  adapter.rpcRouter.registerSelector(target, receiver, selector)
+  adapter.rpcRouter.registerSelectorRoute(
+    target,
+    receiver,
+    selector.name,
+    decodeJsonParams[A],
+    encodeJsonResult[R],
+  )
   adapter.addRoute(
     methodName,
     target,
@@ -127,7 +225,13 @@ proc registerSelectorMethod*[A, R](
   let wireName = jsonRpcMethodName(methodName)
   let target = exactSelectorTarget(wireName)
   adapter.requireAvailable([wireName])
-  adapter.rpcRouter.registerSelector(target, receiver, selector)
+  adapter.rpcRouter.registerSelectorRoute(
+    target,
+    receiver,
+    selector.name,
+    decodeJsonParams[A],
+    encodeJsonResult[R],
+  )
   adapter.addRoute(
     wireName,
     target,
@@ -135,77 +239,42 @@ proc registerSelectorMethod*[A, R](
     JsonRpcMethodKind.Selector,
   )
 
-proc registerProtocol*(
-    adapter: JsonRpcAdapter,
-    target: string,
-    receiver: DynamicAgent,
-    protocol: SigilProtocol,
-) =
-  ## Expose a conforming protocol's selectors as ``target.selector`` methods.
-  var methodNames = newSeqOfCap[string](protocol.requirements.len)
-  for requirement in protocol.requirements:
-    methodNames.add(jsonRpcMethodName(target, $requirement.selector))
-  adapter.requireAvailable(methodNames)
-  adapter.rpcRouter.registerProtocol(target, receiver, protocol)
-  for index, requirement in protocol.requirements:
-    adapter.addRoute(
-      methodNames[index],
-      target,
-      $requirement.selector,
-      JsonRpcMethodKind.Selector,
-    )
-
-proc registerProtocolMethods*(
-    adapter: JsonRpcAdapter,
-    receiver: DynamicAgent,
-    protocol: SigilProtocol,
-) =
-  ## Expose a protocol's selectors under their exact JSON-RPC method names.
-  var methodNames = newSeqOfCap[string](protocol.requirements.len)
-  for requirement in protocol.requirements:
-    methodNames.add(jsonRpcMethodName($requirement.selector))
-  adapter.requireAvailable(methodNames)
-  let target =
-    if methodNames.len == 0:
-      exactSelectorTarget($protocol.name)
-    else:
-      exactSelectorTarget(methodNames[0])
-  adapter.rpcRouter.registerProtocol(target, receiver, protocol)
-  for index, requirement in protocol.requirements:
-    adapter.addRoute(
-      methodNames[index],
-      target,
-      $requirement.selector,
-      JsonRpcMethodKind.Selector,
-    )
-
-proc registerSlot*(
+proc registerSlot*[A](
     adapter: JsonRpcAdapter,
     target, name: string,
     receiver: Agent,
-    implementation: AgentProc,
+    implementation: AgentProcTy[A],
 ) =
   ## Expose one generated slot as ``target.name``.
   let methodName = jsonRpcMethodName(target, name)
   adapter.requireAvailable([methodName])
-  adapter.rpcRouter.registerSlot(target, name, receiver, implementation)
+  adapter.rpcRouter.registerSlotRoute(
+    target,
+    name,
+    receiver,
+    implementation,
+    decodeJsonParams[A],
+    encodeJsonResult[bool],
+  )
   adapter.addRoute(methodName, target, name, JsonRpcMethodKind.Slot)
 
-proc registerSlotMethod*(
+proc registerSlotMethod*[A](
     adapter: JsonRpcAdapter,
     methodName: string,
     receiver: Agent,
-    implementation: AgentProc,
+    implementation: AgentProcTy[A],
 ) =
   ## Expose one generated slot under its exact JSON-RPC method name.
   let wireName = jsonRpcMethodName(methodName)
   let target = exactSlotTarget(wireName)
   adapter.requireAvailable([wireName])
-  adapter.rpcRouter.registerSlot(
+  adapter.rpcRouter.registerSlotRoute(
     target,
     wireName,
     receiver,
     implementation,
+    decodeJsonParams[A],
+    encodeJsonResult[bool],
   )
   adapter.addRoute(
     wireName,
@@ -214,79 +283,45 @@ proc registerSlotMethod*(
     JsonRpcMethodKind.Slot,
   )
 
-proc registerSignal*(
+proc registerSignal*[A](
     adapter: JsonRpcAdapter,
     target: string,
     source: Agent,
-    name: SigilName,
+    signal: SignalDescriptor[A],
 ) =
   ## Expose one signal as a JSON-RPC notification named ``target.signal``.
-  let methodName = jsonRpcMethodName(target, $name)
+  let methodName = jsonRpcMethodName(target, $signal.name)
   adapter.requireAvailable([methodName])
-  adapter.rpcRouter.registerSignal(target, source, name)
-  adapter.addRoute(methodName, target, $name, JsonRpcMethodKind.Signal)
+  adapter.rpcRouter.registerSignalRoute(
+    target,
+    source,
+    signal.name,
+    decodeJsonParams[A],
+  )
+  adapter.addRoute(methodName, target, $signal.name, JsonRpcMethodKind.Signal)
 
-proc registerSignalMethod*(
+proc registerSignalMethod*[A](
     adapter: JsonRpcAdapter,
     methodName: string,
     source: Agent,
-    name: SigilName,
+    signal: SignalDescriptor[A],
 ) =
   ## Expose one signal notification under its exact JSON-RPC method name.
   let wireName = jsonRpcMethodName(methodName)
   let target = exactSignalTarget(wireName)
   adapter.requireAvailable([wireName])
-  adapter.rpcRouter.registerSignal(target, source, name)
+  adapter.rpcRouter.registerSignalRoute(
+    target,
+    source,
+    signal.name,
+    decodeJsonParams[A],
+  )
   adapter.addRoute(
     wireName,
     target,
-    $name,
+    $signal.name,
     JsonRpcMethodKind.Signal,
   )
-
-proc registerSignalProtocol*(
-    adapter: JsonRpcAdapter,
-    target: string,
-    source: Agent,
-    protocol: SigilProtocol,
-) =
-  ## Expose a protocol's signals as ``target.signal`` notifications.
-  var methodNames = newSeqOfCap[string](protocol.signals.len)
-  for signal in protocol.signals:
-    methodNames.add(jsonRpcMethodName(target, $signal.name))
-  adapter.requireAvailable(methodNames)
-  adapter.rpcRouter.registerSignalProtocol(target, source, protocol)
-  for index, signal in protocol.signals:
-    adapter.addRoute(
-      methodNames[index],
-      target,
-      $signal.name,
-      JsonRpcMethodKind.Signal,
-    )
-
-proc registerSignalProtocolMethods*(
-    adapter: JsonRpcAdapter,
-    source: Agent,
-    protocol: SigilProtocol,
-) =
-  ## Expose a protocol's signals under their exact JSON-RPC method names.
-  var methodNames = newSeqOfCap[string](protocol.signals.len)
-  for signal in protocol.signals:
-    methodNames.add(jsonRpcMethodName($signal.name))
-  adapter.requireAvailable(methodNames)
-  let target =
-    if methodNames.len == 0:
-      exactSignalTarget($protocol.name)
-    else:
-      exactSignalTarget(methodNames[0])
-  adapter.rpcRouter.registerSignalProtocol(target, source, protocol)
-  for index, signal in protocol.signals:
-    adapter.addRoute(
-      methodNames[index],
-      target,
-      $signal.name,
-      JsonRpcMethodKind.Signal,
-    )
 
 proc errorMessage(code: int32): string =
   case code
@@ -434,24 +469,22 @@ proc handleRequest(adapter: JsonRpcAdapter, node: JsonNode): JsonNode =
       adapter.rpcRouter.dispatchNotify(
         route.target,
         route.name,
-        initRpcParams(RpcWireFormat.Json, $params),
+        $params,
       )
       return nil
 
-    let resultParams = adapter.rpcRouter.dispatchRequest(
+    let resultData = adapter.rpcRouter.dispatchRequest(
       route.target,
       route.name,
-      initRpcParams(RpcWireFormat.Json, $params),
+      $params,
     )
     if notification:
       return nil
-    if not resultParams.hasRpcData():
+    if resultData.len == 0:
       # A void selector/slot is a valid JSON-RPC result. LSP uses this for
       # requests such as ``shutdown``, whose result is JSON null.
       return responseNode(id, newJNull())
-    if resultParams.wireFormat != RpcWireFormat.Json:
-      return errorNode(RpcInternalError, id)
-    result = responseNode(id, parseJson(resultParams.rpcData()))
+    result = responseNode(id, parseJson(resultData))
   except RpcRouteError as error:
     if not notification:
       result = errorNode(error.code, id)
