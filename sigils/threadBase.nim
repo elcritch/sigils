@@ -74,7 +74,6 @@ proc repr*(obj: SigilThread): string =
   result =
     fmt"SigilThread(id: {$getThreadId(obj)}, {dname}signaled: {$obj.signaled.len} agent: {$obj.agent.unsafeWeakRef} )"
 
-
 proc `=destroy`*(thread: var SigilThread) =
   # SigilThread
   thread.running.store(false, Relaxed)
@@ -352,8 +351,9 @@ proc cancel*(timer: SigilTimer, ct: SigilThreadPtr = getCurrentSigilThread()) =
 # The current actor is distinct from the current scheduler in a worker pool.
 var executingActor* {.threadvar.}: AgentEndpoint
 
-proc dispatchActor(endpoint: AgentEndpoint, req: sink SigilRequest,
-    slot: AgentProc): SigilResponse {.gcsafe.} =
+proc dispatchActor(
+    endpoint: AgentEndpoint, req: sink SigilRequest, slot: AgentProc
+): SigilResponse {.gcsafe.} =
   if not endpoint.isAlive:
     return
   let scheduler = cast[SigilThreadPtr](endpoint[].scheduler)
@@ -361,10 +361,59 @@ proc dispatchActor(endpoint: AgentEndpoint, req: sink SigilRequest,
       (executingActor.isNil or executingActor[].target == endpoint[].target):
     {.cast(gcsafe).}:
       return endpoint[].target[].callMethod(ensureMove(req), slot)
-  scheduler.send(ThreadSignal(kind: Call, tgt: endpoint[].target,
-    endpoint: endpoint, req: ensureMove(req), slot: slot))
+  scheduler.send(
+    ThreadSignal(
+      kind: Call,
+      tgt: endpoint[].target,
+      endpoint: endpoint,
+      req: ensureMove(req),
+      slot: slot,
+    )
+  )
+
+proc dispatchActorSubscription(
+    endpoint: AgentEndpoint,
+    req: sink SigilRequest,
+    slot: AgentProc,
+    envSlot: EnvAgentProc,
+    env: SlotEnv,
+): SigilResponse {.gcsafe.} =
+  if not endpoint.isAlive:
+    return
+  let scheduler = cast[SigilThreadPtr](endpoint[].scheduler)
+  if getCurrentSigilThread() == scheduler and
+      (executingActor.isNil or executingActor[].target == endpoint[].target):
+    {.cast(gcsafe).}:
+      when not sigilsSlotEnvDisabled:
+        if not envSlot.isNil:
+          return endpoint[].target[].callMethod(
+            ensureMove(req),
+            Subscription(
+              tgt: endpoint[].target, packedSlot: slot, envSlot: envSlot, env: env
+            ),
+          )
+      return endpoint[].target[].callMethod(ensureMove(req), slot)
+
+  if not envSlot.isNil:
+    return wrapResponseError(
+      req.origin,
+      SigilError(
+        code: INTERNAL_ERROR,
+        msg: "receiver-bound closure slots cannot cross a thread boundary",
+      ),
+    )
+  scheduler.send(
+    ThreadSignal(
+      kind: Call,
+      tgt: endpoint[].target,
+      endpoint: endpoint,
+      req: ensureMove(req),
+      slot: slot,
+    )
+  )
 
 proc attachActor*(thread: SigilThreadPtr, actor: Agent) =
   let endpoint = actor.endpoint()
   endpoint[].scheduler = cast[pointer](thread)
   endpoint[].dispatch = dispatchActor
+  endpoint[].dispatchSubscription = dispatchActorSubscription

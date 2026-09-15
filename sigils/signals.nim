@@ -123,11 +123,21 @@ template connect*(
       nil
   checkSignalTypes(a, signal, b, packedAgentSlot, acceptVoidSlot)
   a.addSubscription(signalName(signal), b, packedAgentSlot, directAgentSlot)
+  when compiles(`slot`(LocalSignalTypes, typeof(b), LocalSlotCloneInfo)):
+    # Preserve the legacy virtual hook above. Only sink slots have additional
+    # metadata to install; ordinary/repeated reactive connections need no scan.
+    a.updateSubscriptionDelivery(
+      signalName(signal),
+      Subscription(
+        tgt: b.unsafeWeakRef().toKind(Agent),
+        packedSlot: packedAgentSlot,
+        directSlot: directAgentSlot,
+        directSlotClone: `slot`(LocalSignalTypes, typeof(b),
+            LocalSlotCloneInfo),
+      ),
+    )
 
-template connected*(
-    a: Agent,
-    signal: typed,
-): bool =
+template connected*(a: Agent, signal: typed): bool =
   if a.hasSubscription(signalName(signal)):
     echo "CONNECTED: "
     true

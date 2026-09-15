@@ -187,9 +187,9 @@ suite "threaded agent slots":
       check not compiles(connect(a, valueChanged, bp, someAction))
 
       check thread.peek() == 1
+      thread.start()
       thread.setRunning(false)
-      when not defined(tsan):
-        thread.join()
+      thread.join()
 
     GC_fullCollect()
 

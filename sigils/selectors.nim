@@ -2517,7 +2517,10 @@ proc initInvocation*[A](
 
 proc initLocalInvocation[A, R](
     selector: SigilName, args: var A, value: var R
-): Invocation =
+): Invocation {.raises: [].} =
+  # Initialize the entire return storage, including unused managed fields.
+  # Callers use noinit to avoid zeroing it twice; do not replace this constructor
+  # with partial field assignments or add work before it initializes result.
   result = Invocation(
     selector: selector,
     handled: false,
@@ -2985,7 +2988,7 @@ proc perform*[A, R](
     value: var R,
 ): bool =
   var localArgs = ensureMove args
-  var invocation = initLocalInvocation(selector.name, localArgs, value)
+  var invocation {.noinit.} = initLocalInvocation(selector.name, localArgs, value)
   result = obj.dispatch(invocation)
   if result and not invocation.resultWritten:
     rpcUnpack(value, invocation.result)
@@ -2997,7 +3000,7 @@ proc performLocal*[A, R](
     value: var R,
 ): bool =
   var localArgs = ensureMove args
-  var invocation = initLocalInvocation(selector.name, localArgs, value)
+  var invocation {.noinit.} = initLocalInvocation(selector.name, localArgs, value)
   result = obj.dispatchLocal(invocation)
   if result and not invocation.resultWritten:
     rpcUnpack(value, invocation.result)
@@ -3032,7 +3035,7 @@ proc performNext*[A, R](
 ): bool =
   ## Perform the next lower local implementation for a selector.
   var localArgs = ensureMove args
-  var invocation = initLocalInvocation(selector.name, localArgs, value)
+  var invocation {.noinit.} = initLocalInvocation(selector.name, localArgs, value)
   result = obj.dispatchNextLocal(invocation)
   if result and not invocation.resultWritten:
     rpcUnpack(value, invocation.result)

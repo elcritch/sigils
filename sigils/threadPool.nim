@@ -180,7 +180,7 @@ method send*(
     pool: SigilThreadPoolPtr, msg: sink ThreadSignal,
         blocking: BlockingKinds
 ) {.gcsafe.} =
-  var sig = msg
+  var sig = ensureMove(msg)
   case sig.kind
   of Move:
     if not (sig.item of AgentActor):

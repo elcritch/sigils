@@ -148,6 +148,13 @@ method addSubscription*(
   if added:
     subscription.tgt[].addListener(obj.unsafeWeakRef().asAgent())
 
+method updateSubscriptionDelivery*(
+    obj: AgentActor, sig: SigilName, subscription: Subscription
+) {.gcsafe, raises: [].} =
+  obj.ensureActorReady()
+  withLock obj.lock:
+    procCall updateSubscriptionDelivery(Agent(obj), sig, subscription)
+
 method addSubscription*(
     obj: AgentActor, sig: SigilName, tgt: WeakRef[Agent], slot: AgentProc
 ) {.gcsafe, raises: [].} =

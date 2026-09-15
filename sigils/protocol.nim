@@ -1,4 +1,4 @@
-import std/[strutils, syncio, tables]
+import std/[isolation, strutils, syncio, tables]
 import cloneutils
 import features
 
@@ -44,14 +44,20 @@ else:
   import svariant
   export svariant
 
-type SigilParams* {.acyclic.} = object ## Implementation-specific call payload.
-  when defined(nimscript) or defined(useJsonSerde) or defined(sigilsJsonSerde):
-    payload*: JsonNode
-  elif sigilsCborSerdeEnabled:
-    payload*: CborStream
-  else:
-    payload*: Variant
-    cloner*: VariantCloner
+type
+  SigilParamsMode {.pure.} = enum
+    Copy
+    Consume
+
+  SigilParams* {.acyclic.} = object ## Implementation-specific call payload.
+    mode: SigilParamsMode
+    when defined(nimscript) or defined(useJsonSerde) or defined(sigilsJsonSerde):
+      payload*: JsonNode
+    elif sigilsCborSerdeEnabled:
+      payload*: CborStream
+    else:
+      payload*: Variant
+      cloner*: VariantCloner
 
 type
   RequestType* {.size: sizeof(uint8).} = enum
@@ -95,6 +101,12 @@ type
     msg*: string
     stacktrace*: seq[string]
 
+proc isConsumedDelivery*(params: SigilParams): bool {.inline.} =
+  params.mode == SigilParamsMode.Consume
+
+proc markConsumedDelivery*(params: var SigilParams) {.inline.} =
+  params.mode = SigilParamsMode.Consume
+
 func compareSigilName*(a, b: SigilName): int {.inline.} =
   when sigilsSigilNameStringEnabled:
     cmp(a, b)
@@ -133,6 +145,16 @@ proc `$`*(id: SigilId): string =
 proc rpcPack*(res: SigilParams): SigilParams {.inline.} =
   result = res
 
+when not (
+  defined(nimscript) or defined(useJsonSerde) or defined(sigilsJsonSerde) or
+  sigilsCborSerdeEnabled
+):
+  proc rpcPack*[T](res: sink Isolated[T]): SigilParams =
+    ## Pack an isolated value directly for destructive Variant extraction.
+    ## This overload does not cover tuples containing isolated arguments.
+    ## Reuse and fanout reject the missing cloner.
+    result = SigilParams(payload: newOwnedVariant(ensureMove(res)))
+
 proc rpcPack*[T](res: sink T): SigilParams =
   when defined(nimscript) or defined(useJsonSerde) or defined(sigilsJsonSerde):
     let jn = toJson(res)
@@ -158,6 +180,17 @@ proc rpcUnpack*[T](obj: var T, ss: SigilParams) =
   else:
     assert not ss.payload.isNil
     obj = ss.payload.get(T)
+
+proc rpcUnpackMove*[T](obj: var T, ss: sink SigilParams) =
+  ## Consume a uniquely owned packed value for a sink slot.
+  when defined(nimscript) or defined(useJsonSerde) or defined(sigilsJsonSerde):
+    obj.fromJson(ss.payload)
+  elif sigilsCborSerdeEnabled:
+    ss.payload.setPosition(0)
+    obj = unpack(ss.payload, T)
+  else:
+    assert not ss.payload.isNil
+    obj = ss.payload.takeVariant(T)
 
 proc wrapResponse*(id: SigilId, resp: SigilParams,
     kind = Response): SigilResponse =
@@ -193,6 +226,7 @@ when sigilsSigilNameStringEnabled:
 
   proc toSigilName*(name: string): SigilName =
     return name
+
 else:
   proc toSigilName*(name: IndexableChars): SigilName =
     return toStackString(name, sigilsMaxSignalLength)

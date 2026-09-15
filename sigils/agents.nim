@@ -39,6 +39,11 @@ const
 type
   AgentProc* = proc(context: Agent, params: SigilParams) {.nimcall.}
   LocalAgentProc* = proc(context: Agent, params: pointer) {.nimcall.}
+  LocalAgentCloneProc* =
+    proc(context: Agent, params: pointer, mode: CloneMode) {.nimcall.}
+  LocalSlotCloneInfo* = object
+    ## Compile-time marker for generated per-field local clone overloads.
+    discard
 
   SigilLocalCall*[S, A] = object
     source*: S
@@ -55,10 +60,10 @@ type
 
   SlotConnectionState* = ref object
     alive*: bool
+    source*: WeakRef[Agent]
 
-  EnvAgentProc* = proc(
-    context: Agent, params: SigilParams, env: SlotEnv
-  ) {.nimcall.}
+  EnvAgentProc* = proc(context: Agent, params: SigilParams,
+      env: SlotEnv) {.nimcall.}
 
   AgentEndpoint* = SharedPtr[AgentDelivery]
   AgentDelivery* = object
@@ -67,8 +72,16 @@ type
     alive*: Atomic[bool]
     handles*: int # protected by lock
     target*: WeakRef[Agent]
-    dispatch*: proc(endpoint: AgentEndpoint, req: sink SigilRequest,
-      slot: AgentProc): SigilResponse {.nimcall, gcsafe.}
+    dispatch*: proc(
+      endpoint: AgentEndpoint, req: sink SigilRequest, slot: AgentProc
+    ): SigilResponse {.nimcall, gcsafe.}
+    dispatchSubscription*: proc(
+      endpoint: AgentEndpoint,
+      req: sink SigilRequest,
+      slot: AgentProc,
+      envSlot: EnvAgentProc,
+      env: SlotEnv,
+    ): SigilResponse {.nimcall, gcsafe.}
     scheduler*: pointer
     remote*: AgentEndpoint
     owner*: AgentEndpoint
@@ -78,6 +91,7 @@ type
     endpoint*: AgentEndpoint
     packedSlot*: AgentProc
     directSlot*: LocalAgentProc
+    directSlotClone*: LocalAgentCloneProc
     cloneMode*: CloneMode
     when not sigilsSlotEnvDisabled:
       envSlot*: EnvAgentProc
@@ -126,6 +140,10 @@ proc endpoint*(agent: Agent): AgentEndpoint {.gcsafe, raises: [].} =
 
 proc isAlive*(endpoint: AgentEndpoint): bool {.inline.} =
   not endpoint.isNil and endpoint[].alive.load(Acquire)
+
+proc hasDispatcher*(endpoint: AgentEndpoint): bool {.inline.} =
+  not endpoint.isNil and
+    (not endpoint[].dispatch.isNil or not endpoint[].dispatchSubscription.isNil)
 
 proc `$`*(endpoint: AgentEndpoint): string =
   ## Avoid inspecting native locks or recursively following remote endpoints.
@@ -411,6 +429,23 @@ proc sameHandler(a, b: Subscription): bool =
 proc sameSubscription*(a, b: Subscription): bool =
   a.tgt == b.tgt and sameHandler(a, b)
 
+proc mergeDeliveryMetadata(dest: var Subscription,
+    source: Subscription) {.inline.} =
+  ## Merge generated delivery paths without changing logical handler identity.
+  if dest.packedSlot.isNil:
+    dest.packedSlot = source.packedSlot
+  if dest.directSlot.isNil:
+    dest.directSlot = source.directSlot
+  if dest.directSlotClone.isNil:
+    dest.directSlotClone = source.directSlotClone
+  when not sigilsSlotEnvDisabled:
+    if dest.envSlot.isNil:
+      dest.envSlot = source.envSlot
+    if dest.connectionState.isNil:
+      dest.connectionState = source.connectionState
+    if dest.env.isNil:
+      dest.env = source.env
+
 method hasSubscription*(
     obj: Agent, sig: SigilName, subscription: Subscription
 ): bool {.base, gcsafe, raises: [].} =
@@ -432,6 +467,10 @@ proc addSubscriptionSorted*(
   var idx = lowerBoundSubscription(subs, sig)
   while idx < subs.len and subs[idx].signal == sig:
     if subs[idx].subscription.sameSubscription(subscription):
+      # Delivery-specific entry points are optimizations of the same logical
+      # handler. Merge in place: reconnecting a reactive dependency must not
+      # copy its endpoint and closure ownership just to retain the same paths.
+      subs[idx].subscription.mergeDeliveryMetadata(subscription)
       return false
     idx.inc()
   subs.insert((sig, subscription), idx)
@@ -452,6 +491,15 @@ method addSubscription*(
   if addSubscriptionSorted(obj.subcriptions, sig,
       subscription.prepareSubscription()):
     subscription.tgt[].addListener(obj.unsafeWeakRef().asAgent())
+
+method updateSubscriptionDelivery*(
+    obj: Agent, sig: SigilName, subscription: Subscription
+) {.base, gcsafe, raises: [].} =
+  ## Add generated move/clone paths after the legacy virtual connection hook.
+  for item in obj.subcriptions.mitems:
+    if item.signal == sig and item.subscription.sameSubscription(subscription):
+      item.subscription.mergeDeliveryMetadata(subscription)
+      return
 
 method addSubscription*(
     obj: Agent, sig: SigilName, tgt: WeakRef[Agent], slot: AgentProc
@@ -525,7 +573,6 @@ when defined(sigilsDebugPrint):
 method delSubscription*(
     self: Agent, sig: SigilName, tgt: WeakRef[Agent], slot: AgentProc
 ) {.base, gcsafe, raises: [].} =
-
   var
     subsFound: int
     subsDeleted: int

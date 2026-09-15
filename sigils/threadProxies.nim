@@ -122,13 +122,64 @@ proc dispatchProxy(endpoint: AgentEndpoint, req: sink SigilRequest,
   if not endpoint.isAlive:
     return
   let home = cast[SigilThreadPtr](endpoint[].scheduler)
-  if getCurrentSigilThread() == home and
-      (endpoint[].owner.isNil or (not executingActor.isNil and
-       executingActor[].target == endpoint[].owner[].target)):
+  if getCurrentSigilThread() == home and (
+    endpoint[].owner.isNil or
+    (not executingActor.isNil and executingActor[].target == endpoint[].owner[].target)
+  ):
     {.cast(gcsafe).}:
       return endpoint[].target[].callMethod(ensureMove(req), slot)
-  home.send(ThreadSignal(kind: Call, tgt: endpoint[].target,
-    endpoint: endpoint, req: ensureMove(req), slot: slot))
+  home.send(
+    ThreadSignal(
+      kind: Call,
+      tgt: endpoint[].target,
+      endpoint: endpoint,
+      req: ensureMove(req),
+      slot: slot,
+    )
+  )
+
+proc dispatchProxySubscription(
+    endpoint: AgentEndpoint,
+    req: sink SigilRequest,
+    slot: AgentProc,
+    envSlot: EnvAgentProc,
+    env: SlotEnv,
+): SigilResponse {.gcsafe.} =
+  if not endpoint.isAlive:
+    return
+  let home = cast[SigilThreadPtr](endpoint[].scheduler)
+  if getCurrentSigilThread() == home and (
+    endpoint[].owner.isNil or
+    (not executingActor.isNil and executingActor[].target == endpoint[].owner[].target)
+  ):
+    {.cast(gcsafe).}:
+      when not sigilsSlotEnvDisabled:
+        if not envSlot.isNil:
+          return endpoint[].target[].callMethod(
+            ensureMove(req),
+            Subscription(
+              tgt: endpoint[].target, packedSlot: slot, envSlot: envSlot, env: env
+            ),
+          )
+      return endpoint[].target[].callMethod(ensureMove(req), slot)
+
+  if not envSlot.isNil:
+    return wrapResponseError(
+      req.origin,
+      SigilError(
+        code: INTERNAL_ERROR,
+        msg: "receiver-bound closure slots cannot cross a thread boundary",
+      ),
+    )
+  home.send(
+    ThreadSignal(
+      kind: Call,
+      tgt: endpoint[].target,
+      endpoint: endpoint,
+      req: ensureMove(req),
+      slot: slot,
+    )
+  )
 
 method callMethod*(
     proxy: AgentProxyShared, req: sink SigilRequest, slot: AgentProc
@@ -195,6 +246,7 @@ proc initProxy*[T](proxy: var AgentProxy[T],
   endpoint[].remote = remoteEndpoint
   endpoint[].owner = executingActor
   endpoint[].dispatch = dispatchProxy
+  endpoint[].dispatchSubscription = dispatchProxySubscription
   when defined(sigilsDebug):
     proxy.debugName = "proxy::" & agent.debugName
 
@@ -203,9 +255,10 @@ iterator findSubscribedTo(
 ): tuple[signal: SigilName, subscription: Subscription] =
   for item in other[].subcriptions:
     if item.subscription.tgt == agent:
-      yield (item.signal, Subscription(tgt: other,
-          packedSlot: item.subscription.packedSlot,
-          cloneMode: item.subscription.cloneMode))
+      var subscription = item.subscription
+      subscription.tgt = other
+      subscription.endpoint = default(AgentEndpoint)
+      yield (item.signal, subscription)
 
 proc moveToThread*[T: AgentActor, R: SigilThread](
     agentTy: var T, thread: ptr R, inbox = 1_000
@@ -218,14 +271,8 @@ proc moveToThread*[T: AgentActor, R: SigilThread](
       "agent must be unique and not shared to be passed to another thread! " &
         "GC ref is: " & $agentTy.unsafeGcCount(),
     )
-  var
-    agent = agentTy.unsafeWeakRef.toKind(AgentActor)
+  var agent = agentTy.unsafeWeakRef.toKind(AgentActor)
   let agentRef = agent.toKind(Agent)
-
-  var
-    localProxy: AgentProxy[T]
-
-  localProxy.initProxy(agent, thread.toSigilThread(), inbox = inbox)
 
   # handle things subscribed to `agent`, ie the inverse
   var
@@ -234,7 +281,16 @@ proc moveToThread*[T: AgentActor, R: SigilThread](
 
   for listener in agent[].listening:
     for item in listener.findSubscribedTo(agentRef):
+      when not sigilsSlotEnvDisabled:
+        if not item.subscription.envSlot.isNil:
+          raise newException(
+            ValueError,
+            "disconnect receiver-bound closure slots before moving their receiver",
+          )
       oldListeningSubs.add(item)
+
+  var localProxy: AgentProxy[T]
+  localProxy.initProxy(agent, thread.toSigilThread(), inbox = inbox)
 
   agentRef.unsubscribeFrom(agent[].listening)
   agentRef.removeSubscriptions(agent[].subcriptions)
@@ -242,30 +298,19 @@ proc moveToThread*[T: AgentActor, R: SigilThread](
   agent[].subcriptions.setLen(0)
 
   # update subscriptions agent is listening to use the local proxy to send events
-  var listenSubs = false
   for item in oldListeningSubs:
-    item.subscription.tgt[].addSubscription(
-      item.signal,
-      Subscription(
-        tgt: localProxy.unsafeWeakRef().asAgent(),
-        packedSlot: item.subscription.packedSlot,
-        cloneMode: item.subscription.cloneMode,
-      ),
-    )
-    listenSubs = true
+    var subscription = item.subscription
+    subscription.tgt = localProxy.unsafeWeakRef().asAgent()
+    item.subscription.tgt[].addSubscription(item.signal, subscription)
 
   # update my subcriptionsTable so agent uses the remote proxy to send events back
-  var hasSubs = false
   for item in oldSubscribers:
-    localProxy.addSubscription(
-      item.signal,
-      Subscription(
-        tgt: item.subscription.tgt,
-        packedSlot: item.subscription.packedSlot,
-        cloneMode: item.subscription.cloneMode,
-      ),
-    )
-    hasSubs = true
+    var subscription = item.subscription
+    when not sigilsSlotEnvDisabled:
+      if not subscription.connectionState.isNil:
+        subscription.connectionState.source = localProxy.unsafeWeakRef().asAgent()
+        subscription.connectionState.alive = true
+    localProxy.addSubscription(item.signal, subscription)
 
   thread.toSigilThread().attachActor(agentTy)
   when defined(gcOrc):
@@ -341,7 +386,9 @@ template connectThreaded*[T](
   let agentSlot = `slot`(T)
   checkSignalTypes(thr.agent, signal, T(), agentSlot, acceptVoidSlot)
   assert not localProxy.remote.isNil
-  thr.agent.addSubscription(signalName(signal), localProxy.getRemote()[], agentSlot)
+  thr.agent.addSubscription(
+    signalName(signal), localProxy.getRemote().asAgent(), agentSlot
+  )
 
 import macros
 

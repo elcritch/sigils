@@ -62,7 +62,7 @@ method send*(
     msg: sink ThreadSignal,
     blocking: BlockingKinds,
 ) {.gcsafe.} =
-  var prepared = msg
+  var prepared = ensureMove(msg)
   prepared.prepareDelivery()
   var isolatedMsg = isolateRuntime(move(prepared))
   case blocking

@@ -23,7 +23,7 @@ method send*(
     thread: SigilThreadDefaultPtr, msg: sink ThreadSignal,
         blocking: BlockingKinds
 ) {.gcsafe.} =
-  var prepared = msg
+  var prepared = ensureMove(msg)
   prepared.prepareDelivery()
   var msg = isolateRuntime(move(prepared))
   case blocking

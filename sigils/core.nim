@@ -59,28 +59,44 @@ template checkSlotResponse(res: SigilResponse) =
     else:
       discard
 
-proc deliverSubscription*(sub: Subscription,
-    req: sink SigilRequest): SigilResponse =
+proc deliverSubscription*(
+    sub: Subscription, req: sink SigilRequest, consumes = false
+): SigilResponse =
+  var ownedReq = ensureMove(req)
+  if consumes:
+    ownedReq.params.markConsumedDelivery()
   if not sub.endpoint.isNil:
     if not sub.endpoint.isAlive:
       return
+    if not sub.endpoint[].dispatchSubscription.isNil:
+      when not sigilsSlotEnvDisabled:
+        return sub.endpoint[].dispatchSubscription(
+          sub.endpoint, ensureMove(ownedReq), sub.packedSlot, sub.envSlot, sub.env
+        )
+      else:
+        return sub.endpoint[].dispatchSubscription(
+          sub.endpoint, ensureMove(ownedReq), sub.packedSlot, nil, nil
+        )
     if not sub.endpoint[].dispatch.isNil:
-      return sub.endpoint[].dispatch(sub.endpoint, ensureMove(req),
+      return sub.endpoint[].dispatch(sub.endpoint, ensureMove(ownedReq),
           sub.packedSlot)
   when sigilsSlotEnvDisabled:
-    result = sub.tgt[].callMethod(ensureMove(req), sub.packedSlot)
+    result = sub.tgt[].callMethod(ensureMove(ownedReq), sub.packedSlot)
   else:
-    result = sub.tgt[].callMethod(ensureMove(req), sub)
+    result = sub.tgt[].callMethod(ensureMove(ownedReq), sub)
 
-template callSlotsImpl(obj: Agent, req: SigilRequest, subsIter: untyped) =
+template callSlotsImpl(
+    obj: Agent, req: SigilRequest, subsIter: untyped,
+        consumeLast: static bool = true
+) =
   template callSubscription(sub: Subscription, isLast: bool) =
     {.cast(gcsafe).}:
       var subReq =
-        if isLast:
+        if isLast and consumeLast:
           move(req)
         else:
           req.clone(sub.cloneMode)
-      let res = deliverSubscription(sub, ensureMove(subReq))
+      let res = deliverSubscription(sub, ensureMove(subReq), consumeLast and isLast)
       checkSlotResponse(res)
 
   var
@@ -106,10 +122,12 @@ template callSlotsLocalImpl(
 ) =
   template callSubscription(sub: Subscription, isLast: bool) =
     {.cast(gcsafe).}:
-      if not sub.directSlot.isNil and
-          (sub.endpoint.isNil or sub.endpoint[].dispatch.isNil):
+      if not sub.directSlot.isNil and not sub.endpoint.hasDispatcher():
         if sub.endpoint.isNil or sub.endpoint.isAlive:
-          sub.directSlot(sub.tgt[], addr args)
+          if isLast or sub.directSlotClone.isNil:
+            sub.directSlot(sub.tgt[], addr args)
+          else:
+            sub.directSlotClone(sub.tgt[], addr args, sub.cloneMode)
       else:
         var req =
           if isLast:
@@ -124,7 +142,7 @@ template callSlotsLocalImpl(
               args = args.cloneForDelivery(sub.cloneMode),
               origin = origin,
             )
-        let res = deliverSubscription(sub, ensureMove(req))
+        let res = deliverSubscription(sub, ensureMove(req), isLast)
         checkSlotResponse(res)
 
   var
@@ -156,6 +174,22 @@ method callSlots*(obj: AgentActor, req: sink SigilRequest) {.gcsafe.} =
   var ownedReq = ensureMove(req)
   callSlotsImpl(Agent(obj), ownedReq, subs.items)
 
+method callSlotsCopy*(obj: Agent, req: SigilRequest) {.base, gcsafe.} =
+  ## Dispatch a reusable packed request without consuming its payload.
+  let procName = req.procName
+  var ownedReq = req
+  callSlotsImpl(obj, ownedReq, obj.getSubscriptions(procName), false)
+
+method callSlotsCopy*(obj: AgentActor, req: SigilRequest) {.gcsafe.} =
+  obj.ensureActorReady()
+  let procName = req.procName
+  var subs: seq[Subscription]
+  withLock obj.lock:
+    for sub in obj.getSubscriptions(procName):
+      subs.add(sub)
+  var ownedReq = req
+  callSlotsImpl(Agent(obj), ownedReq, subs.items, false)
+
 proc callSlotsLocal*[A](
     obj: Agent, procName: SigilName, origin: SigilId, args: var A
 ) {.gcsafe.} =
@@ -176,8 +210,7 @@ proc callSlotsLocal*[A](
       let entry {.cursor.} = obj.subcriptions[0]
       if entry.signal == procName or entry.signal == AnySigilName:
         let sub {.cursor.} = entry.subscription
-        if not sub.directSlot.isNil and
-            (sub.endpoint.isNil or sub.endpoint[].dispatch.isNil):
+        if not sub.directSlot.isNil and not sub.endpoint.hasDispatcher():
           if sub.endpoint.isNil or sub.endpoint.isAlive:
             {.cast(gcsafe).}:
               sub.directSlot(sub.tgt[], addr args)
@@ -187,18 +220,17 @@ proc callSlotsLocal*[A](
 proc emit*(call: (Agent | WeakRef[Agent], SigilRequest)) =
   var (obj, req) = call
   when obj is WeakRef[Agent]:
-    obj[].callSlots(ensureMove(req))
+    obj[].callSlotsCopy(req)
   else:
-    obj.callSlots(ensureMove(req))
+    obj.callSlotsCopy(req)
 
 proc emit*[T: Agent, A](call: sink SigilLocalCall[T, A]) =
-  var localCall = call
-  localCall.source.callSlotsLocal(
-    localCall.procName, localCall.origin, localCall.args
-  )
+  var localCall = ensureMove(call)
+  localCall.source.callSlotsLocal(localCall.procName, localCall.origin,
+      localCall.args)
 
 proc emit*[T: Agent, A](call: sink SigilLocalCall[WeakRef[T], A]) =
-  var localCall = call
+  var localCall = ensureMove(call)
   localCall.source[].callSlotsLocal(
     localCall.procName, localCall.origin, localCall.args
   )
