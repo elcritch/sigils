@@ -121,13 +121,24 @@ template connect*(
       `slot`(LocalSignalTypes, typeof(b))
     else:
       nil
+  let directAgentClone: LocalAgentCloneProc =
+    when compiles(`slot`(LocalSignalTypes, typeof(b), LocalSlotCloneInfo)):
+      `slot`(LocalSignalTypes, typeof(b), LocalSlotCloneInfo)
+    else:
+      nil
   checkSignalTypes(a, signal, b, packedAgentSlot, acceptVoidSlot)
   a.addSubscription(signalName(signal), b, packedAgentSlot, directAgentSlot)
+  a.updateSubscriptionDelivery(
+    signalName(signal),
+    Subscription(
+      tgt: b.unsafeWeakRef().toKind(Agent),
+      packedSlot: packedAgentSlot,
+      directSlot: directAgentSlot,
+      directSlotClone: directAgentClone,
+    ),
+  )
 
-template connected*(
-    a: Agent,
-    signal: typed,
-): bool =
+template connected*(a: Agent, signal: typed): bool =
   if a.hasSubscription(signalName(signal)):
     echo "CONNECTED: "
     true

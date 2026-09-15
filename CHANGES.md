@@ -1,3 +1,4 @@
+- Unreleased - preserve sink payload moves through signal tuples, direct slots, Variant extraction, and worker/proxy delivery; keep retained packed requests reusable and clone non-final fanout deliveries; preserve local receiver-bound closure environments when moving a source, and reject moving a receiver with attached closure environments
 - Unreleased - instantiate JSON and CBOR codecs only for explicitly registered remote selectors, slots, and signals, keeping local protocol payloads independent of RPC serialization
 - `v0.29.0` - add generic CBOR-RPC and reorganize the import-driven JSON-RPC interfaces under `sigils/rpcs`
 - `v0.28.2` - support `sink` signal and slot payloads while exposing their underlying value type for connection checks, enabling single-owner payload handoffs

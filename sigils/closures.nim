@@ -19,16 +19,15 @@ when not sigilsSlotEnvDisabled:
   proc disconnect*(connection: SlotConnection): bool {.discardable.} =
     if connection.state.isNil or not connection.state.alive:
       return false
-    if connection.source.isNil:
+    let source =
+      if connection.state.source.isNil: connection.source else: connection.state.source
+    if source.isNil:
       connection.state.alive = false
       return false
-    if not connection.source[].hasSubscription(
-      connection.signal, connection.subscription
-    ):
+    if not source[].hasSubscription(connection.signal, connection.subscription):
       connection.state.alive = false
       return false
-    connection.source[].delSubscription(connection.signal,
-        connection.subscription)
+    source[].delSubscription(connection.signal, connection.subscription)
     connection.state.alive = false
     result = true
 
@@ -38,8 +37,20 @@ iterator closureParamTypes(params: NimNode, firstArg: int): NimNode =
     if arg.kind != nnkIdentDefs:
       error("closure slot arguments must be named parameters", arg)
     let argType = arg[^2]
-    for nameIdx in 0 ..< arg.len - 2:
-      yield argType
+    for _ in 0 ..< arg.len - 2:
+      if argType.len == 2 and argType[0].eqIdent("sink"):
+        yield argType[1].copyNimTree()
+      else:
+        yield argType.copyNimTree()
+
+proc closureIsSinkParam(param: NimNode): bool =
+  let paramType = param[^2]
+  paramType.len == 2 and paramType[0].eqIdent("sink")
+
+proc closureHasSinkParam(params: NimNode, firstArg: int): bool =
+  for idx in firstArg ..< params.len:
+    if params[idx].closureIsSinkParam():
+      return true
 
 macro closureTyp(blk: typed) =
   ## figure out the signal type from the lambda and the function sig
@@ -63,9 +74,11 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
   var
     blk = fnInst.getTypeImpl().copyNimTree()
     params = blk.params
+    hasSinkPayload = params.closureHasSinkParam(1)
   let
     fnSlot = ident("fnSlot")
     paramsIdent = ident("args")
+    hasSinkPayloadLit = newLit(hasSinkPayload)
     c1 = ident"c1"
     c2 = ident"c2"
     env = ident"rawEnv"
@@ -75,11 +88,17 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
     fnSigCall1 = quote:
       proc() {.nimcall.}
     fnCall1 = nnkCall.newTree(c1)
-  for idx, param in params[1 ..^ 1]:
-    fnSigCall1.params.add(newIdentDefs(ident("a" & $idx), param[1]))
-    let i = newLit(idx)
-    fnCall1.add quote do:
-      `paramsIdent`[`i`]
+  var argIdx = 0
+  for param in params[1 ..^ 1]:
+    for _ in 0 ..< param.len - 2:
+      fnSigCall1.params.add(newIdentDefs(ident("a" & $argIdx), param[^2]))
+      let i = newLit(argIdx)
+      let arg = nnkBracketExpr.newTree(paramsIdent, i)
+      if param.closureIsSinkParam():
+        fnCall1.add newCall(ident"ensureMove", arg)
+      else:
+        fnCall1.add arg
+      argIdx.inc()
 
   # setup call with env pointer
   var
@@ -99,7 +118,14 @@ macro closureSlotImpl(fnSig, fnInst: typed) =
       if context == nil:
         raise newException(ValueError, "bad value")
       var `paramsIdent`: `fnSig`
-      rpcUnpack(`paramsIdent`, params)
+      when `hasSinkPayloadLit`:
+        if params.isConsumedDelivery():
+          var ownedParams = params
+          rpcUnpackMove(`paramsIdent`, ensureMove(ownedParams))
+        else:
+          rpcUnpack(`paramsIdent`, params)
+      else:
+        rpcUnpack(`paramsIdent`, params)
       let rawProc: pointer = self.rawProc
       let `env`: pointer = self.rawEnv
       if `env`.isNil():
@@ -144,6 +170,7 @@ when not sigilsSlotEnvDisabled:
     let
       blk = fnInst.getTypeImpl().copyNimTree()
       params = blk.params
+      hasSinkPayload = params.closureHasSinkParam(2)
       receiverType = params[1][1].copyNimTree()
       envType = genSym(nskType, "ReceiverSlotEnv")
       envSlot = ident("envSlot")
@@ -154,13 +181,18 @@ when not sigilsSlotEnvDisabled:
       args = ident("args")
       self = ident("self")
       callback = ident("callback")
+      hasSinkPayloadLit = newLit(hasSinkPayload)
 
     var callbackCall = nnkCall.newTree(callback, self)
-    var idx = 0
-    for paramType in params.closureParamTypes(2):
-      discard paramType
-      callbackCall.add nnkBracketExpr.newTree(args, newLit(idx))
-      idx.inc()
+    var argIdx = 0
+    for param in params[2 ..^ 1]:
+      for _ in 0 ..< param.len - 2:
+        let arg = nnkBracketExpr.newTree(args, newLit(argIdx))
+        if param.closureIsSinkParam():
+          callbackCall.add newCall(ident"ensureMove", arg)
+        else:
+          callbackCall.add arg
+        argIdx.inc()
 
     result = quote:
       type `envType` = ref object of SlotEnv
@@ -177,7 +209,14 @@ when not sigilsSlotEnvDisabled:
         if `self` == nil:
           raise newException(ConversionError, "bad cast")
         var `args`: `fnSig`
-        rpcUnpack(`args`, `packedParams`)
+        when `hasSinkPayloadLit`:
+          if `packedParams`.isConsumedDelivery():
+            var ownedParams = `packedParams`
+            rpcUnpackMove(`args`, ensureMove(ownedParams))
+          else:
+            rpcUnpack(`args`, `packedParams`)
+        else:
+          rpcUnpack(`args`, `packedParams`)
         let `callback` = `envType`(`env`).fn
         `callbackCall`
 
@@ -239,7 +278,7 @@ when not sigilsSlotEnvDisabled:
 
       let
         sig = signalName(sigProc)
-        state = SlotConnectionState(alive: true)
+        state = SlotConnectionState(alive: true, source: a.unsafeWeakRef().asAgent())
         subscription = Subscription(
           tgt: b.unsafeWeakRef().asAgent(),
           envSlot: envSlot,

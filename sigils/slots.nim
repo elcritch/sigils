@@ -28,6 +28,26 @@ proc rpcValueType(paramType: NimNode): NimNode =
   else:
     result = paramType.copyNimTree()
 
+proc isSinkType(paramType: NimNode): bool =
+  paramType.len == 2 and paramType[0].eqIdent("sink")
+
+proc isSinkParam(param: NimNode): bool =
+  param[^2].isSinkType()
+
+proc hasSinkParam(parameters: NimNode): bool =
+  if parameters.len <= 1:
+    return
+  for param in parameters[1 ..^ 1]:
+    if param.isSinkParam():
+      return true
+
+proc rpcArgumentExpr(param: NimNode, name: NimNode): NimNode =
+  ## Preserve sink ownership when constructing a signal's argument tuple.
+  if param.isSinkParam():
+    result = newCall(ident"ensureMove", name)
+  else:
+    result = name.copyNimTree()
+
 proc mkParamsVars*(paramsIdent, paramsType, params: NimNode): NimNode =
   ## Create local variables for each parameter in the actual RPC call proc
   if params.isNil:
@@ -87,7 +107,6 @@ proc updateProcsSig(
     for ch in node:
       ch.updateProcsSig(isPublic, gens, procLineInfo)
 
-
 macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
   ## Define a remote procedure call.
   ## Input and return parameters are defined using proc's with the `rpc`
@@ -130,6 +149,7 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
     procNameStr = p.name().repr
     isPublic = pathStr.endsWith("*")
     isGeneric = genericParams.kind != nnkEmpty
+    hasSinkPayload = parameters.hasSinkParam()
 
     rpcMethodGen = genSym(nskProc, procNameStr)
     procName = ident(procNameStr) # ident("agentSlot_" & rpcMethodGen.repr)
@@ -162,8 +182,8 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
     tp = ident "tp"
 
   var signalTyp = nnkTupleConstr.newTree()
-  for i in 2 ..< params.len:
-    signalTyp.add params[i][1].rpcValueType()
+  for _, paramType in paramsIter(parameters):
+    signalTyp.add paramType.rpcValueType()
   if params.len == 2:
     # signalTyp = bindSym"void"
     signalTyp = quote:
@@ -213,22 +233,42 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
     let mcall = nnkCall.newTree(rpcMethod)
     mcall.add(objId)
     var argIdx = 0
-    for param in parameters[1 ..^ 1]:
-      discard param
-      mcall.add nnkBracketExpr.newTree(paramsIdent, newIntLitNode(argIdx))
+    for _, paramType in paramsIter(parameters):
+      let field = nnkBracketExpr.newTree(paramsIdent, newIntLitNode(argIdx))
+      if paramType.isSinkType():
+        mcall.add newCall(ident"ensureMove", field)
+      else:
+        mcall.add field
       argIdx.inc()
 
     let localArgsIdent = genSym(nskLet, "sigilsLocalSlotArgs")
     let localMcall = nnkCall.newTree(rpcMethod)
     localMcall.add(objId)
     var localArgIdx = 0
-    for param in parameters[1 ..^ 1]:
-      discard param
-      localMcall.add nnkBracketExpr.newTree(
-        nnkBracketExpr.newTree(localArgsIdent),
-        newIntLitNode(localArgIdx)
+    for _, paramType in paramsIter(parameters):
+      let field = nnkBracketExpr.newTree(
+        nnkBracketExpr.newTree(localArgsIdent), newIntLitNode(localArgIdx)
       )
+      if paramType.isSinkType():
+        localMcall.add newCall(ident"move", field)
+      else:
+        localMcall.add field
       localArgIdx.inc()
+
+    let rawArgsIdent = genSym(nskLet, "sigilsRawSlotArgs")
+    let clonedArgsIdent = genSym(nskVar, "sigilsClonedSlotArgs")
+    let cloneModeIdent = ident("cloneMode")
+    var cloneConstruct = nnkTupleConstr.newTree()
+    var cloneArgIdx = 0
+    for _, paramType in paramsIter(parameters):
+      let field = nnkBracketExpr.newTree(
+        nnkBracketExpr.newTree(rawArgsIdent), newIntLitNode(cloneArgIdx)
+      )
+      if paramType.isSinkType():
+        cloneConstruct.add newCall(ident"cloneRc", field)
+      else:
+        cloneConstruct.add field
+      cloneArgIdx.inc()
 
     let agentSlotImpl = quote:
       proc slot(context: Agent, params: SigilParams) {.nimcall.} =
@@ -239,8 +279,25 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
           raise newException(ConversionError, "bad cast")
         when `tupTyp` isnot tuple[]:
           var `paramsIdent`: `tupTyp`
-          rpcUnpack(`paramsIdent`, params)
-        `mcall`
+          when `hasSinkPayload`:
+            if params.isConsumedDelivery():
+              var ownedParams = params
+              rpcUnpackMove(`paramsIdent`, ensureMove(ownedParams))
+              `mcall`
+            else:
+              when compiles(rpcUnpack(`paramsIdent`, params)):
+                rpcUnpack(`paramsIdent`, params)
+                `mcall`
+              else:
+                raise newException(ValueError, "slot payload is not copyable")
+          else:
+            when compiles(rpcUnpack(`paramsIdent`, params)):
+              rpcUnpack(`paramsIdent`, params)
+              `mcall`
+            else:
+              raise newException(ValueError, "slot payload is not copyable")
+        else:
+          `mcall`
 
     let directSlotImpl = quote:
       proc directSlot(context: Agent, rawArgs: pointer) {.nimcall.} =
@@ -252,6 +309,26 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
         when `tupTyp` isnot tuple[]:
           let `localArgsIdent` = cast[ptr `tupTyp`](rawArgs)
         `localMcall`
+
+    let directCloneSlotImpl = quote:
+      proc directCloneSlot(
+          context: Agent, rawArgs: pointer, `cloneModeIdent`: CloneMode
+      ) {.nimcall.} =
+        if context == nil:
+          raise newException(ValueError, "bad value")
+        let `objId` = `contextType`(context)
+        if `objId` == nil:
+          raise newException(ConversionError, "bad cast")
+        when `tupTyp` isnot tuple[]:
+          let `rawArgsIdent` = cast[ptr `tupTyp`](rawArgs)
+          discard `cloneModeIdent`
+          when compiles(`cloneConstruct`):
+            var `clonedArgsIdent` = `cloneConstruct`
+            let `localArgsIdent` = addr `clonedArgsIdent`
+            `localMcall`
+          else:
+            raise
+              newException(ValueError, "sink payload cannot be copied for local fanout")
 
     let procTyp = quote:
       proc() {.nimcall.}
@@ -274,22 +351,30 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
           `directSlotImpl`
           directSlot
 
+        when `hasSinkPayload`:
+          proc `rpcMethod`(
+              `kd`: typedesc[LocalSignalTypes],
+              `tp`: typedesc[`contextType`],
+              _: typedesc[LocalSlotCloneInfo],
+          ): LocalAgentCloneProc =
+            `directCloneSlotImpl`
+            directCloneSlot
+
     result.updateProcsSig(isPublic, genericParams, procLineInfo)
   elif isSignal:
     var construct = nnkTupleConstr.newTree()
     for param in parameters[1 ..^ 1]:
-      construct.add param[0]
+      for index in 0 ..< param.len - 2:
+        construct.add rpcArgumentExpr(param, param[index])
     let
       objId = newIdentNode("__sigilsSignalSource")
       signalArgsIdent = newIdentNode("__sigilsSignalArgs")
 
     result.add quote do:
-      proc `rpcMethod`(
-          `objId`: `firstType`
-      ): SigilLocalCall[`firstType`, typeof(`construct`)] =
+      proc `rpcMethod`(`objId`: `firstType`): SigilLocalCall[`firstType`, `signalTyp`] =
         var `signalArgsIdent` = `construct`
         const name: SigilName = toSigilName(`signalName`)
-        result = SigilLocalCall[`firstType`, typeof(`signalArgsIdent`)](
+        result = SigilLocalCall[`firstType`, `signalTyp`](
           source: `objId`,
           procName: name,
           origin: `objId`.getSigilId(),
@@ -302,11 +387,10 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
     result.add quote do:
       proc `rpcMethod`(
           `objId`: WeakRef[`firstType`]
-      ): SigilLocalCall[WeakRef[`firstType`], typeof(`construct`)] =
+      ): SigilLocalCall[WeakRef[`firstType`], `signalTyp`] =
         var `signalArgsIdent` = `construct`
         const name: SigilName = toSigilName(`signalName`)
-        result = SigilLocalCall[WeakRef[`firstType`], typeof(
-            `signalArgsIdent`)](
+        result = SigilLocalCall[WeakRef[`firstType`], `signalTyp`](
           source: `objId`,
           procName: name,
           origin: `objId`.getSigilId(),

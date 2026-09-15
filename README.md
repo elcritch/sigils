@@ -154,6 +154,27 @@ finally:
 Compile with `--mm:arc --threads:on` (ORC also works). The actor must have a unique
 strong reference when moved. After the move, use its proxy for communication.
 
+For an owned value such as a parsed document, declare both the signal payload and
+the receiving slot parameter as `sink Document`. Emit a temporary or use
+`ensureMove(document)` at its last use. Sigils moves sink fields through the
+argument tuple and consumes the final delivery, including replies forwarded
+through a worker proxy. Earlier fanout deliveries receive copies; direct local
+fanout retains reference identity, while packed/threaded fanout follows the
+subscription's clone policy.
+
+An explicitly retained packed request remains reusable with `emit((agent, request))`
+or `callSlotsCopy`. Low-level `callSlots` takes ownership of its request, and
+`rpcUnpackMove` destructively extracts its payload; do not retain aliases to that
+payload. Direct `rpcPack(Isolated[T])` supports extraction without a cloner, so
+cloning it raises `ValueError`. This overload does not make tuples containing
+`Isolated[T]` valid signal payloads. JSON and CBOR still deserialize values.
+
+Receiver-bound closure environments stay on their creating thread. Moving a
+signal source preserves its local closure subscriptions and disconnect handles.
+Disconnect receiver-bound closures before moving their receiver; `moveToThread`
+rejects that move before changing the connections. Endpoint delivery also reports
+an error if it would have to send a receiver-bound environment to another thread.
+
 `poll()` waits for a message; `pollAll()` processes messages until the queue is
 empty and returns. In a GUI, use `pollAll()` when the application loop wakes.
 Calling it once immediately after sending a request does not guarantee that the

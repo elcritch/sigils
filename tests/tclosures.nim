@@ -10,7 +10,34 @@ type
 
   Originator* = ref object of Agent
 
+  SinkPayload = object
+    value: int
+    state: int
+
+const LiveSinkPayload = 1
+
+var
+  sinkPayloadCopies: int
+  sinkPayloadDestroys: int
+
+proc `=copy`(dest: var SinkPayload, src: SinkPayload) =
+  inc sinkPayloadCopies
+  dest.value = src.value
+  dest.state = src.state
+
+proc `=wasMoved`(payload: var SinkPayload) =
+  payload.value = 0
+  payload.state = 0
+
+proc `=destroy`(payload: var SinkPayload) =
+  if payload.state == LiveSinkPayload:
+    inc sinkPayloadDestroys
+    payload.state = 0
+
 proc valueChanged*(tp: Counter, val: int) {.signal.}
+proc sinkPayloadChanged*(tp: Originator, payload: sink SinkPayload) {.signal.}
+proc groupedSinkChanged(tp: Originator, first,
+    second: sink SinkPayload) {.signal.}
 
 proc setValue*(self: Counter, value: int) {.slot.} =
   echo "setValue! ", value
@@ -72,3 +99,60 @@ suite "agent closure slots":
     emit a.valueChanged(42)
     check b.value == 42
     check clsAgent.typeof() is ClosureAgent[(int, )]
+
+  test "sink closure consumes packed payload without copying":
+    var
+      source = Originator()
+      receiver = Counter()
+
+    let closureAgent = connectTo(source, sinkPayloadChanged) do(
+      payload: sink SinkPayload
+    ):
+      receiver.value = payload.value
+
+    discard closureAgent
+    sinkPayloadCopies = 0
+    sinkPayloadDestroys = 0
+    block:
+      var payload = SinkPayload(value: 73, state: LiveSinkPayload)
+      emit source.sinkPayloadChanged(move payload)
+
+    check receiver.value == 73
+    check sinkPayloadCopies == 0
+    check sinkPayloadDestroys == 1
+
+  test "grouped sink closure parameters move independently":
+    let source = Originator()
+    let receiver = Counter()
+    let closureAgent = connectTo(source, groupedSinkChanged) do(
+        first, second: sink SinkPayload
+    ):
+      receiver.value = first.value + second.value
+    discard closureAgent
+    sinkPayloadCopies = 0
+    sinkPayloadDestroys = 0
+    emit source.groupedSinkChanged(
+      SinkPayload(value: 17, state: LiveSinkPayload),
+      SinkPayload(value: 19, state: LiveSinkPayload),
+    )
+    check receiver.value == 36
+    check sinkPayloadCopies == 0
+    check sinkPayloadDestroys == 2
+
+  when not sigilsSlotEnvDisabled:
+    test "receiver-bound sink closure consumes its owned payload":
+      let source = Originator()
+      let receiver = Counter()
+      let offset = 5
+      let conn = connectTo(source, sinkPayloadChanged, receiver) do(
+          self: Counter, payload: sink SinkPayload
+      ):
+        self.value = payload.value + offset
+      sinkPayloadCopies = 0
+      sinkPayloadDestroys = 0
+      emit source.sinkPayloadChanged(SinkPayload(value: 23,
+          state: LiveSinkPayload))
+      check receiver.value == 28
+      check sinkPayloadCopies == 0
+      check sinkPayloadDestroys == 1
+      check conn.disconnect()

@@ -44,7 +44,7 @@ method send*(
     thread: AsyncSigilThreadPtr, msg: sink ThreadSignal, blocking: BlockingKinds
 ) {.gcsafe.} =
   debugPrint "threadSend: ", thread.toSigilThread()[].getThreadId()
-  var prepared = msg
+  var prepared = ensureMove(msg)
   prepared.prepareDelivery()
   var msg = isolateRuntime(move(prepared))
   case blocking
