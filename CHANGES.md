@@ -1,3 +1,8 @@
+## 0.31.0
+
+- Add the ownership-safe fixed-ring `sigils/rchannels` module, including
+  managed payload, overwrite, teardown, and concurrent producer/consumer tests.
+
 - Unreleased - avoid redundant reactive reconnection bookkeeping and local selector initialization; duplicate non-final direct sink arguments into fresh storage, reject unavailable duplicate hooks before consuming, and preserve fanout and connection overrides
 - Unreleased - preserve sink payload moves through signal tuples, direct slots, Variant extraction, and worker/proxy delivery; keep retained packed requests reusable and clone non-final fanout deliveries; preserve local receiver-bound closure environments when moving a source, and reject moving a receiver with attached closure environments
 - Unreleased - instantiate JSON and CBOR codecs only for explicitly registered remote selectors, slots, and signals, keeping local protocol payloads independent of RPC serialization
