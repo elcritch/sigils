@@ -2,6 +2,7 @@ import std/isolation
 import std/unittest
 import std/os
 import std/sequtils
+import std/tables
 
 import sigils
 import sigils/isolateutils
@@ -13,6 +14,38 @@ import threading/smartptrs
 import threading/channels
 
 type
+  IsolationLeaf = ref object
+    value: int
+
+  IsolationBox[T] = object
+    value: T
+
+  IsolationTree = object
+    value: int
+    children: seq[IsolationTree]
+
+  IsolationCycle = ref object
+    children: seq[IsolationCycle]
+
+  IsolationChoice = object
+    case hasRef: bool
+    of true:
+      leaf: IsolationLeaf
+    of false:
+      value: int
+
+  IsolationRecursive[T] = object
+    children: seq[IsolationRecursive[T]]
+    value: T
+
+  IsolationBase[T] = object of RootObj
+    value: T
+
+  IsolationInherited[T] = object of IsolationBase[T]
+    extra: int
+
+  IsolationSequence[T] = seq[T]
+
   SomeAction* = ref object of Agent
     value: int
 
@@ -81,6 +114,139 @@ suite "isolate utils":
     var f = TestInner()
     var isoF = isolateRuntime(f)
     check isoF.extract() == f
+
+  test "runtime checks reject sequence and array elements with outside owners":
+    let outside = IsolationLeaf(value: 42)
+    var sequence = @[outside]
+    expect(IsolationError):
+      var isolated = isolateRuntime(move sequence)
+      discard isolated.extract()
+    var array = [outside]
+    expect(IsolationError):
+      var isolated = isolateRuntime(move array)
+      discard isolated.extract()
+    check outside.value == 42
+
+  test "runtime checks follow nested generic objects tuples and containers":
+    let outside = IsolationLeaf(value: 43)
+    var nested = @[IsolationBox[tuple[leaves: array[1, seq[IsolationLeaf]]]](
+      value: (leaves: [@[outside]])
+    )]
+    expect(IsolationError):
+      var isolated = isolateRuntime(move nested)
+      discard isolated.extract()
+    check outside.value == 43
+
+  test "runtime checks follow containers stored in refs":
+    type Owner = ref object
+      leaves: seq[IsolationBox[IsolationLeaf]]
+    let outside = IsolationLeaf(value: 44)
+    var owner = Owner(leaves: @[IsolationBox[IsolationLeaf](value: outside)])
+    expect(IsolationError):
+      var isolated = isolateRuntime(move owner)
+      discard isolated.extract()
+    check outside.value == 44
+
+  test "positional tuples and inherited generic fields retain ref checks":
+    let outside = IsolationLeaf(value: 53)
+    var positional = @[(1, outside)]
+    expect(IsolationError):
+      var isolated = isolateRuntime(move positional)
+      discard isolated.extract()
+    var inherited = @[IsolationInherited[IsolationLeaf](value: outside)]
+    expect(IsolationError):
+      var isolated = isolateRuntime(move inherited)
+      discard isolated.extract()
+    check outside.value == 53
+
+  test "recursive generic values check refs after recursive fields":
+    let outside = IsolationLeaf(value: 54)
+    var shared = @[IsolationRecursive[IsolationLeaf](value: outside)]
+    expect(IsolationError):
+      var isolated = isolateRuntime(move shared)
+      discard isolated.extract()
+    var owned = @[IsolationRecursive[IsolationLeaf](
+      children: @[IsolationRecursive[IsolationLeaf](value: IsolationLeaf(
+          value: 55))],
+      value: IsolationLeaf(value: 56)
+    )]
+    var isolated = isolateRuntime(move owned)
+    let recovered = isolated.extract()
+    check recovered[0].children[0].value.value == 55
+    check recovered[0].value.value == 56
+
+  test "sequence aliases and standard table elements follow their value types":
+    let outside = IsolationLeaf(value: 57)
+    var aliases: IsolationSequence[IsolationSequence[IsolationLeaf]] = @[@[outside]]
+    expect(IsolationError):
+      var isolated = isolateRuntime(move aliases)
+      discard isolated.extract()
+    var table = {"leaf": outside}.toTable()
+    var tables = @[move table]
+    expect(IsolationError):
+      var isolated = isolateRuntime(move tables)
+      discard isolated.extract()
+    check outside.value == 57
+
+  test "uniquely owned nested containers isolate without extra ref counts":
+    var nested = @[IsolationBox[tuple[leaves: array[1, seq[IsolationLeaf]]]](
+      value: (leaves: [@[IsolationLeaf(value: 45)]])
+    )]
+    var isolated = isolateRuntime(move nested)
+    let recovered = isolated.extract()
+    check recovered[0].value.leaves[0][0].value == 45
+    check recovered[0].value.leaves[0][0].unsafeGcCount() == 1
+
+  test "empty and ref-free containers including recursive value types isolate":
+    var empty: seq[IsolationLeaf]
+    var isolatedEmpty = isolateRuntime(move empty)
+    check isolatedEmpty.extract().len == 0
+    var values = @[IsolationTree(value: 46, children: @[IsolationTree(value: 47)])]
+    var isolatedValues = isolateRuntime(move values)
+    let recovered = isolatedValues.extract()
+    check recovered[0].value == 46
+    check recovered[0].children[0].value == 47
+    var strings = ["one", "two"]
+    var isolatedStrings = isolateRuntime(move strings)
+    check isolatedStrings.extract() == ["one", "two"]
+
+  test "ref-bearing variant containers inspect only the active fields":
+    var plain = @[IsolationChoice(hasRef: false, value: 48)]
+    var isolatedPlain = isolateRuntime(move plain)
+    check isolatedPlain.extract()[0].value == 48
+    let outside = IsolationLeaf(value: 49)
+    var referenced = @[IsolationChoice(hasRef: true, leaf: outside)]
+    expect(IsolationError):
+      var isolated = isolateRuntime(move referenced)
+      discard isolated.extract()
+    check outside.value == 49
+
+  test "container checks reject internal repeated refs and cycles":
+    var leaf = IsolationLeaf(value: 50)
+    var repeated = @[leaf, move leaf]
+    expect(IsolationError):
+      var isolated = isolateRuntime(move repeated)
+      discard isolated.extract()
+    var cycle = IsolationCycle()
+    cycle.children.add cycle
+    defer:
+      cycle.children.setLen(0)
+    var cyclic = @[cycle]
+    expect(IsolationError):
+      var isolated = isolateRuntime(move cyclic)
+      discard isolated.extract()
+    check cycle.children[0] == cycle
+
+  test "arrays with enum indexes retain uniquely owned elements":
+    type Index = enum
+      first, second
+    var values: array[Index, IsolationLeaf]
+    values[first] = IsolationLeaf(value: 51)
+    values[second] = IsolationLeaf(value: 52)
+    var isolated = isolateRuntime(move values)
+    let recovered = isolated.extract()
+    check recovered[first].value == 51
+    check recovered[second].value == 52
 
 type
   NonCopy = object

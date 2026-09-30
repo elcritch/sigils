@@ -185,6 +185,14 @@ limit outstanding work if a producer can outpace its worker. For ownership,
 queue limits, shutdown, and choosing between a single worker, a thread pool,
 selectors, asyncdispatch, or Chronos, see the [threading guide](docs/threading.md).
 
+`sigils/isolateutils` provides `isolateRuntime(move payload)` for runtime checks
+of unique refs in declared fields and nested sequences or arrays. Elements with
+ref-free types are skipped. An `IsolationError` means a supported ref has more
+than one owner; this also rejects sharing within the payload, including cycles.
+It does not prove general graph ownership. Dynamic subtype fields, distinct
+wrappers, closures, and raw/shared pointers are outside the checker; weak refs
+are deliberately skipped, and `SharedPtr` retains its explicit sharing contract.
+
 For exposing typed selectors through JSON-RPC 2.0 on a local selector scheduler, a
 selector helper thread, a Chronos helper thread, or an LSP-style stdin/stdout
 transport, see the

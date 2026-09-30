@@ -28,11 +28,49 @@ type IsolationError* = object of CatchableError
 
 import std/macros
 
+proc containsRefs(typ: NimNode, visited: var seq[
+    NimNode]): bool {.compileTime.} =
+  case typ.kind
+  of nnkRefTy:
+    return true
+  of nnkPtrTy, nnkProcTy:
+    discard
+  of nnkObjectTy:
+    if typ[1].kind == nnkOfInherit and containsRefs(typ[1][0], visited):
+      return true
+    return containsRefs(typ[2], visited)
+  of nnkTupleTy, nnkRecList, nnkRecCase, nnkOfBranch, nnkElse:
+    for child in typ:
+      if child.kind in {nnkIdentDefs, nnkRecList, nnkRecCase, nnkOfBranch, nnkElse}:
+        if containsRefs(child, visited):
+          return true
+  of nnkTupleConstr:
+    for child in typ:
+      if containsRefs(child, visited):
+        return true
+  of nnkIdentDefs:
+    return containsRefs(typ[^2], visited)
+  of nnkBracketExpr, nnkSym:
+    if typ.kind == nnkBracketExpr and
+        (typ[0].eqIdent("seq") or typ[0].eqIdent("array")):
+      return containsRefs(typ[^1], visited)
+    for previous in visited:
+      if sameType(typ, previous):
+        return
+    visited.add typ
+    return containsRefs(typ.getTypeImpl(), visited)
+  else:
+    discard
+
+macro containsRefs(typ: typedesc): untyped =
+  var visited: seq[NimNode]
+  newLit(containsRefs(typ.getTypeInst()[1], visited))
+
 import std/private/syslocks
 proc verifyUniqueSkip(tp: typedesc[SysLock]) =
   discard
 
-proc verifyUnique[T, V](field: T, parent: V) =
+proc verifyUnique[T, V](field: T, parent: V) {.raises: [IsolationError].} =
   when T is ref:
     if not field.isNil:
       if not field.isUniqueRef():
@@ -42,6 +80,10 @@ proc verifyUnique[T, V](field: T, parent: V) =
         )
       for v in field[].fields():
         verifyUnique(v, parent)
+  elif T is seq or T is array:
+    when containsRefs(typeof(field[low(field)])):
+      for index in low(field) .. high(field):
+        verifyUnique(field[index], parent)
   elif T is tuple or T is object:
     when compiles(verifyUniqueSkip(T)):
       discard
@@ -53,12 +95,21 @@ proc verifyUnique[T, V](field: T, parent: V) =
 
 proc isolateRuntime*[T](item: sink T): Isolated[T] {.raises: [
     IsolationError].} =
-  ## Isolates a ref type or type with ref's and ensure that
-  ## each ref is unique. This allows safely isolating it.
+  ## Checks that supported, statically visible refs have unique ownership.
+  ## Traverses declared ref/object/tuple fields and ref-bearing sequence/array
+  ## elements. Ref-free element types need no runtime traversal.
+  ##
+  ## This is stricter than exclusive ownership of a graph: repeated internal
+  ## refs and cycles are rejected too. Dynamic subclass fields, distinct wrappers,
+  ## closure environments, and raw/shared pointers are not verified. Weak refs
+  ## are explicitly exempt. Callers remain responsible for these opaque values
+  ## and any intentional cross-thread sharing.
+  # A generic sink can pass the compiler's isolation check even when sequence
+  # elements have outside owners. Always perform the runtime check first.
+  verifyUnique(item, item)
   when compiles(isolate(item)):
     result = isolate(item)
   else:
-    verifyUnique(item, item)
     result = unsafeIsolate(item)
 
 proc isolateRuntime*[T](item: SharedPtr[T]): Isolated[SharedPtr[T]] =
