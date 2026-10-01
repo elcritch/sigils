@@ -1,3 +1,9 @@
+## 0.31.1
+
+- Check refs inside sequences and arrays during runtime isolation, including
+  nested generic records, tuples, and containers. Skip ref-free element types
+  and perform runtime checks even when a generic sink passes compiler isolation.
+
 ## 0.31.0
 
 - Add the ownership-safe fixed-ring `sigils/rchannels` module, including

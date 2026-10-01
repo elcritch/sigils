@@ -95,3 +95,6 @@ jobs:
           else
             atlas-run tests --jobs:2 --only-errors -- -d:features.sigils.chronos --cc:${{ matrix.cc }}
           fi
+
+      - name: Check runtime isolation with ORC
+        run: atlas-run tests isolateutils.nim -- --mm:orc --cc:${{ matrix.cc }}
