@@ -1,5 +1,5 @@
 import std/[isolation, monotimes, os, strutils, unittest]
-import threading/atomics
+import std/atomics
 
 import sigils
 import sigils/threads

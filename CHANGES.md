@@ -1,3 +1,10 @@
+## Unreleased
+
+- Use `std/atomics` for scheduler and delivery state so MSVC builds do not
+  depend on the deprecated GCC-only `threading/atomics` implementation.
+  Custom schedulers that access the exported atomic fields must import
+  `std/atomics` and use its `mo*` memory-order names.
+
 ## 0.31.1
 
 - Check refs inside sequences and arrays during runtime isolation, including

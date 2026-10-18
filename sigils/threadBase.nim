@@ -6,7 +6,7 @@ import std/syncio
 import std/tables
 import threading/smartptrs
 import threading/channels
-import threading/atomics
+import std/atomics
 
 import isolateutils
 import agents
@@ -63,7 +63,7 @@ proc timeout*(timer: SigilTimer) {.signal.}
 proc started*(tp: SigilThreadAgent) {.signal.}
 
 proc getThreadId*(thread: SigilThread): int =
-  addr(thread.threadId)[].load(Relaxed)
+  addr(thread.threadId)[].load(moRelaxed)
 
 proc repr*(obj: SigilThread): string =
   when defined(sigilsDebug):
@@ -76,12 +76,12 @@ proc repr*(obj: SigilThread): string =
 
 proc `=destroy`*(thread: var SigilThread) =
   # SigilThread
-  thread.running.store(false, Relaxed)
+  thread.running.store(false, moRelaxed)
 
 proc notifyMessageEnqueued*(thread: SigilThreadPtr) {.inline, gcsafe, raises: [].} =
   ## Scheduler implementation hook called after publishing a destination-queue
   ## message. Registered callbacks run synchronously on the sending thread.
-  if thread.hasWakeCallbacks.load(Acquire):
+  if thread.hasWakeCallbacks.load(moAcquire):
     withLock thread.signaledLock:
       for index in 0 ..< thread.wakeCallbacks.len:
         thread.wakeCallbacks[index]()
@@ -104,7 +104,7 @@ proc addWakeCallback*(
 
   withLock thread.signaledLock:
     thread.wakeCallbacks.add(callback)
-    thread.hasWakeCallbacks.store(true, Release)
+    thread.hasWakeCallbacks.store(true, moRelease)
     callback()
 
 proc clearWakeCallbacks*(thread: SigilThreadPtr) =
@@ -115,7 +115,7 @@ proc clearWakeCallbacks*(thread: SigilThreadPtr) =
   if thread.isNil:
     return
   withLock thread.signaledLock:
-    thread.hasWakeCallbacks.store(false, Release)
+    thread.hasWakeCallbacks.store(false, moRelease)
     thread.wakeCallbacks.setLen(0)
 
 proc signal*(thread: SigilThreadPtr, obj: WeakRef[AgentActor]) =
@@ -150,11 +150,11 @@ method poll*(
   raise newException(AssertionDefect, "this should never be called!")
 
 proc isRunning*(thread: SigilThreadPtr): bool =
-  thread.running.load(Relaxed)
+  thread.running.load(moRelaxed)
 
 proc setRunning*(thread: SigilThreadPtr, state: bool, immediate = false) =
   if immediate:
-    thread[].running.store(state, Relaxed)
+    thread[].running.store(state, moRelaxed)
   else:
     thread.send(ThreadSignal(kind: Exit))
 
@@ -164,7 +164,7 @@ proc gcCollectReferences(thread: SigilThreadPtr) =
     let endpoint = agent[].endpoint()
     withLock endpoint[].lock:
       if endpoint[].handles == 0 and not agent[].hasConnections():
-        endpoint[].alive.store(false, Release)
+        endpoint[].alive.store(false, moRelease)
         derefs.incl(agent)
 
   for agent in derefs:
@@ -177,7 +177,7 @@ proc exec*(thread: SigilThreadPtr, sig: sink ThreadSignal) {.gcsafe.} =
   case sig.kind
   of Exit:
     debugPrint "\t threadExec:exit: ", $getThreadId()
-    thread.running.store(false, Relaxed)
+    thread.running.store(false, moRelaxed)
   of Move:
     debugPrint "\t threadExec:move: ",
       $sig.item.unsafeWeakRef(), " refcount: ", $sig.item.unsafeGcCount()

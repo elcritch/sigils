@@ -1,5 +1,5 @@
 import std/[locks, os, unittest]
-import threading/atomics
+import std/atomics
 
 import sigils
 import sigils/registry

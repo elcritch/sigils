@@ -3,7 +3,7 @@ import std/unittest
 import std/os
 import std/sequtils
 import std/[monotimes, times]
-import threading/atomics
+import std/atomics
 
 import sigils
 import sigils/threads

@@ -1,5 +1,5 @@
 import std/[cpuinfo, deques, locks, tables]
-import threading/atomics
+import std/atomics
 
 import isolateutils
 import agents
@@ -50,7 +50,7 @@ proc unusedActor(actor: WeakRef[AgentActor]): bool =
   withLock endpoint[].lock:
     result = endpoint[].handles == 0 and not actor[].hasConnections()
     if result:
-      endpoint[].alive.store(false, Release)
+      endpoint[].alive.store(false, moRelease)
 
 proc enqueueReadyLocked(pool: SigilThreadPoolPtr, actor: WeakRef[AgentActor]) =
   if actor notin pool[].states:
@@ -173,8 +173,8 @@ proc newSigilThreadPool*(
   result[].signaledLock.initLock()
   result[].queueLock.initLock()
   result[].queueCond.initCond()
-  result[].threadId.store(-1, Relaxed)
-  result[].running.store(true, Relaxed)
+  result[].threadId.store(-1, moRelaxed)
+  result[].running.store(true, moRelaxed)
 
 method send*(
     pool: SigilThreadPoolPtr, msg: sink ThreadSignal,
@@ -258,7 +258,7 @@ method send*(
   of Exit:
     withLock pool[].queueLock:
       pool[].stopping = true
-      pool[].running.store(false, Relaxed)
+      pool[].running.store(false, moRelaxed)
       pool[].queueCond.broadcast()
 
 method recv*(
@@ -287,7 +287,7 @@ proc stop*(pool: SigilThreadPoolPtr, immediate = false) =
   if immediate:
     withLock pool[].queueLock:
       pool[].stopping = true
-      pool[].running.store(false, Relaxed)
+      pool[].running.store(false, moRelaxed)
       pool[].queueCond.broadcast()
   else:
     pool.send(ThreadSignal(kind: Exit))

@@ -2,7 +2,7 @@ import std/isolation
 import std/unittest
 import std/os
 import std/sequtils
-import threading/atomics
+import std/atomics
 
 import sigils
 import sigils/threads

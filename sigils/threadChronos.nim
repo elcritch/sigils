@@ -7,7 +7,8 @@
 import std/[isolation, locks]
 from std/times import inMilliseconds
 
-import threading/[atomics, channels, smartptrs]
+import std/atomics
+import threading/[channels, smartptrs]
 import chronos
 import chronos/threadsync as chronosThreadSync except ThreadSignal
 
@@ -31,7 +32,7 @@ type
   SigilChronosThreadPtr* = ptr SigilChronosThread
 
 proc wakeDispatcher(thread: SigilChronosThreadPtr) {.gcsafe.} =
-  if thread.wakeClosed.load(Relaxed):
+  if thread.wakeClosed.load(moRelaxed):
     raise newException(IOError, "Chronos thread wake signal is closed")
 
   let wakeResult = chronosThreadSync.fireSync(thread.wake)
@@ -52,10 +53,10 @@ proc newSigilChronosThread*(): SigilChronosThreadPtr =
   result.wake = wakeResult.get()
   result.signaledLock.initLock()
   result.timerLock.initLock()
-  result.threadId.store(-1, Relaxed)
-  result.running.store(true, Relaxed)
-  result.drain.store(false, Relaxed)
-  result.wakeClosed.store(false, Relaxed)
+  result.threadId.store(-1, moRelaxed)
+  result.running.store(true, moRelaxed)
+  result.drain.store(false, moRelaxed)
+  result.wakeClosed.store(false, moRelaxed)
 
 method send*(
     thread: SigilChronosThreadPtr,
@@ -211,7 +212,7 @@ proc runChronosLoop(thread: SigilChronosThreadPtr): Future[void] {.async.} =
     if thread.isRunning():
       await chronosThreadSync.wait(thread.wake)
 
-  if thread.drain.load(Relaxed):
+  if thread.drain.load(moRelaxed):
     while thread.execOne():
       discard
   await thread.cancelTimerTasks()
@@ -221,7 +222,7 @@ proc runChronosThread*(thread: SigilChronosThreadPtr) {.thread.} =
     doAssert not hasLocalSigilThread()
     setThreadDispatcher(newDispatcher())
     setLocalSigilThread(thread)
-    thread.threadId.store(getThreadId(), Relaxed)
+    thread.threadId.store(getThreadId(), moRelaxed)
     try:
       waitFor thread.runChronosLoop()
     except CatchableError as error:
@@ -234,7 +235,7 @@ proc runChronosThread*(thread: SigilChronosThreadPtr) {.thread.} =
 proc startLocalThreadChronos*() =
   if not hasLocalSigilThread():
     let thread = newSigilChronosThread()
-    thread.threadId.store(getThreadId(), Relaxed)
+    thread.threadId.store(getThreadId(), moRelaxed)
     setLocalSigilThread(thread)
 
 proc start*(thread: SigilChronosThreadPtr) =
@@ -247,12 +248,12 @@ proc stop*(
     immediate = false,
     drain = false,
 ) =
-  thread.drain.store(drain and not immediate, Relaxed)
-  thread.running.store(false, Relaxed)
+  thread.drain.store(drain and not immediate, moRelaxed)
+  thread.running.store(false, moRelaxed)
   thread.wakeDispatcher()
 
 proc close*(thread: SigilChronosThreadPtr) =
-  if thread.wakeClosed.exchange(true, AcqRel):
+  if thread.wakeClosed.exchange(true, moAcquireRelease):
     return
 
   if thread.timerTasks.len > 0:

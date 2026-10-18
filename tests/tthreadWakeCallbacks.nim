@@ -1,6 +1,6 @@
 import std/assertions
 
-import threading/atomics
+import std/atomics
 
 import sigils
 
