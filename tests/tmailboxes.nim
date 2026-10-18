@@ -1,5 +1,5 @@
 import std/[isolation, unittest]
-import threading/atomics
+import std/atomics
 import sigils/mailboxes
 
 when defined(linux):

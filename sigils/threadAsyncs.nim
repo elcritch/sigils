@@ -3,7 +3,7 @@ import std/isolation
 import std/locks
 import threading/smartptrs
 import threading/channels
-import threading/atomics
+import std/atomics
 
 import std/os
 import std/monotimes
@@ -37,8 +37,8 @@ proc newSigilAsyncThread*(): ptr AsyncSigilThread =
   result[].agent = SigilThreadAgent()
   result[].signaledLock.initLock()
   result[].inputs = newSigilChan()
-  result[].running.store(true, Relaxed)
-  result[].drain.store(true, Relaxed)
+  result[].running.store(true, moRelaxed)
+  result[].drain.store(true, moRelaxed)
 
 method send*(
     thread: AsyncSigilThreadPtr, msg: sink ThreadSignal, blocking: BlockingKinds
@@ -149,7 +149,7 @@ proc runAsyncThread*(targ: AsyncSigilThreadPtr) {.thread.} =
     asyncdispatch.drain()
 
   try:
-    if thread.drain.load(Relaxed):
+    if thread.drain.load(moRelaxed):
       asyncdispatch.drain()
   except ValueError:
     discard
@@ -157,7 +157,7 @@ proc runAsyncThread*(targ: AsyncSigilThreadPtr) {.thread.} =
 proc startLocalThreadDispatch*() =
   if not hasLocalSigilThread():
     var st = newSigilAsyncThread()
-    st[].threadId.store(getThreadId(), Relaxed)
+    st[].threadId.store(getThreadId(), moRelaxed)
     setLocalSigilThread(st)
 
 proc start*(thread: ptr AsyncSigilThread) =
@@ -167,10 +167,10 @@ proc start*(thread: ptr AsyncSigilThread) =
 
 proc stop*(thread: ptr AsyncSigilThread, immediate: bool = false,
     drain: bool = false) =
-  thread[].running.store(false, Relaxed)
-  thread[].drain.store(drain, Relaxed)
+  thread[].running.store(false, moRelaxed)
+  thread[].drain.store(drain, moRelaxed)
   if immediate:
-    thread[].drain.store(true, Relaxed)
+    thread[].drain.store(true, moRelaxed)
   else:
     thread[].event.trigger()
 

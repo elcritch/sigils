@@ -1,7 +1,7 @@
 when defined(features.sigils.siwin):
   import std/unittest
 
-  import threading/atomics
+  import std/atomics
   from siwin/platforms/any/window import
     SiwinGlobals, consumeEventLoopWake, eventLoopWaker,
     installEventLoopWakeProc

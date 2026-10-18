@@ -87,6 +87,17 @@ jobs:
           atlas init
           atlas --feature=chronos --feature=ipc install
 
+      - name: Reject uncorrected MSVC atomic operations
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $diagnostic = (& nim check --cc:vcc --errorMax:1 sigils/agents.nim 2>&1 | Out-String)
+          if ($LASTEXITCODE -eq 0 -or $diagnostic -notmatch 'Sigils MSVC builds require corrected Nim atomics') {
+            Write-Output $diagnostic
+            throw 'Expected the stock MSVC atomic implementation to be rejected.'
+          }
+          exit 0
+
       - name: Run tests including Chronos and IPC
         run: |
           if [[ "$RUNNER_OS" == "Windows" ]]; then

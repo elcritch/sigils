@@ -2,7 +2,7 @@ import std/locks
 import std/options
 import threading/smartptrs
 import threading/channels
-import threading/atomics
+import std/atomics
 
 import isolateutils
 import agents
@@ -62,13 +62,13 @@ proc newSigilThread*(): ptr SigilThreadDefault =
   result[].agent = SigilThreadAgent()
   result[].inputs = newSigilChan()
   result[].signaledLock.initLock()
-  result[].threadId.store(-1, Relaxed)
-  result[].running.store(true, Relaxed)
+  result[].threadId.store(-1, moRelaxed)
+  result[].running.store(true, moRelaxed)
 
 proc startLocalThreadDefault*() =
   if not hasLocalSigilThread():
     var st = newSigilThread()
-    st[].threadId.store(getThreadId(), Relaxed)
+    st[].threadId.store(getThreadId(), moRelaxed)
     setLocalSigilThread(st)
 
 if getStartSigilThreadProc().isNil:
@@ -95,7 +95,7 @@ proc runThread*(thread: SigilThreadDefaultPtr) {.thread.} =
       pidx = pcnt
     doAssert not hasLocalSigilThread()
     setLocalSigilThread(thread)
-    thread[].threadId.store(getThreadId(), Relaxed)
+    thread[].threadId.store(getThreadId(), moRelaxed)
     debugPrint "Sigil worker thread waiting!"
     thread.runForever()
 

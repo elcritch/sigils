@@ -3,7 +3,7 @@ import std/isolation
 import std/locks
 import threading/smartptrs
 import threading/channels
-import threading/atomics
+import std/atomics
 
 import std/os
 import std/options
@@ -121,8 +121,8 @@ proc newSigilSelectorThread*(): ptr SigilSelectorThread =
   when defined(windows):
     result[].timerDeadlines = initTable[SigilTimer, MonoTime]()
   result[].inputs = newSigilChan()
-  result[].running.store(true, Relaxed)
-  result[].drain.store(true, Relaxed)
+  result[].running.store(true, moRelaxed)
+  result[].drain.store(true, moRelaxed)
 
 method send*(
     thread: SigilSelectorThreadPtr, msg: sink ThreadSignal,
@@ -326,7 +326,7 @@ proc runSelectorThread*(targ: SigilSelectorThreadPtr) {.thread.} =
   {.cast(gcsafe).}:
     doAssert not hasLocalSigilThread()
     setLocalSigilThread(targ)
-    targ[].threadId.store(getThreadId(), Relaxed)
+    targ[].threadId.store(getThreadId(), moRelaxed)
     try:
       emit targ[].agent.started()
     except Exception as error:
@@ -343,7 +343,7 @@ proc runSelectorThread*(targ: SigilSelectorThreadPtr) {.thread.} =
         if targ.exceptionHandler.isNil:
           raise
         targ.exceptionHandler(error)
-    if targ.drain.load(Relaxed):
+    if targ.drain.load(moRelaxed):
       var pending = true
       while pending:
         try:
@@ -362,8 +362,8 @@ proc stop*(
     thread: ptr SigilSelectorThread, immediate: bool = false,
         drain: bool = false
 ) =
-  thread[].running.store(false, Relaxed)
-  thread[].drain.store(drain or immediate, Relaxed)
+  thread[].running.store(false, moRelaxed)
+  thread[].drain.store(drain or immediate, moRelaxed)
   thread[].inputWake.trigger()
 
 proc join*(thread: ptr SigilSelectorThread) =

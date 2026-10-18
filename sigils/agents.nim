@@ -1,6 +1,14 @@
 import std/[hashes, options, sets, strformat, tables]
-import std/[isolation, locks]
-import threading/[atomics, smartptrs]
+import std/[atomics, isolation, locks]
+
+when defined(vcc) and not defined(nimscript) and
+    not (defined(cpp) and defined(nimUseCppAtomics)):
+  when not declared(nimHasCorrectMsvcAtomics):
+    {.error: "Sigils MSVC builds require corrected Nim atomics " &
+      "(nimHasCorrectMsvcAtomics); see " &
+      "https://github.com/elcritch/Nim/tree/fix/msvc-atomics-v2.2.10".}
+
+import threading/smartptrs
 import protocol
 import weakrefs
 import debugs
@@ -135,11 +143,11 @@ proc endpoint*(agent: Agent): AgentEndpoint {.gcsafe, raises: [].} =
       agent.delivery = newSharedPtr(unsafeIsolate(AgentDelivery(
           target: agent.unsafeWeakRef())))
       initLock(agent.delivery[].lock)
-      agent.delivery[].alive.store(true, Release)
+      agent.delivery[].alive.store(true, moRelease)
     result = agent.delivery
 
 proc isAlive*(endpoint: AgentEndpoint): bool {.inline.} =
-  not endpoint.isNil and endpoint[].alive.load(Acquire)
+  not endpoint.isNil and endpoint[].alive.load(moAcquire)
 
 proc hasDispatcher*(endpoint: AgentEndpoint): bool {.inline.} =
   not endpoint.isNil and
@@ -152,7 +160,7 @@ proc `$`*(endpoint: AgentEndpoint): string =
 proc closeEndpoint*(agent: Agent) =
   if not agent.delivery.isNil:
     withLock agent.delivery[].lock:
-      agent.delivery[].alive.store(false, Release)
+      agent.delivery[].alive.store(false, moRelease)
 
 proc prepareSubscription*(subscription: Subscription): Subscription =
   result = subscription

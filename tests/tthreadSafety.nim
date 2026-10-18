@@ -1,5 +1,5 @@
 import std/[os, osproc, streams, tables, strutils, unittest]
-import threading/atomics
+import std/atomics
 import sigils
 import sigils/registry
 when not defined(windows):

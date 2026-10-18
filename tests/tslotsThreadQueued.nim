@@ -1,6 +1,6 @@
 import std/unittest
 import std/os
-import threading/atomics
+import std/atomics
 
 import sigils
 import sigils/threads
