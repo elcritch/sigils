@@ -1,5 +1,13 @@
 import std/[hashes, options, sets, strformat, tables]
 import std/[atomics, isolation, locks]
+
+when defined(vcc) and not defined(nimscript) and
+    not (defined(cpp) and defined(nimUseCppAtomics)):
+  when not declared(nimHasCorrectMsvcAtomics):
+    {.error: "Sigils MSVC builds require corrected Nim atomics " &
+      "(nimHasCorrectMsvcAtomics); see " &
+      "https://github.com/elcritch/Nim/tree/fix/msvc-atomics-v2.2.10".}
+
 import threading/smartptrs
 import protocol
 import weakrefs
