@@ -1,4 +1,4 @@
-## Unreleased
+## 0.32.0
 
 - Use `std/atomics` for scheduler and delivery state so MSVC builds do not
   depend on the deprecated GCC-only `threading/atomics` implementation.
