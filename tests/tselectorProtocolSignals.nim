@@ -9,13 +9,16 @@ type
     handled: bool
 
 protocol SelectorOnlyProtocol:
+  ## Declares signals and slots using only the selectors import.
   proc selectorOnlySignal(source: SelectorOnlySource) {.signal.}
   proc selectorOnlySlot(value: int) {.slot.}
 
 protocol SelectorOnlyEvents:
+  ## Declares the event observed by the receiver-bound implementation.
   proc selectorOnlyEvent(source: SelectorOnlySource) {.signal.}
 
 protocol SelectorOnlyObserverEvents from SelectorOnlyObserver:
+  ## Connects a source event to its observer slot.
   includes SelectorOnlyEvents
 
   proc selectorOnlyEvent(observer: SelectorOnlyObserver) {.slot.} =
@@ -37,8 +40,9 @@ suite "protocol signal and slot declarations":
     check weakCall.procName == toSigilName("selectorOnlySignal")
 
     static:
-      doAssert not compiles(checkProtocolSlots(SelectorOnlySource,
-          SelectorOnlyProtocol))
+      doAssert not compiles(
+        checkProtocolSlots(SelectorOnlySource, SelectorOnlyProtocol)
+      )
 
   test "protocol connectors compile with selectors import only":
     let

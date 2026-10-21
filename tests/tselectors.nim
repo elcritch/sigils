@@ -1,4 +1,4 @@
-import std/[options, strutils, unittest]
+import std/[macros, options, strutils, unittest]
 
 import sigils/core
 import sigils/selectors
@@ -61,19 +61,23 @@ proc new(_: typedesc[ExportedThing], value: int): ExportedThing =
   ExportedThing(value: value + 1, builtWithNew: true)
 
 protocol TextFieldDelegate:
+  ## Validates text and receives optional editing notifications.
   method validateText(text: string): bool
   method textDidCommit(text: string) {.optional.}
   method placeholderText(): string {.optional.}
 
 protocol StrictTextFieldDelegate:
+  ## Extends text validation with a required selection range.
   includes TextFieldDelegate
 
   method selectionRange(): string
 
 protocol TitledProtocol {.setterStyle: prefixed.}:
+  ## Exposes a title through prefixed getter and setter selectors.
   property title -> string
 
 protocol CaptionedViewProtocol from View:
+  ## Binds caption access, change notifications, and update slots to a view.
   property caption -> string
   proc captionWillChange(view: View) {.signal.}
 
@@ -87,37 +91,47 @@ protocol CaptionedViewProtocol from View:
     self.name = value
 
 protocol FieldCaptionedViewProtocol from FieldBackedView:
+  ## Maps caption selectors directly to the backing name field.
   property fieldCaption -> string {.field: name.}
 
 protocol FieldTitledViewVariant of TitledProtocol from FieldBackedView:
+  ## Implements title access through a receiver field.
   property title -> string {.field: name.}
 
 protocol NimTitledProtocol {.setterStyle: nim.}:
+  ## Exposes a title through a Nim assignment setter.
   property nimTitle -> string
 
 protocol NimTitleVariant {.setterStyle: nim.} of NimTitledProtocol from FieldBackedView:
+  ## Implements the Nim title setter through a receiver field.
   property nimTitle -> string {.field: name.}
 
 protocol NilSafeFieldViewProtocol from NilSafeFieldBackedView:
+  ## Returns defaults when a nested field receiver is nil.
   property safeChildName -> string {.field: child.name, nilSafe.}
 
 protocol CheckNilFieldViewProtocol from CheckNilFieldBackedView:
+  ## Rejects access through a nil nested field receiver.
   property checkedChildName -> string {.field: child.name, checkNil.}
 
 protocol NimSetterViewProtocol {.setterStyle: nim.} from NimSetterView:
+  ## Maps a Nim assignment setter to stored enabled state.
   property enabled -> bool {.field: storedEnabled.}
 
 protocol SettableWindowProtocol from Window:
+  ## Implements a backticked assignment selector on a window.
   method `enabled=`*(self: Window, value: bool) =
     self.focused = value
 
 protocol WindowLifecycleProtocolInternal:
+  ## Describes window content changes and observer slots.
   method windowShouldSetContentView*(view: View): bool {.optional.}
   proc windowWillSetContentView*(window: Window, view: View) {.signal.}
   proc windowDidSetContentView*(window: Window, view: View) {.signal.}
   proc rememberContentView*(view: View) {.slot.}
 
 protocol StrictWindowLifecycleProtocol:
+  ## Extends window lifecycle events with required identification.
   includes WindowLifecycleProtocolInternal
 
   method windowIdentifier*(): string
@@ -140,8 +154,7 @@ method validateRequired(self: TextController, text: string): bool {.selector.} =
 method validateDigitsOnly(self: TextField, text: string): bool {.selector.} =
   text.len > 0 and text.allCharsInSet({'0' .. '9'})
 
-method controllerCommand(self: TextController,
-    command: string): bool {.selector.} =
+method controllerCommand(self: TextController, command: string): bool {.selector.} =
   result = command in ["submit:", "cancel:"]
   if result:
     self.lastCommand = command
@@ -165,29 +178,48 @@ method viewSetTitle(self: View, value: string) {.selector.} =
   self.name = value
 
 protocol DefaultTextField of TextFieldDelegate:
+  ## Accepts nonblank text and records committed values.
   method validateText(self: TextController, text: string): bool =
     text.strip.len > 0
 
   method textDidCommit(self: TextController, text: string) =
     self.lastCommand = text
 
+macro documentedEmptyProtocols(): untyped =
+  result = parseStmt(
+    """
+protocol DocumentedEmptyProtocol:
+  ## Describes a marker protocol without any requirements.
+
+protocol DocumentedEmptyVariant of DocumentedEmptyProtocol:
+  ## Installs the documented marker without adding methods.
+"""
+  )
+
+documentedEmptyProtocols()
+
 protocol ExportedThingProtocol from ExportedThing:
+  ## Exposes the stored value of an exported receiver type.
   method exportedValue*(self: ExportedThing): int =
     self.value
 
 protocol PlainThingProtocol from PlainThing:
+  ## Exposes the stored value of a plain receiver type.
   method plainValue*(self: PlainThing): int =
     self.value
 
 protocol WidgetEvents:
+  ## Declares the event selector shared by stacked implementations.
   method handleWidgetEvent*(event: string): string
 
 protocol BaseWidgetEvents of WidgetEvents:
+  ## Handles a widget event at the base of the implementation stack.
   method handleWidgetEvent(self: BaseWidget, event: string): string =
     self.log.add "base:" & event
     "base:" & event
 
 protocol MiddleWidgetEvents of WidgetEvents:
+  ## Wraps the next widget handler in the implementation stack.
   method handleWidgetEvent(self: DerivedWidget, event: string): string =
     self.log.add "middle:" & event
     let next = self.performNext(handleWidgetEvent, event)
@@ -197,6 +229,7 @@ protocol MiddleWidgetEvents of WidgetEvents:
       "middle"
 
 protocol DerivedWidgetEvents of WidgetEvents:
+  ## Delegates to the next installed widget handler.
   method handleWidgetEvent(self: DerivedWidget, event: string): string =
     self.log.add "derived:" & event
     let next = self.performNext(handleWidgetEvent, event)
@@ -206,8 +239,7 @@ protocol DerivedWidgetEvents of WidgetEvents:
       "derived"
 
 method viewHitTest(self: View, x, y: int): string {.selector.} =
-  if x >= self.x and y >= self.y and
-      x < self.x + self.width and y < self.y + self.height:
+  if x >= self.x and y >= self.y and x < self.x + self.width and y < self.y + self.height:
     result = self.name
 
 method windowFirstResponder(self: Window): bool {.selector.} =
@@ -272,11 +304,10 @@ suite "dynamic selectors":
       parseName = selectorName(parseInteger)
 
     check controller.addMethod(parseInteger, parseController)
-    field.setForwardingTarget(proc(
-        self: DynamicAgent, selector: SigilName
-    ): DynamicAgent =
-      if selector == parseName:
-        result = controller
+    field.setForwardingTarget(
+      proc(self: DynamicAgent, selector: SigilName): DynamicAgent =
+        if selector == parseName:
+          result = controller
     )
 
     check field.respondsTo(parseInteger)
@@ -288,9 +319,10 @@ suite "dynamic selectors":
       field = TextField(text: "19")
       parseName = selectorName(parseInteger)
 
-    field.setResolveMethod(proc(self: DynamicAgent, selector: SigilName): bool =
-      if selector == parseName:
-        result = self.addMethod(parseInteger, parseField)
+    field.setResolveMethod(
+      proc(self: DynamicAgent, selector: SigilName): bool =
+        if selector == parseName:
+          result = self.addMethod(parseInteger, parseField)
     )
 
     check field.methodStack(parseInteger).len == 0
@@ -302,12 +334,11 @@ suite "dynamic selectors":
       field = TextField(text: "23")
       parseName = selectorName(parseInteger)
 
-    field.setForwardInvocation(proc(
-        self: DynamicAgent, invocation: var Invocation
-    ): bool =
-      if invocation.selector == parseName:
-        invocation.setResult(parseInt(invocation.argsAs(string)) + 1)
-        result = true
+    field.setForwardInvocation(
+      proc(self: DynamicAgent, invocation: var Invocation): bool =
+        if invocation.selector == parseName:
+          invocation.setResult(parseInt(invocation.argsAs(string)) + 1)
+          result = true
     )
 
     check field.parseInteger(field.text) == 24
@@ -340,8 +371,9 @@ suite "dynamic selectors":
       let field = TextField(text: "field")
       var offset = 10
 
-      let old = field.replaceMethod(parseInteger) do(self: TextField,
-          text: string) -> int:
+      let old = field.replaceMethod(parseInteger) do(
+        self: TextField, text: string
+      ) -> int:
         parseInt(text) + offset + self.text.len
 
       check old.isNil
@@ -354,8 +386,9 @@ suite "dynamic selectors":
       let controller = TextController()
       let prefix = "saved:"
 
-      let old = controller.replaceMethod(textDidCommit) do(self: TextController,
-          text: string):
+      let old = controller.replaceMethod(textDidCommit) do(
+        self: TextController, text: string
+      ):
         self.lastCommand = prefix & text
 
       check old.isNil
@@ -365,10 +398,9 @@ suite "dynamic selectors":
   test "replaceMethods installs selector bindings in one batch":
     let field = TextField()
 
-    let old = field.replaceMethods([
-      parseInteger => parseField,
-      validateText => validateDigitsOnly,
-    ])
+    let old = field.replaceMethods(
+      [parseInteger => parseField, validateText => validateDigitsOnly]
+    )
 
     check old.len == 2
     check old[0].isNil
@@ -403,8 +435,9 @@ suite "dynamic selectors":
 
       discard field.addMethod(parseInteger, parseField)
 
-      let token = field.pushMethod(parseInteger) do(self: TextField,
-          text: string) -> int:
+      let token = field.pushMethod(parseInteger) do(
+        self: TextField, text: string
+      ) -> int:
         parseInt(text) + offset
 
       check field.parseInteger("7") == 12
@@ -459,31 +492,29 @@ suite "dynamic selectors":
       invocationField = TextField(text: "19")
       parseName = selectorName(parseInteger)
 
-    resolved.setResolveMethod(proc(self: DynamicAgent,
-        selector: SigilName): bool =
-      if selector == parseName:
-        result = self.addMethod(parseInteger, parseField)
+    resolved.setResolveMethod(
+      proc(self: DynamicAgent, selector: SigilName): bool =
+        if selector == parseName:
+          result = self.addMethod(parseInteger, parseField)
     )
 
     check resolved.trySendLocal(parseInteger, resolved.text).get() == 13
 
     check controller.addMethod(parseInteger, parseController)
-    forwarded.setForwardingTarget(proc(
-        self: DynamicAgent, selector: SigilName
-    ): DynamicAgent =
-      if selector == parseName:
-        result = controller
+    forwarded.setForwardingTarget(
+      proc(self: DynamicAgent, selector: SigilName): DynamicAgent =
+        if selector == parseName:
+          result = controller
     )
 
     check forwarded.trySendLocal(parseInteger, forwarded.text).get() == 17
     check controller.parsed == 17
 
-    invocationField.setForwardInvocation(proc(
-        self: DynamicAgent, invocation: var Invocation
-    ): bool =
-      if invocation.selector == parseName:
-        invocation.setResult(parseInt(invocation.argsAs(string)) + 1)
-        result = true
+    invocationField.setForwardInvocation(
+      proc(self: DynamicAgent, invocation: var Invocation): bool =
+        if invocation.selector == parseName:
+          invocation.setResult(parseInt(invocation.argsAs(string)) + 1)
+          result = true
     )
 
     check invocationField.trySendLocal(parseInteger, invocationField.text).get() == 20
@@ -497,11 +528,10 @@ suite "dynamic selectors":
 
     forwardingTarget.setNextResponder(downstream)
     check downstream.addMethod(parseInteger, parseController)
-    field.setForwardingTarget(proc(
-        self: DynamicAgent, selector: SigilName
-    ): DynamicAgent =
-      if selector == parseName:
-        result = forwardingTarget
+    field.setForwardingTarget(
+      proc(self: DynamicAgent, selector: SigilName): DynamicAgent =
+        if selector == parseName:
+          result = forwardingTarget
     )
 
     check field.trySendLocal(parseInteger, field.text).isNone
@@ -536,6 +566,14 @@ suite "dynamic selectors":
     expect UnhandledSelectorError:
       discard controller.placeholderText()
 
+  test "documentation-only protocols preserve empty conformance":
+    let controller = TextController().withProtocol(DocumentedEmptyVariant)
+
+    check DocumentedEmptyProtocol.requirements.len == 0
+    check DocumentedEmptyProtocol.signals.len == 0
+    check DocumentedEmptyProtocol.slots.len == 0
+    check controller.hasAdopted(DocumentedEmptyProtocol)
+
   test "protocol introspection splits required and optional requirements":
     check TextFieldDelegate.requiredRequirements.len == 1
     check TextFieldDelegate.optionalRequirements.len == 2
@@ -553,29 +591,27 @@ suite "dynamic selectors":
     check WindowLifecycleProtocolInternal.signals.len == 2
     check WindowLifecycleProtocolInternal.slots.len == 1
     check toSigilName("windowWillSetContentView") in
-        WindowLifecycleProtocolInternal.signalNames
-    check toSigilName("rememberContentView") in
-        WindowLifecycleProtocolInternal.slotNames
+      WindowLifecycleProtocolInternal.signalNames
+    check toSigilName("rememberContentView") in WindowLifecycleProtocolInternal.slotNames
     check WindowLifecycleProtocolInternal.hasSignal(
       toSigilName("windowDidSetContentView")
     )
     check WindowLifecycleProtocolInternal.hasSlot(toSigilName("rememberContentView"))
-    check WindowLifecycleProtocolInternal.protocolSignal(
-      toSigilName("windowWillSetContentView")
-    ).get().signature.len > 0
-    check WindowLifecycleProtocolInternal.protocolSlot(
-      toSigilName("rememberContentView")
-    ).get().signature.len > 0
+    check WindowLifecycleProtocolInternal
+      .protocolSignal(toSigilName("windowWillSetContentView"))
+      .get().signature.len > 0
+    check WindowLifecycleProtocolInternal
+      .protocolSlot(toSigilName("rememberContentView"))
+      .get().signature.len > 0
 
     check window.canConformTo(WindowLifecycleProtocolInternal)
     check window.missingRequirements(WindowLifecycleProtocolInternal).len == 0
-    check SignalTypes.windowWillSetContentView(Window) is (View, )
-    check SignalTypes.rememberContentView(TextController) is (View, )
+    check SignalTypes.windowWillSetContentView(Window) is (View,)
+    check SignalTypes.rememberContentView(TextController) is (View,)
     checkProtocolSlots(TextController, WindowLifecycleProtocolInternal)
 
     static:
-      doAssert not compiles(checkProtocolSlots(Window,
-          WindowLifecycleProtocolInternal))
+      doAssert not compiles(checkProtocolSlots(Window, WindowLifecycleProtocolInternal))
 
   test "protocol includes inherit signals and slots":
     check StrictWindowLifecycleProtocol.requirements.len == 2
@@ -606,8 +642,7 @@ suite "dynamic selectors":
     check StrictTextFieldDelegate.requirements.len == 4
     check StrictTextFieldDelegate.hasRequirement(validateText)
     check StrictTextFieldDelegate.hasRequirement(selectionRange)
-    check selectorName(selectionRange) in
-        StrictTextFieldDelegate.requiredSelectors
+    check selectorName(selectionRange) in StrictTextFieldDelegate.requiredSelectors
 
     check controller.addMethod(validateText, validateRequired)
     check not controller.canConformTo(StrictTextFieldDelegate)
@@ -620,8 +655,7 @@ suite "dynamic selectors":
     let window = Window().withProto
 
     check SettableWindowProtocol.requirements.len == 1
-    check SettableWindowProtocol.requirements[0].selector ==
-        toSigilName("enabled=")
+    check SettableWindowProtocol.requirements[0].selector == toSigilName("enabled=")
     check window.hasAdopted(SettableWindowProtocol)
     check not window.focused
     window.enabled = true
@@ -634,10 +668,9 @@ suite "dynamic selectors":
     check TitledProtocol.hasRequirement(title)
     check TitledProtocol.hasRequirement(setTitle)
 
-    discard view.replaceMethods(TitledProtocol, [
-      title => viewTitle,
-      setTitle => viewSetTitle,
-    ])
+    discard view.replaceMethods(
+      TitledProtocol, [title => viewTitle, setTitle => viewSetTitle]
+    )
 
     check view.title() == "old"
     view.setTitle("new")
@@ -655,13 +688,13 @@ suite "dynamic selectors":
     check CaptionedViewProtocol.hasSignal(toSigilName("captionWillChange"))
     check CaptionedViewProtocol.hasSlot(toSigilName("applyCaption"))
     check SignalTypes.captionWillChange(View) is tuple[]
-    check SignalTypes.applyCaption(View) is (string, )
+    check SignalTypes.applyCaption(View) is (string,)
     checkProtocolSlots(View, CaptionedViewProtocol)
     check view.hasAdopted(CaptionedViewProtocol)
     check view.caption() == "old"
     check view.captionWillChange().procName == toSigilName("captionWillChange")
     check view.unsafeWeakRef().captionWillChange().procName ==
-        toSigilName("captionWillChange")
+      toSigilName("captionWillChange")
     view.applyCaption("applied")
     check view.caption() == "applied"
     view.setCaption("new")
@@ -683,10 +716,8 @@ suite "dynamic selectors":
     let view = NimSetterView().withProto
 
     check NimSetterViewProtocol.requirements.len == 2
-    check NimSetterViewProtocol.requirements[0].selector ==
-        toSigilName("enabled")
-    check NimSetterViewProtocol.requirements[1].selector ==
-        toSigilName("enabled=")
+    check NimSetterViewProtocol.requirements[0].selector == toSigilName("enabled")
+    check NimSetterViewProtocol.requirements[1].selector == toSigilName("enabled=")
     check view.hasAdopted(NimSetterViewProtocol)
     check not view.enabled()
     view.enabled = true
@@ -752,10 +783,10 @@ suite "dynamic selectors":
   test "replaceMethods can install and adopt a protocol":
     let controller = TextController()
 
-    let old = controller.replaceMethods(TextFieldDelegate, [
-      validateText => validateRequired,
-      textDidCommit => controllerCommit,
-    ])
+    let old = controller.replaceMethods(
+      TextFieldDelegate,
+      [validateText => validateRequired, textDidCommit => controllerCommit],
+    )
 
     check old.len == 2
     check old[0].isNil
@@ -768,7 +799,7 @@ suite "dynamic selectors":
   test "large method batch installs, dispatches, and removes":
     let controller = TextController()
     var implementation = ProtocolImplementation(
-      protocol: SigilProtocol(name: toSigilName("LargePayloadProtocol")),
+      protocol: SigilProtocol(name: toSigilName("LargePayloadProtocol"))
     )
     var selectors: seq[Selector[SelectorPayload, int]]
 
@@ -793,23 +824,22 @@ suite "dynamic selectors":
     for fn in removed:
       check not fn.isNil
     check not controller.hasAdopted(implementation.protocol)
-    check controller.perform(
-      selectors[^1],
-      SelectorPayload(x: 1, y: 2),
-    ).isNone
+    check controller.perform(selectors[^1], SelectorPayload(x: 1, y: 2)).isNone
 
   when sigilsClosuresEnabled:
     test "protocol method batches accept selector closures":
       let controller = TextController()
       let minimum = 4
 
-      let old = controller.replaceMethods(TextFieldDelegate, [
-        selectorMethod(validateText) do(self: TextController,
-            text: string) -> bool:
-        text.strip.len >= minimum,
-        selectorMethod(textDidCommit) do(self: TextController, text: string):
-        self.lastCommand = "closed:" & text,
-      ])
+      let old = controller.replaceMethods(
+        TextFieldDelegate,
+        [
+          selectorMethod(validateText) do(self: TextController, text: string) -> bool:
+            text.strip.len >= minimum,
+          selectorMethod(textDidCommit) do(self: TextController, text: string):
+            self.lastCommand = "closed:" & text,
+        ],
+      )
 
       check old.len == 2
       check old[0].isNil
@@ -861,12 +891,12 @@ suite "dynamic selectors":
     check middleTokens.len == 1
     check widget.handleWidgetEvent("drag") == "derived(middle(base:drag))"
     check widget.log == @["derived:drag", "middle:drag", "base:drag"]
-    check BaseWidget(widget).handleWidgetEvent("cast") ==
-        "derived(middle(base:cast))"
-    check widget.log == @[
-      "derived:drag", "middle:drag", "base:drag", "derived:cast", "middle:cast",
-      "base:cast"
-    ]
+    check BaseWidget(widget).handleWidgetEvent("cast") == "derived(middle(base:cast))"
+    check widget.log ==
+      @[
+        "derived:drag", "middle:drag", "base:drag", "derived:cast", "middle:cast",
+        "base:cast",
+      ]
 
     check tokens[0].popMethod()
     check widget.handleWidgetEvent("drop") == "middle(base:drop)"
@@ -929,9 +959,9 @@ suite "dynamic selectors":
     let controller = TextController()
 
     expect ProtocolConformanceError:
-      discard controller.replaceMethods(TextFieldDelegate, [
-        textDidCommit => controllerCommit,
-      ])
+      discard controller.replaceMethods(
+        TextFieldDelegate, [textDidCommit => controllerCommit]
+      )
 
     check not controller.respondsTo(textDidCommit)
     check not controller.hasAdopted(TextFieldDelegate)
@@ -945,10 +975,10 @@ suite "dynamic selectors":
     check not field.respondsTo(parseInteger)
 
     let controller = TextController()
-    discard controller.replaceMethods(TextFieldDelegate, [
-      validateText => validateRequired,
-      textDidCommit => controllerCommit,
-    ])
+    discard controller.replaceMethods(
+      TextFieldDelegate,
+      [validateText => validateRequired, textDidCommit => controllerCommit],
+    )
 
     check controller.hasAdopted(TextFieldDelegate)
     let removed = controller.removeMethods(TextFieldDelegate)

@@ -12,9 +12,11 @@ type
     drawCount: int
 
 protocol DrawingProtocol:
+  ## Declares drawing behavior shared across imported implementations.
   method draw*(context: DrawingContext) {.optional.}
 
 protocol DrawingImplementation of DrawingProtocol:
+  ## Supplies the drawing implementation imported by the test.
   method draw(self: DrawingView, context: DrawingContext) =
     inc self.drawCount
     context.value = 42

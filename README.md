@@ -257,9 +257,11 @@ socket on POSIX and a named pipe on Windows.
 
 ```nim
 protocol Calculator:
-  method addNumbers(left, right: int): int
+  ## Declares the calculator operation exposed over IPC.
+  method addNumbers(left, right: int): int ## Returns the sum of two integers.
 
 protocol CalculatorService of Calculator:
+  ## Implements calculator requests on the server.
   method addNumbers(self: DynamicAgent, left, right: int): int =
     left + right
 
@@ -267,6 +269,9 @@ let calculator = DynamicAgent().withProtocol(CalculatorService)
 let router = newIpcRouter()
 router.registerSelector("calculator", calculator, addNumbers)
 ```
+
+Put protocol summaries inside the block with `##`. Put method and proc docs
+after their signatures; formatters can wrap these comments when needed.
 
 `createIpcServer`, `connectIpc`, and `callSelector` complete the Chronos side of
 the flow. Build the example, then launch its server and client modes in separate

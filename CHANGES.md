@@ -1,3 +1,10 @@
+## 0.32.1
+
+- Accept doc comments inside protocol declarations and implementations, including
+  protocols containing only documentation.
+- Preserve protocol summaries in generated API documentation and demonstrate the
+  comment placement in examples and tests.
+
 ## 0.32.0
 
 - Use `std/atomics` for scheduler and delivery state so MSVC builds do not

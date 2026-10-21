@@ -50,13 +50,13 @@ type
     children: seq[ModelPayload]
 
 protocol PayloadProvider:
+  ## Returns local model values without requiring remote serialization.
   method modelAtIndex(index: int): ModelPayload {.optional.}
 
 protocol PayloadProviderImplementation of PayloadProvider:
+  ## Provides a model payload for the requested row index.
   method modelAtIndex(self: DynamicAgent, index: int): ModelPayload =
-    ModelPayload(
-      value: ObjectValuePayload(kind: text, textValue: $index),
-    )
+    ModelPayload(value: ObjectValuePayload(kind: text, textValue: $index))
 
 suite "protocol payloads":
   test "local payloads do not require JSON serialization":
@@ -74,15 +74,16 @@ suite "protocol payloads":
       dateTime = now()
       timezoneParams = rpcPack(TimezonePayload(timezone: utc()))
       dateTimeParams = rpcPack(DateTimePayload(dateTime: dateTime))
-      nestedParams = rpcPack(
-        NestedDateTimePayload(payload: DateTimePayload(dateTime: dateTime))
-      )
-      modelParams = rpcPack(ModelPayload(
-        value: ObjectValuePayload(
-          kind: temporal,
-          temporalValue: TemporalPayload(kind: date, dateTime: dateTime)
+      nestedParams =
+        rpcPack(NestedDateTimePayload(payload: DateTimePayload(dateTime: dateTime)))
+      modelParams = rpcPack(
+        ModelPayload(
+          value: ObjectValuePayload(
+            kind: temporal,
+            temporalValue: TemporalPayload(kind: date, dateTime: dateTime),
+          )
         )
-      ))
+      )
     var
       timezonePayload: TimezonePayload
       dateTimePayload: DateTimePayload
