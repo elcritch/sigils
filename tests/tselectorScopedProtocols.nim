@@ -9,18 +9,21 @@ type
     rows: seq[string]
 
 protocol ListViewDataSource {.selectorScope: protocol.}:
+  ## Scopes row-query selectors to their declaring protocol.
   method numberOfRows*(listView: ListView): int {.optional.}
   method objectValueForRow*(listView: ListView, row: int): string {.optional.}
 
 protocol ScopedDefaultDataSource {.selectorScope: protocol.} from ListDataSource:
+  ## Installs a receiver-bound implementation with scoped selector names.
   method defaultNumberOfRows*(self: ListDataSource, listView: ListView): int =
     self.rows.len
 
 method rowCount(self: ListDataSource, listView: ListView): int {.selector.} =
   self.rows.len
 
-method rowValue(self: ListDataSource, listView: ListView,
-    row: int): string {.selector.} =
+method rowValue(
+    self: ListDataSource, listView: ListView, row: int
+): string {.selector.} =
   self.rows[row]
 
 suite "scoped protocol selectors":
@@ -29,10 +32,9 @@ suite "scoped protocol selectors":
       listView = ListView()
       dataSource = ListDataSource(rows: @["a", "b"])
 
-    check selectorName(numberOfRows) ==
-        toSigilName("ListViewDataSource.numberOfRows")
+    check selectorName(numberOfRows) == toSigilName("ListViewDataSource.numberOfRows")
     check selectorName(objectValueForRow) ==
-        toSigilName("ListViewDataSource.objectValueForRow")
+      toSigilName("ListViewDataSource.objectValueForRow")
     check ListViewDataSource.hasRequirement(
       toSigilName("ListViewDataSource.numberOfRows")
     )
@@ -49,7 +51,7 @@ suite "scoped protocol selectors":
       dataSource = ListDataSource(rows: @["a", "b", "c"]).withProto
 
     check selectorName(defaultNumberOfRows) ==
-        toSigilName("ScopedDefaultDataSource.defaultNumberOfRows")
+      toSigilName("ScopedDefaultDataSource.defaultNumberOfRows")
     check ScopedDefaultDataSource.hasRequirement(
       toSigilName("ScopedDefaultDataSource.defaultNumberOfRows")
     )
@@ -59,14 +61,13 @@ suite "scoped protocol selectors":
   test "scoped selector names are checked against SigilName capacity at compile time":
     let
       repoRoot = parentDir(parentDir(currentSourcePath()))
-      sourcePath = repoRoot / "tests" / "examples" /
-        "tooLongScopedSelectorSource.nim"
+      sourcePath = repoRoot / "tests" / "examples" / "tooLongScopedSelectorSource.nim"
 
     let (output, exitCode) = execCmdEx(
       "nim check --hints:off --warnings:off" &
         " -u:sigilsSigilNameString -u:sigils.sigNameAsString" &
-        " -u:features.sigils.sigNameAsString --path:" & quoteShell(repoRoot) &
-        " " & quoteShell(sourcePath),
+        " -u:features.sigils.sigNameAsString --path:" & quoteShell(repoRoot) & " " &
+        quoteShell(sourcePath),
       options = {poStdErrToStdOut, poUsePath},
       workingDir = repoRoot,
     )

@@ -41,14 +41,17 @@ type
     lastSender: DynamicAgent
 
 protocol ListViewDelegate:
+  ## Allows a delegate to veto selection of a list row.
   method shouldSelectRow*(listView: ListView, row: int): bool {.optional.}
 
 protocol ViewLayoutInputEvents:
+  ## Reports changes to layout inputs.
   proc layoutInputChanged*(
-      view: LayoutView, reason: LayoutInvalidationReason
+    view: LayoutView, reason: LayoutInvalidationReason
   ) {.signal.}
 
 protocol ViewLayoutInputSlots from LayoutView:
+  ## Records layout changes through an aliased observer slot.
   includes ViewLayoutInputEvents
 
   proc markLayoutInputDirty*(
@@ -57,24 +60,29 @@ protocol ViewLayoutInputSlots from LayoutView:
     view.dirtyReasons.incl reason
 
 protocol ListViewEvents:
+  ## Reports list selection and activation events.
   proc selectionIsChanging*(listView: ListView, sender: DynamicAgent) {.signal.}
   proc selectionDidChange*(listView: ListView, sender: DynamicAgent) {.signal.}
   proc rowWasActivated*(listView: ListView, sender: DynamicAgent) {.signal.}
   proc selectionWasIgnored*(listView: ListView, sender: DynamicAgent) {.signal.}
 
 protocol ListViewObserverSlots:
+  ## Describes observer slots for list selection and activation.
   proc selectionIsChanging*(sender: DynamicAgent) {.slot.}
   proc selectionDidChange*(sender: DynamicAgent) {.slot.}
   proc rowWasActivated*(sender: DynamicAgent) {.slot.}
   proc selectionWasIgnored*(sender: DynamicAgent) {.slot.}
 
 protocol ListViewReloadEvents:
+  ## Reports completion of list reloads.
   proc listWasReloaded*(listView: ListView, sender: DynamicAgent) {.signal.}
 
 protocol StrictListViewEvents:
+  ## Combines list selection and reload event contracts.
   includes ListViewEvents, ListViewReloadEvents
 
 protocol ReceiverBoundListDelegateSpyEvents from ReceiverBoundListDelegateSpy:
+  ## Records list events on a receiver-bound observer.
   includes ListViewEvents
 
   proc selectionDidChange*(
@@ -84,6 +92,7 @@ protocol ReceiverBoundListDelegateSpyEvents from ReceiverBoundListDelegateSpy:
     delegate.lastSender = sender
 
 protocol NamedVariantListDelegateSpyEvents of ListViewEvents:
+  ## Records list events through a named implementation.
   proc selectionDidChange*(
       delegate: NamedVariantListDelegateSpy, sender: DynamicAgent
   ) {.slot.} =
@@ -91,29 +100,26 @@ protocol NamedVariantListDelegateSpyEvents of ListViewEvents:
     delegate.lastSender = sender
 
 protocol NamedVariantAliasedListDelegateSpyEvents of ListViewEvents:
+  ## Receives list events through an explicitly named slot alias.
   proc rememberSelectionDidChange*(
       delegate: AliasedNamedVariantListDelegateSpy, sender: DynamicAgent
   ) {.slotFor: selectionDidChange.} =
     inc delegate.changedCount
     delegate.lastSender = sender
 
-proc selectionIsChanging*(delegate: ListDelegateSpy,
-    sender: DynamicAgent) {.slot.} =
+proc selectionIsChanging*(delegate: ListDelegateSpy, sender: DynamicAgent) {.slot.} =
   inc delegate.changingCount
   delegate.lastSender = sender
 
-proc selectionDidChange*(delegate: ListDelegateSpy,
-    sender: DynamicAgent) {.slot.} =
+proc selectionDidChange*(delegate: ListDelegateSpy, sender: DynamicAgent) {.slot.} =
   inc delegate.changedCount
   delegate.lastSender = sender
 
-proc rowWasActivated*(delegate: ListDelegateSpy,
-    sender: DynamicAgent) {.slot.} =
+proc rowWasActivated*(delegate: ListDelegateSpy, sender: DynamicAgent) {.slot.} =
   inc delegate.activatedCount
   delegate.lastSender = sender
 
-proc listWasReloaded*(delegate: ListDelegateSpy,
-    sender: DynamicAgent) {.slot.} =
+proc listWasReloaded*(delegate: ListDelegateSpy, sender: DynamicAgent) {.slot.} =
   inc delegate.reloadedCount
   delegate.lastSender = sender
 
@@ -259,9 +265,9 @@ suite "protocol signal-slot connection":
     connectProtocol(view, view, ViewLayoutInputSlots)
 
     check view.hasSubscription(toSigilName("layoutInputChanged"), view)
-    check ViewLayoutInputSlots.protocolSlot(
-      toSigilName("markLayoutInputDirty")
-    ).get().eventName == toSigilName("layoutInputChanged")
+    check ViewLayoutInputSlots
+      .protocolSlot(toSigilName("markLayoutInputDirty"))
+      .get().eventName == toSigilName("layoutInputChanged")
 
     emit view.layoutInputChanged(layoutSizeChanged)
 
@@ -289,8 +295,8 @@ suite "protocol signal-slot connection":
     let
       listView = ListView()
       delegate = AliasedNamedVariantListDelegateSpy().withProtocol(
-        NamedVariantAliasedListDelegateSpyEvents
-      )
+          NamedVariantAliasedListDelegateSpyEvents
+        )
       sender = DynamicAgent()
 
     connectProtocol(listView, delegate, NamedVariantAliasedListDelegateSpyEvents)

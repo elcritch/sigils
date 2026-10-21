@@ -126,7 +126,8 @@ Protocols group selectors into runtime contracts. Required selectors must be han
 
 ```nim
 protocol TextFieldDelegate:
-  method validateText(text: string): bool
+  ## Validates text and receives optional commit notifications.
+  method validateText(text: string): bool ## Returns whether the proposed text is valid.
   method textDidCommit(text: string) {.optional.}
 
 method validateRequired(self: TextController, text: string): bool {.selector.} =
@@ -146,10 +147,14 @@ doAssert controller.hasAdopted(TextFieldDelegate)
 doAssert controller.validateText("value")
 ```
 
+Place protocol summaries as `##` comments at the start of the block. Put proc and method
+doc comments after their signatures; formatters may wrap them onto following lines.
+
 Protocols support inheritance:
 
 ```nim
 protocol StrictTextFieldDelegate:
+  ## Extends text validation with a required selection range.
   includes TextFieldDelegate
 
   method selectionRange(): string
@@ -310,6 +315,7 @@ You can package a reusable protocol implementation and install it later.
 
 ```nim
 protocol DefaultTextField of TextFieldDelegate:
+  ## Validates nonblank text and records committed values.
   method validateText(self: TextController, text: string): bool =
     text.strip.len > 0
 

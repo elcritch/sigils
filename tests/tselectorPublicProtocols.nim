@@ -1,4 +1,4 @@
-import std/unittest
+import std/[json, os, osproc, strutils, tempfiles, unittest]
 
 import selectorPublicProtocolsFixture
 import sigils/core
@@ -6,6 +6,40 @@ import sigils/selectors
 import sigils/signals
 
 suite "public selector protocols":
+  test "protocol summaries appear on generated documentation entries":
+    let
+      repoRoot = parentDir(parentDir(currentSourcePath()))
+      outputDir = createTempDir("sigils-protocol-docs-", "")
+      outputPath = outputDir / "protocols.json"
+      sourcePath = repoRoot / "tests" / "selectorPublicProtocolsFixture.nim"
+    defer:
+      removeDir(outputDir)
+
+    let (output, exitCode) = execCmdEx(
+      "nim jsondoc --docInternal:on --hints:off --out:" & quoteShell(outputPath) & " " &
+        quoteShell(sourcePath),
+      options = {poStdErrToStdOut, poUsePath},
+      workingDir = repoRoot,
+    )
+    checkpoint output
+    require exitCode == 0
+    let documentation = parseFile(outputPath)
+    for (name, summary) in [
+      ("PublicWindowLifecycleProtocol", "Exports optional close validation"),
+      ("PublicControllerEvents", "Receives window-close notifications"),
+      ("PublicCaptionedViewProtocol", "Exports receiver-bound caption access"),
+      (
+        "PublicCaptionVariant",
+        "Supplies caption queries through a named implementation",
+      ),
+    ]:
+      var found = false
+      for entry in documentation["entries"]:
+        if entry["name"].getStr() == name:
+          check entry{"description"}.getStr().contains(summary)
+          found = true
+      check found
+
   test "exported receiverless protocol is visible across modules":
     check PublicWindowLifecycleProtocol.requirements.len == 1
     check PublicWindowLifecycleProtocol.signals.len == 1
@@ -31,9 +65,7 @@ suite "public selector protocols":
       controller = PublicController().withProto()
 
     connectProtocol(
-      window,
-      controller,
-      selectorPublicProtocolsFixture.PublicControllerEvents,
+      window, controller, selectorPublicProtocolsFixture.PublicControllerEvents
     )
     emit window.windowDidClose()
 
@@ -49,9 +81,10 @@ suite "public selector protocols":
     check PublicCaptionedViewProtocol.hasSignal(toSigilName("captionWillChange"))
     check PublicCaptionedViewProtocol.hasSlot(toSigilName("rememberCaption"))
     check SignalTypes.captionWillChange(PublicView) is tuple[]
-    check SignalTypes.rememberCaption(PublicView) is (string, )
-    checkProtocolSlots(PublicView,
-        selectorPublicProtocolsFixture.PublicCaptionedViewProtocol)
+    check SignalTypes.rememberCaption(PublicView) is (string,)
+    checkProtocolSlots(
+      PublicView, selectorPublicProtocolsFixture.PublicCaptionedViewProtocol
+    )
 
     check view.hasAdopted(PublicCaptionedViewProtocol)
     check view.currentCaption() == "old"

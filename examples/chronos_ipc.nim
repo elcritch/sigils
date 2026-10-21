@@ -17,10 +17,13 @@ else:
   const endpoint = "/tmp/sigils-calculator.sock"
 
 protocol Calculator:
-  method addNumbers(left, right: int): int
+  ## Declares the calculator operation exposed over IPC.
+  method addNumbers(left, right: int): int ## Returns the sum of two integers.
 
 protocol CalculatorService of Calculator:
+  ## Implements calculator requests on the server.
   method addNumbers(self: DynamicAgent, left, right: int): int =
+    ## Adds and logs the requested operands.
     result = left + right
     echo "addNumbers(", left, ", ", right, ") = ", result
 
@@ -46,11 +49,7 @@ proc runServer(server: IpcServer) {.async.} =
 proc runClient() {.async.} =
   let peer = await connectIpc(initTAddress(endpoint))
   try:
-    let sum = await peer.callSelector(
-      "calculator",
-      addNumbers,
-      (left: 20, right: 22),
-    )
+    let sum = await peer.callSelector("calculator", addNumbers, (left: 20, right: 22))
     echo "20 + 22 = ", sum
   finally:
     await peer.closeWait()

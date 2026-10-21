@@ -1467,7 +1467,7 @@ proc implementBlock(
     bindings: seq[NimNode]
 
   for item in body:
-    if item.procIsSignal or item.procIsSlot:
+    if item.kind == nnkCommentStmt or item.procIsSignal or item.procIsSlot:
       discard
     else:
       let property = item.protocolProperty()
@@ -1520,6 +1520,16 @@ proc implementBlock(
 
 proc protocolSlotReceiverType(item: NimNode): NimNode
 proc validateProtocolReceiver(item: NimNode, receiver: NimNode)
+
+proc protocolDocumentation(body: NimNode): string =
+  for item in body:
+    if item.kind != nnkCommentStmt:
+      break
+    for line in item.strVal.splitLines():
+      if result.len == 0:
+        result.add " ## " & line
+      else:
+        result.add "\n  ## " & line
 
 proc implementVariant(
     variant: NimNode,
@@ -1662,8 +1672,15 @@ proc implementVariant(
     observers = observerBindings,
   )
 
-  result = quote do:
+  var variantDeclaration = quote do:
     type `variantType` = object
+  let documentation = protocolDocumentation(body)
+  if documentation.len > 0:
+    variantDeclaration = parseStmt("type documentedProtocol = object" & documentation)
+    variantDeclaration[0][0][0] = variantType.copyNimTree()
+
+  result = quote do:
+    `variantDeclaration`
 
     `slotDecls`
     `slotChecks`
@@ -1982,7 +1999,9 @@ proc protocolDeclaration(
 
   for section in split.body:
     let property = section.protocolProperty()
-    if property.found:
+    if section.kind == nnkCommentStmt:
+      discard
+    elif property.found:
       if not property.prop.field.isNil and receiver.isNil:
         error(
           "property field pragma requires a receiver-bound protocol implementation",
@@ -2364,7 +2383,7 @@ proc protocolDeclaration(
         protocolName,
         nnkBracket.newTree(reqs),
         nnkBracket.newTree(sigs),
-        nnkBracket.newTree(slts),
+        nnkExprEqExpr.newTree(ident"slots", nnkBracket.newTree(slts)),
       )
     else:
       newCall(
@@ -2373,10 +2392,19 @@ proc protocolDeclaration(
         nnkBracket.newTree(allInherited),
         nnkBracket.newTree(reqs),
         nnkBracket.newTree(sigs),
-        nnkBracket.newTree(slts),
+        nnkExprEqExpr.newTree(ident"slots", nnkBracket.newTree(slts)),
       )
 
-  result.add newLetStmt(selectorIdent(selectorIdentName(name), true), protocolCall)
+  let protocolIdent = selectorIdent(selectorIdentName(name), true)
+  let documentation = protocolDocumentation(body)
+  if documentation.len == 0:
+    result.add newLetStmt(protocolIdent, protocolCall)
+  else:
+    # Parsing the declaration preserves doc metadata that NimNode cannot set.
+    let declaration = parseStmt("let documentedProtocol = nil" & documentation)[0]
+    declaration[0][0] = protocolIdent
+    declaration[0][2] = protocolCall
+    result.add declaration
 
 proc implementProtocolForReceiver(
     protocol: NimNode,
