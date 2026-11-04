@@ -183,7 +183,13 @@ Variant behavior change.
 - Merenda `examples/button_counter.nim` built with speed optimization and
   initialized a native Metal window. An eight-second startup smoke run had no
   exception; it was then terminated. This was not an interactive UI test.
-- Final-code Kosmo speed build succeeded. Full Merenda integration run pending.
+- Final-code Kosmo speed build succeeded.
+- Full Merenda integration run against the final library code: **2,068 tests,
+  175 suites, zero failures/skips**, all four runners, **19m07s** (1,147.15 s).
+  Command: `MERENDA_BACKGROUND=1 /usr/bin/time -lp nim integration` on Nim 2.4.0,
+  macOS arm64. Log: `/tmp/merenda-selector-owned-full-suite.log`.
+- The Windows scheduling-test correction passed the focused threaded suite
+  locally; CI runs the same correction across its platform matrix.
 
 ## Measurement setup
 
