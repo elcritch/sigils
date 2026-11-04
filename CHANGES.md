@@ -1,3 +1,8 @@
+## Unreleased
+
+- Compare StackString signal names directly without allocating temporary strings,
+  preserving byte ordering and the compile-time comparison path.
+
 ## 0.34.0
 
 - Share cold selector/slot adapter errors and borrow local selector arguments,

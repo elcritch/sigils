@@ -114,10 +114,10 @@ proc markConsumedDelivery*(params: var SigilParams) {.inline.} =
 
 func compareSigilName*(a, b: SigilName): int {.inline.} =
   when sigilsSigilNameStringEnabled or sigilsSharedNamesEnabled:
-    cmp(a, b)
-  elif defined(sigilsDirectNameCompare):
+    result = cmp(a, b)
+  else:
     when nimvm:
-      cmp($a, $b)
+      result = cmp($a, $b)
     else:
       let common = min(a.len, b.len)
       if common > 0:
@@ -125,8 +125,6 @@ func compareSigilName*(a, b: SigilName): int {.inline.} =
         if result != 0:
           return
       result = cmp(a.len, b.len)
-  else:
-    cmp($a, $b)
 
 proc clone*(
     params: SigilParams, mode: CloneMode = defaultCloneMode
