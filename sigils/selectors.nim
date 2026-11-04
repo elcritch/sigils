@@ -9,6 +9,12 @@ export agents
 export options
 export signals
 
+proc raiseNilReceiver() {.noinline, noreturn.} =
+  raise newException(ValueError, "bad value")
+
+proc raiseInvalidReceiver() {.noinline, noreturn.} =
+  raise newException(ConversionError, "bad cast")
+
 type
   Selector*[A, R] = object
     ## A typed runtime method name.
@@ -1211,10 +1217,10 @@ when sigilsClosuresEnabled:
             `dynSelf`: DynamicAgent, `invocation`: var Invocation
         ) =
           if `dynSelf` == nil:
-            raise newException(ValueError, "bad value")
+            raiseNilReceiver()
           let `receiver` = `receiverType`(`dynSelf`)
           if `receiver` == nil:
-            raise newException(ConversionError, "bad cast")
+            raiseInvalidReceiver()
           `dispatchBody`
 
         `dynMethod`
@@ -1350,10 +1356,10 @@ proc selectorImplNode(p: NimNode, runtimeSelectorName = ""): NimNode =
     result.add quote do:
       proc `dynProc`(`dynSelf`: DynamicAgent, `invocation`: var Invocation) =
         if `dynSelf` == nil:
-          raise newException(ValueError, "bad value")
+          raiseNilReceiver()
         let `receiverName` = `receiverType`(`dynSelf`)
         if `receiverName` == nil:
-          raise newException(ConversionError, "bad cast")
+          raiseInvalidReceiver()
         `dispatchBody`
 
 macro selectorImpl(p: untyped): untyped =
@@ -1446,10 +1452,10 @@ proc implementMethodBinding(item: NimNode): tuple[defs: seq[NimNode],
   let dynDef = quote do:
     proc `dynProc`(`dynSelf`: DynamicAgent, `invocation`: var Invocation) =
       if `dynSelf` == nil:
-        raise newException(ValueError, "bad value")
+        raiseNilReceiver()
       let `receiverName` = `receiverType`(`dynSelf`)
       if `receiverName` == nil:
-        raise newException(ConversionError, "bad cast")
+        raiseInvalidReceiver()
       `dispatchBody`
 
   result.defs = @[implDef, dynDef]
@@ -3199,10 +3205,10 @@ proc toDynamicMethod*[T: DynamicAgent, A, R](
 ): DynamicMethod =
   result = proc(self: DynamicAgent, invocation: var Invocation) =
     if self == nil:
-      raise newException(ValueError, "bad value")
+      raiseNilReceiver()
     let obj = T(self)
     if obj == nil:
-      raise newException(ConversionError, "bad cast")
+      raiseInvalidReceiver()
     let args = invocation.argsAs(A)
     invocation.setResult(fn(obj, args))
 
@@ -3211,10 +3217,10 @@ proc toDynamicMethod*[T: DynamicAgent, A, R](
 ): DynamicMethod =
   result = proc(self: DynamicAgent, invocation: var Invocation) =
     if self == nil:
-      raise newException(ValueError, "bad value")
+      raiseNilReceiver()
     let obj = T(self)
     if obj == nil:
-      raise newException(ConversionError, "bad cast")
+      raiseInvalidReceiver()
     let args = invocation.argsAs(A)
     invocation.setResult(fn(obj, args))
 
