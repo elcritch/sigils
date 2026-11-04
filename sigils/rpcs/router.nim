@@ -49,7 +49,7 @@ proc routeError(code: int32, message: string): ref RpcRouteError =
   result.code = code
 
 proc validateRpcName(name: string) =
-  when not sigilsSigilNameStringEnabled:
+  when not sigilsSigilNameStringEnabled and not sigilsSharedNamesEnabled:
     if name.len > sigilsMaxSignalLength:
       raise routeError(
         RpcInvalidRequest,

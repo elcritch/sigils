@@ -204,4 +204,7 @@ suite "Chronos IPC":
     check values.concurrentTotal == 10
     check values.missingCode == IpcMethodNotFound
     check values.invalidParamsCode == IpcInvalidParams
-    check values.oversizedNameCode == IpcInvalidRequest
+    when sigilsSigilNameStringEnabled or sigilsSharedNamesEnabled:
+      check values.oversizedNameCode == IpcMethodNotFound
+    else:
+      check values.oversizedNameCode == IpcInvalidRequest

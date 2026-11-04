@@ -549,7 +549,7 @@ proc selectorIdent(name: string, exported: bool): NimNode =
     result = ident(name)
 
 proc checkSigilNameLength(name: string, node: NimNode, kind: string) =
-  when not sigilsSigilNameStringEnabled:
+  when not sigilsSigilNameStringEnabled and not sigilsSharedNamesEnabled:
     if name.len > sigilsMaxSignalLength:
       error(
         kind & " `" & name & "` is " & $name.len &

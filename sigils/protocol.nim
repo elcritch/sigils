@@ -4,6 +4,9 @@ import features
 
 export cloneutils, features
 
+when sigilsSharedNamesEnabled:
+  import sharednames
+  export sharednames
 when not sigilsSigilNameStringEnabled:
   import stack_strings
 
@@ -20,7 +23,9 @@ type FastErrorCodes* = enum
   INTERNAL_ERROR = -23
   SERVER_ERROR = -22
 
-when sigilsSigilNameStringEnabled:
+when sigilsSharedNamesEnabled:
+  type SigilName* = SharedName
+elif sigilsSigilNameStringEnabled:
   type SigilName* = string
 else:
   type SigilName* = StackString[48]
@@ -108,8 +113,18 @@ proc markConsumedDelivery*(params: var SigilParams) {.inline.} =
   params.mode = SigilParamsMode.Consume
 
 func compareSigilName*(a, b: SigilName): int {.inline.} =
-  when sigilsSigilNameStringEnabled:
+  when sigilsSigilNameStringEnabled or sigilsSharedNamesEnabled:
     cmp(a, b)
+  elif defined(sigilsDirectNameCompare):
+    when nimvm:
+      cmp($a, $b)
+    else:
+      let common = min(a.len, b.len)
+      if common > 0:
+        result = cmpMem(unsafeAddr a.data[0], unsafeAddr b.data[0], common)
+        if result != 0:
+          return
+      result = cmp(a.len, b.len)
   else:
     cmp($a, $b)
 
@@ -220,7 +235,22 @@ proc initSigilRequest*[S, T](
 
 const sigilsMaxSignalLength* {.intdefine.} = 48
 
-when sigilsSigilNameStringEnabled:
+when sigilsSharedNamesEnabled:
+  proc toSigilName*(name: static string): SigilName {.inline.} =
+    initSharedName(name)
+
+  proc toSigilName*(name: string): SigilName =
+    initSharedName(name)
+
+  proc toSigilName*(name: SigilName): SigilName {.inline.} = name
+
+  proc toSigilName*(name: IndexableChars): SigilName =
+    var text = newString(name.len)
+    for index in 0 ..< text.len:
+      text[index] = name[index]
+    initSharedName(text)
+
+elif sigilsSigilNameStringEnabled:
   proc toSigilName*(name: static string): SigilName =
     return name
 
