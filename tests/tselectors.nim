@@ -154,7 +154,8 @@ method validateRequired(self: TextController, text: string): bool {.selector.} =
 method validateDigitsOnly(self: TextField, text: string): bool {.selector.} =
   text.len > 0 and text.allCharsInSet({'0' .. '9'})
 
-method controllerCommand(self: TextController, command: string): bool {.selector.} =
+method controllerCommand(self: TextController,
+    command: string): bool {.selector.} =
   result = command in ["submit:", "cancel:"]
   if result:
     self.lastCommand = command
@@ -306,8 +307,8 @@ suite "dynamic selectors":
     check controller.addMethod(parseInteger, parseController)
     field.setForwardingTarget(
       proc(self: DynamicAgent, selector: SigilName): DynamicAgent =
-        if selector == parseName:
-          result = controller
+      if selector == parseName:
+        result = controller
     )
 
     check field.respondsTo(parseInteger)
@@ -321,8 +322,8 @@ suite "dynamic selectors":
 
     field.setResolveMethod(
       proc(self: DynamicAgent, selector: SigilName): bool =
-        if selector == parseName:
-          result = self.addMethod(parseInteger, parseField)
+      if selector == parseName:
+        result = self.addMethod(parseInteger, parseField)
     )
 
     check field.methodStack(parseInteger).len == 0
@@ -336,9 +337,9 @@ suite "dynamic selectors":
 
     field.setForwardInvocation(
       proc(self: DynamicAgent, invocation: var Invocation): bool =
-        if invocation.selector == parseName:
-          invocation.setResult(parseInt(invocation.argsAs(string)) + 1)
-          result = true
+      if invocation.selector == parseName:
+        invocation.setResult(parseInt(invocation.argsAs(string)) + 1)
+        result = true
     )
 
     check field.parseInteger(field.text) == 24
@@ -494,8 +495,8 @@ suite "dynamic selectors":
 
     resolved.setResolveMethod(
       proc(self: DynamicAgent, selector: SigilName): bool =
-        if selector == parseName:
-          result = self.addMethod(parseInteger, parseField)
+      if selector == parseName:
+        result = self.addMethod(parseInteger, parseField)
     )
 
     check resolved.trySendLocal(parseInteger, resolved.text).get() == 13
@@ -503,8 +504,8 @@ suite "dynamic selectors":
     check controller.addMethod(parseInteger, parseController)
     forwarded.setForwardingTarget(
       proc(self: DynamicAgent, selector: SigilName): DynamicAgent =
-        if selector == parseName:
-          result = controller
+      if selector == parseName:
+        result = controller
     )
 
     check forwarded.trySendLocal(parseInteger, forwarded.text).get() == 17
@@ -512,9 +513,9 @@ suite "dynamic selectors":
 
     invocationField.setForwardInvocation(
       proc(self: DynamicAgent, invocation: var Invocation): bool =
-        if invocation.selector == parseName:
-          invocation.setResult(parseInt(invocation.argsAs(string)) + 1)
-          result = true
+      if invocation.selector == parseName:
+        invocation.setResult(parseInt(invocation.argsAs(string)) + 1)
+        result = true
     )
 
     check invocationField.trySendLocal(parseInteger, invocationField.text).get() == 20
@@ -530,8 +531,8 @@ suite "dynamic selectors":
     check downstream.addMethod(parseInteger, parseController)
     field.setForwardingTarget(
       proc(self: DynamicAgent, selector: SigilName): DynamicAgent =
-        if selector == parseName:
-          result = forwardingTarget
+      if selector == parseName:
+        result = forwardingTarget
     )
 
     check field.trySendLocal(parseInteger, field.text).isNone
@@ -592,26 +593,28 @@ suite "dynamic selectors":
     check WindowLifecycleProtocolInternal.slots.len == 1
     check toSigilName("windowWillSetContentView") in
       WindowLifecycleProtocolInternal.signalNames
-    check toSigilName("rememberContentView") in WindowLifecycleProtocolInternal.slotNames
+    check toSigilName("rememberContentView") in
+        WindowLifecycleProtocolInternal.slotNames
     check WindowLifecycleProtocolInternal.hasSignal(
       toSigilName("windowDidSetContentView")
     )
     check WindowLifecycleProtocolInternal.hasSlot(toSigilName("rememberContentView"))
     check WindowLifecycleProtocolInternal
       .protocolSignal(toSigilName("windowWillSetContentView"))
-      .get().signature.len > 0
+      .get().signature.len > 0 == sigilsProtocolSignatures
     check WindowLifecycleProtocolInternal
       .protocolSlot(toSigilName("rememberContentView"))
-      .get().signature.len > 0
+      .get().signature.len > 0 == sigilsProtocolSignatures
 
     check window.canConformTo(WindowLifecycleProtocolInternal)
     check window.missingRequirements(WindowLifecycleProtocolInternal).len == 0
-    check SignalTypes.windowWillSetContentView(Window) is (View,)
-    check SignalTypes.rememberContentView(TextController) is (View,)
+    check SignalTypes.windowWillSetContentView(Window) is (View, )
+    check SignalTypes.rememberContentView(TextController) is (View, )
     checkProtocolSlots(TextController, WindowLifecycleProtocolInternal)
 
     static:
-      doAssert not compiles(checkProtocolSlots(Window, WindowLifecycleProtocolInternal))
+      doAssert not compiles(checkProtocolSlots(Window,
+          WindowLifecycleProtocolInternal))
 
   test "protocol includes inherit signals and slots":
     check StrictWindowLifecycleProtocol.requirements.len == 2
@@ -642,7 +645,8 @@ suite "dynamic selectors":
     check StrictTextFieldDelegate.requirements.len == 4
     check StrictTextFieldDelegate.hasRequirement(validateText)
     check StrictTextFieldDelegate.hasRequirement(selectionRange)
-    check selectorName(selectionRange) in StrictTextFieldDelegate.requiredSelectors
+    check selectorName(selectionRange) in
+        StrictTextFieldDelegate.requiredSelectors
 
     check controller.addMethod(validateText, validateRequired)
     check not controller.canConformTo(StrictTextFieldDelegate)
@@ -688,7 +692,7 @@ suite "dynamic selectors":
     check CaptionedViewProtocol.hasSignal(toSigilName("captionWillChange"))
     check CaptionedViewProtocol.hasSlot(toSigilName("applyCaption"))
     check SignalTypes.captionWillChange(View) is tuple[]
-    check SignalTypes.applyCaption(View) is (string,)
+    check SignalTypes.applyCaption(View) is (string, )
     checkProtocolSlots(View, CaptionedViewProtocol)
     check view.hasAdopted(CaptionedViewProtocol)
     check view.caption() == "old"
@@ -835,9 +839,9 @@ suite "dynamic selectors":
         TextFieldDelegate,
         [
           selectorMethod(validateText) do(self: TextController, text: string) -> bool:
-            text.strip.len >= minimum,
+          text.strip.len >= minimum,
           selectorMethod(textDidCommit) do(self: TextController, text: string):
-            self.lastCommand = "closed:" & text,
+          self.lastCommand = "closed:" & text,
         ],
       )
 
@@ -894,7 +898,8 @@ suite "dynamic selectors":
     check BaseWidget(widget).handleWidgetEvent("cast") == "derived(middle(base:cast))"
     check widget.log ==
       @[
-        "derived:drag", "middle:drag", "base:drag", "derived:cast", "middle:cast",
+        "derived:drag", "middle:drag", "base:drag", "derived:cast",
+        "middle:cast",
         "base:cast",
       ]
 

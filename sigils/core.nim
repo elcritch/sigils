@@ -207,24 +207,24 @@ proc dispatchLocalPayload(
         subs.add(sub)
     callSlotsLocalImpl(procName, origin, args, pack, subs.items)
   else:
-    # A sole local slot needs no lookahead snapshot. Borrow its entry only until
-    # the call: a slot may disconnect itself or destroy the receiver, so nothing
-    # in this entry may be read after invoking it. Actors and proxy dispatch keep
-    # the owning snapshots used by the general delivery path.
-    if obj.subcriptions.len == 1:
-      let entry {.cursor.} = obj.subcriptions[0]
-      if entry.signal == procName or entry.signal == AnySigilName:
-        let sub {.cursor.} = entry.subscription
-        if not sub.directSlot.isNil and not sub.endpoint.hasDispatcher():
-          if sub.endpoint.isNil or sub.endpoint.isAlive:
-            {.cast(gcsafe).}:
-              sub.directSlot(sub.tgt[], args)
-          return
     callSlotsLocalImpl(procName, origin, args, pack, obj.getSubscriptions(procName))
 
 proc callSlotsLocal*[A](
     obj: Agent, procName: SigilName, origin: SigilId, args: var A
 ) {.inline, gcsafe.} =
+  # A sole local slot needs no lookahead snapshot. Borrow its entry only until
+  # the call: a slot may disconnect itself or destroy the receiver, so nothing
+  # in this entry may be read after invoking it. Actors and proxy dispatch keep
+  # the owning snapshots used by the general delivery path.
+  if obj of AgentActor == false and obj.subcriptions.len == 1:
+    let entry {.cursor.} = obj.subcriptions[0]
+    if entry.signal == procName or entry.signal == AnySigilName:
+      let sub {.cursor.} = entry.subscription
+      if not sub.directSlot.isNil and not sub.endpoint.hasDispatcher():
+        if sub.endpoint.isNil or sub.endpoint.isAlive:
+          {.cast(gcsafe).}:
+            sub.directSlot(sub.tgt[], addr args)
+        return
   # The shared dispatcher consumes this borrowed pointer synchronously. Queued
   # deliveries receive an owned SigilParams, never the stack pointer.
   dispatchLocalPayload(obj, procName, origin, addr args, packLocalPayload[A])
