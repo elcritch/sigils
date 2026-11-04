@@ -5,8 +5,12 @@
 - Reduce selector constructor and invocation specialization; preserve slot
   `inline` and `noinline` pragmas and share cold exception construction.
 - Add `ProtocolRequirement.valueType` for property discovery without parsing
-  diagnostic text. Protocol signatures now exclude bodies and can be omitted with
-  `-d:sigilsProtocolSignatures=false` (verbose declarations remain the default).
+  diagnostic text. Generated protocol signatures are omitted by default; opt into
+  declaration-only signatures with `-d:sigilsPreserveProtocolSignatures`.
+- Share RChan synchronization and ring bookkeeping across payload types and send
+  modes, retaining typed swap/destruction adapters and reentrant cleanup.
+- Correct the recvIso test to allow caller-side moved-from resets while verifying
+  no payload sink/destruction during transfer and safe hook reentrancy.
 
 ## 0.32.1
 

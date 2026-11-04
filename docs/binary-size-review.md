@@ -63,10 +63,14 @@ modifying that dependency is deferred rather than silently vendoring a patch.
 
 ## 4. Protocol metadata
 
-Generated signatures contain declarations only, never slot bodies/comments.
-The new booldefine `sigilsProtocolSignatures` defaults to true for compatibility;
-`-d:sigilsProtocolSignatures=false` omits generated diagnostic signatures.
-Manually supplied signature strings remain caller-controlled.
+Generated diagnostic signatures are omitted by default. Opt into declaration-only
+text (without slot bodies/comments) with `-d:sigilsPreserveProtocolSignatures`.
+The signature field remains present; manually supplied strings are unaffected.
+
+The initial draft kept signatures on by default. At the user's request, compact
+metadata became the default and the opt-in was renamed to state what legacy
+behavior it preserves. The draft flag sigilsProtocolSignatures was not released
+and is not retained as a second, conflicting control.
 
 ProtocolRequirement.valueType stores a property setter's type spelling, generated
 from the AST. It covers the same single `value` parameter and `setX`/`x=` shapes
@@ -74,8 +78,8 @@ previously recognized by Merenda. Getter existence, namespacing, and resource
 registration remain Merenda's responsibility. This deliberately adds one small
 metadata field instead of a new property registry or a type-ID protocol.
 
-Merenda now consumes valueType directly, requires Sigils >= 0.33.0, and disables
-verbose signatures. Disabling signatures without this migration would silently
+Merenda now consumes valueType directly and requires Sigils >= 0.33.0. It inherits
+the compact default; its draft explicit disable setting was removed. Disabling signatures without this migration would silently
 lose resource property registrations. Tests cover both signature settings,
 setter styles, unrelated methods, and exclusion of implementation bodies.
 
@@ -89,10 +93,9 @@ strings and would not establish a binary-size win.
 
 ## 6. Validation, results, and obstacles
 
-- Full `atlas-run tests --only-errors`: 55/56 passed. RChan's recvIso ownership
-  test expects no additional move hook, but Nim 2.4.0 reports one extra move.
-  Running that test against the unmodified Merenda Sigils 0.32.1 dependency
-  reproduces the same failure. No RChan implementation was changed.
+- The initial full run was 55/56 because the baseline recvIso test forbade a
+  legitimate caller-side moved-from reset. This is now corrected (see step 7).
+  The full suite passed 56/56 with the shared RChan implementation.
 - After the fast-path adjustment: ten focused slot, generic, thread, closure,
   selector, and clone-routing selections passed.
 - Metadata/selector tests pass with signatures disabled; ordinary defaults pass.
@@ -154,29 +157,57 @@ alternating runs, original dependency vs this checkout, verified symbols):
   multi-recipient throughput. Ignore the harness's methodRatio=inf when filtering
   out its method baseline. Correctness assertions passed in all six runs.
 
-## 7. Follow-up: RChan specialization
+## 7. RChan specialization and ownership-test correction
 
-RChanData[T] currently combines synchronization state with seq[Isolated[T]].
-channelSend[T] additionally specializes for static blocking/overwrite flags;
-channelReceive[T] specializes for static blocking. The queue bookkeeping does
-not fundamentally require T. In the fresh Kosmo baseline, symbol extents for
-allocChannel/freeChannel/channelSend/channelReceive total about 6,088 bytes
-(including cold fragments; excluding other wrappers and lifetime hooks). This is
-a real reuse opportunity but currently much smaller than signal dispatch in
-Kosmo, so its priority should reflect payload diversity in other consumers too.
+This was initially a follow-up; the user requested including it in this PR.
+The old RChanData[T] combined synchronization and seq[Isolated[T]] storage;
+send/receive also specialized on static blocking/overwrite flags. The new header,
+locking, condition waits, ring indexing, mode branches, and detach/finalization
+helpers are shared. Typed RChan[T] handles and small swap/allocation/destruction
+adapters preserve compile-time payload checks.
 
-A separate experiment should use a non-generic ring/synchronization header,
-shared send/receive bookkeeping, and small typed allocation/swap/destruction
-adapters. Compare runtime policy flags with the existing static modes. Preserve
-alignment, zero-initialized vacant slots, move-only ownership, and typed cleanup.
-Payload hooks must never execute under the lock; overwritten payload destruction
-must remain outside it. Final-owner teardown must detach storage before running
-reentrant destructors. Do not substitute unchecked byte copying for these rules.
+Storage stays a typed seq, held by a separately allocated descriptor. This costs
+one small additional shared allocation per channel plus adapter indirection, but
+avoids introducing a raw byte-buffer allocator, alignment arithmetic, or manual
+per-element lifetime management. Only system.swap runs under the lock, through a
+non-raising, gcsafe typed adapter. The overwrite wrapper owns the dropped value
+outside the lock. Cleanup detaches storage before destructors run and leaves
+synchronization alive for reentrancy.
 
-Measure distinct payload counts and text size, then run FIFO, overwrite, blocking,
-concurrency, reentrant-hook, exception, and ARC/ORC tests. Resolve or explain the
-baseline recvIso hook-count mismatch before using it as a regression gate. This
-item is intentionally a follow-up, not an unmeasured channel rewrite in this PR.
+An initial implementation stored an erased destruction callback too. Cleanup
+instead remains a thin generic adapter calling shared helpers, so payload
+destructor effects stay visible to the compiler. New tests verify incompatible
+channel/payload types fail compilation and safe typed handles work in a thread
+without cast(gcsafe).
+
+The recvIso failure was an overly strict test. Generated C shows the caller
+receiving into a temporary, transferring it, then invoking its lifted =wasMoved
+after recvIso returns. There is no payload hook in channelReceive's locked swap.
+The corrected test checks no sink or live-payload destruction, intact payload,
+empty channel, exactly-once final destruction, and reentrant peek from the move
+hook. An initial fixture using a try/finally expression introduced destruction
+of an empty temporary; it was simplified to direct initialization. The test does
+not prescribe compiler-dependent counts of empty temporary resets/destruction.
+
+Validation:
+
+- RChan passes under ARC, ORC, and atomic ARC, including FIFO, wraparound,
+  blocking concurrency, overwrite, move-only values, exceptions and teardown.
+- With useMalloc disabled, the existing 10,000-channel lifetime test confirms
+  no retained ring/descriptor allocation.
+- AddressSanitizer passes ownership and fixed-ring suites. Running the separate
+  RSS threshold test under ASan exceeded its ordinary 64 MiB threshold because
+  sanitizer allocation/quarantine changes RSS; that measurement is not an ASan
+  leak check. Ordinary unsanitized RSS tests pass and retain their thresholds.
+- Identical release test sources, Nim 2.4.0 / ARC / --opt:size, before vs after:
+  send implementations 15 -> 1, receive implementations 10 -> 1; seven small
+  swap adapters remain. Send/receive text extents fall from 6,572 to 768 bytes;
+  adapters add 528 bytes. Test executable machine code falls from 131,676 to
+  128,052 bytes; file size from 275,128 to 257,336 bytes. Symbol extents include
+  alignment and are not whole-application savings.
+- A short warmed 1M integer send/receive round-trip comparison (seven alternating
+  samples) had medians 22,491 vs 21,415 microseconds, with overlapping ranges and
+  concurrent build activity. This establishes no throughput improvement claim.
 
 ## Final Kosmo rebuild
 
