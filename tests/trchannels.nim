@@ -1,6 +1,21 @@
 import std/[atomics, isolation, unittest]
 import sigils/rchannels
 
+static:
+  doAssert not compiles(block:
+    var ints: RChan[int]
+    var strings: RChan[string]
+    ints = strings
+  )
+  doAssert not compiles(block:
+    let ints = newRChan[int]()
+    ints.send(isolate("wrong payload"))
+  )
+
+# No cast(gcsafe): the shared core must retain statically safe thread usage.
+proc sendTypedMessage(channel: RChan[string]) {.thread.} =
+  channel.send(isolate("typed thread payload"))
+
 var destroyed: Atomic[int]
 
 type Payload = object
@@ -383,6 +398,15 @@ suite "RChan managed payload ownership":
     check teardownRejected == 4
 
 suite "RChan fixed ring":
+  test "typed channel handles transfer safely to threads":
+    let channel = newRChan[string](1)
+    var producer: Thread[RChan[string]]
+    createThread(producer, sendTypedMessage, channel)
+    let message = channel.recv()
+    joinThread(producer)
+    check message == "typed thread payload"
+    check channel.peek() == 0
+
   test "FIFO order and overwrite wrap around arbitrary capacities":
     for capacity in [1, 3, 7]:
       let channel = newRChan[string](capacity)
