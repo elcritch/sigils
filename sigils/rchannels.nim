@@ -394,6 +394,8 @@ proc recv*[T](c: RChan[T]): T {.inline.} =
 proc recvIso*[T](c: RChan[T]): Isolated[T] {.inline.} =
   ## Receives a message from the channel.
   ## Returns the isolated message directly, without extracting its payload.
+  ## The caller may invoke `=wasMoved` while receiving the return value; this
+  ## happens after the channel lock has been released.
   if not channelReceive(c.d, result, true):
     raiseClosedChannel()
 

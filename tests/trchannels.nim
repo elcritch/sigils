@@ -35,6 +35,8 @@ proc `=wasMoved`(value: var OwnedPayload) =
   # Instrument the hook without changing move's noSideEffect contract.
   {.cast(noSideEffect).}:
     inc movedCalls
+    if ownedObserver != nil:
+      discard ownedObserver[].peek()
   value.id = 0
   wasMoved(value.text)
 
@@ -273,20 +275,31 @@ suite "RChan managed payload ownership":
       check channel.recv().id == 1
     check destroyed.load() == 2
 
-  test "recvIso transfers isolated ownership without payload hooks":
+  test "recvIso transfers ownership without sinking or destroying the payload":
     ownedDestroyed = default(typeof(ownedDestroyed))
-    block:
-      let channel = newRChan[OwnedPayload](1)
-      channel.send(isolate(ownedPayload(1)))
-      let before = hookCounts()
-      failSink = true
-      var received = channel.recvIso()
+    var channel = newRChan[OwnedPayload](1)
+    ownedObserver = addr channel
+    try:
+      block:
+        channel.send(isolate(ownedPayload(1)))
+        let before = hookCounts()
+        failSink = true
+        var received = channel.recvIso()
+        failSink = false
+        # Nim may reset the returned temporary via =wasMoved at the call site.
+        # That reset is outside the channel lock (the hook re-enters peek).
+        # Receiving must neither sink nor destroy the transferred payload.
+        check sinkCalls == before.sinks
+        check ownedDestroyed[1] == 0
+        check channel.peek() == 0
+        var value = extract(received)
+        check value.id == 1
+        check value.text == "1"
+      check ownedDestroyed[1] == 1
+    finally:
       failSink = false
-      check hookCounts() == before
-      var value = extract(received)
-      check value.id == 1
-      check value.text == "1"
-    check ownedDestroyed[1] == 1
+      reset(channel)
+      ownedObserver = nil
 
   test "empty tryRecv preserves a populated destination":
     ownedDestroyed = default(typeof(ownedDestroyed))
