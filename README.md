@@ -359,7 +359,7 @@ Note however, that means you need to ensure your `Agent`'s aren't destroyed befo
 
 Internally `sigils` was based on an RPC system. There are many similarities when calling typed compiled functions in a generic fashion.
 
-To wit `sigils` supports multiple serialization methods. The default uses [variant](https://github.com/yglukhov/variant). In theory we could use the `any` type. Additionally JSON and CBOR methods are also supported by passing `-d:sigilsCborSerde` or `-d:sigilsJsonSerde`. These can be useful for backeneds such as NimScript and JavaScript. Using CBOR can be handy for networking which might be added in the future.
+To wit `sigils` supports multiple serialization methods. The default uses Sigils' own typed Variant payloads; no external `variant` package is required. Additionally JSON and CBOR methods are also supported by passing `-d:sigilsCborSerde` or `-d:sigilsJsonSerde`. These can be useful for backeneds such as NimScript and JavaScript. Using CBOR can be handy for networking which might be added in the future.
 
 
 ### Multiple Threads

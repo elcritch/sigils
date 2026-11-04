@@ -42,6 +42,45 @@ The unmodified PR #64 baseline also passed the full Merenda suite: 2,068 tests,
 Logs are under `/tmp/merenda-pr64-full-suite-20261104/`. That run validates the
 base, not these new changes.
 
+Borrowing alone reduces another 8,172 machine-code bytes and 35,704 file bytes
+in Kosmo: 12,271,892 code bytes and a 31,927,496-byte unstripped executable.
+The scaling benchmark (16 methods, four payload types containing strings,
+100,000 iterations per method) ran seven alternating trials. Median selector
+time was 164,618 us with cold errors alone versus 137,713 us with borrowing,
+about 16.3% lower. Both binaries were compiled from the same benchmark source
+in the isolated Merenda checkout; this microbenchmark is not a GUI workload.
+
+## 3. Sigils-owned Variant
+
+Removed the `variant` package requirement and the textual `include variant`.
+Sigils now owns the implementation in `sigils/svariant.nim`, adapted from the
+MIT-licensed upstream code and Merenda's `fix/ic-type-ids` work (f1dcfec). The
+original license is retained in the source. The established constructors,
+get/ofType/isEmpty, variantMatch, owned extraction, and clone adapters remain.
+
+The compile-time counter was deliberately not brought back: cached sibling IC
+modules need matching type identities. The owned implementation uses the same
+canonical type signatures and collision-checked hash cache used by Merenda,
+with a Sigils-specific cache namespace. IDs are build-local, not persistent or
+wire values. Nominal types from different modules must remain distinct even
+when they share names and layouts. Procedure calling conventions/effects and
+closure conversion behavior are preserved.
+
+Both ordinary get and destructive take now share cold failure helpers. Without
+`variantDebugTypes`, failures omit per-type diagnostic strings; the debug switch
+retains expected/actual type text. Exception types remain unchanged. Typed
+payload refs still use Nim's ordinary ARC/ORC ownership rather than raw buffers.
+
+New coverage caught and fixed two inherited issues: removing closure pragmas
+while iterating forward could index beyond the shrinking pragma list, and
+variantMatch could evaluate a side-effecting subject twice. The former now
+iterates backward; the latter binds its subject once before matching.
+
+Atlas `install -k` succeeds and regenerates nim.cfg without a Variant path.
+Focused ownership, thread delivery, caller-name collision, and payload tests
+passed 4/4. API tests passed with debug type names enabled; the initial IC run
+also passed. Further configuration and full-suite results follow below.
+
 ## Measurement setup
 
 The Kosmo validation checkout is an isolated archive/worktree of Merenda
