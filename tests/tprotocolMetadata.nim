@@ -1,4 +1,4 @@
-import std/[unittest, strutils]
+import std/[unittest, strutils, macros]
 import sigils/selectors
 
 type MetadataView = ref object of DynamicAgent
@@ -28,3 +28,14 @@ suite "compact protocol metadata":
     for item in MetadataSlots.slots:
       check "PRIVATE_BODY_MARKER" notin item.signature
       check (item.signature.len > 0) == sigilsProtocolSignatures
+
+macro checkInline(call: typed): untyped =
+  let pragmas = call[0].getImpl()[4]
+  var found = false
+  for pragma in pragmas:
+    if pragma.eqIdent("inline"):
+      found = true
+  doAssert found, "slot implementation must preserve inline"
+  newStmtList()
+
+checkInline updateTitle(MetadataView(), "")

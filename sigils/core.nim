@@ -216,7 +216,7 @@ proc callSlotsLocal*[A](
   # the call: a slot may disconnect itself or destroy the receiver, so nothing
   # in this entry may be read after invoking it. Actors and proxy dispatch keep
   # the owning snapshots used by the general delivery path.
-  if obj of AgentActor == false and obj.subcriptions.len == 1:
+  if not (obj of AgentActor) and obj.subcriptions.len == 1:
     let entry {.cursor.} = obj.subcriptions[0]
     if entry.signal == procName or entry.signal == AnySigilName:
       let sub {.cursor.} = entry.subscription
