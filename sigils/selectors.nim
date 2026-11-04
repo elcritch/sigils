@@ -143,6 +143,15 @@ type
     selector: SigilName
     depth: int
 
+proc borrowInvocationArgs[A](packed: var A,
+    invocation: Invocation): lent A {.inline.} =
+  # Local arguments remain owned by perform() for the whole synchronous dispatch.
+  # Packed invocations still decode into adapter-owned storage and remain reusable.
+  if not invocation.argsPtr.isNil:
+    return cast[ptr A](invocation.argsPtr)[]
+  rpcUnpack(packed, invocation.params)
+  packed
+
 proc initSelector*[A, R](name: static string): Selector[A, R] =
   result.name = toSigilName(name)
 
@@ -1175,7 +1184,7 @@ when sigilsClosuresEnabled:
       dynSelf = genSym(nskParam, "self")
       receiver = genSym(nskLet, "receiver")
       invocation = genSym(nskParam, "invocation")
-      argsIdent = genSym(nskVar, "args")
+      argsIdent = genSym(nskLet, "args")
       call = nnkCall.newTree(callback)
 
     call.add receiver
@@ -1193,12 +1202,14 @@ when sigilsClosuresEnabled:
             `invocation`.setResult(`call`)
       elif retType.kind == nnkTupleTy and retType.len == 0:
         quote do:
-          var `argsIdent` = `invocation`.argsAs(`argsTypeAlias`)
+          var packedArgs: `argsTypeAlias`
+          let `argsIdent` {.cursor.} = borrowInvocationArgs(packedArgs, `invocation`)
           `call`
           `invocation`.setResult(())
       else:
         quote do:
-          var `argsIdent` = `invocation`.argsAs(`argsTypeAlias`)
+          var packedArgs: `argsTypeAlias`
+          let `argsIdent` {.cursor.} = borrowInvocationArgs(packedArgs, `invocation`)
           `invocation`.setResult(`call`)
 
     result = quote do:
@@ -1318,7 +1329,7 @@ proc selectorImplNode(p: NimNode, runtimeSelectorName = ""): NimNode =
       receiverName = params[1][0].copyNimTree()
       receiverType = params[1][1].copyNimTree()
       argsType = selectorArgsType(params, 2)
-      argsIdent = genSym(nskVar, "args")
+      argsIdent = genSym(nskLet, "args")
       dynSelf = genSym(nskParam, "self")
       invocation = genSym(nskParam, "invocation")
       call = nnkCall.newTree(implProc)
@@ -1343,12 +1354,14 @@ proc selectorImplNode(p: NimNode, runtimeSelectorName = ""): NimNode =
             `invocation`.setResult(`implProc`(`receiverName`))
       elif retType.kind == nnkTupleTy and retType.len == 0:
         quote do:
-          var `argsIdent` = `invocation`.argsAs(`argsType`)
+          var packedArgs: `argsType`
+          let `argsIdent` {.cursor.} = borrowInvocationArgs(packedArgs, `invocation`)
           `call`
           `invocation`.setResult(())
       else:
         quote do:
-          var `argsIdent` = `invocation`.argsAs(`argsType`)
+          var packedArgs: `argsType`
+          let `argsIdent` {.cursor.} = borrowInvocationArgs(packedArgs, `invocation`)
           `invocation`.setResult(`call`)
 
     result = newStmtList()
@@ -1416,7 +1429,7 @@ proc implementMethodBinding(item: NimNode): tuple[defs: seq[NimNode],
     receiverName = params[1][0].copyNimTree()
     receiverType = params[1][1].copyNimTree()
     argsType = selectorArgsType(params, 2)
-    argsIdent = genSym(nskVar, "args")
+    argsIdent = genSym(nskLet, "args")
     dynSelf = genSym(nskParam, "self")
     invocation = genSym(nskParam, "invocation")
     call = nnkCall.newTree(implProc)
@@ -1441,12 +1454,14 @@ proc implementMethodBinding(item: NimNode): tuple[defs: seq[NimNode],
           `invocation`.setResult(`implProc`(`receiverName`))
     elif retType.kind == nnkTupleTy and retType.len == 0:
       quote do:
-        var `argsIdent` = `invocation`.argsAs(`argsType`)
+        var packedArgs: `argsType`
+        let `argsIdent` {.cursor.} = borrowInvocationArgs(packedArgs, `invocation`)
         `call`
         `invocation`.setResult(())
     else:
       quote do:
-        var `argsIdent` = `invocation`.argsAs(`argsType`)
+        var packedArgs: `argsType`
+        let `argsIdent` {.cursor.} = borrowInvocationArgs(packedArgs, `invocation`)
         `invocation`.setResult(`call`)
 
   let dynDef = quote do:
@@ -3209,7 +3224,8 @@ proc toDynamicMethod*[T: DynamicAgent, A, R](
     let obj = T(self)
     if obj == nil:
       raiseInvalidReceiver()
-    let args = invocation.argsAs(A)
+    var packedArgs: A
+    let args {.cursor.} = borrowInvocationArgs(packedArgs, invocation)
     invocation.setResult(fn(obj, args))
 
 proc toDynamicMethod*[T: DynamicAgent, A, R](
@@ -3221,7 +3237,8 @@ proc toDynamicMethod*[T: DynamicAgent, A, R](
     let obj = T(self)
     if obj == nil:
       raiseInvalidReceiver()
-    let args = invocation.argsAs(A)
+    var packedArgs: A
+    let args {.cursor.} = borrowInvocationArgs(packedArgs, invocation)
     invocation.setResult(fn(obj, args))
 
 when sigilsClosuresEnabled:
