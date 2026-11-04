@@ -23,11 +23,11 @@ suite "compact protocol metadata":
     check MetadataProperties.requirement(toSigilName(
         "MetadataProperties.unrelated")).get.valueType == ""
     for item in MetadataProperties.requirements:
-      check (item.signature.len > 0) == sigilsProtocolSignatures
+      check (item.signature.len > 0) == sigilsPreserveProtocolSignatures
   test "slot metadata contains no implementation body":
     for item in MetadataSlots.slots:
       check "PRIVATE_BODY_MARKER" notin item.signature
-      check (item.signature.len > 0) == sigilsProtocolSignatures
+      check (item.signature.len > 0) == sigilsPreserveProtocolSignatures
 
 macro checkInline(call: typed): untyped =
   let pragmas = call[0].getImpl()[4]

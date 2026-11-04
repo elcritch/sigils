@@ -1827,12 +1827,12 @@ proc protocolObserverStatement(
       "      " & call & "\n"
   )
 
-const sigilsProtocolSignatures* {.booldefine.} = true
-  ## Retain declaration text for protocol introspection. Property value types
-  ## remain available when this is disabled.
+const sigilsPreserveProtocolSignatures * {.booldefine.} = false
+  ## Opt into legacy declaration text for protocol introspection. Property value
+  ## types remain available independently of this setting.
 
 proc protocolSignature(item: NimNode): NimNode =
-  when sigilsProtocolSignatures:
+  when sigilsPreserveProtocolSignatures:
     let declaration = item.copyNimTree()
     declaration[6] = newEmptyNode()
     result = newLit(declaration.repr)

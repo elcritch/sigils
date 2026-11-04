@@ -601,10 +601,10 @@ suite "dynamic selectors":
     check WindowLifecycleProtocolInternal.hasSlot(toSigilName("rememberContentView"))
     check WindowLifecycleProtocolInternal
       .protocolSignal(toSigilName("windowWillSetContentView"))
-      .get().signature.len > 0 == sigilsProtocolSignatures
+      .get().signature.len > 0 == sigilsPreserveProtocolSignatures
     check WindowLifecycleProtocolInternal
       .protocolSlot(toSigilName("rememberContentView"))
-      .get().signature.len > 0 == sigilsProtocolSignatures
+      .get().signature.len > 0 == sigilsPreserveProtocolSignatures
 
     check window.canConformTo(WindowLifecycleProtocolInternal)
     check window.missingRequirements(WindowLifecycleProtocolInternal).len == 0
