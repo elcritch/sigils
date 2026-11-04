@@ -95,7 +95,8 @@ strings and would not establish a binary-size win.
 
 - The initial full run was 55/56 because the baseline recvIso test forbade a
   legitimate caller-side moved-from reset. This is now corrected (see step 7).
-  The full suite passed 56/56 with the shared RChan implementation.
+  The full suite passed 56/56 with shared RChan and compact signatures as the
+  default; focused tests also passed with the legacy signature opt-in.
 - After the fast-path adjustment: ten focused slot, generic, thread, closure,
   selector, and clone-routing selections passed.
 - Metadata/selector tests pass with signatures disabled; ordinary defaults pass.
@@ -229,3 +230,22 @@ The temporary Sigils symlink and Atlas link metadata were removed after validati
 the original dependency checkout/config were restored. To rebuild the companion
 Merenda branch, first install/link Sigils 0.33.0. It is intentionally an ordered
 cross-repository change, not a published dependency release yet.
+
+## Final RChan/default-setting integration rebuild
+
+Kosmo was rebuilt again with the shared RChan implementation and no Merenda
+protocol-signature override; it now inherits the compact default. The same
+release options succeeded, producing `/tmp/kosmo-size-rchan-final` and its dSYM.
+The temporary dependency symlink was removed and original checkout restored.
+
+Final file: 30,419,736 bytes; machine code: 11,009,892; text constants: 4,674,184.
+Against the original baseline this saves 1,287,960 file bytes
+(4.1%) and 807,616 machine-code bytes
+(6.8%). The earlier table predates the RChan addition.
+
+Relative to the preceding signal/metadata build, this final integration has
+1,208 fewer machine-code bytes but 1,768 more total file bytes. Kosmo uses few
+RChan payload types; the added adapters/storage bookkeeping do not produce a net
+file-size saving there. The broader RChan test fixture shows the stronger reuse
+benefit. Treat the overall 4.1% Kosmo reduction as the combined change, not a
+claim that RChan alone reduces every executable.
