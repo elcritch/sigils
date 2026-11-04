@@ -1,6 +1,6 @@
 # Selector and payload reuse after PR #64
 
-Base: `perf/share-signal-dispatch` at `0abe4cc` (PR #64). This follow-up measures
+Base: merged PR #64 at `3578d80` (the same tree as its former head `0abe4cc`). This follow-up measures
 `--opt:speed`, per the requested Kosmo build policy. Earlier `--opt:size` results
 are not directly comparable.
 
@@ -78,8 +78,91 @@ iterates backward; the latter binds its subject once before matching.
 
 Atlas `install -k` succeeds and regenerates nim.cfg without a Variant path.
 Focused ownership, thread delivery, caller-name collision, and payload tests
-passed 4/4. API tests passed with debug type names enabled; the initial IC run
-also passed. Further configuration and full-suite results follow below.
+passed 4/4. API tests passed with debug type names enabled, Nim 2.4 initial and
+warmed IC builds, and Nim 2.2.10 C compilation. ORC passed four focused suites;
+AddressSanitizer with `useMalloc` passed the API, ownership, and payload suites.
+The owned Variant stage alone removes another 29,112 machine-code bytes and
+65,568 file bytes from Kosmo.
+
+## 4. Local versus packed selector paths: rejected experiment
+
+Tried private `noinline` packing/unpacking helpers shared by payload type,
+alongside an explicitly `inline` setResult so local dispatch could keep only
+the pointer write. The full Sigils suite passed 58/58 with that experiment, but
+the matching Kosmo build grew by 75,804 code bytes and 176,480 file bytes over
+the owned Variant stage. Removing forced setResult inlining still grew code by
+11,364 bytes and the file by 40,656 bytes. Both variants were discarded.
+
+Thus the final change borrows local arguments and shares cold errors, but leaves
+packing and setResult's existing compiler decisions intact. A second local-only
+adapter/dispatch table was not added: it would introduce more wrappers and
+state for an unproven benefit. The size data does not justify that complexity.
+These results also show why a small source-level helper is not automatically a
+smaller executable under `--opt:speed`.
+
+## 5. Table and RChan specialization audit
+
+Selector methods use one `SelectorMethodStore[DynamicMethod]` specialization
+regardless of selector argument/result types. Agent subscriptions are already a
+shared `seq[SubscriptionEntry]`, not a table specialized for every payload.
+The remaining generic tables serve different values: actor references, timer
+handles/deadlines, pool state, registry locations, proxy entries, and RPC routes.
+The previously reported stdlib table code is application-wide, not all Sigils.
+
+No additional table erasure was made. It would require new ownership/destructor
+adapters or boxed values while offering no per-selector specialization reduction
+in the primary store. RChan retains PR #64's shared synchronization/ring core and
+typed transfer/destruction adapters. Its descriptor allocation is a possible
+separate allocation optimization, not required by the Variant replacement;
+this PR does not change its lifetime or reentrancy rules.
+
+## 6. Repeatable specialization benchmark
+
+Added `benchmarks/dispatchScaling.nim` and invocation guidance. Independent
+adapter and payload-type counts cover selectors, signal/slot pairs, and RChans.
+Every generated adapter is invoked and a checksum checks its result. Timing
+excludes setup; it measures synchronous operations, not GUI work or channel
+contention. No allocation counter or brittle timing threshold was added.
+
+Final selector-only size series (1,000 iterations, ARC, release, speed, same
+Atlas configuration):
+
+| Methods | Payload types | Machine-code bytes |
+| ---: | ---: | ---: |
+| 1 | 1 | 249,512 |
+| 16 | 1 | 257,984 |
+| 64 | 1 | 283,528 |
+| 16 | 16 | 276,600 |
+| 64 | 64 | 361,472 |
+
+These include runtime/library startup code. The series makes both adapter and
+payload specialization costs visible; it is not a count of Sigils code alone.
+
+## Size results
+
+All sizes are bytes from matching macOS arm64 `--opt:speed` builds. File sizes
+are unstripped; code is `__TEXT,__text`, excluding assets and symbols.
+
+| Stage | Machine code | Executable file | Code change from preceding kept stage |
+| --- | ---: | ---: | ---: |
+| PR #64 | 12,412,912 | 32,145,336 | — |
+| Shared cold errors | 12,280,064 | 31,963,200 | -132,848 |
+| Borrowed local arguments | 12,271,892 | 31,927,496 | -8,172 |
+| Owned Variant (final) | 12,242,780 | 31,861,928 | -29,112 |
+
+Total: **170,132 fewer machine-code bytes (1.37%)** and **283,408 fewer file
+bytes (0.88%)**. Rejected packing experiments are excluded from these savings.
+
+## Validation limitations found
+
+Focused selector payload tests pass with `sigilsJsonSerde` and `sigilsCborSerde`.
+The entire selector suite cannot be used as a JSON-backend test: `core.nim` has
+a pre-existing response guard that recognizes `useJsonSerde` but not its newer
+`sigilsJsonSerde` alias, and correcting that guard then reaches unsupported JSON
+serialization of `DynamicMethod` callbacks in the suite's object fixtures.
+The guard issue is also present in PR #64. The trial correction was reverted;
+backend-wide JSON compatibility is outside this optimization, and the passing
+default suite must not be presented as validating every serialization mode.
 
 ## Measurement setup
 
