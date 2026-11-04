@@ -1,3 +1,13 @@
+## 0.33.0
+
+- Share local signal fanout and actor dispatch across payload types while retaining
+  the single-recipient fast path and existing ownership rules.
+- Reduce selector constructor and invocation specialization; preserve slot
+  `inline` and `noinline` pragmas and share cold exception construction.
+- Add `ProtocolRequirement.valueType` for property discovery without parsing
+  diagnostic text. Protocol signatures now exclude bodies and can be omitted with
+  `-d:sigilsProtocolSignatures=false` (verbose declarations remain the default).
+
 ## 0.32.1
 
 - Accept doc comments inside protocol declarations and implementations, including
