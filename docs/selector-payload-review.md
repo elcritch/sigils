@@ -12,8 +12,8 @@ invalid receiver, and non-copyable slot payload exceptions. The exception types
 and messages are unchanged. Helpers remain private within their owning modules;
 there is no new public error API and receiver downcasts retain their checks.
 
-Validation: `atlas-run tests selectors.nim slots.nim` passed 2/2. Size and runtime
-measurements are recorded below after the matching before/after builds finish.
+Validation: `atlas-run tests selectors.nim slots.nim` passed 2/2. Matching size
+and runtime measurements are recorded below.
 
 The isolated speed build confirms this change alone reduces Kosmo's machine
 code by 132,848 bytes (12,412,912 to 12,280,064), and its unstripped file by
@@ -163,6 +163,27 @@ serialization of `DynamicMethod` callbacks in the suite's object fixtures.
 The guard issue is also present in PR #64. The trial correction was reverted;
 backend-wide JSON compatibility is outside this optimization, and the passing
 default suite must not be presented as validating every serialization mode.
+
+Windows CI also exposed a pre-existing race in `tslotsThread`: the multiple-reply
+test made only twenty 1 ms polling attempts and could assert before the worker
+was scheduled (`polled: 0`, value still zero). The earlier CI run with identical
+library code passed on Windows. Replaced the fixed attempt count and unrelated
+poll-count cutoff with a five-second monotonic deadline while waiting for the
+expected sum of both replies. The value assertion remains unchanged; a missing
+delivery still fails. This is a test scheduling correction, not a delivery or
+Variant behavior change.
+
+## Final validation
+
+- Final `atlas-run tests`: **58/58 passed** on Nim 2.4.0/macOS arm64.
+- Variant API/ownership/payload tests passed with ORC and AddressSanitizer;
+  debug type diagnostics, Nim 2.2.10, and initial/warmed IC builds passed.
+- Benchmark runs passed checksums for 1/16/64 selectors, shared/distinct types,
+  all three operation categories together, and channel-only operation.
+- Merenda `examples/button_counter.nim` built with speed optimization and
+  initialized a native Metal window. An eight-second startup smoke run had no
+  exception; it was then terminated. This was not an interactive UI test.
+- Final-code Kosmo speed build succeeded. Full Merenda integration run pending.
 
 ## Measurement setup
 
