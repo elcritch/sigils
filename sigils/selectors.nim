@@ -18,6 +18,7 @@ type
     ## A selector requirement declared by a dynamic protocol.
     selector*: SigilName
     signature*: string
+    valueType*: string ## Property setter value type, independent of diagnostics.
     required*: bool
 
   ProtocolSignal* = object
@@ -152,11 +153,12 @@ proc selectorName*[A, R](selector: Selector[A, R]): SigilName =
   selector.name
 
 proc requirement*[A, R](
-    selector: Selector[A, R], required = true, signature = ""
+    selector: Selector[A, R], required = true, signature = "", valueType = ""
 ): ProtocolRequirement =
   result = ProtocolRequirement(
     selector: selector.name,
     signature: signature,
+    valueType: valueType,
     required: required,
   )
 
@@ -1825,6 +1827,28 @@ proc protocolObserverStatement(
       "      " & call & "\n"
   )
 
+const sigilsProtocolSignatures* {.booldefine.} = true
+  ## Retain declaration text for protocol introspection. Property value types
+  ## remain available when this is disabled.
+
+proc protocolSignature(item: NimNode): NimNode =
+  when sigilsProtocolSignatures:
+    let declaration = item.copyNimTree()
+    declaration[6] = newEmptyNode()
+    result = newLit(declaration.repr)
+  else:
+    result = newLit("")
+
+proc propertyValueTypeName(item: NimNode): NimNode =
+  let params = item[3]
+  let name = selectorIdentName(item[0])
+  if params.len == 2 and params[1].kind == nnkIdentDefs and
+      params[1].len == 3 and params[1][0].eqIdent("value") and
+      (name.endsWith("=") or (name.len > 3 and name.startsWith("set") and
+      name[3].isUpperAscii)):
+    return newLit(params[1][1].repr)
+  newLit("")
+
 proc addProtocolRequirement(
     selectorDecls: var seq[NimNode],
     reqs: var seq[NimNode],
@@ -1852,7 +1876,8 @@ proc addProtocolRequirement(
     bindSym"requirement",
     ident(selectorName),
     newLit(required),
-    newLit(requirementMethod.repr),
+    protocolSignature(requirementMethod),
+    propertyValueTypeName(requirementMethod),
   )
 
 proc addProtocolSignal(
@@ -1887,7 +1912,7 @@ proc addProtocolSignal(
   sigs.add newCall(
     bindSym"protocolSignal",
     newLit(signalName),
-    newLit(item.repr),
+    protocolSignature(item),
   )
 
 proc addProtocolSlot(
@@ -1928,7 +1953,7 @@ proc addProtocolSlot(
   slots.add newCall(
     bindSym"protocolSlot",
     newLit(slotName),
-    newLit(item.repr),
+    protocolSignature(item),
     newLit(eventName),
   )
 
