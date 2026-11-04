@@ -1,0 +1,878 @@
+{
+  "environment": {
+    "nim": "2.4.0",
+    "os": "macOS arm64",
+    "cpu": "Apple M3 Pro",
+    "memory_manager": "ARC unless class-atomic",
+    "optimization": "speed",
+    "useMalloc": true,
+    "baseline": "687c5b6",
+    "merenda": "a160f21c"
+  },
+  "storage": {
+    "raw": {
+      "stack": [
+        {
+          "static_construct": 6521,
+          "dynamic_construct": 4959,
+          "static_copy": 1598,
+          "dynamic_copy": 2100,
+          "compare": 26483,
+          "lookup": 6071
+        },
+        {
+          "static_construct": 1941,
+          "dynamic_construct": 2020,
+          "static_copy": 692,
+          "dynamic_copy": 692,
+          "compare": 14099,
+          "lookup": 4252
+        },
+        {
+          "static_construct": 1874,
+          "dynamic_construct": 1897,
+          "static_copy": 663,
+          "dynamic_copy": 699,
+          "compare": 14063,
+          "lookup": 4285
+        },
+        {
+          "static_construct": 1874,
+          "dynamic_construct": 1957,
+          "static_copy": 670,
+          "dynamic_copy": 642,
+          "compare": 14095,
+          "lookup": 4282
+        },
+        {
+          "static_construct": 1927,
+          "dynamic_construct": 2021,
+          "static_copy": 765,
+          "dynamic_copy": 765,
+          "compare": 14001,
+          "lookup": 4236
+        },
+        {
+          "static_construct": 1874,
+          "dynamic_construct": 1885,
+          "static_copy": 745,
+          "dynamic_copy": 639,
+          "compare": 14168,
+          "lookup": 4285
+        },
+        {
+          "static_construct": 1948,
+          "dynamic_construct": 2023,
+          "static_copy": 765,
+          "dynamic_copy": 768,
+          "compare": 14293,
+          "lookup": 4312
+        }
+      ],
+      "direct": [
+        {
+          "static_construct": 5991,
+          "dynamic_construct": 4818,
+          "static_copy": 2115,
+          "dynamic_copy": 1807,
+          "compare": 1713,
+          "lookup": 9232
+        },
+        {
+          "static_construct": 3505,
+          "dynamic_construct": 3186,
+          "static_copy": 1083,
+          "dynamic_copy": 1069,
+          "compare": 1123,
+          "lookup": 6184
+        },
+        {
+          "static_construct": 1962,
+          "dynamic_construct": 2022,
+          "static_copy": 762,
+          "dynamic_copy": 712,
+          "compare": 678,
+          "lookup": 4348
+        },
+        {
+          "static_construct": 1931,
+          "dynamic_construct": 2019,
+          "static_copy": 690,
+          "dynamic_copy": 691,
+          "compare": 717,
+          "lookup": 4283
+        },
+        {
+          "static_construct": 1874,
+          "dynamic_construct": 1883,
+          "static_copy": 674,
+          "dynamic_copy": 641,
+          "compare": 684,
+          "lookup": 4261
+        },
+        {
+          "static_construct": 1935,
+          "dynamic_construct": 2020,
+          "static_copy": 692,
+          "dynamic_copy": 693,
+          "compare": 779,
+          "lookup": 4673
+        },
+        {
+          "static_construct": 2022,
+          "dynamic_construct": 2021,
+          "static_copy": 693,
+          "dynamic_copy": 691,
+          "compare": 729,
+          "lookup": 4250
+        }
+      ],
+      "string": [
+        {
+          "static_construct": 562,
+          "dynamic_construct": 8881,
+          "static_copy": 1203,
+          "dynamic_copy": 6567,
+          "compare": 1875,
+          "lookup": 4833
+        },
+        {
+          "static_construct": 285,
+          "dynamic_construct": 4358,
+          "static_copy": 869,
+          "dynamic_copy": 3247,
+          "compare": 970,
+          "lookup": 2734
+        },
+        {
+          "static_construct": 197,
+          "dynamic_construct": 3119,
+          "static_copy": 643,
+          "dynamic_copy": 2375,
+          "compare": 755,
+          "lookup": 2276
+        },
+        {
+          "static_construct": 197,
+          "dynamic_construct": 3111,
+          "static_copy": 642,
+          "dynamic_copy": 2383,
+          "compare": 739,
+          "lookup": 2381
+        },
+        {
+          "static_construct": 197,
+          "dynamic_construct": 3365,
+          "static_copy": 694,
+          "dynamic_copy": 2557,
+          "compare": 801,
+          "lookup": 2264
+        },
+        {
+          "static_construct": 203,
+          "dynamic_construct": 3347,
+          "static_copy": 697,
+          "dynamic_copy": 2570,
+          "compare": 791,
+          "lookup": 2249
+        },
+        {
+          "static_construct": 197,
+          "dynamic_construct": 3118,
+          "static_copy": 642,
+          "dynamic_copy": 2413,
+          "compare": 766,
+          "lookup": 2249
+        }
+      ],
+      "shared": [
+        {
+          "static_construct": 337,
+          "dynamic_construct": 12929,
+          "static_copy": 1169,
+          "dynamic_copy": 2086,
+          "compare": 2572,
+          "lookup": 7387
+        },
+        {
+          "static_construct": 191,
+          "dynamic_construct": 5585,
+          "static_copy": 467,
+          "dynamic_copy": 904,
+          "compare": 1219,
+          "lookup": 3883
+        },
+        {
+          "static_construct": 147,
+          "dynamic_construct": 4543,
+          "static_copy": 402,
+          "dynamic_copy": 817,
+          "compare": 1039,
+          "lookup": 3407
+        },
+        {
+          "static_construct": 148,
+          "dynamic_construct": 4595,
+          "static_copy": 429,
+          "dynamic_copy": 822,
+          "compare": 1103,
+          "lookup": 3506
+        },
+        {
+          "static_construct": 148,
+          "dynamic_construct": 4482,
+          "static_copy": 397,
+          "dynamic_copy": 762,
+          "compare": 1014,
+          "lookup": 3394
+        },
+        {
+          "static_construct": 149,
+          "dynamic_construct": 4342,
+          "static_copy": 399,
+          "dynamic_copy": 765,
+          "compare": 1058,
+          "lookup": 3489
+        },
+        {
+          "static_construct": 148,
+          "dynamic_construct": 4834,
+          "static_copy": 429,
+          "dynamic_copy": 822,
+          "compare": 1043,
+          "lookup": 3417
+        }
+      ],
+      "class": [
+        {
+          "static_construct": 1511,
+          "dynamic_construct": 17345,
+          "static_copy": 1126,
+          "dynamic_copy": 1100,
+          "compare": 3450,
+          "lookup": 8004
+        },
+        {
+          "static_construct": 533,
+          "dynamic_construct": 6755,
+          "static_copy": 570,
+          "dynamic_copy": 558,
+          "compare": 1751,
+          "lookup": 4732
+        },
+        {
+          "static_construct": 470,
+          "dynamic_construct": 6528,
+          "static_copy": 569,
+          "dynamic_copy": 555,
+          "compare": 1728,
+          "lookup": 4800
+        },
+        {
+          "static_construct": 486,
+          "dynamic_construct": 6174,
+          "static_copy": 559,
+          "dynamic_copy": 512,
+          "compare": 1695,
+          "lookup": 4685
+        },
+        {
+          "static_construct": 470,
+          "dynamic_construct": 6481,
+          "static_copy": 565,
+          "dynamic_copy": 551,
+          "compare": 1696,
+          "lookup": 4701
+        },
+        {
+          "static_construct": 470,
+          "dynamic_construct": 6302,
+          "static_copy": 559,
+          "dynamic_copy": 512,
+          "compare": 1696,
+          "lookup": 4699
+        },
+        {
+          "static_construct": 469,
+          "dynamic_construct": 6335,
+          "static_copy": 567,
+          "dynamic_copy": 555,
+          "compare": 1688,
+          "lookup": 4674
+        }
+      ],
+      "class-atomic": [
+        {
+          "static_construct": 2037,
+          "dynamic_construct": 15949,
+          "static_copy": 2287,
+          "dynamic_copy": 1964,
+          "compare": 3441,
+          "lookup": 8455
+        },
+        {
+          "static_construct": 734,
+          "dynamic_construct": 6606,
+          "static_copy": 966,
+          "dynamic_copy": 970,
+          "compare": 1723,
+          "lookup": 4687
+        },
+        {
+          "static_construct": 713,
+          "dynamic_construct": 6225,
+          "static_copy": 910,
+          "dynamic_copy": 901,
+          "compare": 1727,
+          "lookup": 4686
+        },
+        {
+          "static_construct": 699,
+          "dynamic_construct": 6546,
+          "static_copy": 965,
+          "dynamic_copy": 961,
+          "compare": 1695,
+          "lookup": 4647
+        },
+        {
+          "static_construct": 699,
+          "dynamic_construct": 6438,
+          "static_copy": 917,
+          "dynamic_copy": 947,
+          "compare": 1731,
+          "lookup": 4660
+        },
+        {
+          "static_construct": 699,
+          "dynamic_construct": 6705,
+          "static_copy": 966,
+          "dynamic_copy": 957,
+          "compare": 1731,
+          "lookup": 4654
+        },
+        {
+          "static_construct": 699,
+          "dynamic_construct": 6300,
+          "static_copy": 934,
+          "dynamic_copy": 920,
+          "compare": 1732,
+          "lookup": 4667
+        }
+      ],
+      "descriptor": [
+        {
+          "static_construct": 962,
+          "dynamic_construct": 10759,
+          "static_copy": 1920,
+          "dynamic_copy": 2270,
+          "compare": 1892,
+          "lookup": 6415
+        },
+        {
+          "static_construct": 296,
+          "dynamic_construct": 3569,
+          "static_copy": 647,
+          "dynamic_copy": 802,
+          "compare": 807,
+          "lookup": 2831
+        },
+        {
+          "static_construct": 295,
+          "dynamic_construct": 3771,
+          "static_copy": 696,
+          "dynamic_copy": 855,
+          "compare": 804,
+          "lookup": 2955
+        },
+        {
+          "static_construct": 296,
+          "dynamic_construct": 3700,
+          "static_copy": 644,
+          "dynamic_copy": 827,
+          "compare": 815,
+          "lookup": 2884
+        },
+        {
+          "static_construct": 305,
+          "dynamic_construct": 3584,
+          "static_copy": 659,
+          "dynamic_copy": 830,
+          "compare": 808,
+          "lookup": 2995
+        },
+        {
+          "static_construct": 317,
+          "dynamic_construct": 3810,
+          "static_copy": 695,
+          "dynamic_copy": 855,
+          "compare": 803,
+          "lookup": 2935
+        },
+        {
+          "static_construct": 296,
+          "dynamic_construct": 3691,
+          "static_copy": 665,
+          "dynamic_copy": 855,
+          "compare": 804,
+          "lookup": 2884
+        }
+      ]
+    },
+    "medians": {
+      "stack": {
+        "static_construct": 1927,
+        "dynamic_construct": 2020,
+        "static_copy": 745,
+        "dynamic_copy": 699,
+        "compare": 14099,
+        "lookup": 4285
+      },
+      "direct": {
+        "static_construct": 1962,
+        "dynamic_construct": 2021,
+        "static_copy": 693,
+        "dynamic_copy": 693,
+        "compare": 729,
+        "lookup": 4348
+      },
+      "string": {
+        "static_construct": 197,
+        "dynamic_construct": 3347,
+        "static_copy": 694,
+        "dynamic_copy": 2557,
+        "compare": 791,
+        "lookup": 2276
+      },
+      "shared": {
+        "static_construct": 148,
+        "dynamic_construct": 4595,
+        "static_copy": 429,
+        "dynamic_copy": 822,
+        "compare": 1058,
+        "lookup": 3489
+      },
+      "class": {
+        "static_construct": 470,
+        "dynamic_construct": 6481,
+        "static_copy": 567,
+        "dynamic_copy": 555,
+        "compare": 1696,
+        "lookup": 4701
+      },
+      "class-atomic": {
+        "static_construct": 699,
+        "dynamic_construct": 6546,
+        "static_copy": 965,
+        "dynamic_copy": 957,
+        "compare": 1731,
+        "lookup": 4667
+      },
+      "descriptor": {
+        "static_construct": 296,
+        "dynamic_construct": 3700,
+        "static_copy": 665,
+        "dynamic_copy": 855,
+        "compare": 807,
+        "lookup": 2935
+      }
+    }
+  },
+  "dispatch": {
+    "raw": {
+      "stack": [
+        {
+          "selectors": 169473,
+          "signals": 931407
+        },
+        {
+          "selectors": 136733,
+          "signals": 909737
+        },
+        {
+          "selectors": 138889,
+          "signals": 910182
+        },
+        {
+          "selectors": 138998,
+          "signals": 903592
+        },
+        {
+          "selectors": 136765,
+          "signals": 907988
+        },
+        {
+          "selectors": 138163,
+          "signals": 914796
+        },
+        {
+          "selectors": 137685,
+          "signals": 912604
+        }
+      ],
+      "direct": [
+        {
+          "selectors": 163387,
+          "signals": 195480
+        },
+        {
+          "selectors": 137619,
+          "signals": 195115
+        },
+        {
+          "selectors": 137088,
+          "signals": 195223
+        },
+        {
+          "selectors": 137316,
+          "signals": 191239
+        },
+        {
+          "selectors": 137986,
+          "signals": 199007
+        },
+        {
+          "selectors": 137509,
+          "signals": 196957
+        },
+        {
+          "selectors": 137938,
+          "signals": 201298
+        }
+      ],
+      "string": [
+        {
+          "selectors": 165883,
+          "signals": 182375
+        },
+        {
+          "selectors": 137158,
+          "signals": 187259
+        },
+        {
+          "selectors": 137905,
+          "signals": 183917
+        },
+        {
+          "selectors": 134832,
+          "signals": 182341
+        },
+        {
+          "selectors": 137225,
+          "signals": 184288
+        },
+        {
+          "selectors": 136401,
+          "signals": 182494
+        },
+        {
+          "selectors": 137356,
+          "signals": 183934
+        }
+      ],
+      "shared": [
+        {
+          "selectors": 165035,
+          "signals": 214879
+        },
+        {
+          "selectors": 142244,
+          "signals": 214142
+        },
+        {
+          "selectors": 137649,
+          "signals": 213574
+        },
+        {
+          "selectors": 137699,
+          "signals": 212092
+        },
+        {
+          "selectors": 139753,
+          "signals": 212536
+        },
+        {
+          "selectors": 139209,
+          "signals": 215348
+        },
+        {
+          "selectors": 143149,
+          "signals": 219442
+        }
+      ]
+    },
+    "medians": {
+      "stack": {
+        "selectors": 138163,
+        "signals": 910182
+      },
+      "direct": {
+        "selectors": 137619,
+        "signals": 195480
+      },
+      "string": {
+        "selectors": 137225,
+        "signals": 183917
+      },
+      "shared": {
+        "selectors": 139753,
+        "signals": 214142
+      }
+    }
+  },
+  "allocation_counts": {
+    "stack": {
+      "static_construct": {
+        "allocations": 0,
+        "releases": 0
+      },
+      "dynamic_construct": {
+        "allocations": 0,
+        "releases": 0
+      },
+      "static_copy": {
+        "allocations": 0,
+        "releases": 0
+      },
+      "dynamic_copy": {
+        "allocations": 0,
+        "releases": 0
+      },
+      "compare": {
+        "allocations": 400000,
+        "releases": 400000
+      },
+      "lookup": {
+        "allocations": 0,
+        "releases": 0
+      },
+      "startup": {
+        "allocations": 0,
+        "releases": 0
+      }
+    },
+    "direct": {
+      "static_construct": {
+        "allocations": 0,
+        "releases": 0
+      },
+      "dynamic_construct": {
+        "allocations": 0,
+        "releases": 0
+      },
+      "static_copy": {
+        "allocations": 0,
+        "releases": 0
+      },
+      "dynamic_copy": {
+        "allocations": 0,
+        "releases": 0
+      },
+      "compare": {
+        "allocations": 0,
+        "releases": 0
+      },
+      "lookup": {
+        "allocations": 0,
+        "releases": 0
+      },
+      "startup": {
+        "allocations": 0,
+        "releases": 0
+      }
+    },
+    "string": {
+      "static_construct": {
+        "allocations": 0,
+        "releases": 0
+      },
+      "dynamic_construct": {
+        "allocations": 200000,
+        "releases": 199488
+      },
+      "static_copy": {
+        "allocations": 0,
+        "releases": 512
+      },
+      "dynamic_copy": {
+        "allocations": 512,
+        "releases": 0
+      },
+      "compare": {
+        "allocations": 0,
+        "releases": 0
+      },
+      "lookup": {
+        "allocations": 0,
+        "releases": 0
+      },
+      "startup": {
+        "allocations": 0,
+        "releases": 0
+      }
+    },
+    "shared": {
+      "static_construct": {
+        "allocations": 0,
+        "releases": 0
+      },
+      "dynamic_construct": {
+        "allocations": 200000,
+        "releases": 199488
+      },
+      "static_copy": {
+        "allocations": 0,
+        "releases": 512
+      },
+      "dynamic_copy": {
+        "allocations": 0,
+        "releases": 0
+      },
+      "compare": {
+        "allocations": 0,
+        "releases": 0
+      },
+      "lookup": {
+        "allocations": 0,
+        "releases": 0
+      },
+      "startup": {
+        "allocations": 0,
+        "releases": 0
+      }
+    },
+    "class": {
+      "static_construct": {
+        "allocations": 0,
+        "releases": 0
+      },
+      "dynamic_construct": {
+        "allocations": 400000,
+        "releases": 398976
+      },
+      "static_copy": {
+        "allocations": 0,
+        "releases": 1024
+      },
+      "dynamic_copy": {
+        "allocations": 0,
+        "releases": 0
+      },
+      "compare": {
+        "allocations": 0,
+        "releases": 0
+      },
+      "lookup": {
+        "allocations": 0,
+        "releases": 0
+      },
+      "startup": {
+        "allocations": 512,
+        "releases": 0
+      }
+    },
+    "descriptor": {
+      "static_construct": {
+        "allocations": 0,
+        "releases": 0
+      },
+      "dynamic_construct": {
+        "allocations": 200000,
+        "releases": 199488
+      },
+      "static_copy": {
+        "allocations": 0,
+        "releases": 512
+      },
+      "dynamic_copy": {
+        "allocations": 0,
+        "releases": 0
+      },
+      "compare": {
+        "allocations": 0,
+        "releases": 0
+      },
+      "lookup": {
+        "allocations": 0,
+        "releases": 0
+      },
+      "startup": {
+        "allocations": 0,
+        "releases": 0
+      }
+    }
+  },
+  "kosmo": [
+    {
+      "name": "string-matched",
+      "file_bytes": 31853672,
+      "code_bytes": 12242780,
+      "stripped_bytes": 17897376,
+      "symbols": {
+        "entries": 452384,
+        "entry_bytes": 7238144,
+        "string_table_bytes": 6651712
+      },
+      "sections": {
+        "__TEXT,__text": 12242780,
+        "__TEXT,__stubs": 3192,
+        "__TEXT,__const": 4658232,
+        "__TEXT,__cstring": 47726,
+        "__TEXT,__unwind_info": 115320,
+        "__TEXT,__eh_frame": 2048,
+        "__DATA_CONST,__got": 2280,
+        "__DATA_CONST,__const": 400608,
+        "__DATA,__data": 86896,
+        "__DATA,__thread_vars": 1920
+      }
+    },
+    {
+      "name": "shared",
+      "file_bytes": 31700624,
+      "code_bytes": 12289332,
+      "stripped_bytes": 17913288,
+      "symbols": {
+        "entries": 446916,
+        "entry_bytes": 7150656,
+        "string_table_bytes": 6571552
+      },
+      "sections": {
+        "__TEXT,__text": 12289332,
+        "__TEXT,__stubs": 3192,
+        "__TEXT,__const": 4615224,
+        "__TEXT,__cstring": 74663,
+        "__TEXT,__unwind_info": 114776,
+        "__TEXT,__eh_frame": 2048,
+        "__DATA_CONST,__got": 2280,
+        "__DATA_CONST,__const": 400704,
+        "__DATA,__data": 86952,
+        "__DATA,__thread_vars": 1920
+      }
+    }
+  ],
+  "layouts": {
+    "stack": {
+      "SigilName": "64",
+      "SigilRequest": "104",
+      "SubscriptionEntry": "112",
+      "Invocation": "144",
+      "Selector[int,int]": "64",
+      "ProtocolRequirement": "104"
+    },
+    "string": {
+      "SigilName": "16",
+      "SigilRequest": "56",
+      "SubscriptionEntry": "64",
+      "Invocation": "96",
+      "Selector[int,int]": "16",
+      "ProtocolRequirement": "56"
+    },
+    "shared": {
+      "SigilName": "16",
+      "SigilRequest": "56",
+      "SubscriptionEntry": "64",
+      "Invocation": "96",
+      "Selector[int,int]": "16",
+      "ProtocolRequirement": "56"
+    }
+  }
+}
