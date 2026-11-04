@@ -20,6 +20,10 @@ suite "immutable shared names":
     check dynamic == "literal"
     check "literal" == dynamic
     check dynamic != "different"
+    check dynamic.startsWith("lit")
+    check dynamic.startsWith("")
+    check not dynamic.startsWith("literal-too-long")
+    check not dynamic.startsWith("different")
     check hash(dynamic) == hash(literal)
     check cmp(dynamic, literal) == 0
     check default(SharedName) == initSharedName("")

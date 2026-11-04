@@ -55,21 +55,23 @@ proc initSharedName*(value: static string): SharedName {.inline.} =
     doAssert '\0' notin value, "SharedName cannot contain NUL bytes"
   SharedName(data: cstring(value), count: value.len)
 
-proc initSharedName*(value: string): SharedName =
+func initSharedName*(value: string): SharedName =
   ## Copy runtime bytes into one allocation shared by subsequent name copies.
   if value.len == 0:
     return
   if '\0' in value:
     raise newException(ValueError, "SharedName cannot contain NUL bytes")
-  let allocation = cast[ptr NameHeader](allocShared(
-    sizeof(NameHeader) + value.len + 1))
-  allocation.owners.store(1, moRelaxed)
-  let data = cast[cstring](cast[uint](allocation) + uint(sizeof(NameHeader)))
-  copyMem(data, unsafeAddr value[0], value.len)
-  cast[ptr UncheckedArray[char]](data)[value.len] = '\0'
-  result = SharedName(data: data, count: -value.len)
-  when defined(sigilsNameMetrics):
-    discard nameAllocations.fetchAdd(1, moRelaxed)
+  # The allocation is fresh and unpublished; only its private owner count changes.
+  {.cast(noSideEffect).}:
+    let allocation = cast[ptr NameHeader](allocShared(
+      sizeof(NameHeader) + value.len + 1))
+    allocation.owners.store(1, moRelaxed)
+    let data = cast[cstring](cast[uint](allocation) + uint(sizeof(NameHeader)))
+    copyMem(data, unsafeAddr value[0], value.len)
+    cast[ptr UncheckedArray[char]](data)[value.len] = '\0'
+    result = SharedName(data: data, count: -value.len)
+    when defined(sigilsNameMetrics):
+      discard nameAllocations.fetchAdd(1, moRelaxed)
 
 func len*(value: SharedName): int {.inline.} =
   if value.count < 0: -value.count else: value.count
@@ -105,6 +107,19 @@ proc `==`*(a: SharedName, b: string): bool {.inline.} =
     equalMem(a.data, unsafeAddr b[0], a.len)
 
 proc `==`*(a: string, b: SharedName): bool {.inline.} = b == a
+
+proc startsWith*(value: SharedName, prefix: string): bool =
+  if prefix.len > value.len:
+    return false
+  if prefix.len == 0:
+    return true
+  when nimvm:
+    for index in 0 ..< prefix.len:
+      if value.data[index] != prefix[index]:
+        return false
+    true
+  else:
+    equalMem(value.data, unsafeAddr prefix[0], prefix.len)
 
 proc cmp*(a, b: SharedName): int =
   let common = min(a.len, b.len)

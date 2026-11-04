@@ -1,0 +1,26 @@
+diff --git a/src/merenda/nimkit/foundation/types.nim b/src/merenda/nimkit/foundation/types.nim
+index d0b59805..27932e7d 100644
+--- a/src/merenda/nimkit/foundation/types.nim
++++ b/src/merenda/nimkit/foundation/types.nim
+@@ -9,7 +9,7 @@ when defined(macosx):
+   {.passc: "-Wno-incompatible-function-pointer-types".}
+ 
+ when not defined(nimdoc):
+-  when not sigilsSigilNameStringEnabled:
++  when not sigilsSigilNameStringEnabled and not sigilsSharedNamesEnabled:
+     {.error: "NimKit requires -d:sigils.sigNameAsString ".}
+   when not sigilsClosuresEnabled:
+     {.error: "NimKit requires -d:sigils.closures ".}
+diff --git a/src/merenda/nimkit/resources/resrcregistry.nim b/src/merenda/nimkit/resources/resrcregistry.nim
+index daf28de7..8028c063 100644
+--- a/src/merenda/nimkit/resources/resrcregistry.nim
++++ b/src/merenda/nimkit/resources/resrcregistry.nim
+@@ -1013,7 +1013,7 @@ proc initNimKitResourceRegistry*(): ResourceRegistry =
+       true,
+     getter = proc(view: View, _: ResourcePropertyContext): ResourcePropertyReadResult =
+       ResourcePropertyReadResult(
+-        read: true, value: resourceValue(Control(view).action.name)
++        read: true, value: resourceValue($Control(view).action.name)
+       ),
+     nimTypeName = "string",
+   )

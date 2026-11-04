@@ -16,6 +16,10 @@ elif nameBackend == "class":
   import classNames
   type Name = ClassName
   template makeName(value: untyped): Name = initClassName(value)
+elif nameBackend == "descriptor":
+  import descriptorNames
+  type Name = DescriptorName
+  template makeName(value: untyped): Name = initDescriptorName(value)
 elif nameBackend == "string":
   type Name = string
   proc makeName(value: static string): Name = value
@@ -115,3 +119,5 @@ proc run() =
   echo "checksum=", checksum, " compareScore=", score
 
 run()
+when defined(nimAllocStats):
+  echo "teardown_allocations=", getAllocStats()
