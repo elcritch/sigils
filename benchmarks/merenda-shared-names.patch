@@ -2,9 +2,7 @@ diff --git a/src/merenda/nimkit/foundation/types.nim b/src/merenda/nimkit/founda
 index d0b59805..27932e7d 100644
 --- a/src/merenda/nimkit/foundation/types.nim
 +++ b/src/merenda/nimkit/foundation/types.nim
-@@ -9,7 +9,7 @@ when defined(macosx):
-   {.passc: "-Wno-incompatible-function-pointer-types".}
- 
+@@ -11,5 +11,5 @@ when defined(macosx):
  when not defined(nimdoc):
 -  when not sigilsSigilNameStringEnabled:
 +  when not sigilsSigilNameStringEnabled and not sigilsSharedNamesEnabled:
