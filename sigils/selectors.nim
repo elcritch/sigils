@@ -1271,7 +1271,7 @@ proc selectorImplNode(p: NimNode, runtimeSelectorName = ""): NimNode =
 
     let selectorValueDef = quote do:
       let `selectorValueCache` =
-        initSelector[`argsType`, `retType`](`selectorName`)
+        Selector[`argsType`, `retType`](name: toSigilName(`selectorName`))
 
       template `selectorValueProc`(): untyped =
         `selectorValueCache`
@@ -2543,8 +2543,8 @@ proc initInvocation*[A](
     handled: false,
   )
 
-proc initLocalInvocation[A, R](
-    selector: SigilName, args: var A, value: var R
+proc initLocalInvocation(
+    selector: SigilName, args: pointer, value: pointer
 ): Invocation {.raises: [].} =
   # Initialize the entire return storage, including unused managed fields.
   # Callers use noinit to avoid zeroing it twice; do not replace this constructor
@@ -2552,8 +2552,8 @@ proc initLocalInvocation[A, R](
   result = Invocation(
     selector: selector,
     handled: false,
-    argsPtr: addr args,
-    resultPtr: addr value,
+    argsPtr: args,
+    resultPtr: value,
   )
 
 proc argsAs*[A](invocation: Invocation, _: typedesc[A]): A =
@@ -3016,7 +3016,7 @@ proc perform*[A, R](
     value: var R,
 ): bool =
   var localArgs = ensureMove args
-  var invocation {.noinit.} = initLocalInvocation(selector.name, localArgs, value)
+  var invocation {.noinit.} = initLocalInvocation(selector.name, addr localArgs, addr value)
   result = obj.dispatch(invocation)
   if result and not invocation.resultWritten:
     rpcUnpack(value, invocation.result)
@@ -3028,7 +3028,7 @@ proc performLocal*[A, R](
     value: var R,
 ): bool =
   var localArgs = ensureMove args
-  var invocation {.noinit.} = initLocalInvocation(selector.name, localArgs, value)
+  var invocation {.noinit.} = initLocalInvocation(selector.name, addr localArgs, addr value)
   result = obj.dispatchLocal(invocation)
   if result and not invocation.resultWritten:
     rpcUnpack(value, invocation.result)
@@ -3063,7 +3063,7 @@ proc performNext*[A, R](
 ): bool =
   ## Perform the next lower local implementation for a selector.
   var localArgs = ensureMove args
-  var invocation {.noinit.} = initLocalInvocation(selector.name, localArgs, value)
+  var invocation {.noinit.} = initLocalInvocation(selector.name, addr localArgs, addr value)
   result = obj.dispatchNextLocal(invocation)
   if result and not invocation.resultWritten:
     rpcUnpack(value, invocation.result)
@@ -3159,7 +3159,7 @@ proc sendNextIfHandled*[R](obj: DynamicAgent, selector: Selector[tuple[], R]): b
   var value: R
   obj.performNext(selector, (), value)
 
-proc raiseUnhandledSelector(selector: SigilName) =
+proc raiseUnhandledSelector(selector: SigilName) {.noinline, noreturn.} =
   raise newException(UnhandledSelectorError, "unhandled selector: " & $selector)
 
 proc send*[A, R](

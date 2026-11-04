@@ -17,15 +17,21 @@ proc newOwnedVariant*[T](value: sink T): Variant =
   when defined(variantDebugTypes):
     result.mangledName = getMangledName(T)
 
+proc raiseNilVariant() {.noinline, noreturn.} =
+  raise newException(Exception, "Wrong variant type: nil")
+
 proc takeVariant*[T](value: Variant, _: typedesc[T]): T =
   ## Move a value out of an exclusively owned variant payload.
   ##
   ## Unlike `Variant.get`, this is destructive: callers must ensure that the
   ## variant is not retained for another delivery before using this proc.
   if value.isNil:
-    raise newException(
-      Exception, "Wrong variant type: nil. Expected type: " & getMangledName(T)
-    )
+    when debugVariantTypes:
+      raise newException(
+        Exception, "Wrong variant type: nil. Expected type: " & getMangledName(T)
+      )
+    else:
+      raiseNilVariant()
   if getTypeId(T) == value.typeId:
     let concrete = cast[VariantConcrete[T]](value)
     # `ensureMove` cannot prove exclusivity through the Variant reference;
