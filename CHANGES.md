@@ -1,3 +1,17 @@
+## 0.33.0
+
+- Share local signal fanout and actor dispatch across payload types while retaining
+  the single-recipient fast path and existing ownership rules.
+- Reduce selector constructor and invocation specialization; preserve slot
+  `inline` and `noinline` pragmas and share cold exception construction.
+- Add `ProtocolRequirement.valueType` for property discovery without parsing
+  diagnostic text. Generated protocol signatures are omitted by default; opt into
+  declaration-only signatures with `-d:sigilsPreserveProtocolSignatures`.
+- Share RChan synchronization and ring bookkeeping across payload types and send
+  modes, retaining typed swap/destruction adapters and reentrant cleanup.
+- Correct the recvIso test to allow caller-side moved-from resets while verifying
+  no payload sink/destruction during transfer and safe hook reentrancy.
+
 ## 0.32.1
 
 - Accept doc comments inside protocol declarations and implementations, including

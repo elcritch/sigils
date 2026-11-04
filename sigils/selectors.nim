@@ -18,6 +18,7 @@ type
     ## A selector requirement declared by a dynamic protocol.
     selector*: SigilName
     signature*: string
+    valueType*: string ## Property setter value type, independent of diagnostics.
     required*: bool
 
   ProtocolSignal* = object
@@ -152,11 +153,12 @@ proc selectorName*[A, R](selector: Selector[A, R]): SigilName =
   selector.name
 
 proc requirement*[A, R](
-    selector: Selector[A, R], required = true, signature = ""
+    selector: Selector[A, R], required = true, signature = "", valueType = ""
 ): ProtocolRequirement =
   result = ProtocolRequirement(
     selector: selector.name,
     signature: signature,
+    valueType: valueType,
     required: required,
   )
 
@@ -1271,7 +1273,7 @@ proc selectorImplNode(p: NimNode, runtimeSelectorName = ""): NimNode =
 
     let selectorValueDef = quote do:
       let `selectorValueCache` =
-        initSelector[`argsType`, `retType`](`selectorName`)
+        Selector[`argsType`, `retType`](name: toSigilName(`selectorName`))
 
       template `selectorValueProc`(): untyped =
         `selectorValueCache`
@@ -1825,6 +1827,28 @@ proc protocolObserverStatement(
       "      " & call & "\n"
   )
 
+const sigilsPreserveProtocolSignatures * {.booldefine.} = false
+  ## Opt into legacy declaration text for protocol introspection. Property value
+  ## types remain available independently of this setting.
+
+proc protocolSignature(item: NimNode): NimNode =
+  when sigilsPreserveProtocolSignatures:
+    let declaration = item.copyNimTree()
+    declaration[6] = newEmptyNode()
+    result = newLit(declaration.repr)
+  else:
+    result = newLit("")
+
+proc propertyValueTypeName(item: NimNode): NimNode =
+  let params = item[3]
+  let name = selectorIdentName(item[0])
+  if params.len == 2 and params[1].kind == nnkIdentDefs and
+      params[1].len == 3 and params[1][0].eqIdent("value") and
+      (name.endsWith("=") or (name.len > 3 and name.startsWith("set") and
+      name[3].isUpperAscii)):
+    return newLit(params[1][1].repr)
+  newLit("")
+
 proc addProtocolRequirement(
     selectorDecls: var seq[NimNode],
     reqs: var seq[NimNode],
@@ -1852,7 +1876,8 @@ proc addProtocolRequirement(
     bindSym"requirement",
     ident(selectorName),
     newLit(required),
-    newLit(requirementMethod.repr),
+    protocolSignature(requirementMethod),
+    propertyValueTypeName(requirementMethod),
   )
 
 proc addProtocolSignal(
@@ -1887,7 +1912,7 @@ proc addProtocolSignal(
   sigs.add newCall(
     bindSym"protocolSignal",
     newLit(signalName),
-    newLit(item.repr),
+    protocolSignature(item),
   )
 
 proc addProtocolSlot(
@@ -1928,7 +1953,7 @@ proc addProtocolSlot(
   slots.add newCall(
     bindSym"protocolSlot",
     newLit(slotName),
-    newLit(item.repr),
+    protocolSignature(item),
     newLit(eventName),
   )
 
@@ -2543,8 +2568,8 @@ proc initInvocation*[A](
     handled: false,
   )
 
-proc initLocalInvocation[A, R](
-    selector: SigilName, args: var A, value: var R
+proc initLocalInvocation(
+    selector: SigilName, args: pointer, value: pointer
 ): Invocation {.raises: [].} =
   # Initialize the entire return storage, including unused managed fields.
   # Callers use noinit to avoid zeroing it twice; do not replace this constructor
@@ -2552,8 +2577,8 @@ proc initLocalInvocation[A, R](
   result = Invocation(
     selector: selector,
     handled: false,
-    argsPtr: addr args,
-    resultPtr: addr value,
+    argsPtr: args,
+    resultPtr: value,
   )
 
 proc argsAs*[A](invocation: Invocation, _: typedesc[A]): A =
@@ -3016,7 +3041,7 @@ proc perform*[A, R](
     value: var R,
 ): bool =
   var localArgs = ensureMove args
-  var invocation {.noinit.} = initLocalInvocation(selector.name, localArgs, value)
+  var invocation {.noinit.} = initLocalInvocation(selector.name, addr localArgs, addr value)
   result = obj.dispatch(invocation)
   if result and not invocation.resultWritten:
     rpcUnpack(value, invocation.result)
@@ -3028,7 +3053,7 @@ proc performLocal*[A, R](
     value: var R,
 ): bool =
   var localArgs = ensureMove args
-  var invocation {.noinit.} = initLocalInvocation(selector.name, localArgs, value)
+  var invocation {.noinit.} = initLocalInvocation(selector.name, addr localArgs, addr value)
   result = obj.dispatchLocal(invocation)
   if result and not invocation.resultWritten:
     rpcUnpack(value, invocation.result)
@@ -3063,7 +3088,7 @@ proc performNext*[A, R](
 ): bool =
   ## Perform the next lower local implementation for a selector.
   var localArgs = ensureMove args
-  var invocation {.noinit.} = initLocalInvocation(selector.name, localArgs, value)
+  var invocation {.noinit.} = initLocalInvocation(selector.name, addr localArgs, addr value)
   result = obj.dispatchNextLocal(invocation)
   if result and not invocation.resultWritten:
     rpcUnpack(value, invocation.result)
@@ -3159,7 +3184,7 @@ proc sendNextIfHandled*[R](obj: DynamicAgent, selector: Selector[tuple[], R]): b
   var value: R
   obj.performNext(selector, (), value)
 
-proc raiseUnhandledSelector(selector: SigilName) =
+proc raiseUnhandledSelector(selector: SigilName) {.noinline, noreturn.} =
   raise newException(UnhandledSelectorError, "unhandled selector: " & $selector)
 
 proc send*[A, R](

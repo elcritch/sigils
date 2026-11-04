@@ -47,7 +47,7 @@ from system/ansi_c import c_raise
 
 type AgentSlotError* = object of CatchableError
 
-template checkSlotResponse(res: SigilResponse) =
+proc checkSlotResponse(res: SigilResponse) =
   when defined(nimscript) or defined(useJsonSerde):
     discard
   elif sigilsCborSerdeEnabled:
@@ -113,51 +113,55 @@ template callSlotsImpl(
   if hasPendingSubscription:
     callSubscription(pendingSubscription, true)
 
-template callSlotsLocalImpl(
-    obj: Agent,
-    procName: SigilName,
-    origin: SigilId,
-    args: untyped,
-    subsIter: untyped
-) =
-  template callSubscription(sub: Subscription, isLast: bool) =
-    {.cast(gcsafe).}:
-      if not sub.directSlot.isNil and not sub.endpoint.hasDispatcher():
-        if sub.endpoint.isNil or sub.endpoint.isAlive:
-          if isLast or sub.directSlotClone.isNil:
-            sub.directSlot(sub.tgt[], addr args)
-          else:
-            sub.directSlotClone(sub.tgt[], addr args, sub.cloneMode)
-      else:
-        var req =
-          if isLast:
-            initSigilRequest[typeof(obj), typeof(args)](
-              procName = procName,
-              args = move(args),
-              origin = origin,
-            )
-          else:
-            initSigilRequest[typeof(obj), typeof(args)](
-              procName = procName,
-              args = args.cloneForDelivery(sub.cloneMode),
-              origin = origin,
-            )
-        let res = deliverSubscription(sub, ensureMove(req), isLast)
-        checkSlotResponse(res)
+type LocalPayloadPacker = proc(
+  args: pointer, consume: bool, mode: CloneMode
+): SigilParams {.nimcall, gcsafe.}
 
+proc packLocalPayload[A](
+    args: pointer, consume: bool, mode: CloneMode
+): SigilParams {.nimcall, gcsafe.} =
+  let payload = cast[ptr A](args)
+  if consume:
+    result = rpcPack(move(payload[]))
+  else:
+    result = rpcPack(payload[].cloneForDelivery(mode))
+
+proc deliverLocalSubscription(
+    sub: Subscription, procName: SigilName, origin: SigilId,
+    args: pointer, pack: LocalPayloadPacker, isLast: bool
+) {.gcsafe.} =
+  {.cast(gcsafe).}:
+    if not sub.directSlot.isNil and not sub.endpoint.hasDispatcher():
+      if sub.endpoint.isNil or sub.endpoint.isAlive:
+        if isLast or sub.directSlotClone.isNil:
+          sub.directSlot(sub.tgt[], args)
+        else:
+          sub.directSlotClone(sub.tgt[], args, sub.cloneMode)
+    else:
+      var req = SigilRequest(
+        kind: Request, procName: procName, origin: origin,
+        params: pack(args, isLast, sub.cloneMode),
+      )
+      let res = deliverSubscription(sub, ensureMove(req), isLast)
+      checkSlotResponse(res)
+
+template callSlotsLocalImpl(
+    procName: SigilName, origin: SigilId, args: pointer,
+    pack: LocalPayloadPacker, subsIter: untyped
+) =
   var
     pendingSubscription: Subscription
     hasPendingSubscription = false
   for subscription in subsIter:
-    # Snapshot the lookahead before the pending slot can mutate the source sequence.
+    # Snapshot before invoking a slot that may mutate subscriptions.
     let nextSubscription = subscription
     if hasPendingSubscription:
-      callSubscription(pendingSubscription, false)
+      deliverLocalSubscription(pendingSubscription, procName, origin, args,
+          pack, false)
     pendingSubscription = nextSubscription
     hasPendingSubscription = true
-
   if hasPendingSubscription:
-    callSubscription(pendingSubscription, true)
+    deliverLocalSubscription(pendingSubscription, procName, origin, args, pack, true)
 
 method callSlots*(obj: Agent, req: sink SigilRequest) {.base, gcsafe.} =
   let procName = req.procName
@@ -190,8 +194,9 @@ method callSlotsCopy*(obj: AgentActor, req: SigilRequest) {.gcsafe.} =
   var ownedReq = req
   callSlotsImpl(Agent(obj), ownedReq, subs.items, false)
 
-proc callSlotsLocal*[A](
-    obj: Agent, procName: SigilName, origin: SigilId, args: var A
+proc dispatchLocalPayload(
+    obj: Agent, procName: SigilName, origin: SigilId, args: pointer,
+    pack: LocalPayloadPacker
 ) {.gcsafe.} =
   if obj of AgentActor:
     let actor = AgentActor(obj)
@@ -200,22 +205,29 @@ proc callSlotsLocal*[A](
     withLock actor.lock:
       for sub in actor.getSubscriptions(procName):
         subs.add(sub)
-    callSlotsLocalImpl(Agent(actor), procName, origin, args, subs.items)
+    callSlotsLocalImpl(procName, origin, args, pack, subs.items)
   else:
-    # A sole local slot needs no lookahead snapshot. Borrow its entry only until
-    # the call: a slot may disconnect itself or destroy the receiver, so nothing
-    # in this entry may be read after invoking it. Actors and proxy dispatch keep
-    # the owning snapshots used by the general delivery path.
-    if obj.subcriptions.len == 1:
-      let entry {.cursor.} = obj.subcriptions[0]
-      if entry.signal == procName or entry.signal == AnySigilName:
-        let sub {.cursor.} = entry.subscription
-        if not sub.directSlot.isNil and not sub.endpoint.hasDispatcher():
-          if sub.endpoint.isNil or sub.endpoint.isAlive:
-            {.cast(gcsafe).}:
-              sub.directSlot(sub.tgt[], addr args)
-          return
-    callSlotsLocalImpl(obj, procName, origin, args, obj.getSubscriptions(procName))
+    callSlotsLocalImpl(procName, origin, args, pack, obj.getSubscriptions(procName))
+
+proc callSlotsLocal*[A](
+    obj: Agent, procName: SigilName, origin: SigilId, args: var A
+) {.inline, gcsafe.} =
+  # A sole local slot needs no lookahead snapshot. Borrow its entry only until
+  # the call: a slot may disconnect itself or destroy the receiver, so nothing
+  # in this entry may be read after invoking it. Actors and proxy dispatch keep
+  # the owning snapshots used by the general delivery path.
+  if not (obj of AgentActor) and obj.subcriptions.len == 1:
+    let entry {.cursor.} = obj.subcriptions[0]
+    if entry.signal == procName or entry.signal == AnySigilName:
+      let sub {.cursor.} = entry.subscription
+      if not sub.directSlot.isNil and not sub.endpoint.hasDispatcher():
+        if sub.endpoint.isNil or sub.endpoint.isAlive:
+          {.cast(gcsafe).}:
+            sub.directSlot(sub.tgt[], addr args)
+        return
+  # The shared dispatcher consumes this borrowed pointer synchronously. Queued
+  # deliveries receive an owned SigilParams, never the stack pointer.
+  dispatchLocalPayload(obj, procName, origin, addr args, packLocalPayload[A])
 
 proc emit*(call: (Agent | WeakRef[Agent], SigilRequest)) =
   var (obj, req) = call

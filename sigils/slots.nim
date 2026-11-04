@@ -206,6 +206,9 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
 
       for param in parameters:
         rm[3].add param
+      for pragma in p[4]:
+        if pragma.eqIdent("inline") or pragma.eqIdent("noinline"):
+          rm[4].add pragma.copyNimTree()
       result.add rm
     else:
       # Forward declaration: emit a prototype so the symbol exists
@@ -215,6 +218,9 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
 
       for param in parameters:
         fwd[3].add param
+      for pragma in p[4]:
+        if pragma.eqIdent("inline") or pragma.eqIdent("noinline"):
+          fwd[4].add pragma.copyNimTree()
       result.add fwd
 
     var rpcType = paramTypeName.copyNimTree()

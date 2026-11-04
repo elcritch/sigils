@@ -18,7 +18,7 @@
 ## [C shared-memory channels](https://github.com/aprell/tasking-2.0/blob/master/src/channel_shm/channel.c).
 ##
 ## This implementation has since been rewritten for Sigils around a fixed
-## `seq[Isolated[T]]` ring and `system.swap`. It retains the mutex and
+## typed `seq[Isolated[T]]` storage, shared ring bookkeeping, and `system.swap`. It retains the mutex and
 ## condition-variable channel model from that lineage, but its payload lifetime,
 ## overwrite, and teardown handling have substantially diverged from the
 ## original byte-buffer implementation.
@@ -133,51 +133,84 @@ import std/[atomics, isolation, locks]
 # ------------------------------------------------------------------------------
 
 type
-  RChanData[T] = object
+  SwapSlot = proc(storage: pointer, index: int, value: pointer) {.nimcall,
+      raises: [], gcsafe.}
+
+  RChanData = object
     lock: Lock
     spaceAvailableCV, dataAvailableCV: Cond
-    slots: seq[Isolated[T]]
-    head, count: int
+    storage: pointer
+    capacity, head, count: int
+    swapSlot: SwapSlot
     atomicCounter: Atomic[int]
 
   RChan*[T] = object ## Typed channel
-    d: ptr RChanData[T]
+    d: ptr RChanData
 
 # Slots are allocated once. Unoccupied slots always contain empty values.
 # Only system.swap transfers payload ownership under the lock: unlike an
 # assignment or move, it cannot invoke T's lifetime hooks. Payload-owning locals
 # must outlive the locked scope so even their implicit destructors run unlocked.
 
-proc allocChannel[T](n: Positive): ptr RChanData[T] =
-  # newSeq applies T's field defaults. Vacant slots must instead contain the
-  # zero representation, or sending could swap a default payload back to src.
-  var slots = newSeqOfCap[Isolated[T]](n)
-  for _ in 0 ..< n:
-    slots.add(zeroDefault(Isolated[T]))
-  result = cast[ptr RChanData[T]](allocShared0(sizeof(RChanData[T])))
-  system.swap(result[].slots, slots)
+proc swapSlot[T](storage: pointer, index: int, value: pointer) {.nimcall,
+    raises: [], gcsafe.} =
+  # The header installs this adapter with storage of exactly the same T.
+  let slots = cast[ptr seq[Isolated[T]]](storage)
+  system.swap(slots[][index], cast[ptr Isolated[T]](value)[])
+
+proc destroyStorage[T](storage: pointer) {.nimcall, raises: [].} =
+  let slots = cast[ptr seq[Isolated[T]]](storage)
+  `=destroy`(slots[])
+  deallocShared(slots)
+
+proc newChannelData(
+    capacity: Positive, storage: pointer, swapSlot: SwapSlot
+): ptr RChanData =
+  result = cast[ptr RChanData](allocShared0(sizeof(RChanData)))
+  result[].storage = storage
+  result[].capacity = capacity
+  result[].swapSlot = swapSlot
   result[].atomicCounter.store(1, moRelaxed)
   initLock(result[].lock)
   initCond(result[].spaceAvailableCV)
   initCond(result[].dataAvailableCV)
 
-proc freeChannel[T](channel: ptr RChanData[T]) =
-  if channel.isNil:
-    return
+proc allocChannel[T](n: Positive): ptr RChanData =
+  # Retain typed seq allocation, alignment, and destruction. The separately
+  # allocated descriptor lets every channel share the same synchronization core.
+  # Vacant slots use zero representations rather than T's field defaults.
+  var slots = newSeqOfCap[Isolated[T]](n)
+  for _ in 0 ..< n:
+    slots.add(zeroDefault(Isolated[T]))
+  let storage = cast[ptr seq[Isolated[T]]](allocShared0(sizeof(seq[Isolated[T]])))
+  system.swap(storage[], slots)
+  try:
+    result = newChannelData(n, storage, swapSlot[T])
+  except:
+    destroyStorage[T](storage)
+    raise
 
-  # The final owner has exclusive access. Detach before invoking destructors:
-  # an empty slots buffer marks teardown and rejects reentrant sends/receives.
-  # Destroy the detached storage before dismantling the synchronization objects
-  # so payload destructors may still call peek/tryRecv/tryTake.
-  block:
-    var slots: seq[Isolated[T]]
-    system.swap(slots, channel[].slots)
-    channel[].head = 0
-    channel[].count = 0
+proc detachStorage(channel: ptr RChanData): pointer =
+  # Capacity zero marks teardown. Keep synchronization alive while payload
+  # destructors re-enter the channel.
+  result = channel[].storage
+  channel[].storage = nil
+  channel[].capacity = 0
+  channel[].head = 0
+  channel[].count = 0
+
+proc freeChannelData(channel: ptr RChanData) =
   deinitCond(channel[].spaceAvailableCV)
   deinitCond(channel[].dataAvailableCV)
   deinitLock(channel[].lock)
   deallocShared(channel)
+
+proc freeChannel[T](channel: ptr RChanData) =
+  if not channel.isNil:
+    let storage = detachStorage(channel)
+    # Keep cleanup typed so T's destructor effects remain visible to callers.
+    destroyStorage[T](storage)
+    freeChannelData(channel)
 
 func nextIndex(index, capacity: int): int {.inline.} =
   if index == capacity - 1:
@@ -185,23 +218,21 @@ func nextIndex(index, capacity: int): int {.inline.} =
   else:
     index + 1
 
-proc channelSend[T](
-    channel: ptr RChanData[T],
-    value: var Isolated[T],
-    blocking: static bool,
-    overwrite: static bool,
+proc channelSend(
+    channel: ptr RChanData,
+    value, dropped: pointer,
+    blocking: bool,
+    overwrite: bool,
 ): bool =
   assert not channel.isNil
-  when overwrite:
-    var dropped: Isolated[T]
   acquire(channel[].lock)
   try:
-    let capacity = channel[].slots.len
+    let capacity = channel[].capacity
     if capacity == 0:
       return false
-    when overwrite:
+    if overwrite:
       if channel[].count == capacity:
-        system.swap(dropped, channel[].slots[channel[].head])
+        channel[].swapSlot(channel[].storage, channel[].head, dropped)
         channel[].head = nextIndex(channel[].head, capacity)
         dec channel[].count
     elif blocking:
@@ -218,31 +249,31 @@ proc channelSend[T](
         channel[].count - remaining
       else:
         channel[].head + channel[].count
-    system.swap(value, channel[].slots[tail])
+    channel[].swapSlot(channel[].storage, tail, value)
     inc channel[].count
     signal(channel[].dataAvailableCV)
     result = true
   finally:
     release(channel[].lock)
 
-proc channelReceive[T](
-    channel: ptr RChanData[T], value: var Isolated[T], blocking: static bool
+proc channelReceive(
+    channel: ptr RChanData, value: pointer, blocking: bool
 ): bool =
   # Internal callers supply an empty value to leave the vacated slot empty.
   assert not channel.isNil
   acquire(channel[].lock)
   try:
-    if channel[].slots.len == 0:
+    if channel[].capacity == 0:
       return false
-    when blocking:
+    if blocking:
       while channel[].count == 0:
         wait(channel[].dataAvailableCV, channel[].lock)
     else:
       if channel[].count == 0:
         return false
 
-    system.swap(value, channel[].slots[channel[].head])
-    channel[].head = nextIndex(channel[].head, channel[].slots.len)
+    channel[].swapSlot(channel[].storage, channel[].head, value)
+    channel[].head = nextIndex(channel[].head, channel[].capacity)
     dec channel[].count
     signal(channel[].spaceAvailableCV)
     result = true
@@ -255,12 +286,12 @@ proc raiseClosedChannel() {.noinline, noreturn.} =
 # Public API
 # ------------------------------------------------------------------------------
 
-template frees(c) =
+template frees[T](c: RChan[T]) =
   if c.d != nil:
     # fetchSub returns the count before decrementing, so one means this is the
     # final owner.
     if c.d.atomicCounter.fetchSub(1, moAcquireRelease) == 1:
-      freeChannel(c.d)
+      freeChannel[T](c.d)
 
 when defined(nimAllowNonVarDestructor):
   proc `=destroy`*[T](c: RChan[T]) =
@@ -298,7 +329,7 @@ proc trySend*[T](c: RChan[T], src: sink Isolated[T]): bool {.inline.} =
   ##    operations.
   ##
   ## Returns `false` if the channel is full or is being destroyed.
-  result = channelSend(c.d, src, false, false)
+  result = channelSend(c.d, addr src, nil, false, false)
 
 template trySend*[T](c: RChan[T], src: T): bool =
   ## Helper template for `trySend <#trySend,RChan[T],sinkIsolated[T]>`_.
@@ -323,7 +354,7 @@ proc tryTake*[T](c: RChan[T], src: var Isolated[T]): bool {.inline.} =
   ##    operations.
   ##
   ## Returns `false` if the channel is full or is being destroyed.
-  result = channelSend(c.d, src, false, false)
+  result = channelSend(c.d, addr src, nil, false, false)
 
 proc tryRecv*[T](c: RChan[T], dst: var T): bool {.inline.} =
   ## Tries to receive a message from the channel `c` and fill `dst` with its value.
@@ -337,7 +368,7 @@ proc tryRecv*[T](c: RChan[T], dst: var T): bool {.inline.} =
   ##
   ## Returns `false` and does not change `dst` if no message was received.
   var received: Isolated[T]
-  if channelReceive(c.d, received, false):
+  if channelReceive(c.d, addr received, false):
     dst = extract(received)
     result = true
 
@@ -351,7 +382,7 @@ proc send*[T](c: RChan[T], src: sink Isolated[T]) {.inline.} =
   ## messages from the channel are removed.
   when defined(gcOrc) and defined(nimSafeOrcSend):
     GC_runOrc()
-  if not channelSend(c.d, src, true, false):
+  if not channelSend(c.d, addr src, nil, true, false):
     raiseClosedChannel()
 
 template send*[T](c: RChan[T], src: T) =
@@ -366,7 +397,9 @@ proc push*[T](c: RChan[T], src: sink Isolated[T]) {.inline.} =
   ## The memory of `src` is moved, not copied.
   when defined(gcOrc) and defined(nimSafeOrcSend):
     GC_runOrc()
-  if not channelSend(c.d, src, false, true):
+  # Own overwritten payloads outside the locked core, including implicit cleanup.
+  var dropped = zeroDefault(Isolated[T])
+  if not channelSend(c.d, addr src, addr dropped, false, true):
     raiseClosedChannel()
 
 template push*[T](c: RChan[T], src: T) =
@@ -382,7 +415,7 @@ proc recv*[T](c: RChan[T], dst: var T) {.inline.} =
   ## If the channel does not contain any messages this will block the thread until
   ## a message get sent to the channel.
   var received: Isolated[T]
-  if not channelReceive(c.d, received, true):
+  if not channelReceive(c.d, addr received, true):
     raiseClosedChannel()
   dst = extract(received)
 
@@ -394,7 +427,9 @@ proc recv*[T](c: RChan[T]): T {.inline.} =
 proc recvIso*[T](c: RChan[T]): Isolated[T] {.inline.} =
   ## Receives a message from the channel.
   ## Returns the isolated message directly, without extracting its payload.
-  if not channelReceive(c.d, result, true):
+  ## The caller may invoke `=wasMoved` while receiving the return value; this
+  ## happens after the channel lock has been released.
+  if not channelReceive(c.d, addr result, true):
     raiseClosedChannel()
 
 proc peek*[T](c: RChan[T]): int {.inline.} =
