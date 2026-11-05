@@ -107,6 +107,15 @@ proc updateProcsSig(
     for ch in node:
       ch.updateProcsSig(isPublic, gens, procLineInfo)
 
+proc raiseNilReceiver() {.noinline, noreturn.} =
+  raise newException(ValueError, "bad value")
+
+proc raiseInvalidReceiver() {.noinline, noreturn.} =
+  raise newException(ConversionError, "bad cast")
+
+proc raiseNoncopyableSlotPayload() {.noinline, noreturn.} =
+  raise newException(ValueError, "slot payload is not copyable")
+
 macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
   ## Define a remote procedure call.
   ## Input and return parameters are defined using proc's with the `rpc`
@@ -282,10 +291,10 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
     let agentSlotImpl = quote:
       proc slot(context: Agent, params: SigilParams) {.nimcall.} =
         if context == nil:
-          raise newException(ValueError, "bad value")
+          raiseNilReceiver()
         let `objId` = `contextType`(context)
         if `objId` == nil:
-          raise newException(ConversionError, "bad cast")
+          raiseInvalidReceiver()
         when `tupTyp` isnot tuple[]:
           var `paramsIdent`: `tupTyp`
           when `hasSinkPayload`:
@@ -298,23 +307,23 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
                 rpcUnpack(`paramsIdent`, params)
                 `mcall`
               else:
-                raise newException(ValueError, "slot payload is not copyable")
+                raiseNoncopyableSlotPayload()
           else:
             when compiles(rpcUnpack(`paramsIdent`, params)):
               rpcUnpack(`paramsIdent`, params)
               `mcall`
             else:
-              raise newException(ValueError, "slot payload is not copyable")
+              raiseNoncopyableSlotPayload()
         else:
           `mcall`
 
     let directSlotImpl = quote:
       proc directSlot(context: Agent, rawArgs: pointer) {.nimcall.} =
         if context == nil:
-          raise newException(ValueError, "bad value")
+          raiseNilReceiver()
         let `objId` = `contextType`(context)
         if `objId` == nil:
-          raise newException(ConversionError, "bad cast")
+          raiseInvalidReceiver()
         when `tupTyp` isnot tuple[]:
           let `localArgsIdent` = cast[ptr `tupTyp`](rawArgs)
         `localMcall`
@@ -324,10 +333,10 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
           context: Agent, rawArgs: pointer, `cloneModeIdent`: CloneMode
       ) {.nimcall.} =
         if context == nil:
-          raise newException(ValueError, "bad value")
+          raiseNilReceiver()
         let `objId` = `contextType`(context)
         if `objId` == nil:
-          raise newException(ConversionError, "bad cast")
+          raiseInvalidReceiver()
         when `tupTyp` isnot tuple[]:
           let `rawArgsIdent` = cast[ptr `tupTyp`](rawArgs)
           discard `cloneModeIdent`

@@ -1,6 +1,6 @@
 import std/unittest
 
-import variant
+import variantImportFixture as variant
 
 import sigils/selectors
 

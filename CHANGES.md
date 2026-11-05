@@ -1,3 +1,18 @@
+## 0.34.0
+
+- Share cold selector/slot adapter errors and borrow local selector arguments,
+  avoiding wrapper copies while preserving reusable packed invocations and the
+  public `argsAs` value-copy contract.
+- Own the Variant implementation in `sigils/svariant` and remove the external
+  `variant` dependency. Preserve incremental-build type identities, procedure
+  conversions, and ARC/ORC ownership. Keep per-type error text opt-in through
+  `-d:variantDebugTypes`, including errors for nil variants.
+- Evaluate `variantMatch` subjects once and fix procedure pragma removal when
+  generating allowed conversions.
+- Add a configurable selector/signal/RChan scaling benchmark and record Kosmo
+  size measurements and rejected optimizations in
+  `docs/selector-payload-review.md`.
+
 ## 0.33.0
 
 - Share local signal fanout and actor dispatch across payload types while retaining

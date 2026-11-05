@@ -496,15 +496,15 @@ suite "threaded agent slots":
         emit a.valueChanged(756809)
         emit a.valueChanged(628)
 
-        # thread.thread.joinThread(500)
-        # os.sleep(10)
         let ct = getCurrentSigilThread()
         var cnt = 0
-        for i in 1 .. 20:
+        let deadline = getMonoTime() + initDuration(seconds = 5)
+        # Poll until both replies arrive. A fixed number of 1 ms sleeps can
+        # expire before a worker is scheduled on a loaded CI machine.
+        while a.value != 756809 + 628 and getMonoTime() < deadline:
           cnt.inc(ct.pollAll())
-          if cnt >= 3:
-            break
-          os.sleep(1)
+          if a.value != 756809 + 628:
+            os.sleep(1)
         echo "polled: ", cnt
         check a.value == 756809 + 628
       GC_fullCollect()

@@ -9,6 +9,12 @@ export agents
 export options
 export signals
 
+proc raiseNilReceiver() {.noinline, noreturn.} =
+  raise newException(ValueError, "bad value")
+
+proc raiseInvalidReceiver() {.noinline, noreturn.} =
+  raise newException(ConversionError, "bad cast")
+
 type
   Selector*[A, R] = object
     ## A typed runtime method name.
@@ -136,6 +142,15 @@ type
     owner: WeakRef[DynamicAgent]
     selector: SigilName
     depth: int
+
+proc borrowInvocationArgs[A](packed: var A,
+    invocation: Invocation): lent A {.inline.} =
+  # Local arguments remain owned by perform() for the whole synchronous dispatch.
+  # Packed invocations still decode into adapter-owned storage and remain reusable.
+  if not invocation.argsPtr.isNil:
+    return cast[ptr A](invocation.argsPtr)[]
+  rpcUnpack(packed, invocation.params)
+  packed
 
 proc initSelector*[A, R](name: static string): Selector[A, R] =
   result.name = toSigilName(name)
@@ -1169,7 +1184,7 @@ when sigilsClosuresEnabled:
       dynSelf = genSym(nskParam, "self")
       receiver = genSym(nskLet, "receiver")
       invocation = genSym(nskParam, "invocation")
-      argsIdent = genSym(nskVar, "args")
+      argsIdent = genSym(nskLet, "args")
       call = nnkCall.newTree(callback)
 
     call.add receiver
@@ -1187,12 +1202,14 @@ when sigilsClosuresEnabled:
             `invocation`.setResult(`call`)
       elif retType.kind == nnkTupleTy and retType.len == 0:
         quote do:
-          var `argsIdent` = `invocation`.argsAs(`argsTypeAlias`)
+          var packedArgs: `argsTypeAlias`
+          let `argsIdent` {.cursor.} = borrowInvocationArgs(packedArgs, `invocation`)
           `call`
           `invocation`.setResult(())
       else:
         quote do:
-          var `argsIdent` = `invocation`.argsAs(`argsTypeAlias`)
+          var packedArgs: `argsTypeAlias`
+          let `argsIdent` {.cursor.} = borrowInvocationArgs(packedArgs, `invocation`)
           `invocation`.setResult(`call`)
 
     result = quote do:
@@ -1211,10 +1228,10 @@ when sigilsClosuresEnabled:
             `dynSelf`: DynamicAgent, `invocation`: var Invocation
         ) =
           if `dynSelf` == nil:
-            raise newException(ValueError, "bad value")
+            raiseNilReceiver()
           let `receiver` = `receiverType`(`dynSelf`)
           if `receiver` == nil:
-            raise newException(ConversionError, "bad cast")
+            raiseInvalidReceiver()
           `dispatchBody`
 
         `dynMethod`
@@ -1312,7 +1329,7 @@ proc selectorImplNode(p: NimNode, runtimeSelectorName = ""): NimNode =
       receiverName = params[1][0].copyNimTree()
       receiverType = params[1][1].copyNimTree()
       argsType = selectorArgsType(params, 2)
-      argsIdent = genSym(nskVar, "args")
+      argsIdent = genSym(nskLet, "args")
       dynSelf = genSym(nskParam, "self")
       invocation = genSym(nskParam, "invocation")
       call = nnkCall.newTree(implProc)
@@ -1337,12 +1354,14 @@ proc selectorImplNode(p: NimNode, runtimeSelectorName = ""): NimNode =
             `invocation`.setResult(`implProc`(`receiverName`))
       elif retType.kind == nnkTupleTy and retType.len == 0:
         quote do:
-          var `argsIdent` = `invocation`.argsAs(`argsType`)
+          var packedArgs: `argsType`
+          let `argsIdent` {.cursor.} = borrowInvocationArgs(packedArgs, `invocation`)
           `call`
           `invocation`.setResult(())
       else:
         quote do:
-          var `argsIdent` = `invocation`.argsAs(`argsType`)
+          var packedArgs: `argsType`
+          let `argsIdent` {.cursor.} = borrowInvocationArgs(packedArgs, `invocation`)
           `invocation`.setResult(`call`)
 
     result = newStmtList()
@@ -1350,10 +1369,10 @@ proc selectorImplNode(p: NimNode, runtimeSelectorName = ""): NimNode =
     result.add quote do:
       proc `dynProc`(`dynSelf`: DynamicAgent, `invocation`: var Invocation) =
         if `dynSelf` == nil:
-          raise newException(ValueError, "bad value")
+          raiseNilReceiver()
         let `receiverName` = `receiverType`(`dynSelf`)
         if `receiverName` == nil:
-          raise newException(ConversionError, "bad cast")
+          raiseInvalidReceiver()
         `dispatchBody`
 
 macro selectorImpl(p: untyped): untyped =
@@ -1410,7 +1429,7 @@ proc implementMethodBinding(item: NimNode): tuple[defs: seq[NimNode],
     receiverName = params[1][0].copyNimTree()
     receiverType = params[1][1].copyNimTree()
     argsType = selectorArgsType(params, 2)
-    argsIdent = genSym(nskVar, "args")
+    argsIdent = genSym(nskLet, "args")
     dynSelf = genSym(nskParam, "self")
     invocation = genSym(nskParam, "invocation")
     call = nnkCall.newTree(implProc)
@@ -1435,21 +1454,23 @@ proc implementMethodBinding(item: NimNode): tuple[defs: seq[NimNode],
           `invocation`.setResult(`implProc`(`receiverName`))
     elif retType.kind == nnkTupleTy and retType.len == 0:
       quote do:
-        var `argsIdent` = `invocation`.argsAs(`argsType`)
+        var packedArgs: `argsType`
+        let `argsIdent` {.cursor.} = borrowInvocationArgs(packedArgs, `invocation`)
         `call`
         `invocation`.setResult(())
     else:
       quote do:
-        var `argsIdent` = `invocation`.argsAs(`argsType`)
+        var packedArgs: `argsType`
+        let `argsIdent` {.cursor.} = borrowInvocationArgs(packedArgs, `invocation`)
         `invocation`.setResult(`call`)
 
   let dynDef = quote do:
     proc `dynProc`(`dynSelf`: DynamicAgent, `invocation`: var Invocation) =
       if `dynSelf` == nil:
-        raise newException(ValueError, "bad value")
+        raiseNilReceiver()
       let `receiverName` = `receiverType`(`dynSelf`)
       if `receiverName` == nil:
-        raise newException(ConversionError, "bad cast")
+        raiseInvalidReceiver()
       `dispatchBody`
 
   result.defs = @[implDef, dynDef]
@@ -3199,11 +3220,12 @@ proc toDynamicMethod*[T: DynamicAgent, A, R](
 ): DynamicMethod =
   result = proc(self: DynamicAgent, invocation: var Invocation) =
     if self == nil:
-      raise newException(ValueError, "bad value")
+      raiseNilReceiver()
     let obj = T(self)
     if obj == nil:
-      raise newException(ConversionError, "bad cast")
-    let args = invocation.argsAs(A)
+      raiseInvalidReceiver()
+    var packedArgs: A
+    let args {.cursor.} = borrowInvocationArgs(packedArgs, invocation)
     invocation.setResult(fn(obj, args))
 
 proc toDynamicMethod*[T: DynamicAgent, A, R](
@@ -3211,11 +3233,12 @@ proc toDynamicMethod*[T: DynamicAgent, A, R](
 ): DynamicMethod =
   result = proc(self: DynamicAgent, invocation: var Invocation) =
     if self == nil:
-      raise newException(ValueError, "bad value")
+      raiseNilReceiver()
     let obj = T(self)
     if obj == nil:
-      raise newException(ConversionError, "bad cast")
-    let args = invocation.argsAs(A)
+      raiseInvalidReceiver()
+    var packedArgs: A
+    let args {.cursor.} = borrowInvocationArgs(packedArgs, invocation)
     invocation.setResult(fn(obj, args))
 
 when sigilsClosuresEnabled:
