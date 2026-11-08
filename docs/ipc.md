@@ -1,10 +1,13 @@
-# Chronos IPC design
+# IPC design
 
-Sigils IPC carries slots, signals, and typed selectors across a
-Chronos stream. The first transport is deliberately small: CBOR messages inside
+Sigils IPC carries slots, signals, and typed selectors across a stream.
+The wire transport is deliberately small: CBOR messages inside
 a bounded length frame. On POSIX, a Chronos `AddressFamily.Unix` endpoint is a
 Unix-domain socket. On Windows, Chronos maps that same address family to a named
-pipe. Enable both the `chronos` and `ipc` package features to use this layer.
+pipe. Enable both the `chronos` and `ipc` package features for the Chronos peer.
+The `ipc` feature alone also provides an initial TCP selector peer via
+`sigils/ipc/selectorPeer`; its selector transport supports numeric IPv4 and IPv6 TCP
+addresses and Unix-domain sockets on POSIX.
 
 ## Wire model
 
