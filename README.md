@@ -251,9 +251,18 @@ desired scheduler. `CborRpcIoAgent` is the extension point for other transports.
 Selector I/O can run locally or on a helper selector thread; Chronos I/O runs on
 a helper Chronos thread.
 
-The existing `sigils/ipc` module remains as a compatibility interface for the
-bidirectional Chronos peer API. A Unix-family Chronos address uses a Unix-domain
-socket on POSIX and a named pipe on Windows.
+The `ipc` feature also provides a selector-backed bidirectional peer via
+`sigils/ipc/selectorPeer`. It supports numeric IPv4/IPv6 TCP and Unix-domain socket endpoints
+using `sigils/transports/selectorStream`; requests complete through signals on
+the owning selector thread. Keep peers and accepted streams alive and close
+them before closing the scheduler. Streams provide bounded output queues, read
+pause/resume, flush-before-close, and explicit deadlines. This initial transport
+does not yet provide
+Windows named pipes, DNS, TLS, or HTTP downloads.
+
+The `sigils/ipc` module also retains the Chronos peer API when the `chronos`
+feature is enabled. A Unix-family Chronos address uses a Unix-domain socket on
+POSIX and a named pipe on Windows.
 
 ```nim
 protocol Calculator:

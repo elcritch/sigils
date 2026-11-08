@@ -1,8 +1,11 @@
-## Cross-platform Sigils IPC over Chronos streams and CBOR.
+## Cross-platform Sigils IPC over CBOR streams.
 
-when not defined(features.sigils.ipc) or not defined(features.sigils.chronos):
-  {.error: "enable the sigils 'ipc' and 'chronos' package features before importing sigils/ipc".}
+when not defined(features.sigils.ipc):
+  {.error: "enable the sigils 'ipc' package feature before importing sigils/ipc".}
 
-import ipc/[chronosTransport, framing, protocol, router]
+import ipc/[protocol, router]
+export protocol, router
 
-export chronosTransport, framing, protocol, router
+when defined(features.sigils.chronos):
+  import ipc/[chronosTransport, framing]
+  export chronosTransport, framing
