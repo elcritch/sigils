@@ -1,3 +1,8 @@
+## Unreleased
+
+- Stop async-dispatch workers from re-triggering their own wake events while
+  idle; wake promptly on immediate shutdown and retain async I/O and timers.
+
 ## 0.34.0
 
 - Share cold selector/slot adapter errors and borrow local selector arguments,

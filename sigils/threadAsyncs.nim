@@ -70,7 +70,6 @@ method recv*(
     return true
   of NonBlocking:
     result = thread.inputs.tryRecv(msg)
-  thread.event.trigger()
 
 method setTimer*(
     thread: AsyncSigilThreadPtr, timer: SigilTimer
@@ -146,7 +145,8 @@ proc runAsyncThread*(targ: AsyncSigilThreadPtr) {.thread.} =
 
   thread.setupThread()
   while thread.isRunning():
-    asyncdispatch.drain()
+    # A finite wait lets asyncdispatch wake for sleepAsync timers.
+    asyncdispatch.poll(500)
 
   try:
     if thread.drain.load(moRelaxed):
@@ -168,11 +168,8 @@ proc start*(thread: ptr AsyncSigilThread) =
 proc stop*(thread: ptr AsyncSigilThread, immediate: bool = false,
     drain: bool = false) =
   thread[].running.store(false, moRelaxed)
-  thread[].drain.store(drain, moRelaxed)
-  if immediate:
-    thread[].drain.store(true, moRelaxed)
-  else:
-    thread[].event.trigger()
+  thread[].drain.store(drain and not immediate, moRelaxed)
+  thread[].event.trigger()
 
 proc join*(thread: ptr AsyncSigilThread) =
   thread[].thr.joinThread()
