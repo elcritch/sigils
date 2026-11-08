@@ -434,10 +434,9 @@ Sigils also includes selectors: a dynamic dispatch layer for delegate-style beha
 ## Queued HTTP downloads
 
 `sigils/http/downloads` provides selector-driven, bounded HTTP/1.1 GET
-queues. Move a `DnsResolver` to a worker and pass its proxy and the selector
-scheduler to `newHttpDownloadQueue`. Connect `downloadHeaders`, `downloadData`,
+queues. Pass the selector scheduler to `newHttpDownloadQueue`. Connect `downloadHeaders`, `downloadData`,
 and `downloadFinished` before calling `enqueue`. Body chunks are delivered
 on the selector scheduler; callers own their destination and must avoid blocking
 it. Requests can be cancelled by ID. The current implementation uses one
-connection per request and supports plain HTTP only; HTTPS, redirects and
-connection reuse are not yet implemented.
+connection per request and supports numeric IP addresses and plain HTTP only;
+hostname resolution, HTTPS, redirects and connection reuse are not yet implemented.

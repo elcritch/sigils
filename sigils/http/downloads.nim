@@ -1,16 +1,14 @@
 ## Queued streaming HTTP/1.1 GET requests on a selector scheduler.
 ## HTTPS requires a TLS transport and is not yet supported.
 
-import std/[deques, net, strutils, tables, times, uri]
-import ../[agents, core, threadProxies, threadSelectors]
-import ../net/resolver
+import std/[deques, net, strutils, tables, uri]
+import ../[agents, core, threadSelectors]
 import ../transports/selectorStream
 import responseParser
 
 type
   HttpDownloadQueue* = ref object of Agent
     thread: SigilSelectorThreadPtr
-    resolver: AgentProxy[DnsResolver]
     pending: Deque[HttpDownload]
     active: Table[uint64, HttpDownload]
     maxActive, maxPending, timeoutMs, maxBody: int
@@ -22,15 +20,10 @@ type
     id: uint64
     host, target: string
     port: Port
-    addresses: seq[string]
-    addressIndex: int
     stream: SelectorStream
-    retryTimer: SigilTimer
     parser: HttpResponseParser
     reportedHeaders, done: bool
 
-proc resolveRequested(queue: HttpDownloadQueue, id: uint64,
-    host: string) {.signal.}
 proc downloadHeaders*(queue: HttpDownloadQueue, id: uint64, status: int,
     headers: Table[string, string]) {.signal.}
 proc downloadData*(queue: HttpDownloadQueue, id: uint64,
@@ -38,34 +31,27 @@ proc downloadData*(queue: HttpDownloadQueue, id: uint64,
 proc downloadFinished*(queue: HttpDownloadQueue, id: uint64,
     error: string) {.signal.}
 
-proc resolved(queue: HttpDownloadQueue, answer: DnsResult) {.slot.}
 proc onConnected(job: HttpDownload) {.slot.}
-proc onRetry(job: HttpDownload) {.slot.}
 proc onData(job: HttpDownload, data: string) {.slot.}
 proc onClosed(job: HttpDownload, error: string) {.slot.}
 proc pump(queue: HttpDownloadQueue)
 
 proc newHttpDownloadQueue*(thread: SigilSelectorThreadPtr,
-    dns: AgentProxy[DnsResolver], maxActive = 4, maxPending = 128,
+    maxActive = 4, maxPending = 128,
     timeoutMs = 30_000, maxBody = 64 * 1024 * 1024): HttpDownloadQueue =
-  ## Construct on the selector thread, with a resolver moved to a worker.
-  if thread.isNil or dns.isNil or maxActive <= 0 or maxPending <= 0 or
+  ## Construct on the selector thread. URLs must use numeric IP addresses.
+  if thread.isNil or maxActive <= 0 or maxPending <= 0 or
       timeoutMs <= 0 or maxBody <= 0:
     raise newException(ValueError, "invalid HTTP queue configuration")
-  result = HttpDownloadQueue(thread: thread, resolver: dns,
+  result = HttpDownloadQueue(thread: thread,
     maxActive: maxActive, maxPending: maxPending, timeoutMs: timeoutMs,
     maxBody: maxBody, pending: initDeque[HttpDownload](),
     active: initTable[uint64, HttpDownload]())
-  connectThreaded(result, resolveRequested, dns, resolveDns)
-  connectThreaded(dns, dnsResolved, result, HttpDownloadQueue.resolved())
 
 proc finish(job: HttpDownload, error: string) =
   if job.done: return
   job.done = true
   let queue = job.owner
-  if not job.retryTimer.isNil:
-    job.retryTimer.cancel(queue.thread.toSigilThread())
-    job.retryTimer = nil
   if not job.stream.isNil: job.stream.close()
   queue.active.del(job.id)
   job.owner = nil
@@ -73,33 +59,14 @@ proc finish(job: HttpDownload, error: string) =
   queue.pump()
 
 proc startConnection(job: HttpDownload) =
-  while job.addressIndex < job.addresses.len:
-    let address = job.addresses[job.addressIndex]
-    job.addressIndex.inc()
-    try:
-      job.stream = connectTcp(job.owner.thread, address, job.port)
-      connect(job.stream, streamConnected, job, onConnected)
-      connect(job.stream, streamData, job, onData)
-      connect(job.stream, streamClosed, job, onClosed)
-      job.stream.setDeadline(job.owner.timeoutMs)
-      return
-    except CatchableError:
-      discard
-  job.finish("could not connect to any resolved address")
-
-proc onRetry(job: HttpDownload) {.slot.} =
-  job.retryTimer = nil
-  if not job.done:
-    job.startConnection()
-
-proc resolved(queue: HttpDownloadQueue, answer: DnsResult) {.slot.} =
-  if not queue.active.hasKey(answer.id): return
-  let job = queue.active[answer.id]
-  if answer.error.len > 0:
-    job.finish("DNS: " & answer.error)
-  else:
-    job.addresses = answer.addresses
-    job.startConnection()
+  try:
+    job.stream = connectTcp(job.owner.thread, job.host, job.port)
+    connect(job.stream, streamConnected, job, onConnected)
+    connect(job.stream, streamData, job, onData)
+    connect(job.stream, streamClosed, job, onClosed)
+    job.stream.setDeadline(job.owner.timeoutMs)
+  except CatchableError as error:
+    job.finish(error.msg)
 
 proc pump(queue: HttpDownloadQueue) =
   if queue.pumping or queue.stopped: return
@@ -108,11 +75,7 @@ proc pump(queue: HttpDownloadQueue) =
     while queue.pending.len > 0 and queue.active.len < queue.maxActive:
       let job = queue.pending.popFirst()
       queue.active[job.id] = job
-      if isIpAddress(job.host):
-        job.addresses = @[job.host]
-        job.startConnection()
-      else:
-        emit queue.resolveRequested(job.id, job.host)
+      job.startConnection()
   finally:
     queue.pumping = false
 
@@ -145,11 +108,7 @@ proc onData(job: HttpDownload, data: string) {.slot.} =
 proc onClosed(job: HttpDownload, error: string) {.slot.} =
   if job.done: return
   if error.len > 0:
-    if not job.reportedHeaders and job.addressIndex < job.addresses.len:
-      job.retryTimer = newSigilTimer(initDuration(milliseconds = 1), count = 1)
-      connect(job.retryTimer, timeout, job, onRetry)
-      job.retryTimer.start(job.owner.thread.toSigilThread())
-    else: job.finish(error)
+    job.finish(error)
   else:
     try:
       job.parser.finish()
@@ -169,6 +128,8 @@ proc enqueue*(queue: HttpDownloadQueue, url: string): uint64 =
       parsed.path.contains({'\r', '\n', '\0', ' '}) or
       parsed.query.contains({'\r', '\n', '\0', ' '}):
     raise newException(ValueError, "invalid HTTP URL")
+  if not isIpAddress(parsed.hostname):
+    raise newException(ValueError, "hostname resolution is not supported")
   let portNum = if parsed.port.len == 0: 80 else: parseInt(parsed.port)
   if portNum < 1 or portNum > 65535: raise newException(ValueError, "invalid HTTP port")
   var target = if parsed.path.len == 0: "/" else: parsed.path
@@ -199,7 +160,7 @@ proc cancel*(queue: HttpDownloadQueue, id: uint64): bool =
     return true
 
 proc close*(queue: HttpDownloadQueue) =
-  ## Cancel all work; the resolver worker remains owned by the caller.
+  ## Cancel all work.
   if queue.isNil or queue.stopped: return
   queue.stopped = true
   while queue.pending.len > 0: queue.pending.popFirst().finish("cancelled")

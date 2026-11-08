@@ -1,7 +1,6 @@
 import std/[net, tables, unittest]
 import sigils
 import sigils/threadSelectors
-import sigils/net/resolver
 import sigils/transports/selectorStream
 import sigils/http/downloads
 
@@ -28,22 +27,20 @@ proc finished(self: Observer, id: uint64, error: string) {.slot.} =
   self.error = error
 
 suite "HTTP downloads":
-  test "streams a response from a DNS-resolved server":
+  test "streams a response from a numeric address":
     let thread = newSigilSelectorThread()
     setLocalSigilThread(thread)
-    let worker = newSigilThread()
-    worker.start()
     block:
       let observer = Observer()
       let listener = listenTcp(thread)
       connect(listener, streamAccepted, observer, accepted)
-      var dns = newDnsResolver()
-      let proxy = dns.moveToThread(worker)
-      let queue = newHttpDownloadQueue(thread, proxy)
+      let queue = newHttpDownloadQueue(thread)
+      expect ValueError:
+        discard queue.enqueue("http://localhost/")
       connect(queue, downloadHeaders, observer, headers)
       connect(queue, downloadData, observer, data)
       connect(queue, downloadFinished, observer, finished)
-      discard queue.enqueue("http://localhost:" & $listener.localAddress().port.uint16 & "/")
+      discard queue.enqueue("http://127.0.0.1:" & $listener.localAddress().port.uint16 & "/")
       for i in 0..<1000:
         discard thread.poll()
         if observer.finished > 0: break
@@ -54,23 +51,17 @@ suite "HTTP downloads":
       queue.close()
       for stream in observer.server: stream.close()
       listener.close()
-    worker.setRunning(false)
-    worker.join()
     thread.closeSelectorThread()
 
   test "cancels pending and active requests once":
     let thread = newSigilSelectorThread()
     setLocalSigilThread(thread)
-    let worker = newSigilThread()
-    worker.start()
     block:
-      var dns = newDnsResolver()
-      let proxy = dns.moveToThread(worker)
-      let queue = newHttpDownloadQueue(thread, proxy, maxActive = 1)
+      let queue = newHttpDownloadQueue(thread, maxActive = 1)
       let observer = Observer()
       connect(queue, downloadFinished, observer, finished)
-      let first = queue.enqueue("http://localhost:1/")
-      let second = queue.enqueue("http://localhost:1/")
+      let first = queue.enqueue("http://127.0.0.1:1/")
+      let second = queue.enqueue("http://127.0.0.1:1/")
       check queue.cancel(second)
       check observer.finished == 1
       check observer.error == "cancelled"
@@ -78,6 +69,4 @@ suite "HTTP downloads":
       check observer.finished == 2
       check not queue.cancel(first)
       queue.close()
-    worker.setRunning(false)
-    worker.join()
     thread.closeSelectorThread()
