@@ -1,6 +1,7 @@
 ## Incremental HTTP/1.1 response parser for streamed downloads.
 
 import std/[strutils, tables]
+import httputils
 
 type
   HttpResponseError* = object of CatchableError
@@ -54,27 +55,21 @@ proc add*(parser: var HttpResponseParser, data: string): seq[string] =
         if parser.buffer.len > parser.maxHeader: invalid("headers too large")
         break
       if at + 4 > parser.maxHeader: invalid("headers too large")
-      let lines = parser.buffer[0..<at].split("\r\n")
-      let parts = lines[0].split(' ', maxsplit = 2)
-      if parts.len < 2 or parts[0] notin ["HTTP/1.0", "HTTP/1.1"] or
-          parts[1].len != 3 or parts[1][0] notin {'1'..'5'} or
-          parts[1][1] notin {'0'..'9'} or parts[1][2] notin {'0'..'9'}:
-        invalid("invalid HTTP status line")
-      parser.status = parseInt(parts[1])
-      for line in lines[1..^1]:
-        let colon = line.find(':')
-        if colon <= 0: invalid("invalid HTTP header")
-        let name = line[0..<colon].toLowerAscii()
-        for c in name:
-          if c notin {'a'..'z', '0'..'9', '!', '#', '$', '%', '&', '\'', '*',
-              '+', '-', '.', '^', '_', '`', '|', '~'}:
-            invalid("invalid HTTP header name")
-        let value = line[colon+1..^1].strip()
+      template headerBytes: untyped = parser.buffer.toOpenArrayByte(0, at + 3)
+      let parsed = httputils.parseResponse(headerBytes, false)
+      if parsed.failed() or parsed.length != at + 4 or
+          parsed.version notin [HttpVersion10, HttpVersion11] or
+          parsed.code < 100 or parsed.code > 599:
+        invalid("invalid HTTP response headers")
+      parser.status = parsed.code
+      for key, value in parsed.headers(headerBytes):
+        let name = key.toLowerAscii()
         if name in parser.headers:
           if name == "content-length" or name == "transfer-encoding":
             invalid("duplicate framing header")
           parser.headers[name].add(", " & value)
-        else: parser.headers[name] = value
+        else:
+          parser.headers[name] = value
       parser.consume(at + 4)
       if parser.status < 200: invalid("informational responses are unsupported")
       if parser.status in [204, 304]:
