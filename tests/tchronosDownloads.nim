@@ -1,4 +1,4 @@
-when defined(features.sigils.httpChronos) or defined(features.sigils.chronos):
+when defined(features.sigils.httpChronos):
   import std/[nativesockets, net, os, tables, unittest]
   import sigils
   import sigils/threadChronos

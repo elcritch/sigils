@@ -1,5 +1,9 @@
 ## Unreleased
 
+- Add optional selector, stdlib async, and Chronos HTTP download backends,
+  selectable independently through `httpSelector`, `httpAsync`, and
+  `httpChronos` package features.
+
 - Stop async-dispatch workers from re-triggering their own wake events while
   idle; wake promptly on immediate shutdown and retain async I/O and timers.
 
