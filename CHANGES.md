@@ -1,5 +1,8 @@
 ## Unreleased
 
+- Reject invalid stdlib download URLs and response statuses, and apply body
+  limits to redirect responses before following them.
+
 - Add optional selector, stdlib async, and Chronos HTTP download backends,
   selectable independently through `httpSelector`, `httpAsync`, and
   `httpChronos` package features.

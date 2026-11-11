@@ -1,7 +1,7 @@
 ## Queued HTTP downloads on an ``AsyncSigilThread`` using std/httpclient.
 ## Construct and use the actor on its owning async dispatcher thread.
 
-import std/[asyncdispatch, asyncstreams, deques, strutils, tables]
+import std/[asyncdispatch, asyncstreams, deques, strutils, tables, uri]
 import ../[actors, core]
 import stdlibClient
 
@@ -37,25 +37,47 @@ proc newAsyncDownloadQueue*(maxActive = 4, maxPending = 128,
 
 proc pump(queue: AsyncDownloadQueue)
 
+proc redirectUrl(current, location: string): string =
+  if location.len == 0 or location.contains({'\r', '\n'}):
+    raise newException(ValueError, "invalid HTTP redirect location")
+  let target = combine(parseUri(current), parseUri(location))
+  if target.scheme.toLowerAscii() notin ["http", "https"] or
+      target.hostname.len == 0:
+    raise newException(ValueError, "invalid HTTP redirect location")
+  result = $target
+
 proc perform(queue: AsyncDownloadQueue, item: AsyncDownloadRequest,
     task: AsyncDownloadTask) {.async.} =
   var failure = ""
   try:
-    let response = await task.client.get(item.url)
-    var headers = initTable[string, string]()
-    for name, value in response.headers.pairs:
-      if name in headers: headers[name].add(", " & value)
-      else: headers[name] = value
-    if not task.cancelled:
-      emit queue.asyncDownloadHeaders(item.id, response.code.int, headers)
-    var total = 0
+    var currentUrl = item.url
+    var redirects = 0
     while not task.cancelled:
-      let (hasData, data) = await response.bodyStream.read()
-      if not hasData: break
-      if data.len > queue.maxBody - total:
-        raise newException(IOError, "HTTP response exceeds body limit")
-      total += data.len
-      emit queue.asyncDownloadData(item.id, data)
+      let response = await task.client.get(currentUrl)
+      let status = response.code.int
+      let follow = status in [301, 302, 303, 307, 308] and redirects < 5
+      var nextUrl = ""
+      if follow:
+        nextUrl = redirectUrl(currentUrl, response.headers.getOrDefault("Location"))
+      elif not task.cancelled:
+        var headers = initTable[string, string]()
+        for name, value in response.headers.pairs:
+          if name in headers: headers[name].add(", " & value)
+          else: headers[name] = value
+        emit queue.asyncDownloadHeaders(item.id, status, headers)
+      var total = 0
+      while not task.cancelled:
+        let (hasData, data) = await response.bodyStream.read()
+        if not hasData: break
+        if data.len > queue.maxBody - total:
+          raise newException(IOError, "HTTP response exceeds body limit")
+        total += data.len
+        if not follow: emit queue.asyncDownloadData(item.id, data)
+      if task.cancelled or not follow: break
+      task.client.close()
+      task.client = newAsyncHttpClient(maxRedirects = 0)
+      currentUrl = move nextUrl
+      inc redirects
   except CatchableError as error:
     failure = error.msg
   finally:
@@ -74,7 +96,8 @@ proc pump(queue: AsyncDownloadQueue) =
         queue.active.len < queue.maxActive:
       let item = queue.pending.popFirst()
       try:
-        let task = AsyncDownloadTask(id: item.id, client: newAsyncHttpClient())
+        let task = AsyncDownloadTask(id: item.id,
+          client: newAsyncHttpClient(maxRedirects = 0))
         queue.active[item.id] = task
         asyncCheck queue.perform(item, task)
       except CatchableError as error:

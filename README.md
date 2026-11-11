@@ -462,6 +462,12 @@ The selector backend does not yet implement hostname resolution, HTTPS,
 redirects, or connection reuse. The new async backends create a client per
 request and do not yet reuse connections; their cancellation and timeout
 behavior follows their underlying HTTP libraries. The stdlib backend follows
-redirects using `AsyncHttpClient` defaults; the Chronos queue reports redirect
-responses to the caller. A stdlib request cancelled during connection setup
-may finish cancellation only after the connection attempt completes.
+up to five redirects and applies the body limit to each response, including
+redirects; the Chronos queue reports redirect responses to the caller. A
+stdlib request cancelled during connection setup may finish cancellation only
+after the connection attempt completes.
+
+The stdlib backend compiles the installed Nim HTTP client with a guarded status
+parser adjustment so malformed response statuses become errors rather than
+defects. This relies on the structure of Nim's HTTP client source; an
+unrecognized implementation fails at compile time and may require an update.

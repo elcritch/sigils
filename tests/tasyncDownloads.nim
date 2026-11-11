@@ -42,6 +42,48 @@ proc serve(fd: SocketHandle) {.thread.} =
 proc serveBadStatus(fd: SocketHandle) {.thread.} =
   serveResponse(fd, "HTTP/1.1 700 Nope\r\nContent-Length: 0\r\n\r\n")
 
+proc serveLargeRedirect(fd: SocketHandle) {.thread.} =
+  serveResponse(fd, "HTTP/1.1 302 Found\r\nLocation: /final\r\n" &
+    "Content-Length: 5\r\nConnection: close\r\n\r\nhello")
+
+proc serveRedirect(fd: SocketHandle) {.thread.} =
+  serveResponse(fd, "HTTP/1.1 302 Found\r\nLocation: /final\r\n" &
+    "Content-Length: 1\r\nConnection: close\r\n\r\nx")
+  serve(fd)
+
+proc runRedirect(serverProc: proc(fd: SocketHandle) {.thread.}, maxBody: int):
+    tuple[finished: bool, status: int, body, error: string] =
+  startLocalThreadDefault()
+  let home = getCurrentSigilThread()
+  let listener = newSocket(buffered = false)
+  listener.bindAddr(Port(0), "127.0.0.1")
+  listener.listen()
+  listener.getFd().setBlocking(false)
+  let port = listener.getLocalAddr()[1]
+  var server: Thread[SocketHandle]
+  createThread(server, serverProc, listener.getFd())
+  let worker = newSigilAsyncThread()
+  worker.start()
+  block:
+    var queue = newAsyncDownloadQueue(maxBody = maxBody)
+    let proxy = queue.moveToThread(worker)
+    let observer = Observer()
+    connectThreaded(observer, submit, proxy, enqueueAsyncDownload)
+    connectThreaded(proxy, asyncDownloadHeaders, observer, Observer.headers())
+    connectThreaded(proxy, asyncDownloadData, observer, Observer.chunk())
+    connectThreaded(proxy, asyncDownloadFinished, observer,
+        Observer.recordFinished())
+    emit observer.submit(1, "http://127.0.0.1:" & $port.uint16 & "/")
+    for i in 0..<1500:
+      discard home.poll(NonBlocking)
+      if observer.finished: break
+      sleep(2)
+    result = (observer.finished, observer.status, observer.body, observer.error)
+  worker.stop()
+  worker.join()
+  server.joinThread()
+  listener.close()
+
 suite "stdlib async downloads":
   test "rejects URLs containing newlines":
     let queue = newAsyncDownloadQueue()
@@ -50,6 +92,20 @@ suite "stdlib async downloads":
     queue.enqueueAsyncDownload(1, "http://127.0.0.1/\r\n")
     check observer.finished
     check observer.error == "invalid or duplicate download request"
+
+  test "bounds redirect bodies before following":
+    let response = runRedirect(serveLargeRedirect, maxBody = 3)
+    check response.finished
+    check response.status == 0
+    check response.body == ""
+    check response.error == "HTTP response exceeds body limit"
+
+  test "follows a bounded relative redirect":
+    let response = runRedirect(serveRedirect, maxBody = 5)
+    check response.finished
+    check response.status == 200
+    check response.body == "hello"
+    check response.error == ""
 
   test "streams a queued request on a helper thread":
     startLocalThreadDefault()
