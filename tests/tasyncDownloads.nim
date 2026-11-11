@@ -37,6 +37,14 @@ proc serve(fd: SocketHandle) {.thread.} =
       client.close()
 
 suite "stdlib async downloads":
+  test "rejects URLs containing newlines":
+    let queue = newAsyncDownloadQueue()
+    let observer = Observer()
+    connect(queue, asyncDownloadFinished, observer, recordFinished)
+    queue.enqueueAsyncDownload(1, "http://127.0.0.1/\r\n")
+    check observer.finished
+    check observer.error == "invalid or duplicate download request"
+
   test "streams a queued request on a helper thread":
     startLocalThreadDefault()
     let home = getCurrentSigilThread()

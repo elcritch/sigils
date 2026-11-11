@@ -1,7 +1,7 @@
 ## Queued HTTP downloads on an ``AsyncSigilThread`` using std/httpclient.
 ## Construct and use the actor on its owning async dispatcher thread.
 
-import std/[asyncdispatch, asyncstreams, deques, httpclient, tables]
+import std/[asyncdispatch, asyncstreams, deques, httpclient, strutils, tables]
 import ../[actors, core]
 
 type
@@ -88,7 +88,7 @@ proc enqueueAsyncDownload*(queue: AsyncDownloadQueue, id: uint64,
   if queue.closed:
     emit queue.asyncDownloadFinished(id, "download queue is closed")
     return
-  if id == 0 or url.len == 0 or id in queue.active:
+  if id == 0 or url.len == 0 or url.contains({'\r', '\n'}) or id in queue.active:
     emit queue.asyncDownloadFinished(id, "invalid or duplicate download request")
     return
   for item in queue.pending:
