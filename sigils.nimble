@@ -28,3 +28,12 @@ feature "chronos":
 
 feature "ipc":
   requires "cborious"
+
+feature "httpSelector":
+  requires "httputils >= 0.5.0"
+
+feature "httpAsync":
+  discard
+
+feature "httpChronos":
+  requires "https://github.com/status-im/nim-chronos >= 4.4.0"

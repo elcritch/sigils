@@ -430,3 +430,44 @@ threadB.join()
 ## Selectors
 
 Sigils also includes selectors: a dynamic dispatch layer for delegate-style behavior, responder chains, protocols, and method wrappers when a signal is the wrong shape because you need one answer back. See [docs/selectors.md](docs/selectors.md) for the guide and examples.
+
+## Queued HTTP downloads
+
+Choose one or more package features and import `sigils/http`:
+
+- `httpSelector` provides `newHttpDownloadQueue` on a selector scheduler. It
+  currently accepts numeric IPv4/IPv6 addresses and plain HTTP only.
+- `httpAsync` provides `newAsyncDownloadQueue`, an actor for an
+  `AsyncSigilThread` using Nim's `AsyncHttpClient`. Import
+  `sigils/threadAsyncs` for the scheduler and enable `-d:ssl` for HTTPS.
+- `httpChronos` provides `newChronosDownloadQueue`, an actor for a
+  `SigilChronosThread`, and installs Chronos as a dependency. The selector
+  feature installs `httputils` for HTTP response header parsing.
+
+For example, a dependent package can use `requires "sigils[httpAsync]"`;
+when using Atlas, enable the chosen feature with `--feature=sigils.httpAsync`.
+Backends can be enabled together. Their APIs are importable directly from
+`sigils/http/downloads`, `sigils/http/asyncDownloads`, and
+`sigils/http/chronosDownloads`, respectively.
+
+The selector queue returns a request ID from `enqueue`. The async and Chronos
+actors accept a caller-supplied nonzero ID through their enqueue slots and emit
+headers, data chunks, and a terminal signal. Connect their signals through a
+proxy before submitting work; keep the scheduler alive until the requests finish
+or are cancelled. Each queue has configurable active, pending, and body limits.
+Callers own the destination for streamed data and must avoid blocking the
+scheduler. DNS lookups for the stdlib and Chronos backends run synchronously on
+their worker thread and cannot be interrupted while the system resolver blocks.
+The selector backend does not yet implement hostname resolution, HTTPS,
+redirects, or connection reuse. The new async backends create a client per
+request and do not yet reuse connections; their cancellation and timeout
+behavior follows their underlying HTTP libraries. The stdlib backend follows
+up to five redirects and applies the body limit to each response, including
+redirects; the Chronos queue reports redirect responses to the caller. A
+stdlib request cancelled during connection setup may finish cancellation only
+after the connection attempt completes.
+
+The stdlib backend compiles the installed Nim HTTP client with a guarded status
+parser adjustment so malformed response statuses become errors rather than
+defects. This relies on the structure of Nim's HTTP client source; an
+unrecognized implementation fails at compile time and may require an update.

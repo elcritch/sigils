@@ -1,3 +1,15 @@
+## Unreleased
+
+- Reject invalid stdlib download URLs and response statuses, and apply body
+  limits to redirect responses before following them.
+
+- Add optional selector, stdlib async, and Chronos HTTP download backends,
+  selectable independently through `httpSelector`, `httpAsync`, and
+  `httpChronos` package features.
+
+- Stop async-dispatch workers from re-triggering their own wake events while
+  idle; wake promptly on immediate shutdown and retain async I/O and timers.
+
 ## 0.34.0
 
 - Share cold selector/slot adapter errors and borrow local selector arguments,
