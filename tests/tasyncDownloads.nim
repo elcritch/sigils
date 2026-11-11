@@ -1,4 +1,4 @@
-import std/[nativesockets, net, os, tables, unittest]
+import std/[nativesockets, net, os, strutils, tables, unittest]
 import sigils
 import sigils/threadAsyncs
 import sigils/http/asyncDownloads
@@ -21,7 +21,7 @@ proc recordFinished(self: Observer, id: uint64, error: string) {.slot.} =
   self.error = error
   self.finished = true
 
-proc serve(fd: SocketHandle) {.thread.} =
+proc serveResponse(fd: SocketHandle, response: string) =
   var accepted = osInvalidSocket
   for i in 0..<1000:
     accepted = nativesockets.accept(fd)[0]
@@ -32,9 +32,15 @@ proc serve(fd: SocketHandle) {.thread.} =
     try:
       var data = newString(1024)
       discard client.recv(addr data[0], data.len)
-      client.send("HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\nhello")
+      client.send(response)
     finally:
       client.close()
+
+proc serve(fd: SocketHandle) {.thread.} =
+  serveResponse(fd, "HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\nhello")
+
+proc serveBadStatus(fd: SocketHandle) {.thread.} =
+  serveResponse(fd, "HTTP/1.1 700 Nope\r\nContent-Length: 0\r\n\r\n")
 
 suite "stdlib async downloads":
   test "rejects URLs containing newlines":
@@ -110,6 +116,38 @@ suite "stdlib async downloads":
       check observer.error == "HTTP response exceeds body limit"
       check observer.status == 200
       check observer.body.len <= 3
+    worker.stop()
+    worker.join()
+    server.joinThread()
+    listener.close()
+
+  test "reports a malformed status without crashing the worker":
+    startLocalThreadDefault()
+    let home = getCurrentSigilThread()
+    let listener = newSocket(buffered = false)
+    listener.bindAddr(Port(0), "127.0.0.1")
+    listener.listen()
+    listener.getFd().setBlocking(false)
+    let port = listener.getLocalAddr()[1]
+    var server: Thread[SocketHandle]
+    createThread(server, serveBadStatus, listener.getFd())
+    let worker = newSigilAsyncThread()
+    worker.start()
+    block:
+      var queue = newAsyncDownloadQueue()
+      let proxy = queue.moveToThread(worker)
+      let observer = Observer()
+      connectThreaded(observer, submit, proxy, enqueueAsyncDownload)
+      connectThreaded(proxy, asyncDownloadFinished, observer,
+          Observer.recordFinished())
+      emit observer.submit(1, "http://127.0.0.1:" & $port.uint16 & "/")
+      for i in 0..<1500:
+        discard home.poll(NonBlocking)
+        if observer.finished: break
+        sleep(2)
+      check observer.finished
+      check observer.error.startsWith("invalid HTTP response status")
+      check observer.status == 0
     worker.stop()
     worker.join()
     server.joinThread()

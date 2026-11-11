@@ -1,8 +1,9 @@
 ## Queued HTTP downloads on an ``AsyncSigilThread`` using std/httpclient.
 ## Construct and use the actor on its owning async dispatcher thread.
 
-import std/[asyncdispatch, asyncstreams, deques, httpclient, strutils, tables]
+import std/[asyncdispatch, asyncstreams, deques, strutils, tables]
 import ../[actors, core]
+import stdlibClient
 
 type
   AsyncDownloadRequest = object
