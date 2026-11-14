@@ -139,3 +139,81 @@ suite "collection notification ownership":
     let projection = rows.item(1)
     rows = nil
     check projection{}.get.text == "alive"
+
+  test "switching disconnects externally retained old projections":
+    let rows = newCollectionSigil(@[Row(id: 1, text: "one"), Row(id: 2,
+        text: "two")], key)
+    let old = rows.item(1)
+    let selection = newSigil(1)
+    var evaluations = 0
+    let derived = computedNow[string]:
+      inc evaluations
+      rows.item(selection{}){}.get(Row()).text
+    check evaluations == 1
+    selection <- 2
+    check derived{} == "two"
+    check evaluations == 2
+    check not connected(old, change, derived)
+    rows[1] = Row(id: 1, text: "changed")
+    check evaluations == 2
+    rows[2] = Row(id: 2, text: "updated")
+    check derived{} == "updated"
+    check evaluations == 3
+
+  test "aggregate computed values retain many projections without duplication":
+    var initial: seq[Row]
+    for id in 0 ..< 1000:
+      initial.add Row(id: id, text: $id)
+    let rows = newCollectionSigil(initial, key)
+    var evaluations = 0
+    let derived = computedNow[int]:
+      inc evaluations
+      var count = 0
+      for id in 0 ..< 1000:
+        if rows.item(id){}.isSome:
+          inc count
+      count
+    check derived{} == 1000
+    let retained = rows.unsafeGcCount
+    rows[500] = Row(id: 500, text: "changed")
+    check evaluations == 2
+    check derived{} == 1000
+    check rows.unsafeGcCount == retained
+
+  test "lazy computed disconnects old retained projections when evaluated":
+    let rows = newCollectionSigil(@[Row(id: 1, text: "one"), Row(id: 2,
+        text: "two")], key)
+    let old = rows.item(1)
+    let selection = newSigil(1)
+    let derived = computed[string]:
+      rows.item(selection{}){}.get(Row()).text
+    check derived{} == "one"
+    selection <- 2
+    check derived{} == "two"
+    check not connected(old, change, derived)
+    rows[1] = Row(id: 1, text: "changed")
+    check not derived.isDirty
+    rows[2] = Row(id: 2, text: "updated")
+    check derived.isDirty
+    check derived{} == "updated"
+
+  test "effects switch away from externally retained projections":
+    let rows = newCollectionSigil(@[Row(id: 1), Row(id: 2)], key)
+    let old = rows.item(1)
+    let selection = newSigil(1)
+    let internalSigilEffectRegistry = initSigilEffectRegistry()
+    var evaluations = 0
+    effect:
+      inc evaluations
+      discard rows.item(selection{}){}
+    check evaluations == 1
+    selection <- 2
+    emit internalSigilEffectRegistry.triggerEffects()
+    check evaluations == 2
+    rows[1] = Row(id: 1, text: "changed")
+    emit internalSigilEffectRegistry.triggerEffects()
+    check evaluations == 2
+    rows[2] = Row(id: 2, text: "changed")
+    emit internalSigilEffectRegistry.triggerEffects()
+    check evaluations == 3
+    discard old

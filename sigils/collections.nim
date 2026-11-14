@@ -28,6 +28,7 @@ type
     itemRefs: Table[K, ProjectionLink[Option[T]]]
     publishing: bool
     newItems: int
+    pruneAfter: int
 
 proc `=destroy`[T](handle: ProjectionHandle[T]) =
   if not handle.link.isNil:
@@ -51,10 +52,12 @@ template `{}`*(source: CollectionSource): untyped =
     let input = source
     when enableSigilBinding[^1]:
       mixin getInternalSigilIdent
-      input.connect(change, getInternalSigilIdent(), recompute)
       when input is CollectionValue and compiles(retainSource(
           getInternalSigilIdent(), input)):
+        input.connect(change, SigilBase(getInternalSigilIdent()), recompute)
         retainSource(getInternalSigilIdent(), input)
+      else:
+        input.connect(change, getInternalSigilIdent(), recompute)
     input.snapshot()
 
 proc len*[K, T](source: CollectionSigil[K, T]): int =
@@ -91,16 +94,6 @@ proc order*[K, T](source: CollectionSigil[K, T]): CollectionValue[seq[K]] =
 proc item*[K, T](source: CollectionSigil[K, T], key: K): CollectionValue[Option[T]] =
   ## Observe one identity. Removal publishes none; reinsertion publishes some.
   ## Observations retain the source, which holds only zeroing links back.
-  # Bound stale registry entries even if no further writes occur.
-  inc source.newItems
-  if source.newItems >= 64:
-    source.newItems = 0
-    var expired: seq[K]
-    for id, link in source.itemRefs:
-      if link.target.isNil:
-        expired.add id
-    for id in expired:
-      source.itemRefs.del(id)
   result = (if source.itemRefs.hasKey(key): source.itemRefs[
       key].target else: nil)
   if result.isNil:
@@ -108,6 +101,17 @@ proc item*[K, T](source: CollectionSigil[K, T], key: K): CollectionValue[Option[
     let link = ProjectionLink[Option[T]](target: result)
     result.handle.link = link
     source.itemRefs[key] = link
+    # Sweep only after enough new projections to amortize the table scan.
+    inc source.newItems
+    if source.newItems >= source.pruneAfter:
+      var expired: seq[K]
+      for id, entry in source.itemRefs:
+        if entry.target.isNil:
+          expired.add id
+      for id in expired:
+        source.itemRefs.del(id)
+      source.newItems = 0
+      source.pruneAfter = max(64, source.itemRefs.len)
 
 proc setValue*[K, T](source: CollectionSigil[K, T], values: seq[T]) =
   ## Validate and index the entire snapshot before mutation. Publish one whole
@@ -169,7 +173,7 @@ proc newCollectionSigil*[K, T](
 ): CollectionSigil[K, T] =
   if keyOf.isNil:
     raise newException(ValueError, "collection key getter cannot be nil")
-  result = CollectionSigil[K, T](keyOf: keyOf)
+  result = CollectionSigil[K, T](keyOf: keyOf, pruneAfter: 64)
   result.setValue(values)
 
 proc `[]=`*[K, T](source: CollectionSigil[K, T], key: K, value: T) =

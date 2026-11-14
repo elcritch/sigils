@@ -47,7 +47,8 @@ Projections are allocated only on demand. Repeated `item(id)` calls share a live
 observation. A projection retains its collection; the collection keeps a
 teardown-managed non-owning link back. Dropping projections releases them without
 a cycle. Expired item entries are pruned on changed publication and periodically
-as new observations are requested.
+as new observations are requested. Cache hits are expected O(1); pruning scans
+are amortized across newly created projections.
 
 Observation channels use the same signals/slots and scoped read mechanism.
 All collection and projection operations belong on one owning thread.
@@ -60,5 +61,7 @@ Single-item assignment still copies and validates a snapshot; it is not an O(1)
 persistent-data-structure update. Undo snapshots, sorting/filtering, and virtualized
 table/collection presentation remain controller responsibilities.
 
-Computed expressions retain temporary projections used in their most recent evaluation.
+Computed expressions retain projections used in their most recent evaluation and
+disconnect collection projections that are no longer read. Ordinary `Sigil`
+dependencies retain their existing subscription behavior.
 Explicit connections use normal Sigils ownership: keep the projection alive while observing it.
