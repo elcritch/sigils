@@ -7,6 +7,8 @@ A [signal and slots library](https://en.wikipedia.org/wiki/Signals_and_slots) im
 
 Note that this implementation shares many or most of the limitations you'd see in Qt's implementation. Sigils also includes a message-passing threading model; see `docs/threading.md` for the detailed architecture and safety notes.
 
+For reactive keyed value collections and targeted item observations, see the [collection Sigils guide](docs/collection-sigils.md).
+
 ## Changelog
 
 - v0.22 includes several potential breaking changes

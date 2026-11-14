@@ -5,6 +5,7 @@ import sigils/signals
 import sigils/slots
 import sigils/selectors
 import sigils/core
+import sigils/collections
 import sigils/threads
 
 when defined(features.sigils.ipc) and not defined(features.sigils.chronos):
@@ -13,7 +14,7 @@ when defined(features.sigils.ipc) and not defined(features.sigils.chronos):
 when defined(features.sigils.ipc) and defined(features.sigils.chronos):
   import sigils/ipc
 
-export weakrefs, agents, actors, signals, slots, selectors, threads, core
+export weakrefs, agents, actors, signals, slots, selectors, threads, core, collections
 
 when defined(features.sigils.ipc) and defined(features.sigils.chronos):
   export ipc

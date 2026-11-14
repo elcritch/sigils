@@ -1,3 +1,7 @@
+## Unreleased
+
+- Add keyed collection Sigils with targeted read-only order and item projections.
+
 ## 0.34.0
 
 - Share cold selector/slot adapter errors and borrow local selector arguments,
