@@ -4,6 +4,29 @@ Selectors are Sigils' dynamic dispatch layer. Use signals when you want to broad
 
 They are useful for delegate APIs, command routing, responder chains, hit testing, validation, parsing policies, and small runtime overrides.
 
+## Sending to Collections
+
+Import `sigils/hom` for synchronous local sends to multiple agents. The
+operations accept a typed selector and the same packed argument shape as
+`performLocal`. For example, `items.collectLocal(currentCaption(), ())`
+returns a `seq[Opt[string]]` with one entry per receiver.
+
+- `collectLocal(items, selector, args)` preserves the order and position of
+  all replies. An unhandled send, including a nil receiver, produces `none`.
+  A handled nil result remains `some(nil)`.
+- `selectLocal(items, predicate, args)` returns receivers whose Boolean
+  predicate answers true. Unhandled sends are omitted.
+- `sendEachLocal(items, command, args)` returns one handled flag per receiver
+  for commands with an empty-tuple result.
+- `collectEachLocal(items, selector, arguments)` sends the corresponding
+  argument to each receiver. Unequal lengths raise `ValueError` before sending.
+
+These operations snapshot membership before the first send and execute in order
+on the caller's thread. They do not walk responder chains, though local
+resolution and forwarding hooks still apply. Exceptions propagate immediately
+and earlier side effects remain. The common argument is passed to each send,
+and reference-bearing arguments and receivers retain normal Nim aliasing.
+
 ## Basic Use
 
 Import `sigils` or `sigils/selectors`, then define objects that inherit from `DynamicAgent`.
