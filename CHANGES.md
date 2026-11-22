@@ -2,7 +2,8 @@
 
 - Add `sigils/hom` for local selector sends to collections and inline iterators.
   Collect replies, select matching receivers, and search flat collections or
-  trees. Write selectors in call form with `collectSend` and `selectSend`.
+  trees. Write selectors in call form with `collectSend`, `selectSend`, and
+  `selectWhere`.
 - Apply declared argument defaults when ordinary selector calls omit them.
 
 ## 0.35.0

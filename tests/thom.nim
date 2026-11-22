@@ -20,6 +20,12 @@ protocol ItemProtocol from Item:
   method peer(self: Item): Item =
     nil
 
+  method childAt(self: Item, index: int = 0): Item =
+    if index in 0 ..< self.children.len:
+      self.children[index]
+    else:
+      nil
+
   method wrapName(self: Item, prefix: string = "(",
       suffix: string = ")"): string =
     prefix & self.name & suffix
@@ -193,6 +199,33 @@ suite "higher-order local messages":
     check fixture.surroundedCaption(view, suffix = "!") == "[Caption!"
     check [view].collectSend(fixture.surroundedCaption(suffix = "!")) ==
         @[Opt.some("[Caption!")]
+
+  test "selectWhere keeps original receivers after two local sends":
+    let
+      active = Item(active: true).withProto()
+      inactive = Item().withProto()
+      forwarded = Item()
+      first = Item(children: @[inactive, active]).withProto()
+      second = Item(children: @[active, inactive]).withProto()
+      missingPredicate = Item(children: @[inactive, forwarded]).withProto()
+      nilReply = Item().withProto()
+      missingProjection = Item()
+      items = @[missingProjection, first, nilReply, missingPredicate, second]
+      root = Item(children: items)
+    forwarded.setNextResponder(active)
+    missingProjection.setNextResponder(first)
+    proc childrenOf(node: Item): seq[Item] = node.children
+    var evaluated = 0
+    proc chosenIndex(): int =
+      inc evaluated
+      1
+
+    check items.selectWhere(childAt(index = chosenIndex()), isActive()) == @[first]
+    check evaluated == 1
+    check items.selectWhere(childAt(), isActive()) == @[second]
+    check root.depthFirst(childrenOf).selectWhere(childAt(), isActive()) == @[second]
+    check not compiles(items.selectWhere(itemName(), isActive()))
+    check not compiles(items.selectWhere(childAt(), itemName()))
 
   test "collect and select preserve order, missing replies, and nil results":
     let

@@ -109,10 +109,9 @@ when isMainModule:
   doAssert alice.reports == @[john, mary]
 
   # Section 4.1. The predicate sends a second message to the name.
-  doAssert employees.select(employeeName(), (), proc(name: Text): bool =
-    name.trySendLocal(textEquals(), "John").get(false)) == @[john]
-  doAssert employees.select(employeeName(), (), proc(name: Text): bool =
-    name.trySendLocal(hasPrefix(), "J").get(false)) == @[john, jane]
+  doAssert employees.selectWhere(employeeName(), textEquals("John")) == @[john]
+  doAssert employees.selectWhere(employeeName(), hasPrefix(prefix = "J")) ==
+    @[john, jane]
 
   # Section 4.4. An optional delegate send needs only one selector.
   let

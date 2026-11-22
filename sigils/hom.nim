@@ -281,14 +281,16 @@ proc collectEachLocal*[A, R](
   for argument in snapshotItems(args):
     result.add receiver.replyLocal(message, argument)
 
-proc collectionSend(operation, receivers, message: NimNode,
-    predicate: NimNode = nil): NimNode =
+proc captureSelectorCall(message: NimNode): NimNode =
   if message.kind notin {nnkCall, nnkCommand}:
     error("expected a call to a declared selector", message)
-  let captured = newCall(message[0], newCall(bindSym"SelectorCallCapture"))
+  result = newCall(message[0], newCall(bindSym"SelectorCallCapture"))
   for index in 1 ..< message.len:
-    captured.add message[index]
+    result.add message[index]
 
+proc collectionSend(operation, receivers, message: NimNode,
+    predicate: NimNode = nil): NimNode =
+  let captured = captureSelectorCall(message)
   let binding = genSym(nskLet, "selectorCall")
   let send = newCall(operation, receivers, newDotExpr(binding, ident"message"),
     newDotExpr(binding, ident"args"))
@@ -310,3 +312,23 @@ macro selectSend*(receivers, message: untyped): untyped =
 macro selectSend*(receivers, message, predicate: untyped): untyped =
   ## Keep receivers whose selector reply passes the predicate.
   collectionSend(bindSym"select", receivers, message, predicate)
+
+proc selectorReplyPredicate[R: DynamicAgent, A, B](
+    _: Selector[A, R], message: Selector[B, bool], args: B
+): proc(receiver: R): bool {.closure.} =
+  result = proc(receiver: R): bool =
+    receiver.matchesLocal(message, args, isTrue)
+
+macro selectWhere*(receivers, projection, predicate: untyped): untyped =
+  ## Keep receivers whose projected agent answers true to the predicate call.
+  ## Both sends are local. Nil replies and unhandled sends are skipped.
+  let
+    projectionCall = captureSelectorCall(projection)
+    predicateCall = captureSelectorCall(predicate)
+  result = quote do:
+    block:
+      let
+        attribute = `projectionCall`
+        test = `predicateCall`
+      select(`receivers`, attribute.message, attribute.args,
+        selectorReplyPredicate(attribute.message, test.message, test.args))

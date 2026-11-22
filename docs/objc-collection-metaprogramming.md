@@ -84,7 +84,7 @@ The collection examples use protocols to declare messages such as
 | Reuse the receiver and vary the argument | `title.collectEachLocal(appendText(), names)` |
 | Vary the receiver and the argument together | `titles.collectEachLocal(appendText(), names)` |
 | Give Alice each of Sally's reports | `alice.collectEachLocal(addReport(), sally.reports)` |
-| Select employees by a test on their name | `employees.select(employeeName(), (), namePredicate)` |
+| Select employees by a test on their name | `employees.selectWhere(employeeName(), hasPrefix("J"))` |
 
 The paired form requires equal lengths before sending. A selector with more
 than one parameter can take a tuple of arguments for each send. The optional

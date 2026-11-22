@@ -472,6 +472,18 @@ argument and uses the declared default for `prefix`. The explicit forms
 accept selector values chosen at runtime. All forms work with flat inputs
 and inline iterators.
 
+`selectWhere` takes two selector calls. The first returns a `DynamicAgent`
+or a subtype, and the second asks that agent a Boolean question. It keeps
+the original receiver when the second send answers true.
+
+```nim
+let matches = employees.selectWhere(employeeName(), hasPrefix(prefix = "J"))
+```
+
+Both sends use local dispatch. Nil projections and unhandled sends are
+skipped. Use `selectSend` with a reply predicate to test a value such as a
+plain string.
+
 ### Finding One Match
 
 `findFirst` and `findLast` from `sigils/hom` return an `Opt[T]`
