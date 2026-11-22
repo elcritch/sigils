@@ -1,3 +1,10 @@
+## 0.36.0
+
+- Add `sigils/hom` for local selector sends to collections and inline iterators.
+  Collect replies, select matching receivers, and search flat collections or
+  trees. Write selectors in call form with `collectSend` and `selectSend`.
+- Apply declared argument defaults when ordinary selector calls omit them.
+
 ## 0.35.0
 
 - Add keyed collection Sigils with targeted read-only order and item projections.
