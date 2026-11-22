@@ -160,6 +160,14 @@ let firstSaveView = root.findFirst(
 
 The tree overload starts at the root and follows `subviews` in view order. It can match any view in that tree. A caller can supply `accessibilityChildren` as the child relation and use an element predicate to apply any additional accessibility rules it needs. [NimKit accessibility traversal][traversal]
 
+The same traversal can supply receivers to collection operations. For example, the inspector can select views by their accessibility predicate as it walks the tree:
+
+```nim
+let accessibleViews = root.depthFirst(
+  proc(view: View): seq[View] = view.subviews()
+).selectLocal(isAccessibilityElement(), ())
+```
+
 ## Where observation would fit
 
 A one-shot bulk query and a live inspector column have different lifetimes. Sigils' `CollectionSigil[K, T]` can track membership/order and observe an item by stable key. A selector may also read plain widget fields. Updating a button title in place does not publish a new collection snapshot. A live query would need an event or tracked read covering each input to the selector, plus subscription teardown when a key disappears. For example, the default accessibility label setter writes a field, while the default accessibility value setter explicitly emits a notification. An inspector must establish which changes it can observe before it caches answers. [Keyed collection behavior](collection-sigils.md) · [NimKit accessibility setters][accessibility-setters]

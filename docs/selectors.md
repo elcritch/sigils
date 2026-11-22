@@ -21,23 +21,24 @@ returns a `seq[Opt[string]]` with one entry per receiver.
 - `collectEachLocal(items, selector, arguments)` sends the corresponding
   argument to each receiver. Unequal lengths raise `ValueError` before sending.
 
-These operations snapshot membership before the first send and execute in order
-on the caller's thread. They do not walk responder chains, though local
-resolution and forwarding hooks still apply. Exceptions propagate immediately
+For flat collections, these operations snapshot membership before the first
+send so a handler can safely change the original collection. Sends execute in
+order on the caller's thread and honor local resolution and forwarding hooks.
+The responder chain is skipped. Exceptions propagate immediately
 and earlier side effects remain. The common argument is passed to each send,
 and reference-bearing arguments and receivers retain normal Nim aliasing.
 
 ## Finding One Match
 
-`findFirst`, `findLast`, and `findAny` from `sigils/hom` return an `Opt[T]`
+`findFirst` and `findLast` from `sigils/hom` return an `Opt[T]`
 of the collection's element type. They snapshot membership and stop testing at
 a match. `findFirst` searches from the start and `findLast` searches from the
-end. Use `findAny` when the order of tests and the choice of match can vary.
+end.
 
 ```nim
 let delegate = controllers.findFirst(proc(controller: TextController): bool =
   controller.hasAdopted(TextFieldDelegate))
-let validator = controllers.findAny(validateText(), "draft")
+let validator = controllers.findFirst(validateText(), "draft")
 let placeholder = controllers.findFirst(placeholderText(), (),
   proc(text: string): bool = text.len > 0)
 ```
@@ -61,6 +62,18 @@ a predicate on its reply. An unhandled send skips the node as a match.
 Use `for node in root.depthFirst(childrenOf)` to reuse the traversal in other
 operations. In forward order, breaking the loop also skips expanding the
 current node. Pass `reverse = true` to iterate in the order used by `findLast`.
+
+`findFirst`, `collectLocal`, and `selectLocal` also accept an inline iterator
+directly. Each operation processes a receiver as the iterator yields it.
+
+```nim
+let labels = root.depthFirst(childrenOf).collectLocal(accessibilityLabel(), ())
+let accessible = root.depthFirst(childrenOf).selectLocal(isAccessibilityElement(), ())
+```
+
+When using an inline iterator directly, its traversal determines when members are
+read. For `depthFirst`, sends in forward order happen before the iterator asks
+for that node's children.
 
 ## Basic Use
 

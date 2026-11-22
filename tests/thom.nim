@@ -50,9 +50,6 @@ suite "higher-order local messages":
     visited.setLen(0)
     check items.findLast(isEven) == Opt.some(4)
     check visited == @[4]
-    visited.setLen(0)
-    check items.findAny(isEven).get() in [2, 4]
-    check visited.len in 1..3
     let empty: seq[int] = @[]
     check empty.findLast(isEven).isNone
 
@@ -66,8 +63,7 @@ suite "higher-order local messages":
     let items = [missing, inactive, first, last, Item(nil)]
     check items.findFirst(isActive(), ()) == Opt.some(first)
     check items.findLast(isActive(), ()) == Opt.some(last)
-    check items.findAny(isActive(), ()).get() in [first, last]
-    check [missing, inactive].findAny(isActive(), ()).isNone
+    check [missing, inactive].findFirst(isActive(), ()).isNone
     check not compiles(items.findFirst(itemName(), ()))
 
   test "selector search tests handled replies including nil":
@@ -80,7 +76,6 @@ suite "higher-order local messages":
     proc noPeer(value: Item): bool = value.isNil
     check items.findFirst(itemName(), (), published) == Opt.some(last)
     check items.findLast(itemName(), (), published) == Opt.some(last)
-    check items.findAny(itemName(), (), published) == Opt.some(last)
     check items.findFirst(peer(), (), noPeer) == Opt.some(first)
     check [missing].findFirst(peer(), (), noPeer).isNone
 
@@ -138,6 +133,21 @@ suite "higher-order local messages":
     check root.findLast(childrenOf, proc(node: Item): bool = false).isNone
     check Item(nil).findLast(childrenOf, isActive(), ()).isNone
 
+  test "tree iterators compose with collection sends and searches":
+    let
+      first = Item(name: "first", active: true).withProto()
+      second = Item(name: "second").withProto()
+      root = Item(children: @[first, second])
+    proc childrenOf(node: Item): seq[Item] = node.children
+    proc matches(name: string): bool = name == "second"
+
+    check root.depthFirst(childrenOf).collectLocal(itemName(), ()) ==
+        @[Opt.none(string), Opt.some("first"), Opt.some("second")]
+    check root.depthFirst(childrenOf).selectLocal(isActive(), ()) == @[first]
+    check root.depthFirst(childrenOf).findFirst(isActive(), ()) == Opt.some(first)
+    check root.depthFirst(childrenOf, reverse = true)
+      .findFirst(itemName(), (), matches) == Opt.some(second)
+
   test "collect and select preserve order, missing replies, and nil results":
     let
       first = Item(name: "first", active: true).withProto()
@@ -192,6 +202,19 @@ suite "higher-order local messages":
     check items.collectLocal(itemName(), ()) ==
       @[Opt.some("forwarded"), Opt.some("original")]
     check items[1] == replacement
+
+  test "paired dispatch snapshots arguments before calling handlers":
+    let last = Item().withProto()
+    var labels = @["first", "last"]
+    let first = Item()
+    first.setForwardInvocation(proc(self: DynamicAgent,
+        call: var Invocation): bool =
+      labels[1] = "replacement"
+      call.setResult(())
+      true
+    )
+    discard [first, last].collectEachLocal(rename(), labels)
+    check last.name == "last"
 
   test "exceptions stop later sends after earlier side effects":
     let first = Item(name: "before").withProto()

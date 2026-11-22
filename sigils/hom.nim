@@ -5,14 +5,35 @@ import selectors
 export results.Opt, results.some, results.none, results.get, results.isSome,
   results.isNone, results.`==`
 
+iterator snapshotItems[T](
+    receivers: openArray[T], reverse: static bool = false
+): T =
+  let members = @receivers
+  for offset in 0 ..< members.len:
+    let index = when reverse: members.high - offset else: offset
+    yield members[index]
+
+template firstMatching(T: typedesc, receivers, predicate: untyped): untyped =
+  block:
+    let matches = predicate
+    var found: Opt[T]
+    for receiver in receivers:
+      if matches(receiver):
+        found = Opt.some(receiver)
+        break
+    found
+
+template findFirst*[T](
+    receivers: iterable[T], predicate: proc(receiver: T): bool {.closure.}
+): Opt[T] =
+  ## Return the first matching item yielded by an iterator, or none.
+  firstMatching(T, receivers, predicate)
+
 proc findFirst*[T](
     receivers: openArray[T], predicate: proc(receiver: T): bool {.closure.}
 ): Opt[T] =
   ## Return the first match, or none. Snapshot membership before testing.
-  let members = @receivers
-  for receiver in members:
-    if predicate(receiver):
-      return Opt.some(receiver)
+  findFirst(snapshotItems(receivers), predicate)
 
 iterator depthFirst*[T](
     root: T, childrenOf: proc(node: T): seq[T] {.closure.},
@@ -44,35 +65,21 @@ proc findFirst*[T](
     predicate: proc(node: T): bool {.closure.}
 ): Opt[T] =
   ## Search a tree in depth-first pre-order. Return none when no node matches.
-  for node in root.depthFirst(childrenOf):
-    if predicate(node):
-      return Opt.some(node)
+  findFirst(root.depthFirst(childrenOf), predicate)
 
 proc findLast*[T](
     receivers: openArray[T], predicate: proc(receiver: T): bool {.closure.}
 ): Opt[T] =
   ## Search from the end and return the first match, or none.
   ## Snapshot membership before testing.
-  let members = @receivers
-  for index in countdown(members.high, 0):
-    let receiver = members[index]
-    if predicate(receiver):
-      return Opt.some(receiver)
+  findFirst(snapshotItems(receivers, reverse = true), predicate)
 
 proc findLast*[T](
     root: T, childrenOf: proc(node: T): seq[T] {.closure.},
     predicate: proc(node: T): bool {.closure.}
 ): Opt[T] =
   ## Search a tree in reverse pre-order. Return none when no node matches.
-  for node in root.depthFirst(childrenOf, reverse = true):
-    if predicate(node):
-      return Opt.some(node)
-
-proc findAny*[T](
-    receivers: openArray[T], predicate: proc(receiver: T): bool {.closure.}
-): Opt[T] =
-  ## Return a match, or none. The order of predicate calls is unspecified.
-  receivers.findFirst(predicate)
+  findFirst(root.depthFirst(childrenOf, reverse = true), predicate)
 
 proc matchesLocal[A, R](
     receiver: DynamicAgent, message: Selector[A, R], args: A,
@@ -81,14 +88,30 @@ proc matchesLocal[A, R](
   var value: R
   receiver.performLocal(message, args, value) and predicate(value)
 
+template findMatchingReply(T: typedesc, receivers, message, args,
+    predicate: untyped): untyped =
+  block:
+    let
+      selector = message
+      payload = args
+      matches = predicate
+    firstMatching(T, receivers, proc(receiver: T): bool =
+      receiver.matchesLocal(selector, payload, matches)
+    )
+
+template findFirst*[T: DynamicAgent, A, R](
+    receivers: iterable[T], message: Selector[A, R], args: A,
+    predicate: proc(value: R): bool {.closure.}
+): Opt[T] =
+  ## Find the first yielded receiver whose handled local reply passes the test.
+  findMatchingReply(T, receivers, message, args, predicate)
+
 proc findFirst*[T: DynamicAgent, A, R](
     receivers: openArray[T], message: Selector[A, R], args: A,
     predicate: proc(value: R): bool {.closure.}
 ): Opt[T] =
   ## Return the first receiver whose handled local reply passes the test.
-  receivers.findFirst(proc(receiver: T): bool =
-    receiver.matchesLocal(message, args, predicate)
-  )
+  findMatchingReply(T, snapshotItems(receivers), message, args, predicate)
 
 proc findFirst*[T: DynamicAgent, A, R](
     root: T, childrenOf: proc(node: T): seq[T] {.closure.},
@@ -96,18 +119,15 @@ proc findFirst*[T: DynamicAgent, A, R](
         value: R): bool {.closure.}
 ): Opt[T] =
   ## Search a tree in depth-first pre-order for a handled reply that passes the test.
-  root.findFirst(childrenOf, proc(node: T): bool =
-    node.matchesLocal(message, args, predicate)
-  )
+  findMatchingReply(T, root.depthFirst(childrenOf), message, args, predicate)
 
 proc findLast*[T: DynamicAgent, A, R](
     receivers: openArray[T], message: Selector[A, R], args: A,
     predicate: proc(value: R): bool {.closure.}
 ): Opt[T] =
   ## Search from the end for a receiver whose handled local reply passes the test.
-  receivers.findLast(proc(receiver: T): bool =
-    receiver.matchesLocal(message, args, predicate)
-  )
+  findMatchingReply(T, snapshotItems(receivers, reverse = true), message, args,
+    predicate)
 
 proc findLast*[T: DynamicAgent, A, R](
     root: T, childrenOf: proc(node: T): seq[T] {.closure.},
@@ -115,19 +135,16 @@ proc findLast*[T: DynamicAgent, A, R](
         value: R): bool {.closure.}
 ): Opt[T] =
   ## Search a tree in reverse pre-order for a handled reply that passes the test.
-  root.findLast(childrenOf, proc(node: T): bool =
-    node.matchesLocal(message, args, predicate)
-  )
-
-proc findAny*[T: DynamicAgent, A, R](
-    receivers: openArray[T], message: Selector[A, R], args: A,
-    predicate: proc(value: R): bool {.closure.}
-): Opt[T] =
-  ## Return a receiver whose handled local reply passes the test.
-  ## The order of predicate calls and the choice of match are unspecified.
-  receivers.findFirst(message, args, predicate)
+  findMatchingReply(T, root.depthFirst(childrenOf, reverse = true), message, args,
+    predicate)
 
 proc isTrue(value: bool): bool = value
+
+template findFirst*[T: DynamicAgent, A](
+    receivers: iterable[T], predicate: Selector[A, bool], args: A
+): Opt[T] =
+  ## Find the first yielded receiver whose local predicate answers true.
+  findMatchingReply(T, receivers, predicate, args, isTrue)
 
 proc findFirst*[T: DynamicAgent, A](
     receivers: openArray[T], predicate: Selector[A, bool], args: A
@@ -156,12 +173,31 @@ proc findLast*[T: DynamicAgent, A](
   ## Search a tree in reverse pre-order for a true local predicate reply.
   root.findLast(childrenOf, predicate, args, isTrue)
 
-proc findAny*[T: DynamicAgent, A](
-    receivers: openArray[T], predicate: Selector[A, bool], args: A
-): Opt[T] =
-  ## Return a receiver whose local predicate answers true, or none.
-  ## The order of predicate calls and the choice of match are unspecified.
-  receivers.findFirst(predicate, args)
+proc replyLocal[A, R](
+    receiver: DynamicAgent, message: Selector[A, R], args: A
+): Opt[R] =
+  var value: R
+  if receiver.performLocal(message, args, value):
+    result = Opt.some(value)
+
+template collectReplies[A, R](
+    receivers: untyped, message: Selector[A, R], args: A, capacity: int
+): seq[Opt[R]] =
+  block:
+    let
+      selector = message
+      payload = args
+    var replies = newSeqOfCap[Opt[R]](capacity)
+    for receiver in receivers:
+      replies.add receiver.replyLocal(selector, payload)
+    replies
+
+template collectLocal*[T: DynamicAgent, A, R](
+    receivers: iterable[T], message: Selector[A, R], args: A
+): seq[Opt[R]] =
+  ## Collect a local reply for every receiver yielded by an iterator.
+  ## Unhandled sends produce none.
+  collectReplies(receivers, message, args, 0)
 
 proc collectLocal*[T: DynamicAgent, A, R](
     receivers: openArray[T], message: Selector[A, R], args: A
@@ -169,35 +205,37 @@ proc collectLocal*[T: DynamicAgent, A, R](
   ## Send locally to each receiver and retain an entry for every reply.
   ## An unhandled send produces none, including for a nil receiver.
   ## Membership is snapshotted before the first synchronous send.
-  let members = @receivers
-  result = newSeqOfCap[Opt[R]](members.len)
-  for receiver in members:
-    var value: R
-    if receiver.performLocal(message, args, value):
-      result.add Opt.some(value)
-    else:
-      result.add Opt.none(R)
+  collectReplies(snapshotItems(receivers), message, args, receivers.len)
+
+template selectLocal*[T: DynamicAgent, A](
+    receivers: iterable[T], predicate: Selector[A, bool], args: A
+): seq[T] =
+  ## Keep yielded receivers whose local predicate answers true.
+  block:
+    let
+      selector = predicate
+      payload = args
+    var selected: seq[T]
+    for receiver in receivers:
+      if receiver.matchesLocal(selector, payload, isTrue):
+        selected.add receiver
+    selected
 
 proc selectLocal*[T: DynamicAgent, A](
     receivers: openArray[T], predicate: Selector[A, bool], args: A
 ): seq[T] =
   ## Keep receivers whose local predicate send returns true.
   ## Unhandled sends are omitted. Membership is snapshotted before dispatch.
-  let members = @receivers
-  for receiver in members:
-    if receiver.matchesLocal(predicate, args, isTrue):
-      result.add receiver
+  selectLocal(snapshotItems(receivers), predicate, args)
 
 proc sendEachLocal*[T: DynamicAgent, A](
     receivers: openArray[T], message: Selector[A, tuple[]], args: A
 ): seq[bool] =
   ## Send a command locally to every receiver, reporting which handled it.
   ## Membership is snapshotted before dispatch.
-  let members = @receivers
-  result = newSeqOfCap[bool](members.len)
-  for receiver in members:
-    var value: tuple[]
-    result.add receiver.performLocal(message, args, value)
+  result = newSeqOfCap[bool](receivers.len)
+  for receiver in snapshotItems(receivers):
+    result.add receiver.sendLocalIfHandled(message, args)
 
 proc collectEachLocal*[T: DynamicAgent, A, R](
     receivers: openArray[T], message: Selector[A, R], args: openArray[A]
@@ -211,8 +249,4 @@ proc collectEachLocal*[T: DynamicAgent, A, R](
     arguments = @args
   result = newSeqOfCap[Opt[R]](members.len)
   for index, receiver in members:
-    var value: R
-    if receiver.performLocal(message, arguments[index], value):
-      result.add Opt.some(value)
-    else:
-      result.add Opt.none(R)
+    result.add receiver.replyLocal(message, arguments[index])
