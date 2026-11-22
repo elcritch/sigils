@@ -4,6 +4,7 @@ import sigils/[hom, selectors]
 type Item = ref object of DynamicAgent
   name: string
   active: bool
+  children: seq[Item]
 
 protocol ItemProtocol from Item:
   method itemName(self: Item): string =
@@ -82,6 +83,39 @@ suite "higher-order local messages":
     check items.findAny(itemName(), (), published) == Opt.some(last)
     check items.findFirst(peer(), (), noPeer) == Opt.some(first)
     check [missing].findFirst(peer(), (), noPeer).isNone
+
+  test "tree search checks the root then descends in child order":
+    var visited, expanded: seq[int]
+    proc childrenOf(node: int): seq[int] =
+      expanded.add node
+      case node
+      of 1: @[2, 3]
+      of 2: @[4]
+      else: @[]
+    proc matches(node: int): bool =
+      visited.add node
+      node in [3, 4]
+
+    check 1.findFirst(childrenOf, matches) == Opt.some(4)
+    check visited == @[1, 2, 4]
+    check expanded == @[1, 2]
+    check 1.findFirst(childrenOf, proc(node: int): bool = node == 1) ==
+        Opt.some(1)
+    check expanded == @[1, 2]
+
+  test "tree selector search visits descendants of unhandled receivers":
+    let
+      target = Item(name: "target", active: true).withProto()
+      group = Item(children: @[Item(nil), target])
+      root = Item(children: @[group])
+    group.setNextResponder(target)
+    proc childrenOf(node: Item): seq[Item] = node.children
+    proc matches(name: string): bool = name == "target"
+
+    check root.findFirst(childrenOf, itemName(), (), matches) == Opt.some(target)
+    check root.findFirst(childrenOf, isActive(), ()) == Opt.some(target)
+    check root.findFirst(childrenOf, proc(node: Item): bool = false).isNone
+    check Item(nil).findFirst(childrenOf, isActive(), ()).isNone
 
   test "collect and select preserve order, missing replies, and nil results":
     let

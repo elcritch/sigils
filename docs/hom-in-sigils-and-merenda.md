@@ -149,7 +149,16 @@ let saveButton = root.orderedAccessibilityElements().findFirst(
   accessibilityLabel(), (), proc(label: string): bool = label == "Save")
 ```
 
-This stops querying labels at the first match. NimKit builds the full list of accessible descendants first. A search that also stops descending at the first match would take the child relation as an input and interleave discovery and matching. For a pre-order depth-first search, it would check the current view, then descend into each child's subtree in view order. Following `subviews` gives the view tree. Following `accessibilityChildren` gives the accessibility hierarchy. [NimKit accessibility traversal][traversal]
+This stops querying labels at the first match. NimKit builds the full list of accessible descendants first. To stop both querying and descending at the first match, pass the child relation to the tree overload of `findFirst`.
+
+```nim
+let firstSaveView = root.findFirst(
+  proc(view: View): seq[View] = view.subviews(),
+  accessibilityLabel(), (),
+  proc(label: string): bool = label == "Save")
+```
+
+The tree overload starts at the root and follows `subviews` in view order. It can match any view in that tree. A caller can supply `accessibilityChildren` as the child relation and use an element predicate to apply any additional accessibility rules it needs. [NimKit accessibility traversal][traversal]
 
 ## Where observation would fit
 

@@ -14,6 +14,25 @@ proc findFirst*[T](
     if predicate(receiver):
       return Opt.some(receiver)
 
+proc findFirst*[T](
+    root: T, childrenOf: proc(node: T): seq[T] {.closure.},
+    predicate: proc(node: T): bool {.closure.}
+): Opt[T] =
+  ## Search a tree in depth-first pre-order, including the root.
+  ## Skip nil ref nodes. Read each node's children only after its test fails.
+  ## The child relation must be acyclic. Return none when no node matches.
+  var pending = @[root]
+  while pending.len > 0:
+    let node = pending.pop()
+    when T is ref:
+      if node.isNil:
+        continue
+    if predicate(node):
+      return Opt.some(node)
+    let children = childrenOf(node)
+    for index in countdown(children.high, 0):
+      pending.add children[index]
+
 proc findLast*[T](
     receivers: openArray[T], predicate: proc(receiver: T): bool {.closure.}
 ): Opt[T] =
@@ -47,6 +66,16 @@ proc findFirst*[T: DynamicAgent, A, R](
     receiver.matchesLocal(message, args, predicate)
   )
 
+proc findFirst*[T: DynamicAgent, A, R](
+    root: T, childrenOf: proc(node: T): seq[T] {.closure.},
+    message: Selector[A, R], args: A, predicate: proc(
+        value: R): bool {.closure.}
+): Opt[T] =
+  ## Search a tree in depth-first pre-order for a handled reply that passes the test.
+  root.findFirst(childrenOf, proc(node: T): bool =
+    node.matchesLocal(message, args, predicate)
+  )
+
 proc findLast*[T: DynamicAgent, A, R](
     receivers: openArray[T], message: Selector[A, R], args: A,
     predicate: proc(value: R): bool {.closure.}
@@ -71,6 +100,13 @@ proc findFirst*[T: DynamicAgent, A](
 ): Opt[T] =
   ## Return the first receiver whose local predicate answers true, or none.
   receivers.findFirst(predicate, args, isTrue)
+
+proc findFirst*[T: DynamicAgent, A](
+    root: T, childrenOf: proc(node: T): seq[T] {.closure.},
+    predicate: Selector[A, bool], args: A
+): Opt[T] =
+  ## Search a tree in depth-first pre-order for a true local predicate reply.
+  root.findFirst(childrenOf, predicate, args, isTrue)
 
 proc findLast*[T: DynamicAgent, A](
     receivers: openArray[T], predicate: Selector[A, bool], args: A

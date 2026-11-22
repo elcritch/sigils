@@ -47,6 +47,16 @@ locally and test its reply. A Boolean selector can supply the test on its own.
 For other result types, pass a predicate on the reply. Unhandled selectors are
 skipped. An empty input or a search with no match returns `none`.
 
+`root.findFirst(childrenOf, predicate)` searches a tree in depth-first
+pre-order, beginning at `root` and visiting siblings in the order returned by
+`childrenOf`. Supply a proc that returns a `seq` of direct children. The
+search asks for a node's children only after the node fails the test, and it
+skips nil ref nodes. The child relation must be acyclic.
+
+Tree searches also support `root.findFirst(childrenOf, booleanSelector, args)`
+and `root.findFirst(childrenOf, selector, args, replyPredicate)`. An unhandled
+send leaves the node eligible for descent.
+
 ## Basic Use
 
 Import `sigils` or `sigils/selectors`, then define objects that inherit from `DynamicAgent`.
