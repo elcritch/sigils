@@ -11,6 +11,7 @@ import std/options
 import std/isolation
 import std/uri
 import std/asyncdispatch
+from std/times import initDuration, inMilliseconds
 
 import agents
 import threadBase
@@ -19,6 +20,8 @@ import core
 
 export smartptrs, isolation
 export threadBase
+
+const DrainTimeoutMs = 500
 
 type
   AsyncSigilThread* = object of SigilThread
@@ -142,15 +145,20 @@ proc runAsyncThread*(targ: AsyncSigilThreadPtr) {.thread.} =
   thread.setupThread()
   while thread[].running.load(moAcquire):
     # A finite wait lets asyncdispatch wake for sleepAsync timers.
-    asyncdispatch.poll(500)
+    asyncdispatch.poll()
 
   if thread.drain.load(moRelaxed):
-    while thread.execOne():
-      discard
-    try:
-      asyncdispatch.drain()
-    except ValueError:
-      discard
+    let deadline = getMonoTime() + initDuration(milliseconds = DrainTimeoutMs)
+    while true:
+      while thread.execOne():
+        discard
+      let remainingMs = inMilliseconds(deadline - getMonoTime()).int
+      if remainingMs <= 0:
+        break
+      try:
+        asyncdispatch.poll(remainingMs)
+      except ValueError:
+        break
 
 proc startLocalThreadDispatch*() =
   if not hasLocalSigilThread():
@@ -165,8 +173,8 @@ proc start*(thread: ptr AsyncSigilThread) =
 
 proc stop*(thread: ptr AsyncSigilThread, immediate: bool = false,
     drain: bool = false) =
-  ## Wake the worker and optionally process queued signals and pending async work.
-  ## Immediate shutdown skips draining.
+  ## Wake the worker. Draining processes queued signals and polls the async
+  ## dispatcher for up to 500 ms. Immediate shutdown skips draining.
   thread[].drain.store(drain and not immediate, moRelaxed)
   thread[].running.store(false, moRelease)
   thread[].event.trigger()

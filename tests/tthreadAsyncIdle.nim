@@ -1,10 +1,24 @@
-import std/[monotimes, os, times, unittest]
-import sigils/[core, threadAsyncs]
+import std/[asyncdispatch, atomics, monotimes, os, times, unittest]
+import sigils
+import sigils/threadAsyncs
 
 when defined(windows):
   import std/winlean
 else:
   import std/posix
+
+type DrainActor = ref object of AgentActor
+
+var followUpQueued: Atomic[bool]
+
+proc requestFollowUp(self: Agent) {.signal.}
+
+proc scheduleFollowUp(self: DrainActor) {.slot.} =
+  let worker = cast[AsyncSigilThreadPtr](getCurrentSigilThread())
+  callSoon(proc() {.gcsafe.} =
+    worker.send(ThreadSignal(kind: Trigger))
+    followUpQueued.store(true)
+  )
 
 proc processCpuSeconds(): float =
   when defined(windows):
@@ -54,6 +68,20 @@ suite "async thread idle behavior":
     thread.stop(drain = true)
     thread.start()
     thread.join()
+    check thread.peek() == 0
+
+  test "drain processes signals queued by async callbacks":
+    startLocalThreadDefault()
+    let thread = newSigilAsyncThread()
+    let source = Agent()
+    var actor = DrainActor()
+    let proxy = actor.moveToThread(thread)
+    connectThreaded(source, requestFollowUp, proxy, scheduleFollowUp)
+    emit source.requestFollowUp()
+    thread.stop(drain = true)
+    thread.start()
+    thread.join()
+    check followUpQueued.load()
     check thread.peek() == 0
 
   test "immediate stop skips queued signals even if drain is requested":
