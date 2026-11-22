@@ -136,6 +136,21 @@ doAssert children.collectSend(accessibilityLabel()) ==
 
 Sigils represents a selector without a return value using the empty tuple, so the editor can still see which setters were handled. A purpose-built command API could return just the handled flags. Signals and slots serve another purpose here. A setter can emit its normal change event, and observers can connect using the existing protocol machinery. Replacing the send with a broadcast would lose per-receiver replies. [Selectors and protocol events](selectors.md#protocols)
 
+## Recursion and composition
+
+The collection operations send to the receivers supplied by the caller. The original HOM paper also describes composing messages, for example selecting employees by applying a predicate to the result of their `name` message. In Sigils, `findFirst(accessibilityLabel(), (), predicate)` supports that query pattern for one match. F-Script's recursive patterns additionally apply messages at a chosen depth in nested arrays and preserve the array structure. [Higher Order Messaging, §4.1](https://scg.unibe.ch/archive/papers/Weih05aHigherOrderMessagingOOPSLA2005.pdf) · [OOPAL, §5.3](https://scg.unibe.ch/archive/papers/Moug03aOOPALOOPSLA.pdf)
+
+In a view tree, the caller chooses the edge to follow. `root.subviews()` gives the immediate children. NimKit's accessibility traversal visits accessible descendants and orders them for inspection, so the same selector query can search the whole subtree.
+
+```nim
+import sigils/hom
+
+let saveButton = root.orderedAccessibilityElements().findFirst(
+  accessibilityLabel(), (), proc(label: string): bool = label == "Save")
+```
+
+This stops querying labels at the first match. NimKit builds the full list of accessible descendants first. A search that also stops descending at the first match would take the child relation as an input and interleave discovery and matching. For a pre-order depth-first search, it would check the current view, then descend into each child's subtree in view order. Following `subviews` gives the view tree. Following `accessibilityChildren` gives the accessibility hierarchy. [NimKit accessibility traversal][traversal]
+
 ## Where observation would fit
 
 A one-shot bulk query and a live inspector column have different lifetimes. Sigils' `CollectionSigil[K, T]` can track membership/order and observe an item by stable key. A selector may also read plain widget fields. Updating a button title in place does not publish a new collection snapshot. A live query would need an event or tracked read covering each input to the selector, plus subscription teardown when a key disappears. For example, the default accessibility label setter writes a field, while the default accessibility value setter explicitly emits a notification. An inspector must establish which changes it can observe before it caches answers. [Keyed collection behavior](collection-sigils.md) · [NimKit accessibility setters][accessibility-setters]

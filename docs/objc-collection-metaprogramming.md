@@ -49,6 +49,8 @@ Philippe Mougin and Stéphane Ducasse combined Smalltalk messaging with APL's ar
 
 The numbers on the `@` signs specify nesting levels. They describe an outer and inner loop independently of the method being sent. Multiplication makes the result easy to check, but the rule applies to messages on application objects too. For example, the same arrangement could ask each candidate venue whether it can host each proposed event and produce a table of answers. [OOPAL, §5, figure 6][oopal]
 
+F-Script also has recursive message patterns for arrays nested inside arrays. For `X = {{1, 2}, {3}}`, `X @class` asks the two inner arrays for their classes. `X @@class` applies the first pattern to the second and asks the numbers for their classes, preserving the nested result shape. The repeated `@` specifies how many levels to descend. The numbered patterns in the table specify which inputs share a loop. [OOPAL, §§5.2–5.3][oopal]
+
 Another example from the paper is `P at: P salary > 3000`, where `P` holds pilots. `P salary` gathers salaries, `> 3000` produces a Boolean array, and `at:` uses that array to select the original pilots. The caller can reuse that Boolean array as a mask to select the same positions from a second, aligned array. One detail matters when reading such expressions. For implicit sends, F-Script first checks whether the array itself implements the method. An explicit message pattern lets the programmer direct a send to the elements. [OOPAL, §§5 and 7.1][oopal]
 
 ## What Apple shipped, and what people wanted next
