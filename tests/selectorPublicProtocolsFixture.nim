@@ -48,6 +48,16 @@ protocol PublicCaptionVariant of PublicCaptionedViewProtocol:
   method currentCaption(self: PublicView): string = ## Returns the stored caption.
     self.caption
 
+const defaultCaptionPrefix = "["
+
+method surroundedCaption*(prefix: string = defaultCaptionPrefix,
+    suffix: string = "]"): string {.selector.}
+
+method surroundStoredCaption*(
+    self: PublicView, prefix, suffix: string
+): string {.selector.} =
+  prefix & self.caption & suffix
+
 proc rememberWindowClose*(self: PublicController) {.slot.} =
   self.windowClosed = true
 
