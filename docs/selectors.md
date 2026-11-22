@@ -4,97 +4,6 @@ Selectors are Sigils' dynamic dispatch layer. Use signals when you want to broad
 
 They are useful for delegate APIs, command routing, responder chains, hit testing, validation, parsing policies, and small runtime overrides.
 
-## Sending to Collections
-
-Import `sigils/hom` for synchronous local sends to multiple agents. The
-operations accept a typed selector and the same packed argument shape as
-`performLocal`. For example, `items.collect(currentCaption(), ())`
-returns a `seq[Opt[string]]` with one entry per receiver.
-
-- `collect(items, selector, args)` preserves the order and position of
-  all replies. An unhandled send, including a nil receiver, produces `none`.
-  A handled nil result remains `some(nil)`.
-- `select(items, predicate, args)` returns receivers whose Boolean
-  selector answers true. Pass a fourth argument to test the reply of any
-  selector, as in `items.select(currentCaption(), (), isHeading)`.
-  Unhandled sends are omitted.
-- `sendEachLocal(items, command, args)` returns one handled flag per receiver
-  for commands with an empty-tuple result.
-- `collectEachLocal(items, selector, arguments)` sends the corresponding
-  argument to each receiver. Unequal lengths raise `ValueError` before sending.
-  Pass a single receiver to send it every argument in order.
-
-For flat collections, these operations snapshot membership before the first
-send so a handler can safely change the original collection. Sends execute in
-order on the caller's thread and honor local resolution and forwarding hooks.
-The responder chain is skipped. Exceptions propagate immediately
-and earlier side effects remain. The common argument is passed to each send,
-and reference-bearing arguments and receivers retain normal Nim aliasing.
-
-Use `collectSend` and `selectSend` to write the selector in its ordinary
-call form. They bind positional arguments, named arguments, and defaults
-before traversal and use the same local dispatch as `collect` and `select`.
-
-```nim
-let labels = views.collectSend(accessibilityLabel())
-let accessible = views.selectSend(isAccessibilityElement())
-let named = views.selectSend(accessibilityLabel(),
-  proc(label: string): bool = label == "Save")
-```
-
-The call form uses a declared selector, optionally qualified by its module.
-For example, `texts.collectSend(surround(suffix = "]"))` binds the named
-argument and uses the declared default for `prefix`. The explicit forms
-accept selector values chosen at runtime. All forms work with flat inputs
-and inline iterators.
-
-## Finding One Match
-
-`findFirst` and `findLast` from `sigils/hom` return an `Opt[T]`
-of the collection's element type. They snapshot membership and stop testing at
-a match. `findFirst` searches from the start and `findLast` searches from the
-end.
-
-```nim
-let delegate = controllers.findFirst(proc(controller: TextController): bool =
-  controller.hasAdopted(TextFieldDelegate))
-let validator = controllers.findFirst(validateText(), "draft")
-let placeholder = controllers.findFirst(placeholderText(), (),
-  proc(text: string): bool = text.len > 0)
-```
-
-The first example tests each element directly. The others send a selector
-locally and test its reply. A Boolean selector can supply the test on its own.
-For other result types, pass a predicate on the reply. Unhandled selectors are
-skipped. An empty input or a search with no match returns `none`.
-
-`root.findFirst(childrenOf, predicate)` searches a tree in depth-first
-pre-order, beginning at `root` and visiting siblings in the order returned by
-`childrenOf`. Supply a proc that returns a `seq` of direct children. The
-search asks for a node's children only after the node fails the test, and it
-skips nil ref nodes. The child relation must be acyclic.
-
-`root.findLast(childrenOf, predicate)` walks the exact reverse order. It
-visits the last child's subtree first and tests each parent after its children.
-Both methods stop at a match and support a Boolean selector or a selector with
-a predicate on its reply. An unhandled send skips the node as a match.
-
-Use `for node in root.depthFirst(childrenOf)` to reuse the traversal in other
-operations. In forward order, breaking the loop also skips expanding the
-current node. Pass `reverse = true` to iterate in the order used by `findLast`.
-
-`findFirst`, `collect`, and `select` also accept an inline iterator
-directly. Each operation processes a receiver as the iterator yields it.
-
-```nim
-let labels = root.depthFirst(childrenOf).collect(accessibilityLabel(), ())
-let accessible = root.depthFirst(childrenOf).select(isAccessibilityElement(), ())
-```
-
-When using an inline iterator directly, its traversal determines when members are
-read. For `depthFirst`, sends in forward order happen before the iterator asks
-for that node's children.
-
 ## Basic Use
 
 Import `sigils` or `sigils/selectors`, then define objects that inherit from `DynamicAgent`.
@@ -518,3 +427,94 @@ Prefer a normal method or responder chain first. Use forwarding hooks when the t
 A `Selector[A, R]` is a typed wrapper around a runtime `SigilName`. The `{.selector.}` macro turns an empty method declaration into a selector value plus a direct-send helper. When the method has a body, the macro wraps it as a `DynamicMethod` that unpacks invocation arguments and packs the result. With `-d:sigilsClosures`, closure installs use the same wrapper path, but store the user's closure in the generated `DynamicMethod` environment.
 
 Sending a selector builds an `Invocation` with packed params. Dispatch tries the local method stack, optional lazy resolution, a forwarding target, the next responder, and finally `forwardInvocation`. Required sends raise `UnhandledSelectorError` when nothing handles the invocation. Optional sends return `Option[R]` or a handled `bool`.
+
+## Sending to Collections
+
+Import `sigils/hom` for synchronous local sends to multiple agents. The
+operations accept a typed selector and the same packed argument shape as
+`performLocal`. For example, `items.collect(currentCaption(), ())`
+returns a `seq[Opt[string]]` with one entry per receiver.
+
+- `collect(items, selector, args)` preserves the order and position of
+  all replies. An unhandled send, including a nil receiver, produces `none`.
+  A handled nil result remains `some(nil)`.
+- `select(items, predicate, args)` returns receivers whose Boolean
+  selector answers true. Pass a fourth argument to test the reply of any
+  selector, as in `items.select(currentCaption(), (), isHeading)`.
+  Unhandled sends are omitted.
+- `sendEachLocal(items, command, args)` returns one handled flag per receiver
+  for commands with an empty-tuple result.
+- `collectEachLocal(items, selector, arguments)` sends the corresponding
+  argument to each receiver. Unequal lengths raise `ValueError` before sending.
+  Pass a single receiver to send it every argument in order.
+
+For flat collections, these operations snapshot membership before the first
+send so a handler can safely change the original collection. Sends execute in
+order on the caller's thread and honor local resolution and forwarding hooks.
+The responder chain is skipped. Exceptions propagate immediately
+and earlier side effects remain. The common argument is passed to each send,
+and reference-bearing arguments and receivers retain normal Nim aliasing.
+
+Use `collectSend` and `selectSend` to write the selector in its ordinary
+call form. They bind positional arguments, named arguments, and defaults
+before traversal and use the same local dispatch as `collect` and `select`.
+
+```nim
+let labels = views.collectSend(accessibilityLabel())
+let accessible = views.selectSend(isAccessibilityElement())
+let named = views.selectSend(accessibilityLabel(),
+  proc(label: string): bool = label == "Save")
+```
+
+The call form uses a declared selector, optionally qualified by its module.
+For example, `texts.collectSend(surround(suffix = "]"))` binds the named
+argument and uses the declared default for `prefix`. The explicit forms
+accept selector values chosen at runtime. All forms work with flat inputs
+and inline iterators.
+
+### Finding One Match
+
+`findFirst` and `findLast` from `sigils/hom` return an `Opt[T]`
+of the collection's element type. They snapshot membership and stop testing at
+a match. `findFirst` searches from the start and `findLast` searches from the
+end.
+
+```nim
+let delegate = controllers.findFirst(proc(controller: TextController): bool =
+  controller.hasAdopted(TextFieldDelegate))
+let validator = controllers.findFirst(validateText(), "draft")
+let placeholder = controllers.findFirst(placeholderText(), (),
+  proc(text: string): bool = text.len > 0)
+```
+
+The first example tests each element directly. The others send a selector
+locally and test its reply. A Boolean selector can supply the test on its own.
+For other result types, pass a predicate on the reply. Unhandled selectors are
+skipped. An empty input or a search with no match returns `none`.
+
+`root.findFirst(childrenOf, predicate)` searches a tree in depth-first
+pre-order, beginning at `root` and visiting siblings in the order returned by
+`childrenOf`. Supply a proc that returns a `seq` of direct children. The
+search asks for a node's children only after the node fails the test, and it
+skips nil ref nodes. The child relation must be acyclic.
+
+`root.findLast(childrenOf, predicate)` walks the exact reverse order. It
+visits the last child's subtree first and tests each parent after its children.
+Both methods stop at a match and support a Boolean selector or a selector with
+a predicate on its reply. An unhandled send skips the node as a match.
+
+Use `for node in root.depthFirst(childrenOf)` to reuse the traversal in other
+operations. In forward order, breaking the loop also skips expanding the
+current node. Pass `reverse = true` to iterate in the order used by `findLast`.
+
+`findFirst`, `collect`, and `select` also accept an inline iterator
+directly. Each operation processes a receiver as the iterator yields it.
+
+```nim
+let labels = root.depthFirst(childrenOf).collect(accessibilityLabel(), ())
+let accessible = root.depthFirst(childrenOf).select(isAccessibilityElement(), ())
+```
+
+When using an inline iterator directly, its traversal determines when members are
+read. For `depthFirst`, sends in forward order happen before the iterator asks
+for that node's children.
