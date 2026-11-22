@@ -18,21 +18,24 @@ let tasks = newCollectionSigil(@[Task(id: 1, title: "Draft")], taskId)
 let order = tasks.order       # CollectionValue[seq[int]]
 let first = tasks.item(1)     # CollectionValue[Option[Task]]
 tasks[1] = Task(id: 1, title: "Ready")
+assert tasks.get(1).title == "Ready"
 assert first{}.get.title == "Ready"
 assert order{} == @[1]
 ```
 
 - `tasks{}` / `snapshot()` returns the whole value snapshot; `<-` replaces it.
-- `tasks[id]` is an indexed lookup by **key**, raising `KeyError` when absent.
-  `get(id)` returns `Option[T]`; `contains`, `len`, `items`, and `pairs` are also available.
+- `tasks[id]` and `tasks.get(id)` both look up an item by **key** and raise
+  `KeyError` when the key is absent. Use `contains(id)` to check membership.
+  Collections also support `len`, `items`, and `pairs`.
 - `tasks.order` changes only when membership or ordering changes.
 - `tasks.item(id)` notifies when that item's value changes under `==`. It publishes
   `none(T)` on removal and follows the identity if it is reinserted.
 - `tasks[id] = value` replaces an existing item and requires the same key.
 
-Whole snapshots, order, and item projections support Sigils' scoped `{}` reads
-and explicit `change` subscriptions. Import `sigils/reactive` for computed values
-and reactive helpers.
+Use `{}` to read the current snapshot or projection value. Inside `computed` or
+`effect`, the read also registers a dependency. Snapshots and projections support
+explicit `change` subscriptions. Import `sigils/reactive` for computed values and
+reactive helpers.
 Read-only projections have no setter; commands publish through the collection,
 so they cannot accidentally diverge from the authoritative model.
 

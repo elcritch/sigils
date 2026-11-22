@@ -21,14 +21,17 @@ suite "keyed collection sigils":
     let order = rows.order
     let derived = computedNow[string]:
       discard order{}
-      rows.get(1).get(Row()).text & first{}.get(Row()).text
+      let lookupText = if rows.contains(1): rows.get(1).text else: ""
+      lookupText & first{}.get(Row()).text
     rows <- @[Row(id: 2), Row(id: 1, text: "new")]
     check derived{} == "newnew"
     check order{} == @[2, 1]
     rows <- @[]
     check first{}.isNone
+    check derived{} == ""
     rows <- @[Row(id: 1, text: "back")]
     check first{}.get.text == "back"
+    check derived{} == "backback"
 
   test "duplicate keys and invalid replacements leave values unchanged":
     let rows = newCollectionSigil(@[Row(id: 1, text: "one")], key)
@@ -37,7 +40,7 @@ suite "keyed collection sigils":
     expect ValueError:
       rows[1] = Row(id: 2)
     check rows[1].text == "one"
-    check rows.get(2).isNone
+    check not rows.contains(2)
 
   test "reject recursive publication from a snapshot key callback":
     let initial = @[Row(id: 1)]

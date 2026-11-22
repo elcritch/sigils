@@ -13,5 +13,14 @@ suite "standalone collections import":
     let order = tasks.order
     let first = tasks.item(1)
     tasks[1] = Task(id: 1, title: "Ready")
+    check tasks.get(1).title == "Ready"
     check first{}.get.title == "Ready"
     check order{} == @[1]
+
+  test "get and indexed lookup raise KeyError for a missing key":
+    let tasks = newCollectionSigil(@[Task(id: 1, title: "Draft")], taskId)
+    expect KeyError:
+      discard tasks.get(2)
+    expect KeyError:
+      discard tasks[2]
+    check tasks.item(2){}.isNone

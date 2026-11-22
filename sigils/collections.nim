@@ -70,10 +70,15 @@ proc `[]`*[K, T](source: CollectionSigil[K, T], key: K): T =
   ## Required lookup by stable key, not sequence position. Raises KeyError.
   source.values[source.positions[key]]
 
-proc get*[K, T](source: CollectionSigil[K, T], key: K): Option[T] =
-  let index = source.positions.getOrDefault(key, -1)
+proc get*[K, T](source: CollectionSigil[K, T], key: K): T =
+  ## Return the item for key. Raises KeyError when the key is absent.
+  source[key]
+
+proc lookupProjection[K, T](values: seq[T], positions: Table[K, int],
+    key: K): Option[T] =
+  let index = positions.getOrDefault(key, -1)
   if index >= 0:
-    result = some(source.values[index])
+    result = some(values[index])
 
 iterator items*[K, T](source: CollectionSigil[K, T]): T =
   for value in source.values:
@@ -97,7 +102,8 @@ proc item*[K, T](source: CollectionSigil[K, T], key: K): CollectionValue[Option[
   result = (if source.itemRefs.hasKey(key): source.itemRefs[
       key].target else: nil)
   if result.isNil:
-    result = CollectionValue[Option[T]](value: source.get(key), owner: source)
+    let value = lookupProjection(source.values, source.positions, key)
+    result = CollectionValue[Option[T]](value: value, owner: source)
     let link = ProjectionLink[Option[T]](target: result)
     result.handle.link = link
     source.itemRefs[key] = link
@@ -137,12 +143,7 @@ proc publish[K, T](source: CollectionSigil[K, T], values: seq[T]) =
     if observed.isNil:
       expired.add key
     else:
-      let index = positions.getOrDefault(key, -1)
-      let next =
-        if index < 0:
-          none(T)
-        else:
-          some(values[index])
+      let next = lookupProjection(values, positions, key)
       # Stage every live projection and use equality to decide which ones notify.
       let notify = observed.value != next
       updates.add (observed, next, notify)
