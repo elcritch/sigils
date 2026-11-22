@@ -14,24 +14,31 @@ proc findFirst*[T](
     if predicate(receiver):
       return Opt.some(receiver)
 
-proc findFirst*[T](
-    root: T, childrenOf: proc(node: T): seq[T] {.closure.},
-    predicate: proc(node: T): bool {.closure.}
-): Opt[T] =
-  ## Search a tree in depth-first pre-order, including the root.
-  ## Skip nil ref nodes. Read each node's children only after its test fails.
-  ## The child relation must be acyclic. Return none when no node matches.
+iterator depthFirst*[T](
+    root: T, childrenOf: proc(node: T): seq[T] {.closure.}
+): T {.inline.} =
+  ## Yield nodes in depth-first pre-order, including the root.
+  ## Skip nil ref nodes. Read a node's children when iteration resumes.
+  ## The child relation must be acyclic.
   var pending = @[root]
   while pending.len > 0:
     let node = pending.pop()
     when T is ref:
       if node.isNil:
         continue
-    if predicate(node):
-      return Opt.some(node)
+    yield node
     let children = childrenOf(node)
     for index in countdown(children.high, 0):
       pending.add children[index]
+
+proc findFirst*[T](
+    root: T, childrenOf: proc(node: T): seq[T] {.closure.},
+    predicate: proc(node: T): bool {.closure.}
+): Opt[T] =
+  ## Search a tree in depth-first pre-order. Return none when no node matches.
+  for node in root.depthFirst(childrenOf):
+    if predicate(node):
+      return Opt.some(node)
 
 proc findLast*[T](
     receivers: openArray[T], predicate: proc(receiver: T): bool {.closure.}

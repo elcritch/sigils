@@ -103,6 +103,13 @@ suite "higher-order local messages":
         Opt.some(1)
     check expanded == @[1, 2]
 
+    expanded.setLen(0)
+    visited.setLen(0)
+    for node in 1.depthFirst(childrenOf):
+      visited.add node
+    check visited == @[1, 2, 4, 3]
+    check expanded == visited
+
   test "tree selector search visits descendants of unhandled receivers":
     let
       target = Item(name: "target", active: true).withProto()

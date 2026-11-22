@@ -57,6 +57,10 @@ Tree searches also support `root.findFirst(childrenOf, booleanSelector, args)`
 and `root.findFirst(childrenOf, selector, args, replyPredicate)`. An unhandled
 send leaves the node eligible for descent.
 
+Use `for node in root.depthFirst(childrenOf)` to reuse the traversal in other
+operations. This inline iterator yields a node before it asks for its children,
+so breaking the loop also skips expanding the current node.
+
 ## Basic Use
 
 Import `sigils` or `sigils/selectors`, then define objects that inherit from `DynamicAgent`.
