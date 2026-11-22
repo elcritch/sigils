@@ -1,18 +1,90 @@
-## Higher-order sends and protocol lookup for collections of dynamic agents.
+## Collection searches and higher-order sends to dynamic agents.
 import results
 import selectors
 
 export results.Opt, results.some, results.none, results.get, results.isSome,
   results.isNone, results.`==`
 
-proc findAdopting*[T: DynamicAgent](
-    receivers: openArray[T], protocol: SigilProtocol
+proc findFirst*[T](
+    receivers: openArray[T], predicate: proc(receiver: T): bool {.closure.}
 ): Opt[T] =
-  ## Return the first receiver that has explicitly adopted the protocol.
-  ## Nil receivers are skipped. Return none when no receiver has adopted it.
-  for receiver in receivers:
-    if receiver.hasAdopted(protocol):
+  ## Return the first match, or none. Snapshot membership before testing.
+  let members = @receivers
+  for receiver in members:
+    if predicate(receiver):
       return Opt.some(receiver)
+
+proc findLast*[T](
+    receivers: openArray[T], predicate: proc(receiver: T): bool {.closure.}
+): Opt[T] =
+  ## Search from the end and return the first match, or none.
+  ## Snapshot membership before testing.
+  let members = @receivers
+  for index in countdown(members.high, 0):
+    let receiver = members[index]
+    if predicate(receiver):
+      return Opt.some(receiver)
+
+proc findAny*[T](
+    receivers: openArray[T], predicate: proc(receiver: T): bool {.closure.}
+): Opt[T] =
+  ## Return a match, or none. The order of predicate calls is unspecified.
+  receivers.findFirst(predicate)
+
+proc matchesLocal[A, R](
+    receiver: DynamicAgent, message: Selector[A, R], args: A,
+    predicate: proc(value: R): bool {.closure.}
+): bool =
+  var value: R
+  receiver.performLocal(message, args, value) and predicate(value)
+
+proc findFirst*[T: DynamicAgent, A, R](
+    receivers: openArray[T], message: Selector[A, R], args: A,
+    predicate: proc(value: R): bool {.closure.}
+): Opt[T] =
+  ## Return the first receiver whose handled local reply passes the test.
+  receivers.findFirst(proc(receiver: T): bool =
+    receiver.matchesLocal(message, args, predicate)
+  )
+
+proc findLast*[T: DynamicAgent, A, R](
+    receivers: openArray[T], message: Selector[A, R], args: A,
+    predicate: proc(value: R): bool {.closure.}
+): Opt[T] =
+  ## Search from the end for a receiver whose handled local reply passes the test.
+  receivers.findLast(proc(receiver: T): bool =
+    receiver.matchesLocal(message, args, predicate)
+  )
+
+proc findAny*[T: DynamicAgent, A, R](
+    receivers: openArray[T], message: Selector[A, R], args: A,
+    predicate: proc(value: R): bool {.closure.}
+): Opt[T] =
+  ## Return a receiver whose handled local reply passes the test.
+  ## The order of predicate calls and the choice of match are unspecified.
+  receivers.findFirst(message, args, predicate)
+
+proc isTrue(value: bool): bool = value
+
+proc findFirst*[T: DynamicAgent, A](
+    receivers: openArray[T], predicate: Selector[A, bool], args: A
+): Opt[T] =
+  ## Return the first receiver whose local predicate answers true, or none.
+  receivers.findFirst(predicate, args, isTrue)
+
+proc findLast*[T: DynamicAgent, A](
+    receivers: openArray[T], predicate: Selector[A, bool], args: A
+): Opt[T] =
+  ## Search from the end for a receiver whose local predicate answers true.
+  ## Return none if there is no match.
+  receivers.findLast(predicate, args, isTrue)
+
+proc findAny*[T: DynamicAgent, A](
+    receivers: openArray[T], predicate: Selector[A, bool], args: A
+): Opt[T] =
+  ## Return a receiver whose local predicate answers true, or none.
+  ## The order of predicate calls and the choice of match are unspecified.
+  receivers.findFirst(predicate, args)
 
 proc collectLocal*[T: DynamicAgent, A, R](
     receivers: openArray[T], message: Selector[A, R], args: A
@@ -36,8 +108,7 @@ proc selectLocal*[T: DynamicAgent, A](
   ## Unhandled sends are omitted. Membership is snapshotted before dispatch.
   let members = @receivers
   for receiver in members:
-    var matches: bool
-    if receiver.performLocal(predicate, args, matches) and matches:
+    if receiver.matchesLocal(predicate, args, isTrue):
       result.add receiver
 
 proc sendEachLocal*[T: DynamicAgent, A](

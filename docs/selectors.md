@@ -27,10 +27,25 @@ resolution and forwarding hooks still apply. Exceptions propagate immediately
 and earlier side effects remain. The common argument is passed to each send,
 and reference-bearing arguments and receivers retain normal Nim aliasing.
 
-`findAdopting(items, Foo)` returns the first receiver that has explicitly
-adopted the protocol `Foo`, as an `Opt` of the receiver type. It returns
-`none` if there is no match. Adoption indicates that the object declares
-support for the protocol. Optional selectors may still need an optional send.
+## Finding One Match
+
+`findFirst`, `findLast`, and `findAny` from `sigils/hom` return an `Opt[T]`
+of the collection's element type. They snapshot membership and stop testing at
+a match. `findFirst` searches from the start and `findLast` searches from the
+end. Use `findAny` when the order of tests and the choice of match can vary.
+
+```nim
+let delegate = controllers.findFirst(proc(controller: TextController): bool =
+  controller.hasAdopted(TextFieldDelegate))
+let validator = controllers.findAny(validateText(), "draft")
+let placeholder = controllers.findFirst(placeholderText(), (),
+  proc(text: string): bool = text.len > 0)
+```
+
+The first example tests each element directly. The others send a selector
+locally and test its reply. A Boolean selector can supply the test on its own.
+For other result types, pass a predicate on the reply. Unhandled selectors are
+skipped. An empty input or a search with no match returns `none`.
 
 ## Basic Use
 

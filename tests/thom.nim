@@ -22,7 +22,7 @@ protocol OptionalItemProtocol:
   method optionalLabel(): string {.optional.}
 
 suite "higher-order local messages":
-  test "find returns the first explicit adopter with its concrete type":
+  test "an adoption predicate returns the first explicit adopter":
     let
       absent = Item()
       first = Item(name: "first").withProto()
@@ -31,10 +31,57 @@ suite "higher-order local messages":
     second.adopt(OptionalItemProtocol)
 
     check absent.canConformTo(OptionalItemProtocol)
-    let found: Opt[Item] = [Item(nil), absent, first, second]
-      .findAdopting(OptionalItemProtocol)
+    let items = [Item(nil), absent, first, second]
+    proc adopted(item: Item): bool = item.hasAdopted(OptionalItemProtocol)
+    let found: Opt[Item] = items.findFirst(adopted)
     check found == Opt.some(first)
-    check [Item(nil), absent].findAdopting(OptionalItemProtocol).isNone
+    check [Item(nil), absent].findFirst(adopted).isNone
+
+  test "predicate search stops at a match and handles empty input":
+    let items = [1, 2, 3, 4]
+    var visited: seq[int]
+    proc isEven(value: int): bool =
+      visited.add value
+      value mod 2 == 0
+
+    check items.findFirst(isEven) == Opt.some(2)
+    check visited == @[1, 2]
+    visited.setLen(0)
+    check items.findLast(isEven) == Opt.some(4)
+    check visited == @[4]
+    visited.setLen(0)
+    check items.findAny(isEven).get() in [2, 4]
+    check visited.len in 1..3
+    let empty: seq[int] = @[]
+    check empty.findLast(isEven).isNone
+
+  test "selector search skips false and unhandled replies without routing":
+    let
+      first = Item(active: true).withProto()
+      last = Item(active: true).withProto()
+      inactive = Item().withProto()
+      missing = Item()
+    missing.setNextResponder(first)
+    let items = [missing, inactive, first, last, Item(nil)]
+    check items.findFirst(isActive(), ()) == Opt.some(first)
+    check items.findLast(isActive(), ()) == Opt.some(last)
+    check items.findAny(isActive(), ()).get() in [first, last]
+    check [missing, inactive].findAny(isActive(), ()).isNone
+    check not compiles(items.findFirst(itemName(), ()))
+
+  test "selector search tests handled replies including nil":
+    let
+      first = Item(name: "draft").withProto()
+      last = Item(name: "published").withProto()
+      missing = Item()
+      items = [missing, first, last]
+    proc published(name: string): bool = name == "published"
+    proc noPeer(value: Item): bool = value.isNil
+    check items.findFirst(itemName(), (), published) == Opt.some(last)
+    check items.findLast(itemName(), (), published) == Opt.some(last)
+    check items.findAny(itemName(), (), published) == Opt.some(last)
+    check items.findFirst(peer(), (), noPeer) == Opt.some(first)
+    check [missing].findFirst(peer(), (), noPeer).isNone
 
   test "collect and select preserve order, missing replies, and nil results":
     let
