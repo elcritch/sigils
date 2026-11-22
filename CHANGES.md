@@ -1,3 +1,10 @@
+## 0.35.0
+
+- Add keyed collection Sigils with targeted read-only order and item projections.
+  Validate snapshot replacements before publication and keep all live projections
+  coherent. Item projections use `Opt[T]` to distinguish a present nil ref from
+  a missing key. Computed values and effects track the projections they read.
+
 ## 0.34.0
 
 - Share cold selector/slot adapter errors and borrow local selector arguments,

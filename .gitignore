@@ -15,3 +15,4 @@ nimble.paths
 deps/
 .nimcache
 nimbledeps
+.nimdex

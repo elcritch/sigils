@@ -14,6 +14,7 @@ type
   SigilBase* = ref object of Agent
     attrs: set[SigilAttributes]
     fn: proc (arg: SigilBase) {.closure.}
+    retainedSources: HashSet[SigilBase]
 
   SigilEffect* = ref object of SigilBase
 
@@ -72,6 +73,12 @@ proc setValue*[T](s: Sigil[T], val: T) {.slot.} =
       s.attrs.excl(Dirty)
       emit s.change({Changed})
 
+
+proc retainSource*(sigil: SigilBase, source: SigilBase) =
+  ## Retain a transient reactive source for the current computation.
+  sigil.retainedSources.incl source
+
+
 proc compute*(sigil: SigilBase) {.slot.} =
   if sigil.isLazy() and sigil.isDirty():
     sigil.fn(sigil)
@@ -87,6 +94,11 @@ proc recompute*(sigil: SigilBase, attrs: set[SigilAttributes]) {.slot.} =
     emit sigil.change({Dirty})
   else:
     sigil.fn(sigil)
+
+proc disconnectUnusedSources(sigil: SigilBase, previous: HashSet[SigilBase]) =
+  for source in previous:
+    if source notin sigil.retainedSources:
+      disconnect(source, change, sigil, recompute)
 
 proc `<-`*[T](s: Sigil[T], val: T) =
   ## update a static (non-computed) sigils value
@@ -143,6 +155,8 @@ template computedImpl[T](lazy, blk: untyped): Sigil[T] =
   block:
     let res = Sigil[T]()
     res.fn = proc(arg: SigilBase) {.closure.} =
+      let previousSources = move(arg.retainedSources)
+      defer: arg.disconnectUnusedSources(previousSources)
       bindSigilEvents:
         let internalSigil {.inject.} = Sigil[T](arg)
         let val = block:
@@ -224,6 +238,8 @@ template effect*(blk: untyped) =
     bindSigilEvents:
       internalSigil.computeDeps()
       if Changed in internalSigil.attrs:
+        let previousSources = move(arg.retainedSources)
+        defer: arg.disconnectUnusedSources(previousSources)
         `blk`
         internalSigil.attrs.excl {Dirty, ChangeD}
         # internalSigil.vhash = internalSigil.computeHash()
