@@ -1,8 +1,12 @@
 ## Keyed, observable value collections for GUI-thread models.
 ## Snapshots and items are plain values. Only observed projections allocate
 ## reactive objects; projections cannot be written independently of the collection.
-import std/[options, tables]
+import std/tables
+import results
 import sigils/[core, reactive]
+
+export results.Opt, results.get, results.isSome, results.isNone, results.some,
+    results.none, results.`==`
 
 
 type
@@ -25,7 +29,7 @@ type
     keys: seq[K]
     keyOf: proc(value: T): K {.nimcall.}
     orderRef: ProjectionLink[seq[K]]
-    itemRefs: Table[K, ProjectionLink[Option[T]]]
+    itemRefs: Table[K, ProjectionLink[Opt[T]]]
     publishing: bool
     newItems: int
     pruneAfter: int
@@ -75,10 +79,12 @@ proc get*[K, T](source: CollectionSigil[K, T], key: K): T =
   source[key]
 
 proc lookupProjection[K, T](values: seq[T], positions: Table[K, int],
-    key: K): Option[T] =
+    key: K): Opt[T] =
   let index = positions.getOrDefault(key, -1)
   if index >= 0:
-    result = some(values[index])
+    Opt.some(values[index])
+  else:
+    Opt.none(T)
 
 iterator items*[K, T](source: CollectionSigil[K, T]): T =
   for value in source.values:
@@ -96,15 +102,16 @@ proc order*[K, T](source: CollectionSigil[K, T]): CollectionValue[seq[K]] =
     source.orderRef = ProjectionLink[seq[K]](target: result)
     result.handle.link = source.orderRef
 
-proc item*[K, T](source: CollectionSigil[K, T], key: K): CollectionValue[Option[T]] =
-  ## Observe one identity. Removal publishes none; reinsertion publishes some.
+proc item*[K, T](source: CollectionSigil[K, T], key: K): CollectionValue[Opt[T]] =
+  ## Observe one identity. A missing key publishes none. A present key publishes
+  ## some, including when the item is a nil ref.
   ## Observations retain the source, which holds only zeroing links back.
   result = (if source.itemRefs.hasKey(key): source.itemRefs[
       key].target else: nil)
   if result.isNil:
     let value = lookupProjection(source.values, source.positions, key)
-    result = CollectionValue[Option[T]](value: value, owner: source)
-    let link = ProjectionLink[Option[T]](target: result)
+    result = CollectionValue[Opt[T]](value: value, owner: source)
+    let link = ProjectionLink[Opt[T]](target: result)
     result.handle.link = link
     source.itemRefs[key] = link
     # Sweep only after enough new projections to amortize the table scan.
@@ -136,7 +143,7 @@ proc publish[K, T](source: CollectionSigil[K, T], values: seq[T]) =
   let order = (if source.orderRef.isNil: nil else: source.orderRef.target)
   let moved = keys != source.keys
   let snapshotChanged = moved or source.values != values
-  var updates: seq[tuple[observed: CollectionValue[Option[T]], value: Option[T], notify: bool]]
+  var updates: seq[tuple[observed: CollectionValue[Opt[T]], value: Opt[T], notify: bool]]
   var expired: seq[K]
   for key, link in tables.pairs(source.itemRefs):
     let observed = link.target

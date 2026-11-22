@@ -5,7 +5,6 @@ pattern. Items and snapshots remain plain Nim values. The collection owns one
 authoritative snapshot and a key index; projections are read-only.
 
 ```nim
-import std/options
 import sigils/collections
 
 type Task = object
@@ -16,7 +15,7 @@ proc taskId(task: Task): int = task.id
 
 let tasks = newCollectionSigil(@[Task(id: 1, title: "Draft")], taskId)
 let order = tasks.order       # CollectionValue[seq[int]]
-let first = tasks.item(1)     # CollectionValue[Option[Task]]
+let first = tasks.item(1)     # CollectionValue[Opt[Task]]
 tasks[1] = Task(id: 1, title: "Ready")
 assert tasks.get(1).title == "Ready"
 assert first{}.get.title == "Ready"
@@ -28,8 +27,10 @@ assert order{} == @[1]
   `KeyError` when the key is absent. Use `contains(id)` to check membership.
   Collections also support `len`, `items`, and `pairs`.
 - `tasks.order` changes only when membership or ordering changes.
-- `tasks.item(id)` notifies when that item's value changes under `==`. It publishes
-  `none(T)` on removal and follows the identity if it is reinserted.
+- `tasks.item(id)` projects an `Opt[T]` from nim-results. It notifies when the
+  item's presence or value changes, publishes `Opt.none(T)` on removal, and
+  follows the identity if it is reinserted. If the key getter accepts nil items,
+  a present nil ref has `isSome == true` and `get` returns nil.
 - `tasks[id] = value` replaces an existing item and requires the same key.
 
 Use `{}` to read the current snapshot or projection value. Inside `computed` or

@@ -1,4 +1,4 @@
-import std/[options, unittest]
+import std/unittest
 import sigils/[collections, reactive]
 
 type Row = object
@@ -75,8 +75,8 @@ suite "keyed collection sigils":
 type Watcher = ref object of Agent
   calls: int
   rows: CollectionSigil[int, Row]
-  first: CollectionValue[Option[Row]]
-  second: CollectionValue[Option[Row]]
+  first: CollectionValue[Opt[Row]]
+  second: CollectionValue[Opt[Row]]
   coherent: bool
   recursiveRejected: bool
 
@@ -98,7 +98,42 @@ type ComparableRow = object
 proc key(row: ComparableRow): int = row.id
 proc `==`(a, b: ComparableRow): bool = a.text == b.text
 
+type NullableRow = ref object
+  text: string
+
+proc key(row: NullableRow): int = 1
+
 suite "collection notification ownership":
+  test "distinguish a present nil item from a missing key":
+    let rows = newCollectionSigil(@[NullableRow(nil)], key)
+    let first = rows.item(1)
+    let watcher = Watcher()
+    connect(first, change, watcher, watch)
+    check rows.get(1).isNil
+    check first{}.isSome
+    check first{}.get.isNil
+
+    rows <- @[]
+    check first{}.isNone
+    check watcher.calls == 1
+
+    rows <- @[NullableRow(nil)]
+    check first{}.isSome
+    check first{}.get.isNil
+    check watcher.calls == 2
+
+    rows[1] = NullableRow(text: "ready")
+    check first{}.get.text == "ready"
+    check watcher.calls == 3
+
+    rows[1] = nil
+    check first{}.isSome
+    check first{}.get.isNil
+    check watcher.calls == 4
+
+    rows[1] = nil
+    check watcher.calls == 4
+
   test "notify only changed projections after all values are committed":
     let rows = newCollectionSigil(@[Row(id: 1, text: "old"), Row(id: 2,
         text: "old")], key)
@@ -170,7 +205,7 @@ suite "collection notification ownership":
     for id in 0 ..< 1000:
       initial.add Row(id: id, text: $id)
     let rows = newCollectionSigil(initial, key)
-    var observations: seq[CollectionValue[Option[Row]]]
+    var observations: seq[CollectionValue[Opt[Row]]]
     var watchers: seq[Watcher]
     for id in 0 ..< 1000:
       let observation = rows.item(id)

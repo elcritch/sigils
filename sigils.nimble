@@ -7,6 +7,7 @@ srcDir = "."
 requires "nim >= 2.0.2"
 requires "threading >= 0.2.1"
 requires "stack_strings"
+requires "results >= 0.5.1"
 
 feature "sigNameAsString":
   discard
