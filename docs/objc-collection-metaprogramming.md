@@ -72,6 +72,8 @@ For a related route through **syntax macros**, Tim Burks's Nu put a Lisp on the 
 
 Sigils gives selectors typed signatures, and its keyed collections let a caller observe one item's identity across snapshot changes. If a Sigils caller applied a test to every item, what should the result contain? Matching values, stable keys, and a live projection that tracks membership would each give the caller something different. HOM's distinction between collecting answers and selecting receivers explains why these are different contracts. An observable collection also has to specify **when** the answer should change. [Sigils selectors](selectors.md) · [Observable keyed collections](collection-sigils.md)
 
+Merenda offers a place to try the idea on real objects. An accessibility inspector can ask every child view for its label, keep the replies in view order, and let each control supply its own implementation. The [Sigils and Merenda design note](hom-in-sigils-and-merenda.md) works through a headless prototype, including a Smalltalk-like call form and MPWFoundation-style paired arguments.
+
 [oopal]: https://scg.unibe.ch/archive/papers/Moug03aOOPALOOPSLA.pdf
 [hom]: https://scg.unibe.ch/archive/papers/Weih05aHigherOrderMessagingOOPSLA2005.pdf
 [tsai]: https://mjtsai.com/blog/2014/10/14/hypothetical-objective-c-3-0/
