@@ -1,3 +1,9 @@
+## 0.35.1
+
+- Prevent idle async-dispatch workers from waking themselves. Preserve async
+  I/O and timers, wake workers promptly on shutdown, and process queued
+  signals when draining is requested.
+
 ## 0.35.0
 
 - Add keyed collection Sigils with targeted read-only order and item projections.
