@@ -11,6 +11,7 @@ import std/options
 import std/isolation
 import std/uri
 import std/asyncdispatch
+from std/times import initDuration, inMilliseconds
 
 import agents
 import threadBase
@@ -19,6 +20,8 @@ import core
 
 export smartptrs, isolation
 export threadBase
+
+const DrainTimeoutMs = 500
 
 type
   AsyncSigilThread* = object of SigilThread
@@ -70,7 +73,6 @@ method recv*(
     return true
   of NonBlocking:
     result = thread.inputs.tryRecv(msg)
-  thread.event.trigger()
 
 method setTimer*(
     thread: AsyncSigilThreadPtr, timer: SigilTimer
@@ -96,31 +98,27 @@ method setTimer*(
         return false
     asyncdispatch.addTimer(timer.timerMilliseconds(), oneshot = true, cb)
 
+proc execOne(thread: AsyncSigilThreadPtr): bool {.gcsafe.} =
+  var sig: ThreadSignal
+  if not thread.recv(sig, NonBlocking):
+    return false
+
+  try:
+    thread.exec(sig)
+  except Exception as error:
+    if thread[].exceptionHandler.isNil:
+      raise
+    thread[].exceptionHandler(error)
+  return true
+
 proc setupThread*(thread: ptr AsyncSigilThread) =
   if thread[].isReady:
     return
   thread[].isReady = true
 
   let cb = proc(fd: AsyncFD): bool {.closure, gcsafe.} =
-    var sig: ThreadSignal
-    while isRunning(thread) and thread.recv(sig, NonBlocking):
-      try:
-        thread.exec(sig)
-      except CatchableError as e:
-        if thread[].exceptionHandler.isNil:
-          raise e
-        else:
-          thread[].exceptionHandler(e)
-      except Exception as e:
-        if thread[].exceptionHandler.isNil:
-          raise e
-        else:
-          thread[].exceptionHandler(e)
-      except Defect as e:
-        if thread[].exceptionHandler.isNil:
-          raise e
-        else:
-          thread[].exceptionHandler(e)
+    while thread.isRunning() and thread.execOne():
+      discard
   thread[].event.addEvent(cb)
 
 method poll*(thread: AsyncSigilThreadPtr,
@@ -145,14 +143,22 @@ proc runAsyncThread*(targ: AsyncSigilThreadPtr) {.thread.} =
   setLocalSigilThread(thread)
 
   thread.setupThread()
-  while thread.isRunning():
-    asyncdispatch.drain()
+  while thread[].running.load(moAcquire):
+    # A finite wait lets asyncdispatch wake for sleepAsync timers.
+    asyncdispatch.poll()
 
-  try:
-    if thread.drain.load(moRelaxed):
-      asyncdispatch.drain()
-  except ValueError:
-    discard
+  if thread.drain.load(moRelaxed):
+    let deadline = getMonoTime() + initDuration(milliseconds = DrainTimeoutMs)
+    while true:
+      while thread.execOne():
+        discard
+      let remainingMs = inMilliseconds(deadline - getMonoTime()).int
+      if remainingMs <= 0:
+        break
+      try:
+        asyncdispatch.poll(remainingMs)
+      except ValueError:
+        break
 
 proc startLocalThreadDispatch*() =
   if not hasLocalSigilThread():
@@ -167,12 +173,11 @@ proc start*(thread: ptr AsyncSigilThread) =
 
 proc stop*(thread: ptr AsyncSigilThread, immediate: bool = false,
     drain: bool = false) =
-  thread[].running.store(false, moRelaxed)
-  thread[].drain.store(drain, moRelaxed)
-  if immediate:
-    thread[].drain.store(true, moRelaxed)
-  else:
-    thread[].event.trigger()
+  ## Wake the worker. Draining processes queued signals and polls the async
+  ## dispatcher for up to 500 ms. Immediate shutdown skips draining.
+  thread[].drain.store(drain and not immediate, moRelaxed)
+  thread[].running.store(false, moRelease)
+  thread[].event.trigger()
 
 proc join*(thread: ptr AsyncSigilThread) =
   thread[].thr.joinThread()
