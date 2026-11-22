@@ -1,9 +1,18 @@
-## Synchronous higher-order sends to collections of dynamic agents.
+## Higher-order sends and protocol lookup for collections of dynamic agents.
 import results
 import selectors
 
 export results.Opt, results.some, results.none, results.get, results.isSome,
   results.isNone, results.`==`
+
+proc findAdopting*[T: DynamicAgent](
+    receivers: openArray[T], protocol: SigilProtocol
+): Opt[T] =
+  ## Return the first receiver that has explicitly adopted the protocol.
+  ## Nil receivers are skipped. Return none when no receiver has adopted it.
+  for receiver in receivers:
+    if receiver.hasAdopted(protocol):
+      return Opt.some(receiver)
 
 proc collectLocal*[T: DynamicAgent, A, R](
     receivers: openArray[T], message: Selector[A, R], args: A

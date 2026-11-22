@@ -27,6 +27,11 @@ resolution and forwarding hooks still apply. Exceptions propagate immediately
 and earlier side effects remain. The common argument is passed to each send,
 and reference-bearing arguments and receivers retain normal Nim aliasing.
 
+`findAdopting(items, Foo)` returns the first receiver that has explicitly
+adopted the protocol `Foo`, as an `Opt` of the receiver type. It returns
+`none` if there is no match. Adoption indicates that the object declares
+support for the protocol. Optional selectors may still need an optional send.
+
 ## Basic Use
 
 Import `sigils` or `sigils/selectors`, then define objects that inherit from `DynamicAgent`.

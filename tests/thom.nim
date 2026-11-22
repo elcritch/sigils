@@ -18,7 +18,24 @@ protocol ItemProtocol from Item:
   method peer(self: Item): Item =
     nil
 
+protocol OptionalItemProtocol:
+  method optionalLabel(): string {.optional.}
+
 suite "higher-order local messages":
+  test "find returns the first explicit adopter with its concrete type":
+    let
+      absent = Item()
+      first = Item(name: "first").withProto()
+      second = Item(name: "second").withProto()
+    first.adopt(OptionalItemProtocol)
+    second.adopt(OptionalItemProtocol)
+
+    check absent.canConformTo(OptionalItemProtocol)
+    let found: Opt[Item] = [Item(nil), absent, first, second]
+      .findAdopting(OptionalItemProtocol)
+    check found == Opt.some(first)
+    check [Item(nil), absent].findAdopting(OptionalItemProtocol).isNone
+
   test "collect and select preserve order, missing replies, and nil results":
     let
       first = Item(name: "first", active: true).withProto()
