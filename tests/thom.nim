@@ -84,7 +84,7 @@ suite "higher-order local messages":
     check items.findFirst(peer(), (), noPeer) == Opt.some(first)
     check [missing].findFirst(peer(), (), noPeer).isNone
 
-  test "tree search checks the root then descends in child order":
+  test "tree searches traverse from opposite ends and stop at a match":
     var visited, expanded: seq[int]
     proc childrenOf(node: int): seq[int] =
       expanded.add node
@@ -110,6 +110,17 @@ suite "higher-order local messages":
     check visited == @[1, 2, 4, 3]
     check expanded == visited
 
+    expanded.setLen(0)
+    visited.setLen(0)
+    check 1.findLast(childrenOf, matches) == Opt.some(3)
+    check visited == @[3]
+    check expanded == @[1, 3]
+
+    visited.setLen(0)
+    for node in 1.depthFirst(childrenOf, reverse = true):
+      visited.add node
+    check visited == @[3, 4, 2, 1]
+
   test "tree selector search visits descendants of unhandled receivers":
     let
       target = Item(name: "target", active: true).withProto()
@@ -121,8 +132,11 @@ suite "higher-order local messages":
 
     check root.findFirst(childrenOf, itemName(), (), matches) == Opt.some(target)
     check root.findFirst(childrenOf, isActive(), ()) == Opt.some(target)
+    check root.findLast(childrenOf, itemName(), (), matches) == Opt.some(target)
+    check root.findLast(childrenOf, isActive(), ()) == Opt.some(target)
     check root.findFirst(childrenOf, proc(node: Item): bool = false).isNone
-    check Item(nil).findFirst(childrenOf, isActive(), ()).isNone
+    check root.findLast(childrenOf, proc(node: Item): bool = false).isNone
+    check Item(nil).findLast(childrenOf, isActive(), ()).isNone
 
   test "collect and select preserve order, missing replies, and nil results":
     let

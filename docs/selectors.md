@@ -53,13 +53,14 @@ pre-order, beginning at `root` and visiting siblings in the order returned by
 search asks for a node's children only after the node fails the test, and it
 skips nil ref nodes. The child relation must be acyclic.
 
-Tree searches also support `root.findFirst(childrenOf, booleanSelector, args)`
-and `root.findFirst(childrenOf, selector, args, replyPredicate)`. An unhandled
-send leaves the node eligible for descent.
+`root.findLast(childrenOf, predicate)` walks the exact reverse order. It
+visits the last child's subtree first and tests each parent after its children.
+Both methods stop at a match and support a Boolean selector or a selector with
+a predicate on its reply. An unhandled send skips the node as a match.
 
 Use `for node in root.depthFirst(childrenOf)` to reuse the traversal in other
-operations. This inline iterator yields a node before it asks for its children,
-so breaking the loop also skips expanding the current node.
+operations. In forward order, breaking the loop also skips expanding the
+current node. Pass `reverse = true` to iterate in the order used by `findLast`.
 
 ## Basic Use
 

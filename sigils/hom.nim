@@ -15,21 +15,29 @@ proc findFirst*[T](
       return Opt.some(receiver)
 
 iterator depthFirst*[T](
-    root: T, childrenOf: proc(node: T): seq[T] {.closure.}
+    root: T, childrenOf: proc(node: T): seq[T] {.closure.},
+    reverse: static bool = false
 ): T {.inline.} =
-  ## Yield nodes in depth-first pre-order, including the root.
-  ## Skip nil ref nodes. Read a node's children when iteration resumes.
-  ## The child relation must be acyclic.
-  var pending = @[root]
+  ## Yield nodes in depth-first pre-order, or its exact reverse.
+  ## In forward order, read a node's children when iteration resumes.
+  ## Skip nil ref nodes. The child relation must be acyclic.
+  var pending = @[(node: root, expanded: false)]
   while pending.len > 0:
-    let node = pending.pop()
+    let (node, expanded) = pending.pop()
     when T is ref:
       if node.isNil:
         continue
-    yield node
+    when reverse:
+      if expanded:
+        yield node
+        continue
+      pending.add (node, true)
+    else:
+      yield node
     let children = childrenOf(node)
-    for index in countdown(children.high, 0):
-      pending.add children[index]
+    for offset in 0 ..< children.len:
+      let index = when reverse: offset else: children.high - offset
+      pending.add (children[index], false)
 
 proc findFirst*[T](
     root: T, childrenOf: proc(node: T): seq[T] {.closure.},
@@ -50,6 +58,15 @@ proc findLast*[T](
     let receiver = members[index]
     if predicate(receiver):
       return Opt.some(receiver)
+
+proc findLast*[T](
+    root: T, childrenOf: proc(node: T): seq[T] {.closure.},
+    predicate: proc(node: T): bool {.closure.}
+): Opt[T] =
+  ## Search a tree in reverse pre-order. Return none when no node matches.
+  for node in root.depthFirst(childrenOf, reverse = true):
+    if predicate(node):
+      return Opt.some(node)
 
 proc findAny*[T](
     receivers: openArray[T], predicate: proc(receiver: T): bool {.closure.}
@@ -92,6 +109,16 @@ proc findLast*[T: DynamicAgent, A, R](
     receiver.matchesLocal(message, args, predicate)
   )
 
+proc findLast*[T: DynamicAgent, A, R](
+    root: T, childrenOf: proc(node: T): seq[T] {.closure.},
+    message: Selector[A, R], args: A, predicate: proc(
+        value: R): bool {.closure.}
+): Opt[T] =
+  ## Search a tree in reverse pre-order for a handled reply that passes the test.
+  root.findLast(childrenOf, proc(node: T): bool =
+    node.matchesLocal(message, args, predicate)
+  )
+
 proc findAny*[T: DynamicAgent, A, R](
     receivers: openArray[T], message: Selector[A, R], args: A,
     predicate: proc(value: R): bool {.closure.}
@@ -121,6 +148,13 @@ proc findLast*[T: DynamicAgent, A](
   ## Search from the end for a receiver whose local predicate answers true.
   ## Return none if there is no match.
   receivers.findLast(predicate, args, isTrue)
+
+proc findLast*[T: DynamicAgent, A](
+    root: T, childrenOf: proc(node: T): seq[T] {.closure.},
+    predicate: Selector[A, bool], args: A
+): Opt[T] =
+  ## Search a tree in reverse pre-order for a true local predicate reply.
+  root.findLast(childrenOf, predicate, args, isTrue)
 
 proc findAny*[T: DynamicAgent, A](
     receivers: openArray[T], predicate: Selector[A, bool], args: A
