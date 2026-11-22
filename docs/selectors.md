@@ -8,18 +8,21 @@ They are useful for delegate APIs, command routing, responder chains, hit testin
 
 Import `sigils/hom` for synchronous local sends to multiple agents. The
 operations accept a typed selector and the same packed argument shape as
-`performLocal`. For example, `items.collectLocal(currentCaption(), ())`
+`performLocal`. For example, `items.collect(currentCaption(), ())`
 returns a `seq[Opt[string]]` with one entry per receiver.
 
-- `collectLocal(items, selector, args)` preserves the order and position of
+- `collect(items, selector, args)` preserves the order and position of
   all replies. An unhandled send, including a nil receiver, produces `none`.
   A handled nil result remains `some(nil)`.
-- `selectLocal(items, predicate, args)` returns receivers whose Boolean
-  predicate answers true. Unhandled sends are omitted.
+- `select(items, predicate, args)` returns receivers whose Boolean
+  selector answers true. Pass a fourth argument to test the reply of any
+  selector, as in `items.select(currentCaption(), (), isHeading)`.
+  Unhandled sends are omitted.
 - `sendEachLocal(items, command, args)` returns one handled flag per receiver
   for commands with an empty-tuple result.
 - `collectEachLocal(items, selector, arguments)` sends the corresponding
   argument to each receiver. Unequal lengths raise `ValueError` before sending.
+  Pass a single receiver to send it every argument in order.
 
 For flat collections, these operations snapshot membership before the first
 send so a handler can safely change the original collection. Sends execute in
@@ -63,12 +66,12 @@ Use `for node in root.depthFirst(childrenOf)` to reuse the traversal in other
 operations. In forward order, breaking the loop also skips expanding the
 current node. Pass `reverse = true` to iterate in the order used by `findLast`.
 
-`findFirst`, `collectLocal`, and `selectLocal` also accept an inline iterator
+`findFirst`, `collect`, and `select` also accept an inline iterator
 directly. Each operation processes a receiver as the iterator yields it.
 
 ```nim
-let labels = root.depthFirst(childrenOf).collectLocal(accessibilityLabel(), ())
-let accessible = root.depthFirst(childrenOf).selectLocal(isAccessibilityElement(), ())
+let labels = root.depthFirst(childrenOf).collect(accessibilityLabel(), ())
+let accessible = root.depthFirst(childrenOf).select(isAccessibilityElement(), ())
 ```
 
 When using an inline iterator directly, its traversal determines when members are

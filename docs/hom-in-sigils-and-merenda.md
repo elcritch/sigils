@@ -2,7 +2,7 @@
 
 An inspector wants the accessibility labels of a window's child views. It knows the children as `View` objects. A plain view can answer with its identifier, a button can answer with its title, and a custom control can install its own implementation. The inspector should be able to make one request and keep the replies in child order. This is a good first use of [higher order messaging](objc-collection-metaprogramming.md) in NimKit.
 
-The prototype below uses Sigils' typed selectors. A protocol supplies the message, an ordinary Nim proc decides how to distribute it, and each receiver decides how to answer. Sigils now provides `collectLocal`, `selectLocal`, and `collectEachLocal` in `sigils/hom`. The `collectSend` macro and generated overload shown here are exploratory examples. See [Sending to Collections](selectors.md#sending-to-collections) for the implemented API.
+A protocol supplies the message, the collection operation distributes it, and each receiver decides how to answer. Sigils provides `collect`, `select`, and `collectEachLocal` in `sigils/hom`. The `collectSend` macro and two-stage overload shown here are exploratory examples. [Sending to Collections](selectors.md#sending-to-collections)
 
 ## Where the AppKit analogy holds
 
@@ -17,39 +17,14 @@ Merenda's foundation module already re-exports Sigils selectors and defines shar
 
 ## Two operations on real controls
 
-These fragments can be read as one Nim module, in order. The only primitive the collection needs is `performLocal(selector, args, value)`. It returns a handled flag and writes the answer into typed storage. The helper keeps those facts separate using the same `Opt` type that Sigils uses for keyed item projections. This matters for a selector such as `accessibilityParent()`: a root view legitimately answers with a nil `View`. That is a different answer from a receiver missing the selector. [Selector dispatch](../sigils/selectors.nim) · [Keyed projections](collection-sigils.md) · [NimKit accessibility protocol][accessibility]
+These fragments can be read as one Nim module, in order. The collection operations use `performLocal(selector, args, value)`. It returns a handled flag and writes the answer into typed storage. `collect` represents those facts with `Opt`, the same type Sigils uses for keyed item projections. A root view can answer `accessibilityParent()` with `some(nil)`. A receiver missing the selector produces `none`. [Selector dispatch](../sigils/selectors.nim) · [Keyed projections](collection-sigils.md) · [NimKit accessibility protocol][accessibility]
 
 ```nim
 import std/macros
-import results
-import sigils/selectors
+import sigils/[hom, selectors]
 import merenda/nimkit/view/views
 import merenda/nimkit/controls/buttons
 import merenda/nimkit/accessibility/accessibilityprotocols
-
-proc queryLocal[A, R](
-    receiver: DynamicAgent, message: Selector[A, R], args: A
-): Opt[R] =
-  var value: R
-  if receiver.performLocal(message, args, value):
-    Opt.some(value)
-  else:
-    Opt.none(R)
-
-proc collectLocal[T: DynamicAgent; A, R](
-    receivers: openArray[T], message: Selector[A, R], args: A
-): seq[Opt[R]] =
-  let members = @receivers
-  for receiver in members:
-    result.add receiver.queryLocal(message, args)
-
-proc selectLocal[T: DynamicAgent; A](
-    receivers: openArray[T], predicate: Selector[A, bool], args: A
-): seq[T] =
-  let members = @receivers
-  for receiver in members:
-    if receiver.trySendLocal(predicate, args).get(false):
-      result.add receiver
 ```
 
 ```nim
@@ -61,12 +36,12 @@ root.addSubview(group)
 root.addSubview(save)
 
 let children = root.subviews()
-doAssert children.collectLocal(accessibilityLabel(), ()) ==
+doAssert children.collect(accessibilityLabel(), ()) ==
   @[Opt.some("group"), Opt.some("Save")]
-doAssert children.selectLocal(isAccessibilityElement(), ()) == @[View(save)]
+doAssert children.select(isAccessibilityElement(), ()) == @[View(save)]
 ```
 
-`collectLocal` preserves a position for every input, including a nil receiver or an unhandled send. `selectLocal` preserves the original receiver type and keeps only receivers that answer true. A caller interested in the distinction between false and unhandled can collect the same predicate and inspect the replies. All methods on NimKit's accessibility protocol are optional. Checking whether the receiver has adopted the protocol cannot establish whether it answers this particular message. Sending once also preserves lazy resolution and local forwarding hooks. [Accessibility declarations][accessibility] · [Sigils optional sends](selectors.md#optional-sends)
+`collect` preserves a position for every input, including a nil receiver or an unhandled send. `select` preserves the original receiver type and keeps only receivers that answer true. A caller interested in the distinction between false and unhandled can collect the same predicate and inspect the replies. All methods on NimKit's accessibility protocol are optional. Checking whether the receiver has adopted the protocol cannot establish whether it answers this particular message. Sending once also preserves lazy resolution and local forwarding hooks. [Accessibility declarations][accessibility] · [Sigils optional sends](selectors.md#optional-sends)
 
 The `@receivers` copy fixes membership and order before the first call and keeps the objects alive for the traversal. A handler may remove a sibling or insert another child. This pass still visits the original members, and each sees its current state at dispatch time. Calls run synchronously on the owning UI thread. An exception propagates at the failing element, so any earlier side effects have already occurred. The snapshot costs O(n) references in addition to the output. I would start with inspector queries, where this contract is easy to explain, before considering allocation overhead in rendering or hit testing.
 
@@ -74,7 +49,7 @@ The `@receivers` copy fixes membership and order before the first call and keeps
 
 An Objective-C HOM proxy captures the next message through forwarding. Sigils has a `setForwardInvocation` hook too, but a direct `accessibilityLabel` send already promises its caller a `string`. A proxy returning a sequence through that call would violate the typed result contract. Sigils' local invocation can borrow caller-owned argument and result storage for the duration of a synchronous send. Each element should get a fresh typed send. [Invocation and result handling](../sigils/selectors.nim) · [Local argument ownership](selector-payload-review.md)
 
-Nim can capture the expression one step earlier. The small macro below turns `children.collectSend(accessibilityLabel())` into `collectLocal(children, accessibilityLabel(), ())`. The selector's type determines the element result, and the outer operation determines the collection result. One call site can therefore infer `seq[Opt[string]]` and another `seq[Opt[bool]]`.
+Nim can capture the expression one step earlier. The small macro below turns `children.collectSend(accessibilityLabel())` into `collect(children, accessibilityLabel(), ())`. The selector's type determines the element result, and the outer operation determines the collection result. One call site can therefore infer `seq[Opt[string]]` and another `seq[Opt[bool]]`.
 
 ```nim
 macro collectSend(receivers: typed, message: untyped): untyped =
@@ -86,13 +61,13 @@ macro collectSend(receivers: typed, message: untyped): untyped =
   else:
     for index in 1 ..< message.len:
       args.add message[index]
-  newCall(bindSym"collectLocal", receivers, selectorValue, args)
+  newCall(bindSym"collect", receivers, selectorValue, args)
 
 doAssert children.collectSend(accessibilityLabel()) ==
   @[Opt.some("group"), Opt.some("Save")]
 ```
 
-This sketch accepts ordinary positional calls to declared selectors. For zero parameters it builds `()`, for one it passes the value directly, and for several it builds a tuple in declaration order. The receiver expression and each argument expression are evaluated once before traversal. The compiler still checks the packed argument type, and `selectLocal` only accepts a predicate returning `bool`. If this syntax becomes public, I would share the argument-packing rules with Sigils' selector generator and test named/default arguments and module-qualified selectors before promising those forms. [Selector argument generation](../sigils/selectors.nim)
+This sketch accepts ordinary positional calls to declared selectors. For zero parameters it builds `()`, for one it passes the value directly, and for several it builds a tuple in declaration order. The receiver expression and each argument expression are evaluated once before traversal. The compiler checks the packed argument type. If this syntax becomes public, I would share the argument-packing rules with Sigils' selector generator and test named/default arguments and module-qualified selectors before promising those forms. [Selector argument generation](../sigils/selectors.nim)
 
 There is also a way to get almost the original `[[views collect] label]` spelling. Give the intermediate receiver a Nim type. This overload was enough to make a two-stage send work on the same views.
 
@@ -104,7 +79,7 @@ proc collecting[T: DynamicAgent](members: seq[T]): Collecting[T] =
   Collecting[T](members: members)
 
 proc accessibilityLabel[T: DynamicAgent](batch: Collecting[T]): seq[Opt[string]] =
-  batch.members.collectLocal(accessibilityprotocols.accessibilityLabel(), ())
+  batch.members.collect(accessibilityprotocols.accessibilityLabel(), ())
 
 doAssert children.collecting().accessibilityLabel() ==
   @[Opt.some("group"), Opt.some("Save")]
@@ -117,34 +92,21 @@ Here the compiler chooses the overload from the type of `collecting()`. Sigils c
 Suppose an inspector is applying a pair of edited labels, one per selected view. Repeating one selector with two different arguments is the case that made MPWFoundation's `each` interesting. For UI edits I would check lengths up front. The historical library stopped at the shorter input. A truncated edit would leave some views carrying stale labels. [Higher Order Messaging, §4.1](https://scg.unibe.ch/archive/papers/Weih05aHigherOrderMessagingOOPSLA2005.pdf)
 
 ```nim
-proc collectEachLocal[T: DynamicAgent; A, R](
-    receivers: openArray[T], message: Selector[A, R], args: openArray[A]
-): seq[Opt[R]] =
-  if receivers.len != args.len:
-    raise newException(ValueError, "one argument per receiver required")
-  let
-    members = @receivers
-    arguments = @args
-  for i, receiver in members:
-    result.add receiver.queryLocal(message, arguments[i])
-
 let edits = children.collectEachLocal(setAccessibilityLabel(), ["Section", "Submit"])
 doAssert edits[0].isSome and edits[1].isSome
 doAssert children.collectSend(accessibilityLabel()) ==
   @[Opt.some("Section"), Opt.some("Submit")]
 ```
 
-Sigils represents a selector without a return value using the empty tuple, so the editor can still see which setters were handled. A purpose-built command API could return just the handled flags. Signals and slots serve another purpose here. A setter can emit its normal change event, and observers can connect using the existing protocol machinery. Replacing the send with a broadcast would lose per-receiver replies. [Selectors and protocol events](selectors.md#protocols)
+Sigils represents a selector without a return value using the empty tuple, so the editor can still see which setters were handled. `sendEachLocal` reports handled flags when sending the same command and arguments to every receiver. A setter can emit its normal change event, and observers can connect using the existing protocol machinery. [Selectors and protocol events](selectors.md#protocols)
 
 ## Recursion and composition
 
-The collection operations send to the receivers supplied by the caller. The original HOM paper also describes composing messages, for example selecting employees by applying a predicate to the result of their `name` message. In Sigils, `findFirst(accessibilityLabel(), (), predicate)` supports that query pattern for one match. F-Script's recursive patterns additionally apply messages at a chosen depth in nested arrays and preserve the array structure. [Higher Order Messaging, §4.1](https://scg.unibe.ch/archive/papers/Weih05aHigherOrderMessagingOOPSLA2005.pdf) · [OOPAL, §5.3](https://scg.unibe.ch/archive/papers/Moug03aOOPALOOPSLA.pdf)
+The original HOM paper describes composing messages, for example selecting employees by applying a predicate to the result of their `name` message. In Sigils, `select(accessibilityLabel(), (), predicate)` keeps every matching receiver and `findFirst(accessibilityLabel(), (), predicate)` stops at the first match. F-Script's recursive patterns apply messages at a chosen depth in nested arrays and preserve the array structure. [Higher Order Messaging, §4.1](https://scg.unibe.ch/archive/papers/Weih05aHigherOrderMessagingOOPSLA2005.pdf) · [OOPAL, §5.3](https://scg.unibe.ch/archive/papers/Moug03aOOPALOOPSLA.pdf)
 
 In a view tree, the caller chooses the edge to follow. `root.subviews()` gives the immediate children. NimKit's accessibility traversal visits accessible descendants and orders them for inspection, so the same selector query can search the whole subtree.
 
 ```nim
-import sigils/hom
-
 let saveButton = root.orderedAccessibilityElements().findFirst(
   accessibilityLabel(), (), proc(label: string): bool = label == "Save")
 ```
@@ -165,7 +127,7 @@ The same traversal can supply receivers to collection operations. For example, t
 ```nim
 let accessibleViews = root.depthFirst(
   proc(view: View): seq[View] = view.subviews()
-).selectLocal(isAccessibilityElement(), ())
+).select(isAccessibilityElement(), ())
 ```
 
 ## Where observation would fit
@@ -176,7 +138,7 @@ Merenda at the revision studied also has its own `app/collectionsigils.nim`, who
 
 The typed collection procs live in the opt-in `sigils/hom` module. Widget-specific traversal, event subscriptions, and table fallbacks belong in NimKit. The first Merenda caller I would try is its existing `ViewInspector`. It already displays the selected view's accessibility label and role. To add an accessibility outline, the inspector could pass the result of NimKit's `orderedAccessibilityElements` to a label or role query. That traversal already accounts for ignored views and accessible descendants. A key-equivalent dispatch should keep its current stop-on-first-consumer rule. [Current inspector details][inspector] · [Accessibility traversal][traversal] · [Responder routing][responders]
 
-The prototype ran headlessly on Nim 2.2.12 against Merenda `d5680a0`, with both its Atlas-pinned Sigils `5190b38` and this checkout's selector code. The checks covered button overrides, local versus responder-chain lookup, a handled nil parent, false versus missing predicates, reentrant changes to membership, and rejection of unequal argument counts before delivery. The call macro was exercised with zero, one, and two positional arguments. Timing and live subscriptions remain open design questions.
+The original prototype ran headlessly on Nim 2.2.12 against Merenda `d5680a0` and its Atlas-pinned Sigils `5190b38`. The examples here use the `sigils/hom` module from this checkout.
 
 [views]: https://github.com/elcritch/merenda/blob/d5680a018181f2af56615611c53ba7927d29ed10/src/merenda/nimkit/view/views.nim#L479
 [buttons]: https://github.com/elcritch/merenda/blob/d5680a018181f2af56615611c53ba7927d29ed10/src/merenda/nimkit/controls/buttons.nim#L385

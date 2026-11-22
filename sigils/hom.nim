@@ -192,14 +192,14 @@ template collectReplies[A, R](
       replies.add receiver.replyLocal(selector, payload)
     replies
 
-template collectLocal*[T: DynamicAgent, A, R](
+template collect*[T: DynamicAgent, A, R](
     receivers: iterable[T], message: Selector[A, R], args: A
 ): seq[Opt[R]] =
   ## Collect a local reply for every receiver yielded by an iterator.
   ## Unhandled sends produce none.
   collectReplies(receivers, message, args, 0)
 
-proc collectLocal*[T: DynamicAgent, A, R](
+proc collect*[T: DynamicAgent, A, R](
     receivers: openArray[T], message: Selector[A, R], args: A
 ): seq[Opt[R]] =
   ## Send locally to each receiver and retain an entry for every reply.
@@ -207,26 +207,46 @@ proc collectLocal*[T: DynamicAgent, A, R](
   ## Membership is snapshotted before the first synchronous send.
   collectReplies(snapshotItems(receivers), message, args, receivers.len)
 
-template selectLocal*[T: DynamicAgent, A](
-    receivers: iterable[T], predicate: Selector[A, bool], args: A
-): seq[T] =
-  ## Keep yielded receivers whose local predicate answers true.
+template selectMatchingReplies(T: typedesc, receivers, message, args,
+    predicate: untyped): untyped =
   block:
     let
-      selector = predicate
+      selector = message
       payload = args
+      matches = predicate
     var selected: seq[T]
     for receiver in receivers:
-      if receiver.matchesLocal(selector, payload, isTrue):
+      if receiver.matchesLocal(selector, payload, matches):
         selected.add receiver
     selected
 
-proc selectLocal*[T: DynamicAgent, A](
+template select*[T: DynamicAgent, A, R](
+    receivers: iterable[T], message: Selector[A, R], args: A,
+    predicate: proc(value: R): bool {.closure.}
+): seq[T] =
+  ## Keep yielded receivers whose handled local reply passes the test.
+  selectMatchingReplies(T, receivers, message, args, predicate)
+
+proc select*[T: DynamicAgent, A, R](
+    receivers: openArray[T], message: Selector[A, R], args: A,
+    predicate: proc(value: R): bool {.closure.}
+): seq[T] =
+  ## Keep receivers whose handled local reply passes the test.
+  ## Membership is snapshotted before dispatch.
+  selectMatchingReplies(T, snapshotItems(receivers), message, args, predicate)
+
+template select*[T: DynamicAgent, A](
+    receivers: iterable[T], predicate: Selector[A, bool], args: A
+): seq[T] =
+  ## Keep yielded receivers whose local predicate answers true.
+  selectMatchingReplies(T, receivers, predicate, args, isTrue)
+
+proc select*[T: DynamicAgent, A](
     receivers: openArray[T], predicate: Selector[A, bool], args: A
 ): seq[T] =
   ## Keep receivers whose local predicate send returns true.
   ## Unhandled sends are omitted. Membership is snapshotted before dispatch.
-  selectLocal(snapshotItems(receivers), predicate, args)
+  receivers.select(predicate, args, isTrue)
 
 proc sendEachLocal*[T: DynamicAgent, A](
     receivers: openArray[T], message: Selector[A, tuple[]], args: A
@@ -250,3 +270,11 @@ proc collectEachLocal*[T: DynamicAgent, A, R](
   result = newSeqOfCap[Opt[R]](members.len)
   for index, receiver in members:
     result.add receiver.replyLocal(message, arguments[index])
+
+proc collectEachLocal*[A, R](
+    receiver: DynamicAgent, message: Selector[A, R], args: openArray[A]
+): seq[Opt[R]] =
+  ## Send every argument to the same receiver. Snapshot arguments before dispatch.
+  result = newSeqOfCap[Opt[R]](args.len)
+  for argument in snapshotItems(args):
+    result.add receiver.replyLocal(message, argument)

@@ -78,6 +78,8 @@ suite "higher-order local messages":
     check items.findLast(itemName(), (), published) == Opt.some(last)
     check items.findFirst(peer(), (), noPeer) == Opt.some(first)
     check [missing].findFirst(peer(), (), noPeer).isNone
+    check items.select(itemName(), (), published) == @[last]
+    check items.select(peer(), (), noPeer) == @[first, last]
 
   test "tree searches traverse from opposite ends and stop at a match":
     var visited, expanded: seq[int]
@@ -141,9 +143,10 @@ suite "higher-order local messages":
     proc childrenOf(node: Item): seq[Item] = node.children
     proc matches(name: string): bool = name == "second"
 
-    check root.depthFirst(childrenOf).collectLocal(itemName(), ()) ==
+    check root.depthFirst(childrenOf).collect(itemName(), ()) ==
         @[Opt.none(string), Opt.some("first"), Opt.some("second")]
-    check root.depthFirst(childrenOf).selectLocal(isActive(), ()) == @[first]
+    check root.depthFirst(childrenOf).select(isActive(), ()) == @[first]
+    check root.depthFirst(childrenOf).select(itemName(), (), matches) == @[second]
     check root.depthFirst(childrenOf).findFirst(isActive(), ()) == Opt.some(first)
     check root.depthFirst(childrenOf, reverse = true)
       .findFirst(itemName(), (), matches) == Opt.some(second)
@@ -154,25 +157,26 @@ suite "higher-order local messages":
       second = Item(name: "second").withProto()
       missing = Item()
       items = @[first, missing, second, Item(nil)]
-    check items.collectLocal(itemName(), ()) ==
+    check items.collect(itemName(), ()) ==
       @[Opt.some("first"), Opt.none(string), Opt.some("second"), Opt.none(string)]
-    check items.selectLocal(isActive(), ()) == @[first]
-    let peers = items.collectLocal(peer(), ())
+    check items.select(isActive(), ()) == @[first]
+    let peers = items.collect(peer(), ())
     check peers[0].isSome
     check peers[0].get().isNil
     check peers[1].isNone
     let empty: seq[Item] = @[]
-    check empty.collectLocal(itemName(), ()).len == 0
-    check not compiles(items.selectLocal(itemName(), ()))
-    check not compiles(items.collectLocal(itemName(), 123))
+    check empty.collect(itemName(), ()).len == 0
+    check not compiles(items.select(itemName(), ()))
+    check not compiles(items.collect(itemName(), 123))
 
   test "local dispatch does not walk the responder chain":
     let
-      target = Item(name: "target").withProto()
+      target = Item(name: "target", active: true).withProto()
       missing = Item()
     missing.setNextResponder(target)
     check missing.trySend(itemName()).get() == "target"
-    check @[missing].collectLocal(itemName(), ())[0].isNone
+    check @[missing].collect(itemName(), ())[0].isNone
+    check [missing].select(isActive(), ()).len == 0
 
   test "commands and paired arguments report handling":
     let
@@ -199,7 +203,7 @@ suite "higher-order local messages":
       call.setResult("forwarded")
       true
     )
-    check items.collectLocal(itemName(), ()) ==
+    check items.collect(itemName(), ()) ==
       @[Opt.some("forwarded"), Opt.some("original")]
     check items[1] == replacement
 

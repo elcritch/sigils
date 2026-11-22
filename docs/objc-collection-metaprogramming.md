@@ -70,6 +70,33 @@ The key path says both what to read and how to combine the values. Foundation un
 
 For a related route through **syntax macros**, Tim Burks's Nu put a Lisp on the Objective-C runtime. Its multi-list `map` is a function, while `assert` is a macro that can keep the failing expression for diagnostics. A Nu macro receives program forms. A HOM proxy receives a message that is already being sent. That difference determines what a library author can inspect or change. [Burks on Nu macros][nu-macros] · [Nu library source][nu-code]
 
+## Running the paper's examples in Sigils
+
+The collection examples use protocols to declare messages such as
+`earnsMoreThan()`. Sigils can send that selector to a single employee through
+`trySendLocal`. The HOM module uses the same selector to filter a collection.
+[Runnable collection and utility examples](../examples/hom_paper.nim)
+
+| Example in the paper | Sigils expression |
+| --- | --- |
+| Select employees by salary | `employees.select(earnsMoreThan(), 1000)` |
+| Vary the receiver and reuse a suffix | `texts.collect(appendText(), " Doe")` |
+| Reuse the receiver and vary the argument | `title.collectEachLocal(appendText(), names)` |
+| Vary the receiver and the argument together | `titles.collectEachLocal(appendText(), names)` |
+| Give Alice each of Sally's reports | `alice.collectEachLocal(addReport(), sally.reports)` |
+| Select employees by a test on their name | `employees.select(employeeName(), (), namePredicate)` |
+
+The paired form requires equal lengths before sending. A selector with more
+than one parameter can take a tuple of arguments for each send. The optional
+delegate example uses `sendLocalIfHandled`, and the exception example wraps
+a local send with a logging policy. The scheduling example delays a local
+message and uses a worker slot and an explicit future to sort and merge two
+batches. [Higher Order Messaging, §§4.1–4.4][hom] · [Runnable scheduling example](../examples/hom_paper_scheduling.nim)
+
+```sh
+atlas-run tests examples/hom_paper.nim examples/hom_paper_scheduling.nim -- --mm:arc
+```
+
 ## A connection to Sigils
 
 Sigils gives selectors typed signatures, and its keyed collections let a caller observe one item's identity across snapshot changes. If a Sigils caller applied a test to every item, what should the result contain? Matching values, stable keys, and a live projection that tracks membership would each give the caller something different. HOM's distinction between collecting answers and selecting receivers explains why these are different contracts. An observable collection also has to specify **when** the answer should change. [Sigils selectors](selectors.md) · [Observable keyed collections](collection-sigils.md)
