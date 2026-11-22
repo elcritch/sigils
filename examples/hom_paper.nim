@@ -28,7 +28,8 @@ protocol TextMessages from Text:
   method hasPrefix(self: Text, prefix: string): bool =
     self.value.startsWith(prefix)
 
-  method surround(self: Text, prefix, suffix: string): string =
+  method surround(self: Text, prefix: string = "(",
+      suffix: string = ")"): string =
     prefix & self.value & suffix
 
 protocol EmployeeMessages from Employee:
@@ -76,6 +77,7 @@ when isMainModule:
 
   # Sections 2.2 and 4.1. Keep the employees whose salary passes the test.
   doAssert employees.select(earnsMoreThan(), 1000) == @[john, jane]
+  doAssert employees.selectSend(earnsMoreThan(1000)) == @[john, jane]
 
   # Figure 5. Vary the receiver, the argument, or both in lockstep.
   let
@@ -96,6 +98,8 @@ when isMainModule:
     (prefix: "<", suffix: ">")]
   doAssert texts.collectEachLocal(surround(), decorations) ==
     @[Opt.some("(John)"), Opt.some("[Mary]"), Opt.some("<Bob>")]
+  doAssert texts.collectSend(surround(suffix = "]")) ==
+    @[Opt.some("(John]"), Opt.some("(Mary]"), Opt.some("(Bob]")]
 
   # Figure 4. Keep the receiver fixed while passing each of Sally's reports.
   let

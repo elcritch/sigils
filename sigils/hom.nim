@@ -1,5 +1,7 @@
 ## Collection searches and higher-order sends to dynamic agents.
+import std/macros
 import results
+import private/selectorcalls
 import selectors
 
 export results.Opt, results.some, results.none, results.get, results.isSome,
@@ -33,7 +35,7 @@ proc findFirst*[T](
     receivers: openArray[T], predicate: proc(receiver: T): bool {.closure.}
 ): Opt[T] =
   ## Return the first match, or none. Snapshot membership before testing.
-  findFirst(snapshotItems(receivers), predicate)
+  firstMatching(T, snapshotItems(receivers), predicate)
 
 iterator depthFirst*[T](
     root: T, childrenOf: proc(node: T): seq[T] {.closure.},
@@ -65,21 +67,21 @@ proc findFirst*[T](
     predicate: proc(node: T): bool {.closure.}
 ): Opt[T] =
   ## Search a tree in depth-first pre-order. Return none when no node matches.
-  findFirst(root.depthFirst(childrenOf), predicate)
+  firstMatching(T, root.depthFirst(childrenOf), predicate)
 
 proc findLast*[T](
     receivers: openArray[T], predicate: proc(receiver: T): bool {.closure.}
 ): Opt[T] =
   ## Search from the end and return the first match, or none.
   ## Snapshot membership before testing.
-  findFirst(snapshotItems(receivers, reverse = true), predicate)
+  firstMatching(T, snapshotItems(receivers, reverse = true), predicate)
 
 proc findLast*[T](
     root: T, childrenOf: proc(node: T): seq[T] {.closure.},
     predicate: proc(node: T): bool {.closure.}
 ): Opt[T] =
   ## Search a tree in reverse pre-order. Return none when no node matches.
-  findFirst(root.depthFirst(childrenOf, reverse = true), predicate)
+  firstMatching(T, root.depthFirst(childrenOf, reverse = true), predicate)
 
 proc matchesLocal[A, R](
     receiver: DynamicAgent, message: Selector[A, R], args: A,
@@ -278,3 +280,33 @@ proc collectEachLocal*[A, R](
   result = newSeqOfCap[Opt[R]](args.len)
   for argument in snapshotItems(args):
     result.add receiver.replyLocal(message, argument)
+
+proc collectionSend(operation, receivers, message: NimNode,
+    predicate: NimNode = nil): NimNode =
+  if message.kind notin {nnkCall, nnkCommand}:
+    error("expected a call to a declared selector", message)
+  let captured = newCall(message[0], newCall(bindSym"SelectorCallCapture"))
+  for index in 1 ..< message.len:
+    captured.add message[index]
+
+  let binding = genSym(nskLet, "selectorCall")
+  let send = newCall(operation, receivers, newDotExpr(binding, ident"message"),
+    newDotExpr(binding, ident"args"))
+  if not predicate.isNil:
+    send.add predicate
+  result = quote do:
+    block:
+      let `binding` = `captured`
+      `send`
+
+macro collectSend*(receivers, message: untyped): untyped =
+  ## Collect local replies to a declared selector written in call form.
+  collectionSend(bindSym"collect", receivers, message)
+
+macro selectSend*(receivers, message: untyped): untyped =
+  ## Keep receivers whose Boolean selector call answers true.
+  collectionSend(bindSym"select", receivers, message)
+
+macro selectSend*(receivers, message, predicate: untyped): untyped =
+  ## Keep receivers whose selector reply passes the predicate.
+  collectionSend(bindSym"select", receivers, message, predicate)

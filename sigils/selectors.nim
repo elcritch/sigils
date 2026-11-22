@@ -1,6 +1,7 @@
 import std/[macros, options, strutils]
 
 import agents
+import private/selectorcalls
 import selectorMethodStores
 import signals
 import slots
@@ -1129,7 +1130,16 @@ proc selectorDirectCallArgs(params: NimNode, firstArg: int,
   for idx in firstArg ..< params.len:
     let arg = params[idx]
     for nameIdx in 0 ..< arg.len - 2:
-      result.add arg[nameIdx].copyNimTree()
+      let name = arg[nameIdx].copyNimTree()
+      let defaultValue = arg[^1]
+      if defaultValue.kind == nnkEmpty:
+        result.add name
+      else:
+        result.add quote do:
+          when `name` is SelectorDefaultArg:
+            `defaultValue`
+          else:
+            `name`
 
 proc selectorPragma(node: NimNode): NimNode =
   result = node.copyNimTree()
@@ -1264,21 +1274,26 @@ proc selectorImplNode(p: NimNode, runtimeSelectorName = ""): NimNode =
       selectorValueCache = genSym(nskLet,
           selectorSymbolName & "SelectorValue")
       directProc = genSym(nskProc, selectorSymbolName & "Send")
+      captureProc = genSym(nskProc, selectorSymbolName & "Capture")
       argsType = selectorArgsType(params, 1)
       dynSelf = genSym(nskParam, "self")
       directParams = params.copyNimTree()
+      captureParams = params.copyNimTree()
       directSelf = genSym(nskParam, "self")
       directArgs = selectorDirectArgs(params, 1)
       publicParams = selectorDirectParams(params, 1, dynSelf)
       directCall = nnkCall.newTree(directProc)
+      captureCall = nnkCall.newTree(captureProc)
       selectorValue = newCall(selectorValueProc)
 
     directParams.insert(
       1,
       newIdentDefs(directSelf, bindSym"DynamicAgent"),
     )
-    for arg in selectorDirectCallArgs(params, 1, dynSelf):
+    for index, arg in selectorDirectCallArgs(params, 1, dynSelf):
       directCall.add arg
+      if index > 0:
+        captureCall.add arg.copyNimTree()
 
     let directBody =
       if retType.kind == nnkTupleTy and retType.len == 0:
@@ -1300,9 +1315,18 @@ proc selectorImplNode(p: NimNode, runtimeSelectorName = ""): NimNode =
         `directBody`
     directDef[3] = directParams
 
+    let captureDef = quote do:
+      proc `captureProc`(): tuple[message: Selector[`argsType`, `retType`],
+          args: `argsType`] =
+        (`selectorValue`, `directArgs`)
+    captureParams[0] = captureDef[3][0]
+    captureDef[3] = captureParams
+
     let selectorBody = quote do:
       when `dynSelf` is SelectorDefaultArg:
         `selectorValue`
+      elif `dynSelf` is SelectorCallCapture:
+        `captureCall`
       else:
         `directCall`
     let selectorDef = nnkTemplateDef.newTree(
@@ -1314,7 +1338,7 @@ proc selectorImplNode(p: NimNode, runtimeSelectorName = ""): NimNode =
       newEmptyNode(),
       selectorBody,
     )
-    result = newStmtList(selectorValueDef, directDef, selectorDef)
+    result = newStmtList(selectorValueDef, directDef, captureDef, selectorDef)
   else:
     if params.len < 2:
       error("selector method implementations must take a receiver", params)

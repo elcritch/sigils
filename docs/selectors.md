@@ -31,6 +31,23 @@ The responder chain is skipped. Exceptions propagate immediately
 and earlier side effects remain. The common argument is passed to each send,
 and reference-bearing arguments and receivers retain normal Nim aliasing.
 
+Use `collectSend` and `selectSend` to write the selector in its ordinary
+call form. They bind positional arguments, named arguments, and defaults
+before traversal and use the same local dispatch as `collect` and `select`.
+
+```nim
+let labels = views.collectSend(accessibilityLabel())
+let accessible = views.selectSend(isAccessibilityElement())
+let named = views.selectSend(accessibilityLabel(),
+  proc(label: string): bool = label == "Save")
+```
+
+The call form uses a declared selector, optionally qualified by its module.
+For example, `texts.collectSend(surround(suffix = "]"))` binds the named
+argument and uses the declared default for `prefix`. The explicit forms
+accept selector values chosen at runtime. All forms work with flat inputs
+and inline iterators.
+
 ## Finding One Match
 
 `findFirst` and `findLast` from `sigils/hom` return an `Opt[T]`

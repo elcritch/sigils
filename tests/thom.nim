@@ -1,5 +1,6 @@
 import std/unittest
 import sigils/[hom, selectors]
+import ./selectorPublicProtocolsFixture as fixture
 
 type Item = ref object of DynamicAgent
   name: string
@@ -18,6 +19,10 @@ protocol ItemProtocol from Item:
 
   method peer(self: Item): Item =
     nil
+
+  method wrapName(self: Item, prefix: string = "(",
+      suffix: string = ")"): string =
+    prefix & self.name & suffix
 
 protocol OptionalItemProtocol:
   method optionalLabel(): string {.optional.}
@@ -150,6 +155,44 @@ suite "higher-order local messages":
     check root.depthFirst(childrenOf).findFirst(isActive(), ()) == Opt.some(first)
     check root.depthFirst(childrenOf, reverse = true)
       .findFirst(itemName(), (), matches) == Opt.some(second)
+    check root.depthFirst(childrenOf).collectSend(wrapName()) ==
+        @[Opt.none(string), Opt.some("(first)"), Opt.some("(second)")]
+    check root.depthFirst(childrenOf).selectSend(isActive()) == @[first]
+
+  test "selector call syntax binds defaults and named arguments once":
+    let
+      first = Item(name: "first", active: true).withProto()
+      second = Item(name: "second").withProto()
+      items = [first, Item(), second]
+    var evaluated = 0
+    proc openBracket(): string =
+      inc evaluated
+      "["
+
+    check items.collectSend(wrapName(suffix = "]", prefix = openBracket())) ==
+        @[Opt.some("[first]"), Opt.none(string), Opt.some("[second]")]
+    check evaluated == 1
+    check first.wrapName(suffix = "]") == "(first]"
+    check items.collectSend(wrapName(suffix = "]")) ==
+        @[Opt.some("(first]"), Opt.none(string), Opt.some("(second]")]
+    check items.selectSend(isActive()) == @[first]
+    check items.selectSend(wrapName(), proc(value: string): bool =
+      value == "(second)") == @[second]
+    let renamed = items.collectSend(rename("updated"))
+    check renamed[0].isSome
+    check renamed[1].isNone
+    check second.name == "updated"
+    check not compiles(items.collectSend(wrapName(1)))
+    check not compiles(items.selectSend(wrapName()))
+
+  test "call syntax supports module-qualified selectors":
+    let view = fixture.PublicView(caption: "Caption").withProto()
+    check [view].collectSend(fixture.currentCaption()) == @[Opt.some("Caption")]
+    discard view.addMethod(fixture.surroundedCaption(),
+        fixture.surroundStoredCaption)
+    check fixture.surroundedCaption(view, suffix = "!") == "[Caption!"
+    check [view].collectSend(fixture.surroundedCaption(suffix = "!")) ==
+        @[Opt.some("[Caption!")]
 
   test "collect and select preserve order, missing replies, and nil results":
     let
