@@ -7,6 +7,13 @@ type Row = object
 
 proc key(row: Row): int = row.id
 
+var recursiveRows: CollectionSigil[int, Row]
+
+proc recursiveKey(row: Row): int =
+  if row.text == "recursive":
+    recursiveRows <- @[Row(id: 99)]
+  row.id
+
 suite "keyed collection sigils":
   test "publish coherent projections and track computed values":
     let rows = newCollectionSigil(@[Row(id: 1, text: "one")], key)
@@ -31,6 +38,26 @@ suite "keyed collection sigils":
       rows[1] = Row(id: 2)
     check rows[1].text == "one"
     check rows.get(2).isNone
+
+  test "reject recursive publication from a snapshot key callback":
+    let initial = @[Row(id: 1)]
+    recursiveRows = newCollectionSigil(initial, recursiveKey)
+    defer: recursiveRows = nil
+    expect ValueError:
+      recursiveRows <- @[Row(id: 2, text: "recursive"), Row(id: 2)]
+    check recursiveRows{} == initial
+    recursiveRows <- @[Row(id: 2)]
+    check recursiveRows{} == @[Row(id: 2)]
+
+  test "reject recursive publication from an indexed assignment key callback":
+    let initial = @[Row(id: 1)]
+    recursiveRows = newCollectionSigil(initial, recursiveKey)
+    defer: recursiveRows = nil
+    expect ValueError:
+      recursiveRows[1] = Row(id: 1, text: "recursive")
+    check recursiveRows{} == initial
+    recursiveRows[1] = Row(id: 1, text: "ready")
+    check recursiveRows[1].text == "ready"
 
   test "computed retains temporary projections across recomputation":
     let rows = newCollectionSigil(@[Row(id: 1, text: "one")], key)
@@ -60,6 +87,14 @@ proc watch(w: Watcher, attrs: set[SigilAttributes]) {.slot.} =
     except ValueError:
       w.recursiveRejected = true
 
+type ComparableRow = object
+  id: int
+  text: string
+  detail: string
+
+proc key(row: ComparableRow): int = row.id
+proc `==`(a, b: ComparableRow): bool = a.text == b.text
+
 suite "collection notification ownership":
   test "notify only changed projections after all values are committed":
     let rows = newCollectionSigil(@[Row(id: 1, text: "old"), Row(id: 2,
@@ -77,6 +112,44 @@ suite "collection notification ownership":
     check watcher.recursiveRejected
     check other.calls == 0
     check rows.len == 2
+
+  test "publish changed keys when item values compare equal":
+    let rows = newCollectionSigil(@[ComparableRow(id: 1, text: "same")], key)
+    let order = rows.order
+    let old = rows.item(1)
+    let incoming = rows.item(2)
+    let watcher = Watcher()
+    connect(rows, change, watcher, watch)
+    connect(order, change, watcher, watch)
+    rows <- @[ComparableRow(id: 2, text: "same")]
+    check order{} == @[2]
+    check not rows.contains(1)
+    check rows.contains(2)
+    check old{}.isNone
+    check incoming{}.get.id == 2
+    check watcher.calls == 2
+
+  test "refresh equal projections and snapshots without notifying them":
+    let rows = newCollectionSigil(@[
+      ComparableRow(id: 1, text: "one", detail: "old"),
+      ComparableRow(id: 2, text: "two")], key)
+    let first = rows.item(1)
+    let itemWatcher = Watcher()
+    let snapshotWatcher = Watcher()
+    connect(first, change, itemWatcher, watch)
+    connect(rows, change, snapshotWatcher, watch)
+    rows <- @[ComparableRow(id: 1, text: "one", detail: "new"),
+      ComparableRow(id: 2, text: "changed")]
+    check rows[1].detail == "new"
+    check first{}.get.detail == "new"
+    check itemWatcher.calls == 0
+    check snapshotWatcher.calls == 1
+
+    rows[1] = ComparableRow(id: 1, text: "one", detail: "latest")
+    check rows[1].detail == "latest"
+    check first{}.get.detail == "latest"
+    check itemWatcher.calls == 0
+    check snapshotWatcher.calls == 1
 
   test "dropping and rebinding projections releases ownership":
     let rows = newCollectionSigil(@[Row(id: 1)], key)
@@ -217,3 +290,23 @@ suite "collection notification ownership":
     emit internalSigilEffectRegistry.triggerEffects()
     check evaluations == 3
     discard old
+
+  test "effects keep collection subscriptions when a lazy dependency is unchanged":
+    let tick = newSigil(1)
+    let parity = computed[int]: tick{} mod 2
+    let rows = newCollectionSigil(@[Row(id: 1, text: "old")], key)
+    let first = rows.item(1)
+    let internalSigilEffectRegistry = initSigilEffectRegistry()
+    var seen: seq[string]
+    effect:
+      discard parity{}
+      seen.add first{}.get.text
+    check seen == @["old"]
+
+    tick <- 3
+    emit internalSigilEffectRegistry.triggerEffects()
+    check seen == @["old"]
+
+    rows[1] = Row(id: 1, text: "new")
+    emit internalSigilEffectRegistry.triggerEffects()
+    check seen == @["old", "new"]

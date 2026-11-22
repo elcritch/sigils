@@ -105,7 +105,7 @@ proc item*[K, T](source: CollectionSigil[K, T], key: K): CollectionValue[Option[
     inc source.newItems
     if source.newItems >= source.pruneAfter:
       var expired: seq[K]
-      for id, entry in source.itemRefs:
+      for id, entry in tables.pairs(source.itemRefs):
         if entry.target.isNil:
           expired.add id
       for id in expired:
@@ -113,12 +113,12 @@ proc item*[K, T](source: CollectionSigil[K, T], key: K): CollectionValue[Option[
       source.newItems = 0
       source.pruneAfter = max(64, source.itemRefs.len)
 
-proc setValue*[K, T](source: CollectionSigil[K, T], values: seq[T]) =
-  ## Validate and index the entire snapshot before mutation. Publish one whole
-  ## change, optionally one order change, and only changed observed items.
-  ## All reads see the new state before any callback. Recursive writes are rejected.
+proc beginPublication[K, T](source: CollectionSigil[K, T]) =
   if source.publishing:
     raise newException(ValueError, "cannot publish a collection recursively")
+  source.publishing = true
+
+proc publish[K, T](source: CollectionSigil[K, T], values: seq[T]) =
   var positions = initTable[K, int]()
   var keys: seq[K]
   for i, value in values:
@@ -127,13 +127,12 @@ proc setValue*[K, T](source: CollectionSigil[K, T], values: seq[T]) =
       raise newException(ValueError, "duplicate collection identity")
     positions[key] = i
     keys.add key
-  if source.values == values:
-    return
   let order = (if source.orderRef.isNil: nil else: source.orderRef.target)
   let moved = keys != source.keys
-  var changed: seq[tuple[observed: CollectionValue[Option[T]], value: Option[T]]]
+  let snapshotChanged = moved or source.values != values
+  var updates: seq[tuple[observed: CollectionValue[Option[T]], value: Option[T], notify: bool]]
   var expired: seq[K]
-  for key, link in source.itemRefs:
+  for key, link in tables.pairs(source.itemRefs):
     let observed = link.target
     if observed.isNil:
       expired.add key
@@ -144,9 +143,9 @@ proc setValue*[K, T](source: CollectionSigil[K, T], values: seq[T]) =
           none(T)
         else:
           some(values[index])
-      if observed.value != next:
-        # Stage changed observations; update their values after comparison succeeds.
-        changed.add (observed, next)
+      # Stage every live projection and use equality to decide which ones notify.
+      let notify = observed.value != next
+      updates.add (observed, next, notify)
   source.values = values
   source.positions = positions
   source.keys = keys
@@ -154,16 +153,22 @@ proc setValue*[K, T](source: CollectionSigil[K, T], values: seq[T]) =
     source.itemRefs.del(key)
   if not order.isNil:
     order.value = keys
-  for item in changed:
-    item.observed.value = item.value
-  source.publishing = true
-  defer:
-    source.publishing = false
+  for update in updates.mitems:
+    update.observed.value = move(update.value)
   if moved and not order.isNil:
     emit order.change({Changed})
-  for item in changed:
-    emit item.observed.change({Changed})
-  emit source.change({Changed})
+  for update in updates:
+    if update.notify:
+      emit update.observed.change({Changed})
+  if snapshotChanged:
+    emit source.change({Changed})
+
+proc setValue*[K, T](source: CollectionSigil[K, T], values: seq[T]) =
+  ## Validate and index the snapshot, commit all projections, then notify changes.
+  ## Recursive writes to this collection raise ValueError.
+  source.beginPublication()
+  defer: source.publishing = false
+  source.publish(values)
 
 proc `<-`*[K, T](source: CollectionSigil[K, T], values: seq[T]) =
   source.setValue(values)
@@ -178,8 +183,10 @@ proc newCollectionSigil*[K, T](
 
 proc `[]=`*[K, T](source: CollectionSigil[K, T], key: K, value: T) =
   ## Replace an existing item without changing its identity; publish once.
+  source.beginPublication()
+  defer: source.publishing = false
   if source.keyOf(value) != key:
     raise newException(ValueError, "replacement must preserve collection identity")
   var next = source.snapshot()
   next[source.positions[key]] = value
-  source.setValue(next)
+  source.publish(next)

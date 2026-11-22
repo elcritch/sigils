@@ -234,12 +234,12 @@ template effect*(blk: untyped) =
   when defined(sigilsDebug):
     res.debugName = "EFF"
   res.fn = proc(arg: SigilBase) {.closure.} =
-    let previousSources = move(arg.retainedSources)
-    defer: arg.disconnectUnusedSources(previousSources)
     let internalSigil {.inject.} = SigilEffect(arg)
     bindSigilEvents:
       internalSigil.computeDeps()
       if Changed in internalSigil.attrs:
+        let previousSources = move(arg.retainedSources)
+        defer: arg.disconnectUnusedSources(previousSources)
         `blk`
         internalSigil.attrs.excl {Dirty, ChangeD}
         # internalSigil.vhash = internalSigil.computeHash()

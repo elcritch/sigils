@@ -26,7 +26,7 @@ assert order{} == @[1]
 - `tasks[id]` is an indexed lookup by **key**, raising `KeyError` when absent.
   `get(id)` returns `Option[T]`; `contains`, `len`, `items`, and `pairs` are also available.
 - `tasks.order` changes only when membership or ordering changes.
-- `tasks.item(id)` changes only when that item's value changes. It publishes
+- `tasks.item(id)` notifies when that item's value changes under `==`. It publishes
   `none(T)` on removal and follows the identity if it is reinserted.
 - `tasks[id] = value` replaces an existing item and requires the same key.
 
@@ -37,8 +37,10 @@ Read-only projections have no setter; commands publish through the collection,
 so they cannot accidentally diverge from the authoritative model.
 
 Publication validates unique keys, builds the new index, and compares observed
-items **before mutation**. Every snapshot and projection is updated before the
-first notification. A duplicate-key error leaves the collection unchanged.
+items **before mutation**. Every accepted replacement refreshes the snapshot and
+all live projections before any notification. Snapshot subscribers are notified
+when the ordered keys or item values compare unequal. A duplicate-key error
+leaves the collection unchanged.
 Synchronous recursive publication raises `ValueError`; schedule dependent writes
 after the current publication. Subscriber exceptions do not roll back committed
 state or promise delivery to remaining subscribers.
@@ -46,7 +48,7 @@ state or promise delivery to remaining subscribers.
 Projections are allocated only on demand. Repeated `item(id)` calls share a live
 observation. A projection retains its collection; the collection keeps a
 teardown-managed non-owning link back. Dropping projections releases them without
-a cycle. Expired item entries are pruned on changed publication and periodically
+a cycle. Expired item entries are pruned on publication and periodically
 as new observations are requested. Cache hits are expected O(1); pruning scans
 are amortized across newly created projections.
 
