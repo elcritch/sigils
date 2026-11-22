@@ -431,4 +431,4 @@ threadB.join()
 
 ## Selectors
 
-Sigils also includes selectors: a dynamic dispatch layer for delegate-style behavior, responder chains, protocols, and method wrappers when a signal is the wrong shape because you need one answer back. See [docs/selectors.md](docs/selectors.md) for the guide and examples.
+Sigils also includes selectors: a dynamic dispatch layer for delegate-style behavior, responder chains, protocols, and method wrappers when a signal is the wrong shape because you need one answer back. See [docs/selectors.md](docs/selectors.md) for the guide and examples. A [native library example](examples/protocol_dynlib/README.md) shows how to send a protocol selector to an agent created by a Binny dynamic library.
