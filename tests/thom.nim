@@ -44,6 +44,90 @@ proc itemCursor(items: varargs[Item]): iterator(): Item {.closure.} =
       yield item
 
 suite "higher-order local messages":
+  test "first reply preserves receiver and stops after an accepted callback":
+    let first = Item(name: "").withProto()
+    let second = Item(name: "chosen").withProto()
+    let third = Item(name: "later").withProto()
+    var seen: seq[Item]
+    proc query(item: Item): string =
+      seen.add item
+      item.name
+    proc present(value: string): bool = value.len > 0
+    let match = [first, second, third].findFirstReply(query, present)
+    check match.isSome
+    check match.get().receiver == second
+    check match.get().reply == "chosen"
+    check seen == @[first, second]
+    let empty: seq[Item] = @[]
+    check empty.findFirstReply(query, present).isNone
+    let inlineMatch = [first, second].findFirstReply(
+      proc(item: Item): string = item.name,
+      proc(value: string): bool = value.len > 0,
+    )
+    check inlineMatch.get().receiver == second
+
+  test "first reply callback searches inline iterators":
+    let first = Item(name: "").withProto()
+    let second = Item(name: "found").withProto()
+    let firstAgent = DynamicAgent(first)
+    first.setNextResponder(second)
+    proc present(reply: string): bool {.inline.} = reply.len > 0
+    let found = firstAgent.responderChain().findFirstReply(
+      proc(receiver: DynamicAgent): string = receiver.itemName(),
+      present,
+    )
+    check found.get().receiver == DynamicAgent(second)
+    check found.get().reply == "found"
+
+  test "first local reply skips unhandled sends and resumes closure cursors":
+    let first = Item(name: "").withProto()
+    let second = Item(name: "chosen").withProto()
+    let third = Item(name: "later").withProto()
+    let cursor = itemCursor(Item(), first, second, third)
+    proc present(value: string): bool = value.len > 0
+    let match = cursor.findFirstSend(itemName(), present)
+    check match.isSome
+    check match.get().receiver == second
+    check match.get().reply == "chosen"
+    check cursor() == third
+    let viaChain = first.responderChain().findFirstSend(itemName(), present)
+    check viaChain.isNone
+    first.setNextResponder(second)
+    proc nonempty(value: string): bool {.inline.} = value.len > 0
+    let viaChain2 = first.responderChain().findFirstSend(itemName(), nonempty)
+    check viaChain2.get().receiver == second
+    check viaChain2.get().reply == "chosen"
+
+  test "responder chain follows changes made after a yield":
+    let first = Item(name: "first").withProto()
+    let old = Item(name: "old").withProto()
+    let replacement = Item(name: "replacement").withProto()
+    first.setNextResponder(old)
+    var visited: seq[DynamicAgent]
+    for receiver in first.responderChain():
+      visited.add receiver
+      if receiver == first:
+        first.setNextResponder(replacement)
+    check visited == @[DynamicAgent(first), DynamicAgent(replacement)]
+    check Item(nil).responderChain().findFirst(
+      proc(receiver: DynamicAgent): bool = true).isNone
+
+  test "follow reads the next link lazily":
+    let first = Item()
+    let second = Item()
+    var nextCalls = 0
+    proc next(node: Item): Item =
+      inc nextCalls
+      if node == first: second else: nil
+    proc matches(node: Item): bool = node == first
+    check first.follow(next).findFirst(matches).get() == first
+    check nextCalls == 0
+    var nodes: seq[Item]
+    for node in first.follow(next):
+      nodes.add node
+    check nodes == @[first, second]
+    check nextCalls == 2
+
   test "closure iterator search resumes after the first match":
     iterator numbers(): int {.closure.} =
       yield 1

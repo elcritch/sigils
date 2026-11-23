@@ -9,10 +9,31 @@ export results.Opt, results.some, results.none, results.get, results.isSome,
 
 type ClosureIterator[T] = iterator(): T {.closure.}
 
+type ReplyMatch*[T, R] = object
+  ## The receiver and accepted reply from a first-reply search.
+  receiver*: T
+  reply*: R
+
 iterator remainingItems[T](receivers: ClosureIterator[T]): T =
   if not receivers.isNil:
     for receiver in receivers():
       yield receiver
+
+iterator follow*[T: ref](
+    first: T, next: proc(current: T): T {.closure.}
+): T =
+  ## Yield each node, asking for its successor after the yield.
+  ## A nil successor ends traversal. The links must be acyclic.
+  var current = first
+  while not current.isNil:
+    yield current
+    current = next(current)
+
+iterator responderChain*(first: DynamicAgent): DynamicAgent =
+  ## Yield the receiver and follow its current next responder after each yield.
+  ## The responder chain must be acyclic.
+  for receiver in follow(first, nextResponder):
+    yield receiver
 
 iterator snapshotItems[T](
     receivers: openArray[T], reverse: static bool = false
@@ -209,6 +230,74 @@ proc replyLocal[A, R](
   if receiver.performLocal(message, args, value):
     result = Opt.some(value)
 
+template firstReply(T, R: typedesc, receivers, getReply,
+    predicate: untyped): untyped =
+  block:
+    let
+      query = getReply
+      accepts = predicate
+    var found: Opt[ReplyMatch[T, R]]
+    for receiver in receivers:
+      let reply = query(receiver)
+      if reply.isSome and accepts(reply.get()):
+        found = Opt.some(ReplyMatch[T, R](receiver: receiver, reply: reply.get()))
+        break
+    found
+
+template findFirstReply*[T, R](
+    receivers: iterable[T], query: proc(receiver: T): R {.closure.},
+    predicate: typed
+): Opt[ReplyMatch[T, R]] =
+  ## Return the first receiver and callback reply accepted by the predicate.
+  block:
+    let callback = query
+    firstReply(T, R, receivers, proc(receiver: T): Opt[R] = Opt.some(callback(
+        receiver)),
+      predicate)
+
+proc findFirstReply*[T, R](
+    receivers: openArray[T], query: proc(receiver: T): R {.closure.},
+    predicate: proc(reply: R): bool {.closure.}
+): Opt[ReplyMatch[T, R]] =
+  ## Snapshot membership before calling the query.
+  firstReply(T, R, snapshotItems(receivers),
+    proc(receiver: T): Opt[R] = Opt.some(query(receiver)), predicate)
+
+proc findFirstReply*[T, R](
+    receivers: ClosureIterator[T], query: proc(receiver: T): R {.closure.},
+    predicate: proc(reply: R): bool {.closure.}
+): Opt[ReplyMatch[T, R]] =
+  ## Stop at a match and leave the iterator ready to resume.
+  firstReply(T, R, remainingItems(receivers),
+    proc(receiver: T): Opt[R] = Opt.some(query(receiver)), predicate)
+
+template findFirstReply*[T: DynamicAgent, A, R](
+    receivers: iterable[T], message: Selector[A, R], args: A,
+    predicate: typed
+): Opt[ReplyMatch[T, R]] =
+  ## Return the first accepted local selector reply with its receiver.
+  block:
+    let selector = message
+    let payload = args
+    firstReply(T, R, receivers,
+      proc(receiver: T): Opt[R] = receiver.replyLocal(selector, payload), predicate)
+
+proc findFirstReply*[T: DynamicAgent, A, R](
+    receivers: openArray[T], message: Selector[A, R], args: A,
+    predicate: proc(reply: R): bool {.closure.}
+): Opt[ReplyMatch[T, R]] =
+  ## Snapshot membership and return the first accepted local reply.
+  firstReply(T, R, snapshotItems(receivers),
+    proc(receiver: T): Opt[R] = receiver.replyLocal(message, args), predicate)
+
+proc findFirstReply*[T: DynamicAgent, A, R](
+    receivers: ClosureIterator[T], message: Selector[A, R], args: A,
+    predicate: proc(reply: R): bool {.closure.}
+): Opt[ReplyMatch[T, R]] =
+  ## Stop at the first accepted local reply and leave the iterator ready to resume.
+  firstReply(T, R, remainingItems(receivers),
+    proc(receiver: T): Opt[R] = receiver.replyLocal(message, args), predicate)
+
 template collectReplies[A, R](
     receivers: untyped, message: Selector[A, R], args: A, capacity: int
 ): seq[Opt[R]] =
@@ -369,6 +458,10 @@ proc collectionSend(operation, receivers, message: NimNode,
 macro collectSend*(receivers, message: untyped): untyped =
   ## Collect local replies to a declared selector written in call form.
   collectionSend(bindSym"collect", receivers, message)
+
+macro findFirstSend*(receivers, message, predicate: untyped): untyped =
+  ## Find the first accepted local reply to a selector written in call form.
+  collectionSend(bindSym"findFirstReply", receivers, message, predicate)
 
 proc sendEachCaptured[T: DynamicAgent, A](
     receivers: openArray[T],
