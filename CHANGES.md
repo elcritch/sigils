@@ -1,4 +1,4 @@
-## Unreleased
+## 0.37.3
 
 - Add queued and delayed protocol command sends with `sendLater` and
   `sendAfter` in `sigils/scheduledselectors`. Event-loop hosts can supply
