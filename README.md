@@ -2,6 +2,8 @@
 
 A [signal and slots library](https://en.wikipedia.org/wiki/Signals_and_slots) implemented for the Nim programming language. The signals and slots are type checked and implemented purely in Nim. It can be used for event based programming both with GUIs or standalone.
 
+Read the [Sigils documentation](https://elcritch.github.io/sigils/) for guides on selectors, protocols, collections, threading, and messaging.
+
 > Signals and slots is a language construct introduced in Qt for communication between objects which makes it easy to implement the observer pattern while avoiding boilerplate code. The concept is that GUI widgets, and other objects, can send signals containing event information which can be received by other objects using special member functions known as slots. This is similar to C/C++ function pointers, but the signal/slot system ensures the type-correctness of callback arguments.
 > - Wikipedia
 
