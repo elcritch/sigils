@@ -281,21 +281,6 @@ proc collectEach*[A, R](
   for argument in snapshotItems(args):
     result.add receiver.replyLocal(message, argument)
 
-proc sendEachLocal*[T: DynamicAgent, A](
-    receivers: openArray[T], message: Selector[A, tuple[]], args: A
-): seq[bool] {.inline, deprecated: "use sendEach".} =
-  sendEach(receivers, message, args)
-
-proc collectEachLocal*[T: DynamicAgent, A, R](
-    receivers: openArray[T], message: Selector[A, R], args: openArray[A]
-): seq[Opt[R]] {.inline, deprecated: "use collectEach".} =
-  collectEach(receivers, message, args)
-
-proc collectEachLocal*[A, R](
-    receiver: DynamicAgent, message: Selector[A, R], args: openArray[A]
-): seq[Opt[R]] {.inline, deprecated: "use collectEach".} =
-  collectEach(receiver, message, args)
-
 proc captureSelectorCall(message: NimNode): NimNode =
   if message.kind notin {nnkCall, nnkCommand}:
     error("expected a call to a declared selector", message)
@@ -347,3 +332,18 @@ macro selectWhere*(receivers, projection, predicate: untyped): untyped =
         test = `predicateCall`
       select(`receivers`, attribute.message, attribute.args,
         selectorReplyPredicate(attribute.message, test.message, test.args))
+
+proc sendEachLocal*[T: DynamicAgent, A](
+    receivers: openArray[T], message: Selector[A, tuple[]], args: A
+): seq[bool] {.inline, deprecated: "use sendEach".} =
+  sendEach(receivers, message, args)
+
+proc collectEachLocal*[T: DynamicAgent, A, R](
+    receivers: openArray[T], message: Selector[A, R], args: openArray[A]
+): seq[Opt[R]] {.inline, deprecated: "use collectEach".} =
+  collectEach(receivers, message, args)
+
+proc collectEachLocal*[A, R](
+    receiver: DynamicAgent, message: Selector[A, R], args: openArray[A]
+): seq[Opt[R]] {.inline, deprecated: "use collectEach".} =
+  collectEach(receiver, message, args)
