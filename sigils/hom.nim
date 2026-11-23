@@ -435,13 +435,6 @@ proc collectEach*[A, R](
   for argument in snapshotItems(args):
     result.add receiver.replyLocal(message, argument)
 
-proc captureSelectorCall(message: NimNode): NimNode =
-  if message.kind notin {nnkCall, nnkCommand}:
-    error("expected a call to a declared selector", message)
-  result = newCall(message[0], newCall(bindSym"SelectorCallCapture"))
-  for index in 1 ..< message.len:
-    result.add message[index]
-
 proc collectionSend(operation, receivers, message: NimNode,
     predicate: NimNode = nil): NimNode =
   let captured = captureSelectorCall(message)

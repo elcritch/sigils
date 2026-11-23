@@ -428,6 +428,49 @@ A `Selector[A, R]` is a typed wrapper around a runtime `SigilName`. The `{.selec
 
 Sending a selector builds an `Invocation` with packed params. Dispatch tries the local method stack, optional lazy resolution, a forwarding target, the next responder, and finally `forwardInvocation`. Required sends raise `UnhandledSelectorError` when nothing handles the invocation. Optional sends return `Option[R]` or a handled `bool`.
 
+## Scheduled Selector Sends
+
+Import `sigils/scheduledselectors` to queue command selectors on the current
+Sigils scheduler. Install and service that scheduler on the receiver's thread.
+`sendLater` runs when its queue is polled, while `sendAfter` uses a one-shot
+timer on a timer-capable scheduler such as `AsyncSigilThread` or a Chronos
+scheduler. Hosts with their own event loop can pass a `scheduleTimer` proc as
+the last argument, including when they use the default Sigils scheduler. The
+proc arms a one-shot callback on the current thread and returns a proc that
+cancels it. The host owns the timer and delivers the callback on that thread
+after the requested delay and after registration returns. The cancellation proc
+must be `gcsafe` and runs on the scheduling thread.
+These operations use the current thread's scheduler and do not support
+`SigilThreadPool`. Use actor proxies for work on another thread.
+
+```nim
+import std/times
+import sigils/[scheduledselectors, threadAsyncs]
+
+startLocalThreadDispatch()
+view.sendLater(updateStatus("Ready"))
+let pending = view.sendAfter(initDuration(seconds = 1), updateStatus("Done"))
+pending.cancel() # optional, on the scheduler's thread
+```
+
+An event-loop host can pass its own `SelectorTimerScheduler` directly.
+
+```nim
+let pending = view.sendAfter(
+  initDuration(seconds = 1), updateStatus("Done"), scheduleTimer = armUiTimer
+)
+```
+
+Selector arguments are captured when the send is scheduled. Dispatch uses the
+normal routed selector send. Scheduled work does not keep the receiver alive;
+if the receiver is destroyed before delivery, the send is skipped. The call
+forms accept command selectors with no return value. Explicitly typed selector
+values can be passed to `enqueueSelector` and `scheduleSelector`.
+`sendAfter` returns a cancellation handle. An uncancelled send runs even if
+the caller drops the handle. Cancellation and scheduling happen on the same
+thread as the scheduler. Dispatch errors follow the scheduler's error behavior
+or propagate through the custom host timer callback.
+
 ## Sending to Collections
 
 Import `sigils/hom` for synchronous local sends to multiple agents. The

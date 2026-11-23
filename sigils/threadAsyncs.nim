@@ -91,11 +91,13 @@ method setTimer*(
       if timer.count == 0 or thread.hasCancelTimer(timer):
         thread.removeTimer(timer)
         return true # stop timer
+      emit timer.timeout()
+      timer.count.dec()
+      if timer.count == 0 or thread.hasCancelTimer(timer):
+        thread.removeTimer(timer)
       else:
-        emit timer.timeout()
-        timer.count.dec()
         asyncdispatch.addTimer(timer.timerMilliseconds(), oneshot = true, cb)
-        return false
+      return true # release this one-shot registration
     asyncdispatch.addTimer(timer.timerMilliseconds(), oneshot = true, cb)
 
 proc execOne(thread: AsyncSigilThreadPtr): bool {.gcsafe.} =

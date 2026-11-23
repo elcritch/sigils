@@ -1,3 +1,11 @@
+## 0.37.3
+
+- Add queued and delayed protocol command sends with `sendLater` and
+  `sendAfter` in `sigils/scheduledselectors`. Event-loop hosts can supply
+  their own timer for `sendAfter`.
+- Release each finite asyncdispatch timer registration when it fires so
+  completed timers can release their captured arguments.
+
 ## 0.37.2
 
 - Add `findFirstReply` and `findFirstSend` to return the first accepted
