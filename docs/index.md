@@ -3,6 +3,7 @@
 Sigils provides signals and slots, dynamic selectors and protocols, reactive
 collections, and tools for communicating across threads in Nim.
 
+- [Signals and slots](signals-and-slots.md) introduces events and connections.
 - [Selectors and protocols](selectors.md) covers dynamic dispatch and higher-order messaging.
 - [Collection Sigils](collection-sigils.md) covers keyed reactive collections.
 - [Threading](threading.md) covers agents, workers, and cross-thread communication.
