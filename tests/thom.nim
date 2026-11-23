@@ -260,12 +260,12 @@ suite "higher-order local messages":
       missing = Item()
       last = Item().withProto()
       items = @[first, missing, last]
-    check items.sendEachLocal(rename(), "same") == @[true, false, true]
-    check items.collectEachLocal(rename(), ["a", "b", "c"])[1].isNone
+    check items.sendEach(rename(), "same") == @[true, false, true]
+    check items.collectEach(rename(), ["a", "b", "c"])[1].isNone
     check first.name == "a"
     check last.name == "c"
     expect ValueError:
-      discard items.collectEachLocal(rename(), ["unexpected"])
+      discard items.collectEach(rename(), ["unexpected"])
     check first.name == "a"
 
   test "dispatch snapshots membership before calling handlers":
@@ -293,7 +293,7 @@ suite "higher-order local messages":
       call.setResult(())
       true
     )
-    discard [first, last].collectEachLocal(rename(), labels)
+    discard [first, last].collectEach(rename(), labels)
     check last.name == "last"
 
   test "exceptions stop later sends after earlier side effects":
@@ -305,6 +305,6 @@ suite "higher-order local messages":
       raise newException(ValueError, "failed")
     )
     expect ValueError:
-      discard @[first, failing, last].sendEachLocal(rename(), "after")
+      discard @[first, failing, last].sendEach(rename(), "after")
     check first.name == "after"
     check last.name == "before"

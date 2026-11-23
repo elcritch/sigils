@@ -1,3 +1,9 @@
+## Unreleased
+
+- Rename HOM's `sendEachLocal` and `collectEachLocal` to `sendEach` and
+  `collectEach` to match the local dispatch convention of `collect` and
+  `select`. The original names are deprecated aliases.
+
 ## 0.36.0
 
 - Add `sigils/hom` for local selector sends to collections and inline iterators.

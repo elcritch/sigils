@@ -81,9 +81,9 @@ The collection examples use protocols to declare messages such as
 | --- | --- |
 | Select employees by salary | `employees.select(earnsMoreThan(), 1000)` |
 | Vary the receiver and reuse a suffix | `texts.collect(appendText(), " Doe")` |
-| Reuse the receiver and vary the argument | `title.collectEachLocal(appendText(), names)` |
-| Vary the receiver and the argument together | `titles.collectEachLocal(appendText(), names)` |
-| Give Alice each of Sally's reports | `alice.collectEachLocal(addReport(), sally.reports)` |
+| Reuse the receiver and vary the argument | `title.collectEach(appendText(), names)` |
+| Vary the receiver and the argument together | `titles.collectEach(appendText(), names)` |
+| Give Alice each of Sally's reports | `alice.collectEach(addReport(), sally.reports)` |
 | Select employees by a test on their name | `employees.selectWhere(employeeName(), hasPrefix("J"))` |
 
 The paired form requires equal lengths before sending. A selector with more

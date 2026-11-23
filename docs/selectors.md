@@ -442,9 +442,9 @@ returns a `seq[Opt[string]]` with one entry per receiver.
   selector answers true. Pass a fourth argument to test the reply of any
   selector, as in `items.select(currentCaption(), (), isHeading)`.
   Unhandled sends are omitted.
-- `sendEachLocal(items, command, args)` returns one handled flag per receiver
+- `sendEach(items, command, args)` returns one handled flag per receiver
   for commands with an empty-tuple result.
-- `collectEachLocal(items, selector, arguments)` sends the corresponding
+- `collectEach(items, selector, arguments)` sends the corresponding
   argument to each receiver. Unequal lengths raise `ValueError` before sending.
   Pass a single receiver to send it every argument in order.
 
