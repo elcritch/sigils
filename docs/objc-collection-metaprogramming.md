@@ -75,7 +75,7 @@ For a related route through **syntax macros**, Tim Burks's Nu put a Lisp on the 
 The collection examples use protocols to declare messages such as
 `earnsMoreThan()`. Sigils can send that selector to a single employee through
 `trySendLocal`. The HOM module uses the same selector to filter a collection.
-[Runnable collection and utility examples](../examples/hom_paper.nim)
+[Runnable collection and utility examples](https://github.com/elcritch/sigils/blob/main/examples/hom_paper.nim)
 
 | Example in the paper | Sigils expression |
 | --- | --- |
@@ -91,7 +91,7 @@ than one parameter can take a tuple of arguments for each send. The optional
 delegate example uses `sendLocalIfHandled`, and the exception example wraps
 a local send with a logging policy. The scheduling example delays a local
 message and uses a worker slot and an explicit future to sort and merge two
-batches. [Higher Order Messaging, §§4.1–4.4][hom] · [Runnable scheduling example](../examples/hom_paper_scheduling.nim)
+batches. [Higher Order Messaging, §§4.1–4.4][hom] · [Runnable scheduling example](https://github.com/elcritch/sigils/blob/main/examples/hom_paper_scheduling.nim)
 
 ```sh
 atlas-run tests examples/hom_paper.nim examples/hom_paper_scheduling.nim -- --mm:arc

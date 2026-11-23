@@ -1,0 +1,22 @@
+site_name: Sigils
+site_url: https://elcritch.github.io/sigils/
+repo_url: https://github.com/elcritch/sigils
+repo_name: elcritch/sigils
+edit_uri: edit/main/docs/
+theme:
+  name: readthedocs
+nav:
+  - Home: index.md
+  - Selectors and protocols: selectors.md
+  - Collection Sigils: collection-sigils.md
+  - Threading: threading.md
+  - JSON-RPC: jsonrpc.md
+  - IPC: ipc.md
+  - Higher-order messaging:
+      - Objective-C collection metaprogramming: objc-collection-metaprogramming.md
+      - Sigils and Merenda: hom-in-sigils-and-merenda.md
+  - Reference notes:
+      - CBOR framing: cbor-tag24-fixed32-frame.md
+      - Binary size review: binary-size-review.md
+      - Selector payload review: selector-payload-review.md
+      - Thread pool plan: thread-pool-plan.md
