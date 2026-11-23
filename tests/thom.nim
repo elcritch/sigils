@@ -267,6 +267,9 @@ suite "higher-order local messages":
     expect ValueError:
       discard items.collectEach(rename(), ["unexpected"])
     check first.name == "a"
+    items.sendEach(rename(), "applied")
+    check first.name == "applied"
+    check last.name == "applied"
 
   test "dispatch snapshots membership before calling handlers":
     let

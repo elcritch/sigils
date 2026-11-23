@@ -252,7 +252,7 @@ proc select*[T: DynamicAgent, A](
 
 proc sendEach*[T: DynamicAgent, A](
     receivers: openArray[T], message: Selector[A, tuple[]], args: A
-): seq[bool] =
+): seq[bool] {.discardable.} =
   ## Send a command locally to every receiver, reporting which handled it.
   ## Membership is snapshotted before dispatch.
   result = newSeqOfCap[bool](receivers.len)

@@ -443,7 +443,8 @@ returns a `seq[Opt[string]]` with one entry per receiver.
   selector, as in `items.select(currentCaption(), (), isHeading)`.
   Unhandled sends are omitted.
 - `sendEach(items, command, args)` returns one handled flag per receiver
-  for commands with an empty-tuple result.
+  for commands with an empty-tuple result. You can call it as a statement
+  when you only need the side effects.
 - `collectEach(items, selector, arguments)` sends the corresponding
   argument to each receiver. Unequal lengths raise `ValueError` before sending.
   Pass a single receiver to send it every argument in order.
