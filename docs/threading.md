@@ -119,7 +119,7 @@ condition, as in the example, instead of assuming that an empty local queue mean
 the worker has finished.
 
 In a GUI, call `pollAll()` from the application thread when the event loop wakes.
-The [Siwin example](../README.md#siwin-application-loop) shows how to wake the
+The [Siwin example](https://github.com/elcritch/sigils/blob/main/README.md#siwin-application-loop) shows how to wake the
 application when a Sigils message arrives. Avoid a tight loop that repeatedly
 calls `pollAll()` while idle; use a blocking wait or an event-loop wakeup.
 
@@ -177,7 +177,7 @@ invalidate other handles to the same actor.
 Once the last proxy is gone, the scheduler can collect the actor if it has no
 remaining connections. Global registration can keep an actor available without
 a local proxy; removing one name leaves other names for that actor intact. See
-[`registry.nim`](../sigils/registry.nim) for registration and lookup helpers.
+[`registry.nim`](https://github.com/elcritch/sigils/blob/main/sigils/registry.nim) for registration and lookup helpers.
 
 Queued calls do not keep their receiver alive. If a local receiver or proxy is
 destroyed before a queued call runs, that delivery is discarded. This applies to
@@ -240,10 +240,10 @@ The main scheduler messages are:
 | `Trigger` | Process actors marked ready through the lower-level actor-inbox hooks. Unfinished readiness is restored if a slot raises. |
 | `Exit` | Request scheduler shutdown. |
 
-The implementation lives in [`threadBase.nim`](../sigils/threadBase.nim),
-[`threadProxies.nim`](../sigils/threadProxies.nim),
-[`threadPool.nim`](../sigils/threadPool.nim), and
-[`mailboxes.nim`](../sigils/mailboxes.nim). For more executable examples, see
-[`tslotsThread.nim`](../tests/tslotsThread.nim) and
-[`tthreadPool.nim`](../tests/tthreadPool.nim). The failure cases are covered in
-[`tthreadSafety.nim`](../tests/tthreadSafety.nim).
+The implementation lives in [`threadBase.nim`](https://github.com/elcritch/sigils/blob/main/sigils/threadBase.nim),
+[`threadProxies.nim`](https://github.com/elcritch/sigils/blob/main/sigils/threadProxies.nim),
+[`threadPool.nim`](https://github.com/elcritch/sigils/blob/main/sigils/threadPool.nim), and
+[`mailboxes.nim`](https://github.com/elcritch/sigils/blob/main/sigils/mailboxes.nim). For more executable examples, see
+[`tslotsThread.nim`](https://github.com/elcritch/sigils/blob/main/tests/tslotsThread.nim) and
+[`tthreadPool.nim`](https://github.com/elcritch/sigils/blob/main/tests/tthreadPool.nim). The failure cases are covered in
+[`tthreadSafety.nim`](https://github.com/elcritch/sigils/blob/main/tests/tthreadSafety.nim).
