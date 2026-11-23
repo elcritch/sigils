@@ -83,13 +83,13 @@ Here the compiler chooses the overload from the type of `collecting()`. Sigils c
 Suppose an inspector is applying a pair of edited labels, one per selected view. Repeating one selector with two different arguments is the case that made MPWFoundation's `each` interesting. For UI edits I would check lengths up front. The historical library stopped at the shorter input. A truncated edit would leave some views carrying stale labels. [Higher Order Messaging, §4.1](https://scg.unibe.ch/archive/papers/Weih05aHigherOrderMessagingOOPSLA2005.pdf)
 
 ```nim
-let edits = children.collectEachLocal(setAccessibilityLabel(), ["Section", "Submit"])
+let edits = children.collectEach(setAccessibilityLabel(), ["Section", "Submit"])
 doAssert edits[0].isSome and edits[1].isSome
 doAssert children.collectSend(accessibilityLabel()) ==
   @[Opt.some("Section"), Opt.some("Submit")]
 ```
 
-Sigils represents a selector without a return value using the empty tuple, so the editor can still see which setters were handled. `sendEachLocal` reports handled flags when sending the same command and arguments to every receiver. A setter can emit its normal change event, and observers can connect using the existing protocol machinery. [Selectors and protocol events](selectors.md#protocols)
+Sigils represents a selector without a return value using the empty tuple, so the editor can still see which setters were handled. `sendEach` reports handled flags when sending the same command and arguments to every receiver. A setter can emit its normal change event, and observers can connect using the existing protocol machinery. [Selectors and protocol events](selectors.md#protocols)
 
 ## Recursion and composition
 

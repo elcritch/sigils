@@ -17,6 +17,10 @@ protocol ItemProtocol from Item:
   method rename(self: Item, name: string) =
     self.name = name
 
+  method label(self: Item, name: string, active: bool = true) =
+    self.name = name
+    self.active = active
+
   method peer(self: Item): Item =
     nil
 
@@ -260,13 +264,61 @@ suite "higher-order local messages":
       missing = Item()
       last = Item().withProto()
       items = @[first, missing, last]
-    check items.sendEachLocal(rename(), "same") == @[true, false, true]
-    check items.collectEachLocal(rename(), ["a", "b", "c"])[1].isNone
+    check items.sendEach(rename(), "same") == @[true, false, true]
+    check items.collectEach(rename(), ["a", "b", "c"])[1].isNone
     check first.name == "a"
     check last.name == "c"
     expect ValueError:
-      discard items.collectEachLocal(rename(), ["unexpected"])
+      discard items.collectEach(rename(), ["unexpected"])
     check first.name == "a"
+    items.sendEach(rename(), "applied")
+    check first.name == "applied"
+    check last.name == "applied"
+
+  test "command call form accepts named arguments and defaults":
+    let
+      item = Item().withProto()
+      items = [item, Item()]
+    var evaluated = 0
+    proc nextName(): string =
+      inc evaluated
+      "updated"
+
+    items.sendEachTo(label(nextName()))
+    check item.name == "updated"
+    check item.active
+    check evaluated == 1
+    check items.sendEachTo(label(active = false, name = "assigned")) == @[true, false]
+    check item.name == "assigned"
+    check not item.active
+    check not compiles(items.sendEachTo(itemName()))
+
+  test "selector-first commands accept variadic receivers":
+    let
+      first = Item().withProto()
+      last = Item().withProto()
+      missing = DynamicAgent()
+    check sendEach(label(), ("paired", false), first, missing, last) ==
+      @[true, false, true]
+    check first.name == "paired"
+    check last.name == "paired"
+    sendEach(rename(), "single", last)
+    check last.name == "single"
+    check sendEach(rename(), "unused").len == 0
+    check not compiles(sendEach(rename(), "invalid", 5))
+
+  test "command call form evaluates receivers before arguments":
+    let items = [Item().withProto(), Item().withProto()]
+    var index = 0
+    proc receivers(): seq[Item] = @[items[index]]
+    proc nextName(): string =
+      inc index
+      "first"
+
+    receivers().sendEachTo(rename(nextName()))
+    check items[0].name == "first"
+    check items[1].name == ""
+    check index == 1
 
   test "dispatch snapshots membership before calling handlers":
     let
@@ -293,7 +345,7 @@ suite "higher-order local messages":
       call.setResult(())
       true
     )
-    discard [first, last].collectEachLocal(rename(), labels)
+    discard [first, last].collectEach(rename(), labels)
     check last.name == "last"
 
   test "exceptions stop later sends after earlier side effects":
@@ -305,6 +357,6 @@ suite "higher-order local messages":
       raise newException(ValueError, "failed")
     )
     expect ValueError:
-      discard @[first, failing, last].sendEachLocal(rename(), "after")
+      discard @[first, failing, last].sendEach(rename(), "after")
     check first.name == "after"
     check last.name == "before"

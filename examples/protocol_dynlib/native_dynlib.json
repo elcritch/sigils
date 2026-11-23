@@ -1,0 +1,4 @@
+{
+  "includeProcs": [{"source": "producer.nim", "name": "newCounter"}],
+  "typeImports": [{"name": "DynamicAgent", "module": "sigils/selectors"}]
+}

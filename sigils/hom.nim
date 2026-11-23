@@ -250,19 +250,25 @@ proc select*[T: DynamicAgent, A](
   ## Unhandled sends are omitted. Membership is snapshotted before dispatch.
   receivers.select(predicate, args, isTrue)
 
-proc sendEachLocal*[T: DynamicAgent, A](
+proc sendEach*[T: DynamicAgent, A](
     receivers: openArray[T], message: Selector[A, tuple[]], args: A
-): seq[bool] =
-  ## Send a command locally to every receiver, reporting which handled it.
+): seq[bool] {.discardable.} =
+  ## Send a command locally to every receiver and return the handled flags.
   ## Membership is snapshotted before dispatch.
   result = newSeqOfCap[bool](receivers.len)
   for receiver in snapshotItems(receivers):
     result.add receiver.sendLocalIfHandled(message, args)
 
-proc collectEachLocal*[T: DynamicAgent, A, R](
+proc sendEach*[A](
+    message: Selector[A, tuple[]], args: A, receivers: varargs[DynamicAgent]
+): seq[bool] {.discardable.} =
+  ## Send a command locally to the listed receivers and return the handled flags.
+  sendEach(receivers, message, args)
+
+proc collectEach*[T: DynamicAgent, A, R](
     receivers: openArray[T], message: Selector[A, R], args: openArray[A]
 ): seq[Opt[R]] =
-  ## Send each receiver its corresponding argument.
+  ## Send locally to each receiver with its corresponding argument.
   ## Unequal lengths raise ValueError before any sends take place.
   if receivers.len != args.len:
     raise newException(ValueError, "one argument per receiver required")
@@ -273,10 +279,10 @@ proc collectEachLocal*[T: DynamicAgent, A, R](
   for index, receiver in members:
     result.add receiver.replyLocal(message, arguments[index])
 
-proc collectEachLocal*[A, R](
+proc collectEach*[A, R](
     receiver: DynamicAgent, message: Selector[A, R], args: openArray[A]
 ): seq[Opt[R]] =
-  ## Send every argument to the same receiver. Snapshot arguments before dispatch.
+  ## Send every argument locally to the same receiver. Snapshot arguments before dispatch.
   result = newSeqOfCap[Opt[R]](args.len)
   for argument in snapshotItems(args):
     result.add receiver.replyLocal(message, argument)
@@ -305,6 +311,17 @@ macro collectSend*(receivers, message: untyped): untyped =
   ## Collect local replies to a declared selector written in call form.
   collectionSend(bindSym"collect", receivers, message)
 
+proc sendEachCaptured[T: DynamicAgent, A](
+    receivers: openArray[T],
+    command: tuple[message: Selector[A, tuple[]], args: A]
+): seq[bool] {.inline, discardable.} =
+  sendEach(receivers, command.message, command.args)
+
+macro sendEachTo*(receivers, message: untyped): untyped =
+  ## Send a command written in call form to a collection and return the handled flags.
+  ## Evaluate the receiver expression before the selector arguments.
+  newCall(bindSym"sendEachCaptured", receivers, captureSelectorCall(message))
+
 macro selectSend*(receivers, message: untyped): untyped =
   ## Keep receivers whose Boolean selector call answers true.
   collectionSend(bindSym"select", receivers, message)
@@ -332,3 +349,18 @@ macro selectWhere*(receivers, projection, predicate: untyped): untyped =
         test = `predicateCall`
       select(`receivers`, attribute.message, attribute.args,
         selectorReplyPredicate(attribute.message, test.message, test.args))
+
+proc sendEachLocal*[T: DynamicAgent, A](
+    receivers: openArray[T], message: Selector[A, tuple[]], args: A
+): seq[bool] {.inline, deprecated: "use sendEach".} =
+  sendEach(receivers, message, args)
+
+proc collectEachLocal*[T: DynamicAgent, A, R](
+    receivers: openArray[T], message: Selector[A, R], args: openArray[A]
+): seq[Opt[R]] {.inline, deprecated: "use collectEach".} =
+  collectEach(receivers, message, args)
+
+proc collectEachLocal*[A, R](
+    receiver: DynamicAgent, message: Selector[A, R], args: openArray[A]
+): seq[Opt[R]] {.inline, deprecated: "use collectEach".} =
+  collectEach(receiver, message, args)

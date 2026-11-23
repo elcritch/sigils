@@ -442,11 +442,20 @@ returns a `seq[Opt[string]]` with one entry per receiver.
   selector answers true. Pass a fourth argument to test the reply of any
   selector, as in `items.select(currentCaption(), (), isHeading)`.
   Unhandled sends are omitted.
-- `sendEachLocal(items, command, args)` returns one handled flag per receiver
-  for commands with an empty-tuple result.
-- `collectEachLocal(items, selector, arguments)` sends the corresponding
+- `sendEach(items, command, args)` returns one handled flag per receiver
+  for commands with an empty-tuple result. You can call it as a statement
+  when you only need the side effects.
+- `collectEach(items, selector, arguments)` sends the corresponding
   argument to each receiver. Unequal lengths raise `ValueError` before sending.
   Pass a single receiver to send it every argument in order.
+
+Use `sendEachTo` to pass an ordinary selector call. With `sendEach`, you can
+list the receivers individually after the selector and its packed arguments.
+
+```nim
+items.sendEachTo(setTitle("Draft", true))
+sendEach(setTitle(), ("Draft", true), first, second)
+```
 
 For flat collections, these operations snapshot membership before the first
 send so a handler can safely change the original collection. Sends execute in

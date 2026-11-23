@@ -88,15 +88,15 @@ when isMainModule:
     titles = [newText("Saint "), newText("Ms "), newText("Dr. ")]
   doAssert texts.collect(appendText(), " Doe") ==
     @[Opt.some("John Doe"), Opt.some("Mary Doe"), Opt.some("Bob Doe")]
-  doAssert titles[0].collectEachLocal(appendText(), names) ==
+  doAssert titles[0].collectEach(appendText(), names) ==
     @[Opt.some("Saint John"), Opt.some("Saint Mary"), Opt.some("Saint Bob")]
-  doAssert titles.collectEachLocal(appendText(), names) ==
+  doAssert titles.collectEach(appendText(), names) ==
     @[Opt.some("Saint John"), Opt.some("Ms Mary"), Opt.some("Dr. Bob")]
 
   # Pack multiple arguments for each send into a typed tuple.
   let decorations = [(prefix: "(", suffix: ")"), (prefix: "[", suffix: "]"),
     (prefix: "<", suffix: ">")]
-  doAssert texts.collectEachLocal(surround(), decorations) ==
+  doAssert texts.collectEach(surround(), decorations) ==
     @[Opt.some("(John)"), Opt.some("[Mary]"), Opt.some("<Bob>")]
   doAssert texts.collectSend(surround(suffix = "]")) ==
     @[Opt.some("(John]"), Opt.some("(Mary]"), Opt.some("(Bob]")]
@@ -105,7 +105,7 @@ when isMainModule:
   let
     alice = Employee().withProto()
     sally = Employee(reports: @[john, mary]).withProto()
-  discard alice.collectEachLocal(addReport(), sally.reports)
+  discard alice.collectEach(addReport(), sally.reports)
   doAssert alice.reports == @[john, mary]
 
   # Section 4.1. The predicate sends a second message to the name.
