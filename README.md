@@ -9,8 +9,6 @@ Read the [Sigils documentation](https://elcritch.github.io/sigils/) for guides o
 
 Note that this implementation shares many or most of the limitations you'd see in Qt's implementation. Sigils also includes a message-passing threading model; see `docs/threading.md` for the detailed architecture and safety notes.
 
-For reactive keyed value collections and targeted item observations, see the [collection Sigils guide](docs/collection-sigils.md).
-
 ## Changelog
 
 - v0.22 includes several potential breaking changes
@@ -434,3 +432,7 @@ threadB.join()
 ## Selectors
 
 Sigils also includes selectors: a dynamic dispatch layer for delegate-style behavior, responder chains, protocols, and method wrappers when a signal is the wrong shape because you need one answer back. See [docs/selectors.md](docs/selectors.md) for the guide and examples. A [native library example](examples/protocol_dynlib/README.md) shows how to send a protocol selector to an agent created by a Binny dynamic library.
+
+## Collection Sigils
+
+For reactive keyed value collections and targeted item observations, see the [collection Sigils guide](docs/collection-sigils.md).
