@@ -311,9 +311,16 @@ macro collectSend*(receivers, message: untyped): untyped =
   ## Collect local replies to a declared selector written in call form.
   collectionSend(bindSym"collect", receivers, message)
 
+proc sendEachCaptured[T: DynamicAgent, A](
+    receivers: openArray[T],
+    command: tuple[message: Selector[A, tuple[]], args: A]
+): seq[bool] {.inline, discardable.} =
+  sendEach(receivers, command.message, command.args)
+
 macro sendEachTo*(receivers, message: untyped): untyped =
   ## Send a command written in call form to a collection and return the handled flags.
-  collectionSend(bindSym"sendEach", receivers, message)
+  ## Evaluate the receiver expression before the selector arguments.
+  newCall(bindSym"sendEachCaptured", receivers, captureSelectorCall(message))
 
 macro selectSend*(receivers, message: untyped): untyped =
   ## Keep receivers whose Boolean selector call answers true.

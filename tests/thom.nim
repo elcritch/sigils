@@ -307,6 +307,19 @@ suite "higher-order local messages":
     check sendEach(rename(), "unused").len == 0
     check not compiles(sendEach(rename(), "invalid", 5))
 
+  test "command call form evaluates receivers before arguments":
+    let items = [Item().withProto(), Item().withProto()]
+    var index = 0
+    proc receivers(): seq[Item] = @[items[index]]
+    proc nextName(): string =
+      inc index
+      "first"
+
+    receivers().sendEachTo(rename(nextName()))
+    check items[0].name == "first"
+    check items[1].name == ""
+    check index == 1
+
   test "dispatch snapshots membership before calling handlers":
     let
       original = Item(name: "original").withProto()
