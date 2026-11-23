@@ -37,7 +37,84 @@ protocol ItemProtocol from Item:
 protocol OptionalItemProtocol:
   method optionalLabel(): string {.optional.}
 
+proc itemCursor(items: varargs[Item]): iterator(): Item {.closure.} =
+  let members = @items
+  result = iterator(): Item {.closure.} =
+    for item in members:
+      yield item
+
 suite "higher-order local messages":
+  test "closure iterator search resumes after the first match":
+    iterator numbers(): int {.closure.} =
+      yield 1
+      yield 2
+      yield 3
+
+    let cursor = numbers
+    proc isEven(value: int): bool = value mod 2 == 0
+    check cursor.findFirst(isEven) == Opt.some(2)
+    check not cursor.finished()
+    check cursor() == 3
+    check cursor.findFirst(isEven).isNone
+    check cursor.finished()
+    check cursor.findFirst(isEven).isNone
+
+  test "closure iterator selector searches resume and collect the remaining replies":
+    let
+      missing = Item()
+      active = Item(name: "active", active: true).withProto()
+      inactive = Item(name: "inactive").withProto()
+      last = Item(name: "last").withProto()
+      cursor = itemCursor(missing, active, inactive, nil, last)
+    missing.setNextResponder(active)
+
+    check cursor.findFirst(isActive(), ()) == Opt.some(active)
+    proc namedInactive(name: string): bool = name == "inactive"
+    check cursor.findFirst(itemName(), (), namedInactive) == Opt.some(inactive)
+    check cursor.collect(itemName(), ()) == @[Opt.none(string), Opt.some("last")]
+    check cursor.finished()
+    check cursor.collect(itemName(), ()).len == 0
+
+  test "closure iterator selection and collection accept selector call syntax":
+    let
+      active = Item(name: "active", active: true).withProto()
+      inactive = Item(name: "inactive").withProto()
+      parent = Item(children: @[active]).withProto()
+      missing = Item()
+
+    check itemCursor(missing, active, inactive).select(isActive(), ()) == @[active]
+    check itemCursor(missing, active, inactive).selectSend(isActive()) == @[active]
+    proc namedInactive(name: string): bool = name == "inactive"
+    let selected = itemCursor(active, inactive).selectSend(itemName(), namedInactive)
+    check selected == @[inactive]
+    check itemCursor(missing, parent).selectWhere(childAt(), isActive()) == @[parent]
+    check itemCursor(missing, active).collectSend(itemName()) ==
+      @[Opt.none(string), Opt.some("active")]
+
+  test "closure iterator commands dispatch before requesting the next receiver":
+    let
+      first = Item().withProto()
+      last = Item().withProto()
+      cursor = iterator(): Item {.closure.} =
+        yield first
+        check first.name == "streamed"
+        yield nil
+        yield last
+
+    check cursor.sendEach(rename(), "streamed") == @[true, false, true]
+    check cursor.finished()
+    check last.name == "streamed"
+    itemCursor(first, last).sendEachTo(label("changed"))
+    check first.name == "changed"
+    check last.active
+
+  test "a nil closure iterator is empty":
+    let cursor: iterator(): Item {.closure.} = nil
+    check cursor.findFirst(isActive(), ()).isNone
+    check cursor.collect(itemName(), ()).len == 0
+    check cursor.select(isActive(), ()).len == 0
+    check cursor.sendEach(rename(), "unused").len == 0
+
   test "an adoption predicate returns the first explicit adopter":
     let
       absent = Item()

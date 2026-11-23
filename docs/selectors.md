@@ -496,9 +496,9 @@ plain string.
 ### Finding One Match
 
 `findFirst` and `findLast` from `sigils/hom` return an `Opt[T]`
-of the collection's element type. They snapshot membership and stop testing at
-a match. `findFirst` searches from the start and `findLast` searches from the
-end.
+of the collection's element type. For arrays and sequences, they snapshot
+membership before testing. `findFirst` searches from the start and `findLast`
+searches from the end. Both stop testing at a match.
 
 ```nim
 let delegate = controllers.findFirst(proc(controller: TextController): bool =
@@ -539,3 +539,24 @@ let accessible = root.depthFirst(childrenOf).select(isAccessibilityElement(), ()
 When using an inline iterator directly, its traversal determines when members are
 read. For `depthFirst`, sends in forward order happen before the iterator asks
 for that node's children.
+
+### Closure Iterators
+
+Pass a zero-argument closure iterator as a value to `findFirst`, `collect`,
+`select`, or `sendEach`. The selector-call forms `collectSend`, `selectSend`,
+`selectWhere`, and `sendEachTo` accept it too.
+
+```nim
+iterator candidates(): View {.closure.} =
+  for view in views:
+    yield view
+
+let cursor = candidates
+let firstAccessible = cursor.findFirst(isAccessibilityElement(), ())
+let remainingLabels = cursor.collectSend(accessibilityLabel())
+```
+
+`findFirst` advances through the first match. The next operation on the
+same iterator starts after that match. The collection operations consume the
+rest of the iterator, processing each yield before requesting the next one.
+A nil or exhausted iterator is treated as empty.
