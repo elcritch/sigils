@@ -1,4 +1,4 @@
-## Unreleased
+## 0.37.1
 
 - Accept closure iterators in HOM's `findFirst`, `collect`, `select`,
   and `sendEach`, including the selector-call macros for collections.
