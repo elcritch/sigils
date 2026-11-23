@@ -7,6 +7,13 @@ import selectors
 export results.Opt, results.some, results.none, results.get, results.isSome,
   results.isNone, results.`==`
 
+type ClosureIterator[T] = iterator(): T {.closure.}
+
+iterator remainingItems[T](receivers: ClosureIterator[T]): T =
+  if not receivers.isNil:
+    for receiver in receivers():
+      yield receiver
+
 iterator snapshotItems[T](
     receivers: openArray[T], reverse: static bool = false
 ): T =
@@ -36,6 +43,13 @@ proc findFirst*[T](
 ): Opt[T] =
   ## Return the first match, or none. Snapshot membership before testing.
   firstMatching(T, snapshotItems(receivers), predicate)
+
+proc findFirst*[T](
+    receivers: ClosureIterator[T],
+    predicate: proc(receiver: T): bool {.closure.}
+): Opt[T] =
+  ## Find the first match and leave the iterator positioned after it.
+  firstMatching(T, remainingItems(receivers), predicate)
 
 iterator depthFirst*[T](
     root: T, childrenOf: proc(node: T): seq[T] {.closure.},
@@ -116,6 +130,13 @@ proc findFirst*[T: DynamicAgent, A, R](
   findMatchingReply(T, snapshotItems(receivers), message, args, predicate)
 
 proc findFirst*[T: DynamicAgent, A, R](
+    receivers: ClosureIterator[T], message: Selector[A, R], args: A,
+    predicate: proc(value: R): bool {.closure.}
+): Opt[T] =
+  ## Stop at the first receiver whose handled local reply passes the test.
+  findMatchingReply(T, remainingItems(receivers), message, args, predicate)
+
+proc findFirst*[T: DynamicAgent, A, R](
     root: T, childrenOf: proc(node: T): seq[T] {.closure.},
     message: Selector[A, R], args: A, predicate: proc(
         value: R): bool {.closure.}
@@ -152,6 +173,12 @@ proc findFirst*[T: DynamicAgent, A](
     receivers: openArray[T], predicate: Selector[A, bool], args: A
 ): Opt[T] =
   ## Return the first receiver whose local predicate answers true, or none.
+  receivers.findFirst(predicate, args, isTrue)
+
+proc findFirst*[T: DynamicAgent, A](
+    receivers: ClosureIterator[T], predicate: Selector[A, bool], args: A
+): Opt[T] =
+  ## Stop at the first receiver whose local predicate answers true.
   receivers.findFirst(predicate, args, isTrue)
 
 proc findFirst*[T: DynamicAgent, A](
@@ -209,6 +236,12 @@ proc collect*[T: DynamicAgent, A, R](
   ## Membership is snapshotted before the first synchronous send.
   collectReplies(snapshotItems(receivers), message, args, receivers.len)
 
+proc collect*[T: DynamicAgent, A, R](
+    receivers: ClosureIterator[T], message: Selector[A, R], args: A
+): seq[Opt[R]] =
+  ## Consume the iterator and collect a local reply for every remaining receiver.
+  collectReplies(remainingItems(receivers), message, args, 0)
+
 template selectMatchingReplies(T: typedesc, receivers, message, args,
     predicate: untyped): untyped =
   block:
@@ -237,6 +270,13 @@ proc select*[T: DynamicAgent, A, R](
   ## Membership is snapshotted before dispatch.
   selectMatchingReplies(T, snapshotItems(receivers), message, args, predicate)
 
+proc select*[T: DynamicAgent, A, R](
+    receivers: ClosureIterator[T], message: Selector[A, R], args: A,
+    predicate: proc(value: R): bool {.closure.}
+): seq[T] =
+  ## Consume the iterator, keeping receivers whose handled local replies pass the test.
+  selectMatchingReplies(T, remainingItems(receivers), message, args, predicate)
+
 template select*[T: DynamicAgent, A](
     receivers: iterable[T], predicate: Selector[A, bool], args: A
 ): seq[T] =
@@ -250,14 +290,33 @@ proc select*[T: DynamicAgent, A](
   ## Unhandled sends are omitted. Membership is snapshotted before dispatch.
   receivers.select(predicate, args, isTrue)
 
+proc select*[T: DynamicAgent, A](
+    receivers: ClosureIterator[T], predicate: Selector[A, bool], args: A
+): seq[T] =
+  ## Consume the iterator, keeping receivers whose local predicate answers true.
+  receivers.select(predicate, args, isTrue)
+
+template sendCommands[A](
+    receivers: untyped, message: Selector[A, tuple[]], args: A, capacity: int
+): seq[bool] =
+  block:
+    var handled = newSeqOfCap[bool](capacity)
+    for receiver in receivers:
+      handled.add receiver.sendLocalIfHandled(message, args)
+    handled
+
 proc sendEach*[T: DynamicAgent, A](
     receivers: openArray[T], message: Selector[A, tuple[]], args: A
 ): seq[bool] {.discardable.} =
   ## Send a command locally to every receiver and return the handled flags.
   ## Membership is snapshotted before dispatch.
-  result = newSeqOfCap[bool](receivers.len)
-  for receiver in snapshotItems(receivers):
-    result.add receiver.sendLocalIfHandled(message, args)
+  sendCommands(snapshotItems(receivers), message, args, receivers.len)
+
+proc sendEach*[T: DynamicAgent, A](
+    receivers: ClosureIterator[T], message: Selector[A, tuple[]], args: A
+): seq[bool] {.discardable.} =
+  ## Consume the iterator, sending a local command and reporting handling for each receiver.
+  sendCommands(remainingItems(receivers), message, args, 0)
 
 proc sendEach*[A](
     message: Selector[A, tuple[]], args: A, receivers: varargs[DynamicAgent]
@@ -313,6 +372,12 @@ macro collectSend*(receivers, message: untyped): untyped =
 
 proc sendEachCaptured[T: DynamicAgent, A](
     receivers: openArray[T],
+    command: tuple[message: Selector[A, tuple[]], args: A]
+): seq[bool] {.inline, discardable.} =
+  sendEach(receivers, command.message, command.args)
+
+proc sendEachCaptured[T: DynamicAgent, A](
+    receivers: ClosureIterator[T],
     command: tuple[message: Selector[A, tuple[]], args: A]
 ): seq[bool] {.inline, discardable.} =
   sendEach(receivers, command.message, command.args)

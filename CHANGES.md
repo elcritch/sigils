@@ -1,3 +1,9 @@
+## 0.37.1
+
+- Accept closure iterators in HOM's `findFirst`, `collect`, `select`,
+  and `sendEach`, including the selector-call macros for collections.
+  Searches can stop at a match and let callers resume the iterator.
+
 ## 0.37.0
 
 - Rename HOM's `sendEachLocal` and `collectEachLocal` to `sendEach` and
