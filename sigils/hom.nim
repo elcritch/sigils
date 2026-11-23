@@ -250,17 +250,20 @@ proc select*[T: DynamicAgent, A](
   ## Unhandled sends are omitted. Membership is snapshotted before dispatch.
   receivers.select(predicate, args, isTrue)
 
-proc sendEachTo[T: DynamicAgent, A](
+proc sendEach*[T: DynamicAgent, A](
     receivers: openArray[T], message: Selector[A, tuple[]], args: A
 ): seq[bool] {.discardable.} =
+  ## Send a command locally to every receiver and return the handled flags.
+  ## Membership is snapshotted before dispatch.
   result = newSeqOfCap[bool](receivers.len)
   for receiver in snapshotItems(receivers):
     result.add receiver.sendLocalIfHandled(message, args)
 
-proc sendEachTo[A](
+proc sendEach*[A](
     message: Selector[A, tuple[]], args: A, receivers: varargs[DynamicAgent]
 ): seq[bool] {.discardable.} =
-  sendEachTo(receivers, message, args)
+  ## Send a command locally to the listed receivers and return the handled flags.
+  sendEach(receivers, message, args)
 
 proc collectEach*[T: DynamicAgent, A, R](
     receivers: openArray[T], message: Selector[A, R], args: openArray[A]
@@ -308,25 +311,9 @@ macro collectSend*(receivers, message: untyped): untyped =
   ## Collect local replies to a declared selector written in call form.
   collectionSend(bindSym"collect", receivers, message)
 
-macro sendEach*(receivers, message, args: untyped,
-    remaining: varargs[untyped]): untyped =
-  ## Send a command locally to every receiver and return the handled flags.
-  ## Pass a collection first, or a selector and packed arguments followed by receivers.
-  ## Membership is snapshotted before dispatch.
-  result = newCall(bindSym"sendEachTo", receivers, message, args)
-  for receiver in remaining:
-    result.add receiver
-
-macro sendEachCall(receivers, message: untyped): untyped =
-  collectionSend(bindSym"sendEachTo", receivers, message)
-
-template sendEach*(receivers, message: untyped): untyped =
-  ## Send a command written in call form to a collection.
-  ## A selector and packed arguments with no receivers return an empty sequence.
-  when typeof(receivers) is Selector:
-    sendEachTo(receivers, message)
-  else:
-    sendEachCall(receivers, message)
+macro sendEachTo*(receivers, message: untyped): untyped =
+  ## Send a command written in call form to a collection and return the handled flags.
+  collectionSend(bindSym"sendEach", receivers, message)
 
 macro selectSend*(receivers, message: untyped): untyped =
   ## Keep receivers whose Boolean selector call answers true.
@@ -359,7 +346,7 @@ macro selectWhere*(receivers, projection, predicate: untyped): untyped =
 proc sendEachLocal*[T: DynamicAgent, A](
     receivers: openArray[T], message: Selector[A, tuple[]], args: A
 ): seq[bool] {.inline, deprecated: "use sendEach".} =
-  sendEachTo(receivers, message, args)
+  sendEach(receivers, message, args)
 
 proc collectEachLocal*[T: DynamicAgent, A, R](
     receivers: openArray[T], message: Selector[A, R], args: openArray[A]

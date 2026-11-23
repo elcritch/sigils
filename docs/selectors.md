@@ -449,10 +449,11 @@ returns a `seq[Opt[string]]` with one entry per receiver.
   argument to each receiver. Unequal lengths raise `ValueError` before sending.
   Pass a single receiver to send it every argument in order.
 
-You can also pass an ordinary selector call or list the receivers individually.
+Use `sendEachTo` to pass an ordinary selector call. With `sendEach`, you can
+list the receivers individually after the selector and its packed arguments.
 
 ```nim
-items.sendEach(setTitle("Draft", true))
+items.sendEachTo(setTitle("Draft", true))
 sendEach(setTitle(), ("Draft", true), first, second)
 ```
 

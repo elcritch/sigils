@@ -3,8 +3,8 @@
 - Rename HOM's `sendEachLocal` and `collectEachLocal` to `sendEach` and
   `collectEach` to match the local dispatch convention of `collect` and
   `select`. The original names are deprecated aliases. Call `sendEach` as a
-  statement to ignore the handled flags. It also accepts an ordinary selector
-  call or a variadic list of receivers.
+  statement to ignore the handled flags. It also accepts a variadic list of
+  receivers. Use `sendEachTo` with ordinary selector-call syntax.
 - Add an example of a Binny dynamic library that implements a Sigils protocol.
   A separate host sends selectors to a `DynamicAgent` created by the library.
 

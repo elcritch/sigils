@@ -284,14 +284,14 @@ suite "higher-order local messages":
       inc evaluated
       "updated"
 
-    items.sendEach(label(nextName()))
+    items.sendEachTo(label(nextName()))
     check item.name == "updated"
     check item.active
     check evaluated == 1
-    check items.sendEach(label(active = false, name = "assigned")) == @[true, false]
+    check items.sendEachTo(label(active = false, name = "assigned")) == @[true, false]
     check item.name == "assigned"
     check not item.active
-    check not compiles(items.sendEach(itemName()))
+    check not compiles(items.sendEachTo(itemName()))
 
   test "selector-first commands accept variadic receivers":
     let
