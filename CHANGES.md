@@ -3,6 +3,11 @@
 - Add `findFirstReply` and `findFirstSend` to return the first accepted
   reply together with its receiver. Add lazy `follow` and `responderChain`
   iterators for linked traversal.
+- Add queued and delayed protocol command sends with `sendLater` and
+  `sendAfter` in `sigils/scheduledselectors`. Event-loop hosts can supply
+  their own timer for `sendAfter`.
+- Release each finite asyncdispatch timer registration when it fires so
+  completed timers can release their captured arguments.
 
 ## 0.37.1
 

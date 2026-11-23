@@ -180,5 +180,5 @@ suite "connectQueued to local thread":
     ct.poll()
     check a.value == 2
 
-    ct.poll()
+    ct.poll(NonBlocking)
     check a.value == 2
