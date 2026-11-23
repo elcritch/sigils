@@ -17,6 +17,10 @@ protocol ItemProtocol from Item:
   method rename(self: Item, name: string) =
     self.name = name
 
+  method label(self: Item, name: string, active: bool = true) =
+    self.name = name
+    self.active = active
+
   method peer(self: Item): Item =
     nil
 
@@ -270,6 +274,38 @@ suite "higher-order local messages":
     items.sendEach(rename(), "applied")
     check first.name == "applied"
     check last.name == "applied"
+
+  test "command call form accepts named arguments and defaults":
+    let
+      item = Item().withProto()
+      items = [item, Item()]
+    var evaluated = 0
+    proc nextName(): string =
+      inc evaluated
+      "updated"
+
+    items.sendEach(label(nextName()))
+    check item.name == "updated"
+    check item.active
+    check evaluated == 1
+    check items.sendEach(label(active = false, name = "assigned")) == @[true, false]
+    check item.name == "assigned"
+    check not item.active
+    check not compiles(items.sendEach(itemName()))
+
+  test "selector-first commands accept variadic receivers":
+    let
+      first = Item().withProto()
+      last = Item().withProto()
+      missing = DynamicAgent()
+    check sendEach(label(), ("paired", false), first, missing, last) ==
+      @[true, false, true]
+    check first.name == "paired"
+    check last.name == "paired"
+    sendEach(rename(), "single", last)
+    check last.name == "single"
+    check sendEach(rename(), "unused").len == 0
+    check not compiles(sendEach(rename(), "invalid", 5))
 
   test "dispatch snapshots membership before calling handlers":
     let

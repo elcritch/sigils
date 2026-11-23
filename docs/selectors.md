@@ -449,6 +449,13 @@ returns a `seq[Opt[string]]` with one entry per receiver.
   argument to each receiver. Unequal lengths raise `ValueError` before sending.
   Pass a single receiver to send it every argument in order.
 
+You can also pass an ordinary selector call or list the receivers individually.
+
+```nim
+items.sendEach(setTitle("Draft", true))
+sendEach(setTitle(), ("Draft", true), first, second)
+```
+
 For flat collections, these operations snapshot membership before the first
 send so a handler can safely change the original collection. Sends execute in
 order on the caller's thread and honor local resolution and forwarding hooks.
