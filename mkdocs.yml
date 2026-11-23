@@ -5,6 +5,8 @@ repo_name: elcritch/sigils
 edit_uri: edit/main/docs/
 theme:
   name: readthedocs
+  hljs_languages:
+    - nim
 nav:
   - Home: index.md
   - Selectors and protocols: selectors.md
