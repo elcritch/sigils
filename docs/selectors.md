@@ -542,6 +542,27 @@ for that node's children.
 
 ### Closure Iterators
 
+Use `findFirstReply` when both the matching receiver and its reply are needed.
+The callback receives each receiver, so it can compute receiver-specific arguments
+and use the normal routed selector call.
+
+```nim
+let match = candidates.findFirstReply(
+  proc(view: View): string =
+    view.toolTipAtPoint(view.pointFromView(contentPoint, content)),
+  proc(text: string): bool = text.len > 0,
+)
+```
+
+The result is an `Opt[ReplyMatch[View, string]]` with `receiver` and `reply`
+fields. `findFirstSend(toolTipAtPoint(point), predicate)` captures a selector
+call with shared arguments and skips unhandled local sends. Both forms stop at
+the first accepted reply. With an inline iterator, the reply predicate may be
+a regular proc or a closure. Use `view.responderChain()` for a live traversal
+that reads the next responder after each yield. The chain must be acyclic.
+For other ref-linked structures, `first.follow(next)` yields each node and
+calls `next(node)` when iteration resumes. A nil node ends traversal.
+
 Pass a zero-argument closure iterator as a value to `findFirst`, `collect`,
 `select`, or `sendEach`. The selector-call forms `collectSend`, `selectSend`,
 `selectWhere`, and `sendEachTo` accept it too.
@@ -560,3 +581,6 @@ let remainingLabels = cursor.collectSend(accessibilityLabel())
 same iterator starts after that match. The collection operations consume the
 rest of the iterator, processing each yield before requesting the next one.
 A nil or exhausted iterator is treated as empty.
+These overloads accept value-yielding closure iterators. Iterator aliases share
+their cursor. If a predicate raises, the cursor can resume after the current
+yield. A suspended iterator's `defer` can remain pending if it is abandoned.
