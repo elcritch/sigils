@@ -1,3 +1,7 @@
+## Unreleased
+
+- Release delayed selector arguments after their timer callback completes.
+
 ## 0.37.3
 
 - Add queued and delayed protocol command sends with `sendLater` and
