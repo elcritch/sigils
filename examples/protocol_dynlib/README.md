@@ -15,9 +15,11 @@ factory. The two configuration entries are in [native_dynlib.json](native_dynlib
 ## Run
 
 Use Nim 2.4.2 with its companion `nifler` and `nifmake`, the Sigils Atlas
-dependencies, and a Binny checkout containing the enum case binding fix
-(commit `d3f5a0a` on `fix/native-record-selectors`). From this directory, with
-`BINNY_PATH` set to the absolute path of that checkout:
+dependencies, and a checkout of Binny 0.5.24 or later. The binding fix first
+landed at Binny commit `8d1e83a`. [Binny PR #12](https://github.com/elcritch/binny/pull/12)
+
+Set `BINNY_PATH` to the absolute path of the Binny checkout and run these
+commands from this directory.
 
 ```sh
 eval "$(grabnim use 2.4.2)"
