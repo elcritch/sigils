@@ -1,6 +1,7 @@
 ## Unreleased
 
 - Release delayed selector arguments after their timer callback completes.
+- Share generated protocol method maps with the optional `thetos` feature.
 
 ## 0.37.3
 

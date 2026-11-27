@@ -94,6 +94,13 @@ protocol FieldCaptionedViewProtocol from FieldBackedView:
   ## Maps caption selectors directly to the backing name field.
   property fieldCaption -> string {.field: name.}
 
+protocol TitledViewVariant of TitledProtocol:
+  method title(self: View): string =
+    self.name
+
+  method setTitle(self: View, value: string) =
+    self.name = value
+
 protocol FieldTitledViewVariant of TitledProtocol from FieldBackedView:
   ## Implements title access through a receiver field.
   property title -> string {.field: name.}
@@ -876,6 +883,40 @@ suite "dynamic selectors":
     check not controller.validateText("")
     controller.textDidCommit("variant")
     check controller.lastCommand == "variant"
+
+  test "protocol installations can be shared and independently overridden":
+    let
+      first = View(name: "first").withProto()
+      second = View(name: "second").withProto()
+      titleOnly = View(name: "title")
+    first.withProtocol(TitledViewVariant)
+    titleOnly.withProtocol(TitledViewVariant)
+    second.withProtocol(TitledViewVariant)
+    check first.title == "first"
+    check second.title == "second"
+    check titleOnly.title == "title"
+    check not titleOnly.respondsTo(caption)
+
+    proc overridingCaption(caption: string): DynamicMethod =
+      proc(self: DynamicAgent, invocation: var Invocation) =
+        invocation.setResult(caption)
+    let replacement = overridingCaption("override")
+    let token = first.pushMethod(caption, replacement)
+    check first.caption == "override"
+    check second.caption == "second"
+    check token.popMethod()
+    check first.caption == "first"
+
+    check not second.removeMethod(caption).isNil
+    check not second.respondsTo(caption)
+    check first.caption == "first"
+    second.withProto()
+    check second.caption == "second"
+    check second.title == "second"
+    when not sigilsSigilNameStringEnabled:
+      var shortened = toSigilName("captionExtra")
+      shortened.setLen("caption".len, writeZerosOnTruncate = false)
+      check not second.localMethod(shortened).isNil
 
   test "withProto installs a generated default protocol":
     let thing = ExportedThing(value: 42).withProto

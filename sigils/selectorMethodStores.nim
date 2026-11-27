@@ -4,6 +4,9 @@ import protocol
 type
   SelectorMethodStore*[Method] = HybridSigilTable[Method]
 
+proc hasMethodStacks*[Method](store: SelectorMethodStore[Method]): bool {.inline.} =
+  store.keyCount != 0
+
 proc methodTop*[Method](
     store: SelectorMethodStore[Method], selector: SigilName
 ): Method {.inline, gcsafe, raises: [].} =

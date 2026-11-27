@@ -5,6 +5,7 @@ import features
 export cloneutils, features
 
 when not sigilsSigilNameStringEnabled:
+  import std/hashes
   import stack_strings
 
 export tables
@@ -24,6 +25,10 @@ when sigilsSigilNameStringEnabled:
   type SigilName* = string
 else:
   type SigilName* = StackString[48]
+
+  func hash*(name: SigilName): Hash {.inline.} =
+    ## Match StackString equality even when bytes after the end differ.
+    hash(name.toOpenArray())
 
 type
   SigilRpcEncodeError* = object of CatchableError ## Remote RPC encode failure.
