@@ -62,6 +62,8 @@ proc deliverCommand[A](
 
 proc fireCommand[A](context: Agent, params: SigilParams) {.nimcall.} =
   let scheduled = ScheduledTimer[A](context)
+  defer:
+    scheduled.command = default(ScheduledCommand[A])
   deliverCommand(scheduled.state, scheduled.target, scheduled.command)
 
 proc enqueueSelector*[A](
