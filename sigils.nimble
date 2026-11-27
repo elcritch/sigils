@@ -9,6 +9,9 @@ requires "threading >= 0.2.1"
 requires "stack_strings"
 requires "results >= 0.5.1"
 
+feature "thetos":
+	requires "gh:elcritch/thetos >= 0.7.0"
+
 feature "sigNameAsString":
   discard
 
