@@ -6,6 +6,7 @@
 - Add the optional `sigNameAsImmStr` package feature for immutable sigil names.
 - Add `sig"name"` as the preferred sigil name literal and deprecate
   `sigName"name"` and `sn"name"`.
+- Remove the compile-time check for patched Nim atomics on MSVC.
 
 ## 0.37.3
 
@@ -100,9 +101,6 @@
   depend on the deprecated GCC-only `threading/atomics` implementation.
   Custom schedulers that access the exported atomic fields must import
   `std/atomics` and use its `mo*` memory-order names.
-  MSVC C builds require a corrected Nim standard library declaring
-  `nimHasCorrectMsvcAtomics`. Reject affected standard libraries at compile time
-  to protect shared delivery ownership from broken atomic return values.
 
 ## 0.31.1
 

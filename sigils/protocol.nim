@@ -246,7 +246,8 @@ proc initSigilRequest*[S, T](
 const sigilsMaxSignalLength* {.intdefine.} = 48
 
 when sigilsSigilNameImmStrEnabled:
-  proc toSigilName*(name: static string): SigilName {.inline.} =
+  # Nim 2.2.12 emits duplicate definitions of the cached global if this proc is inline.
+  proc toSigilName*(name: static string): SigilName =
     let cached {.global.} = toImmStr(name)
     cached
 
