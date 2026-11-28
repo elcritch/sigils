@@ -23,6 +23,11 @@ You need to wrap procs with a `slot` to set up the proc to support receiving sig
 
 Connecting signals and slots is accomplished using `connect`. Note that `connect` is idempotent, meaning that you can call it on the same objects the multiple times without ill effect.
 
+Use `sig"valueChanged"` for a literal `SigilName` and `toSigilName(name)` for a runtime string.
+
+Generated protocols share persistent Thetos method maps across agents. Sigils
+requires Nim 2.2.12 or later. See the [Merenda protocol benchmarks](benchmarks/README.md#persistent-protocol-and-slot-storage).
+
 ## Compile-time Options
 
 - Closure slots: enable `-d:sigilsClosures`, `-d:sigils.closures`, or the `closures` package feature, then import `sigils/closures` to use `connectTo(...) do:`.

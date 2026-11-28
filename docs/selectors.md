@@ -232,7 +232,7 @@ The Nim selector symbols stay short (`numberOfRows`, `objectValueForRow`), but t
 
 ```nim
 doAssert selectorName(numberOfRows) ==
-  toSigilName("ListViewDataSource.numberOfRows")
+  sig"ListViewDataSource.numberOfRows"
 ```
 
 This is runtime selector scoping, not a generated Nim namespace; `ListViewDataSource.numberOfRows` is not created. If two imported modules export the same short selector helper, use normal Nim module qualification to choose between them. `SigilName` is a `StackString[48]` by default; you can switch to regular strings with `-d:sigilsSigilNameString`.

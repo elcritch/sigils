@@ -231,11 +231,11 @@ suite "thread pool":
 
     var counter = PoolCounter.new()
     let counterProxy = counter.moveToThread(pool)
-    registerGlobalName(sn"threadPoolCounter", counterProxy, override = true)
-    let located = lookupGlobalName(sn"threadPoolCounter")
+    registerGlobalName(sig"threadPoolCounter", counterProxy, override = true)
+    let located = lookupGlobalName(sig"threadPoolCounter")
     check located.isSome
     check located.get().thread == pool.toSigilThread()
-    check removeGlobalName(sn"threadPoolCounter", counterProxy)
+    check removeGlobalName(sig"threadPoolCounter", counterProxy)
 
     pool.stop()
     pool.join()

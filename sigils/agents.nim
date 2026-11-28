@@ -1,13 +1,6 @@
 import std/[hashes, options, sets, strformat, tables]
 import std/[atomics, isolation, locks]
 
-when defined(vcc) and not defined(nimscript) and
-    not (defined(cpp) and defined(nimUseCppAtomics)):
-  when not declared(nimHasCorrectMsvcAtomics):
-    {.error: "Sigils MSVC builds require corrected Nim atomics " &
-      "(nimHasCorrectMsvcAtomics); see " &
-      "https://github.com/elcritch/Nim/tree/fix/msvc-atomics-v2.2.10".}
-
 import threading/smartptrs
 import protocol
 import weakrefs
@@ -543,7 +536,7 @@ template addSubscription*(
   let tgtRef = tgt.unsafeWeakRef().toKind(Agent)
   addSubscription(obj, sig, tgtRef, slot, directSlot)
 
-when not sigilsSigilNameStringEnabled:
+when sigilsSigilNameStackEnabled:
   template addSubscription*(
       obj: Agent,
       sig: IndexableChars,
@@ -641,7 +634,7 @@ template delSubscription*(
   let tgtRef = tgt.unsafeWeakRef().toKind(Agent)
   delSubscription(obj, sig, tgtRef, slot)
 
-when not sigilsSigilNameStringEnabled:
+when sigilsSigilNameStackEnabled:
   template delSubscription*(
       obj: Agent, sig: IndexableChars, tgt: WeakRef[Agent], slot: AgentProc
   ): void =

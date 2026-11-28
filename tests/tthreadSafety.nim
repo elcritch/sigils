@@ -62,7 +62,7 @@ proc clientReply(self: Client, value: int) {.slot.} =
 
 proc setupClient(self: Client, value: int) {.slot.} =
   setupActive.store(true)
-  self.peer = lookupAgentProxy(sn"review:pool-peer", Counter)
+  self.peer = lookupAgentProxy(sig"review:pool-peer", Counter)
   connectThreaded(self.peer, pong, self, Client.clientReply())
   connectThreaded(self, request, self.peer, reply)
   emit self.request(value)
@@ -95,18 +95,18 @@ proc runCase() =
   of "self_delete":
     let counter = Counter()
     counter.ensureActorReady()
-    counter.addSubscription(sn"self", counter, noop)
+    counter.addSubscription(sig"self", counter, noop)
     echo "deleting self subscription"
-    counter.delSubscription(sn"self", counter, noop)
+    counter.delSubscription(sig"self", counter, noop)
     echo "self subscription deleted"
   of "registry_delete":
     let worker = newSigilThread()
     var counter = Counter()
     let proxy = counter.moveToThread(worker)
-    registerGlobalName(sn"review:actor", proxy)
+    registerGlobalName(sig"review:actor", proxy)
     discard worker.pollAll()
-    doAssert removeGlobalName(sn"review:actor", proxy)
-    doAssert lookupGlobalName(sn"review:actor").isNone
+    doAssert removeGlobalName(sig"review:actor", proxy)
+    doAssert lookupGlobalName(sig"review:actor").isNone
     echo "processing registry keepalive deletion"
     discard worker.pollAll()
     echo "registry keepalive deleted"
@@ -247,7 +247,7 @@ proc runCase() =
     let worker = newSigilThread()
     var counter = Counter()
     let proxy = counter.moveToThread(worker)
-    registerGlobalName(sn"review:pool-peer", proxy)
+    registerGlobalName(sig"review:pool-peer", proxy)
     worker.start()
     let pool = newSigilThreadPool(workers = 2)
     var client = Client()

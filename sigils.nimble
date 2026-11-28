@@ -1,13 +1,18 @@
-version = "0.37.3"
+version = "0.38.0"
 author = "Jaremy Creechley"
 description = "A slot and signals implementation for the Nim programming language"
 license = "MIT"
 srcDir = "."
 
-requires "nim >= 2.0.2"
+requires "nim >= 2.2.12"
 requires "threading >= 0.2.1"
 requires "stack_strings"
 requires "results >= 0.5.1"
+requires "gh:elcritch/thetos >= 0.9.0"
+
+# Accept manifests that request the former opt-in.
+feature "thetos":
+  discard
 
 feature "sigNameAsString":
   discard

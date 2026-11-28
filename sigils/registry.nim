@@ -76,7 +76,7 @@ proc registerGlobalNameImpl[T](
       cloneSignals: clones,
     )
     let sub = ThreadSub(src: proxy.remote.toKind(Agent),
-                        name: sn"sigils:registryKeepAlive",
+                        name: sig"sigils:registryKeepAlive",
                         tgt: proxy.remote.toKind(Agent),
                         fn: keepAlive)
     proxy.remoteThread.send(ThreadSignal(kind: AddSub, add: sub))
@@ -111,7 +111,7 @@ proc removeGlobalName*[T](name: SigilName, proxy: AgentProxy[
       if name in registry:
         let loc = registry[name]
         let sub = ThreadSub(src: proxy.remote.toKind(Agent),
-                            name: sn"sigils:registryKeepAlive",
+                            name: sig"sigils:registryKeepAlive",
                             tgt: proxy.remote.toKind(Agent),
                             fn: keepAlive)
         registry.del(name)

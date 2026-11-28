@@ -97,8 +97,8 @@ suite "threaded agent slots":
     when defined(sigilsDebug):
       counterProxy.debugName = "counterProxyLocal"
 
-    registerGlobalName(sn"globalCounter", counterProxy)
-    registerGlobalAgent(sn"globalCounter2", threadA, counter2)
+    registerGlobalName(sig"globalCounter", counterProxy)
+    registerGlobalAgent(sig"globalCounter2", threadA, counter2)
 
     let bid = cast[int](counterProxy.remote.pt)
     emit actionA.valueChanged(bid)
@@ -108,11 +108,11 @@ suite "threaded agent slots":
     ct.poll()
     check target1.value == bid
 
-    let res = lookupGlobalName(sn"globalCounter").get()
+    let res = lookupGlobalName(sig"globalCounter").get()
     check res.agent == counterProxy.remote
     check res.thread == counterProxy.remoteThread
 
-    let res2 = lookupGlobalName(sn"globalCounter2")
+    let res2 = lookupGlobalName(sig"globalCounter2")
     check res2.isSome
     check res2.get().thread == threadA
 
@@ -134,14 +134,14 @@ suite "threaded agent slots":
     proc remoteRun(cc2: SomeTarget) {.slot.} =
       os.sleep(10)
       echo "REMOTE RUN!"
-      let localCounterProxy = lookupAgentProxy(sn"globalCounter", Counter)
+      let localCounterProxy = lookupAgentProxy(sig"globalCounter", Counter)
       if localCounterProxy != nil:
         connectThreaded(localCounterProxy, updated, cc2, remoteCompleted(SomeTarget))
         threadBRemoteReady.store 1
       else:
         threadBRemoteReady.store 2
 
-      let localCounterProxy2 = lookupAgentProxy(sn"globalCounter2", Counter)
+      let localCounterProxy2 = lookupAgentProxy(sig"globalCounter2", Counter)
       if localCounterProxy2 != nil:
         threadCRemoteReady.store 1
         connectThreaded(localCounterProxy2, updated, cc2, remoteCompleted2(SomeTarget))
@@ -176,7 +176,7 @@ suite "threaded agent slots":
     proc remoteSetup(self: SomeTrigger) {.slot.} =
       os.sleep(10)
       echo "REMOTE RUN!"
-      let localCounterProxy = lookupAgentProxy(sn"globalCounter", Counter)
+      let localCounterProxy = lookupAgentProxy(sig"globalCounter", Counter)
       if localCounterProxy != nil:
         echo "connecting: ", self.unsafeWeakRef(), " to: ",
             localCounterProxy.remote, " th: ", " (th: ", getThreadId(), ")"
@@ -185,7 +185,7 @@ suite "threaded agent slots":
       else:
         threadBRemoteReady.store 2
 
-      let localCounterProxy2 = lookupAgentProxy(sn"globalCounter2", Counter)
+      let localCounterProxy2 = lookupAgentProxy(sig"globalCounter2", Counter)
       if localCounterProxy2 != nil:
         connectThreaded(self, valueChanged, localCounterProxy2, setValue(Counter))
         threadCRemoteReady.store 1

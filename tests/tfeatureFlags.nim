@@ -7,13 +7,16 @@ suite "compile feature flags":
     when defined(sigilsSigilNameString) or defined(sigils.sigNameAsString) or
         defined(features.sigils.sigNameAsString):
       check sigilsSigilNameStringEnabled
-      check SigilName is string
-      let name = toSigilName("featureName")
-      check name == "featureName"
     else:
       check not sigilsSigilNameStringEnabled
+    const name = sig"featureName"
+    when sigilsSigilNameStringEnabled:
+      check SigilName is string
+      check not sigilsSigilNameStackEnabled
+    else:
+      check sigilsSigilNameStackEnabled
       check not (SigilName is string)
-      check $toSigilName("featureName") == "featureName"
+    check $name == "featureName"
 
   test "closure aliases":
     when defined(sigilsClosures) or defined(sigils.closures) or

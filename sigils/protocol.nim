@@ -4,12 +4,12 @@ import features
 
 export cloneutils, features
 
-when not sigilsSigilNameStringEnabled:
+when sigilsSigilNameStackEnabled:
+  import std/hashes
   import stack_strings
+  export stack_strings
 
 export tables
-when not sigilsSigilNameStringEnabled:
-  export stack_strings
 
 type FastErrorCodes* = enum
   # Error messages
@@ -24,6 +24,10 @@ when sigilsSigilNameStringEnabled:
   type SigilName* = string
 else:
   type SigilName* = StackString[48]
+
+  func hash*(name: SigilName): Hash {.inline.} =
+    ## Match StackString equality even when bytes after the end differ.
+    hash(name.toOpenArray())
 
 type
   SigilRpcEncodeError* = object of CatchableError ## Remote RPC encode failure.
@@ -108,10 +112,10 @@ proc markConsumedDelivery*(params: var SigilParams) {.inline.} =
   params.mode = SigilParamsMode.Consume
 
 func compareSigilName*(a, b: SigilName): int {.inline.} =
-  when sigilsSigilNameStringEnabled:
-    cmp(a, b)
-  else:
+  when sigilsSigilNameStackEnabled:
     cmp($a, $b)
+  else:
+    cmp(a, b)
 
 proc clone*(
     params: SigilParams, mode: CloneMode = defaultCloneMode
@@ -237,12 +241,14 @@ else:
   proc toSigilName*(name: string): SigilName =
     return toStackString(name, sigilsMaxSignalLength)
 
-template sigName*(name: static string): SigilName =
-  ## Static Signal Name template
+template sig*(name: static string): SigilName =
+  ## Create a sigil name from a string literal.
   toSigilName(name)
 
-template sn*(name: static string): SigilName =
-  ## Static Signal Name template
-  toSigilName(name)
+template sigName*(name: static string): SigilName {.deprecated: "use sig\"name\"".} =
+  sig(name)
+
+template sn*(name: static string): SigilName {.deprecated: "use sig\"name\"".} =
+  sig(name)
 
 const AnySigilName* = toSigilName(":any:")
