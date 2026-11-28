@@ -8,7 +8,7 @@ requires "nim >= 2.2.12"
 requires "threading >= 0.2.1"
 requires "stack_strings"
 requires "results >= 0.5.1"
-requires "gh:elcritch/thetos >= 0.7.0"
+requires "gh:elcritch/thetos >= 0.9.0"
 
 # Accept manifests that request the former opt-in.
 feature "thetos":
