@@ -99,9 +99,8 @@ jobs:
       - name: Check runtime isolation with ORC
         run: atlas-run tests isolateutils.nim -- --mm:orc --cc:${{ matrix.cc }}
 
-      - name: Check protocols with ImmStr sigil names
+      - name: Check protocols with string sigil names
         run: |
-          # Reject duplicate literal-cache definitions on every platform.
           atlas-run tests --jobs:2 --only-errors featureFlags.nim selectors.nim \
             selectorProtocolSignals.nim selectorScopedProtocols.nim \
-            -- -d:features.sigils.sigNameAsImmStr --cc:${{ matrix.cc }} --passC:-fno-common
+            -- -d:features.sigils.sigNameAsString --cc:${{ matrix.cc }}

@@ -32,7 +32,6 @@ requires Nim 2.2.12 or later. See the [Merenda protocol benchmarks](benchmarks/R
 
 - Closure slots: enable `-d:sigilsClosures`, `-d:sigils.closures`, or the `closures` package feature, then import `sigils/closures` to use `connectTo(...) do:`.
 - String sigil names: enable `-d:sigilsSigilNameString`, `-d:sigils.sigNameAsString`, or the `sigNameAsString` package feature to use plain `string` for `SigilName` instead of the default fixed-size `StackString[48]`. The performance profile differs.
-- Enable the `sigNameAsImmStr` package feature or `-d:features.sigils.sigNameAsImmStr` to use Thetos `ImmStr` for `SigilName`. It accepts plain strings at API boundaries and takes precedence when both name features are enabled. See the [immutable name benchmarks](benchmarks/README.md#immutable-sigil-names).
 - Chronos threads: enable the `chronos` package feature to make `SigilChronosThread` available through `sigils/threads`.
 - CBOR-RPC: enable the `cbor` or `ipc` package feature, import `sigils/rpcs/cborRpc`, and choose a selector or Chronos transport. The Chronos transport also requires the `chronos` feature.
 - JSON-RPC: import `sigils/rpcs/jsonrpc` and a desired `sigils/rpcs/json/jr*` transport module directly; `jrStdio` and `jrFraming` provide LSP-compatible stdin/stdout framing; no package feature or compile-time define is required.

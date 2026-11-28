@@ -128,8 +128,7 @@ proc compareStores(signals, fanout: int) =
   run[TrieAgent[BoxedSlots]]("trie", signals, fanout)
   run[TrieAgent[VectorSlots]]("trie-vector", signals, fanout)
 
-echo "names=", (when sigilsSigilNameImmStrEnabled: "immstr"
-  elif sigilsSigilNameStringEnabled: "string"
+echo "names=", (when sigilsSigilNameStringEnabled: "string"
   else: "stack")
 for signals in [1, 4, 16, 64]:
   for fanout in 1..4:

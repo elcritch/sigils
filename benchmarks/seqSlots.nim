@@ -98,8 +98,7 @@ proc run(signals, fanout: int) =
     " disconnect_ns=", disconnectNs.float / connections,
     " retained_bytes_per_source=", retainedBytes.float / sourceCount.float
 
-echo "names=", (when sigilsSigilNameImmStrEnabled: "immstr"
-  elif sigilsSigilNameStringEnabled: "string"
+echo "names=", (when sigilsSigilNameStringEnabled: "string"
   else: "stack")
 for (signals, fanout) in [(1, 1), (1, 2), (1, 3), (16, 3), (64, 4), (16, 64)]:
   run(signals, fanout)

@@ -17,9 +17,6 @@ feature "thetos":
 feature "sigNameAsString":
   discard
 
-feature "sigNameAsImmStr":
-  discard
-
 feature "closures":
   discard
 

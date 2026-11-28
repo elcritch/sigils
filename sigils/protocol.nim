@@ -4,12 +4,7 @@ import features
 
 export cloneutils, features
 
-when sigilsSigilNameImmStrEnabled:
-  import thetos/immstr
-  from thetos/jsonutils import fromJsonHook, toJsonHook
-  export immstr
-  export fromJsonHook, toJsonHook
-elif sigilsSigilNameStackEnabled:
+when sigilsSigilNameStackEnabled:
   import std/hashes
   import stack_strings
   export stack_strings
@@ -25,9 +20,7 @@ type FastErrorCodes* = enum
   INTERNAL_ERROR = -23
   SERVER_ERROR = -22
 
-when sigilsSigilNameImmStrEnabled:
-  type SigilName* = ImmStr
-elif sigilsSigilNameStringEnabled:
+when sigilsSigilNameStringEnabled:
   type SigilName* = string
 else:
   type SigilName* = StackString[48]
@@ -45,25 +38,11 @@ when defined(features.sigils.ipc):
     SigilIpcEncodeError* = SigilRpcEncodeError
     SigilIpcDecodeError* = SigilRpcDecodeError
 
-when sigilsSigilNameImmStrEnabled and
-    (sigilsCborSerdeEnabled or sigilsCborRpcEnabled):
-  import std/streams
-  import cborious
-
-  proc cborPack*(stream: Stream, name: SigilName) =
-    stream.cborPack($name)
-
-  proc cborUnpack*(stream: Stream, name: var SigilName) =
-    var text: string
-    stream.cborUnpack(text)
-    name = toImmStr(text)
-
 when defined(nimscript) or defined(useJsonSerde) or defined(sigilsJsonSerde):
   import std/[json, jsonutils]
   export json
 elif sigilsCborSerdeEnabled:
-  when not sigilsSigilNameImmStrEnabled:
-    import cborious
+  import cborious
   export cborious
 else:
   import svariant
@@ -245,24 +224,7 @@ proc initSigilRequest*[S, T](
 
 const sigilsMaxSignalLength* {.intdefine.} = 48
 
-when sigilsSigilNameImmStrEnabled:
-  # Nim 2.2.12 emits duplicate definitions of the cached global if this proc is inline.
-  proc toSigilName*(name: static string): SigilName =
-    let cached {.global.} = toImmStr(name)
-    cached
-
-  converter toSigilName*(name: string): SigilName =
-    ## Accept plain strings at APIs taking a sigil name.
-    toImmStr(name)
-
-  converter sigilNameToString*(name: SigilName): string =
-    ## Copy the name's bytes for APIs that require a Nim string.
-    $name
-
-  proc toSigilName*(name: SigilName): SigilName {.inline.} =
-    name
-
-elif sigilsSigilNameStringEnabled:
+when sigilsSigilNameStringEnabled:
   proc toSigilName*(name: static string): SigilName =
     return name
 
@@ -281,8 +243,7 @@ else:
 
 template sig*(name: static string): SigilName =
   ## Create a sigil name from a string literal.
-  # Raw and ordinary literals use separate Nim static specializations.
-  toSigilName(static($name))
+  toSigilName(name)
 
 template sigName*(name: static string): SigilName {.deprecated: "use sig\"name\"".} =
   sig(name)
@@ -290,7 +251,4 @@ template sigName*(name: static string): SigilName {.deprecated: "use sig\"name\"
 template sn*(name: static string): SigilName {.deprecated: "use sig\"name\"".} =
   sig(name)
 
-when sigilsSigilNameImmStrEnabled:
-  let AnySigilName* = toSigilName(":any:")
-else:
-  const AnySigilName* = toSigilName(":any:")
+const AnySigilName* = toSigilName(":any:")

@@ -3,9 +3,7 @@ const
     defined(sigilsSigilNameString) or
     defined(sigils.sigNameAsString) or
     defined(features.sigils.sigNameAsString)
-  sigilsSigilNameImmStrEnabled* = defined(features.sigils.sigNameAsImmStr)
-  sigilsSigilNameStackEnabled* =
-    not (sigilsSigilNameStringEnabled or sigilsSigilNameImmStrEnabled)
+  sigilsSigilNameStackEnabled* = not sigilsSigilNameStringEnabled
   sigilsClosuresEnabled* =
     defined(sigilsClosures) or
     defined(sigils.closures) or
