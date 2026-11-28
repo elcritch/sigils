@@ -1,4 +1,4 @@
-## Unreleased
+## 0.38.0
 
 - Release delayed selector arguments after their timer callback completes.
 - Share generated protocol method maps with Thetos by default. The minimum
