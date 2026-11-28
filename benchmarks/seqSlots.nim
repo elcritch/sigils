@@ -14,28 +14,35 @@ type
 proc receive(receiver: Receiver, value: int) {.slot.} =
   receiver.total += value
 
+template declareSignalOperation(changed, connectSlot, disconnectSlot,
+    emitSignal: untyped) =
+  proc changed(source: Source, value: int) {.signal.}
+
+  proc connectSlot(source: Source, receiver: Receiver) =
+    connect(source, changed, receiver, receive)
+
+  proc disconnectSlot(source: Source, receiver: Receiver) =
+    disconnect(source, changed, receiver, receive)
+
+  proc emitSignal(source: Source, value: int) =
+    emit source.changed(value)
+
 macro declareSignalOperations(count: static int): untyped =
-  var definitions: string
-  var entries: seq[string]
+  result = newStmtList()
+  let entries = newNimNode(nnkBracket)
   for index in 0..<count:
     let suffix = align($index, 2, '0')
-    definitions.add """
-proc valueChanged$1(source: Source, value: int) {.signal.}
+    let changed = ident("valueChanged" & suffix)
+    let connectSlot = ident("connectSlot" & suffix)
+    let disconnectSlot = ident("disconnectSlot" & suffix)
+    let emitSignal = ident("emitSignal" & suffix)
+    result.add newCall(bindSym"declareSignalOperation", changed, connectSlot,
+      disconnectSlot, emitSignal)
 
-proc connectSlot$1(source: Source, receiver: Receiver) =
-  connect(source, valueChanged$1, receiver, receive)
-
-proc disconnectSlot$1(source: Source, receiver: Receiver) =
-  disconnect(source, valueChanged$1, receiver, receive)
-
-proc emitSignal$1(source: Source, value: int) =
-  emit source.valueChanged$1(value)
-
-""" % suffix
-    entries.add ("  SignalOperations(connect: connectSlot$1, " &
-      "disconnect: disconnectSlot$1, emit: emitSignal$1)") % suffix
-  definitions.add "let operations = [\n" & entries.join(",\n") & "\n]\n"
-  result = parseStmt(definitions, currentSourcePath())
+    entries.add quote do:
+      SignalOperations(connect: `connectSlot`, disconnect: `disconnectSlot`,
+        emit: `emitSignal`)
+  result.add newLetStmt(ident"operations", entries)
 
 declareSignalOperations(64)
 
