@@ -37,8 +37,8 @@ thread and does not measure contention, and no allocation counter is provided.
 ## Persistent protocol and slot storage
 
 `withProto()` and `withProtocol(Variant)` share trie roots for generated,
-noncapturing methods. Each thread caches the initial map and the most recent
-composition for each implementation. Per-agent method stacks handle
+noncapturing methods. Each generated factory caches its initial map and most
+recent composition across threads. Per-agent method stacks handle
 swizzling and stateful methods.
 
 The hybrid-table comparisons below were run when Thetos was opt-in. Use

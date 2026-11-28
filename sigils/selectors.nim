@@ -1,4 +1,4 @@
-import std/[macros, options, strutils]
+import std/[atomics, locks, macros, options, strutils]
 import thetos/triemap
 
 import agents
@@ -149,11 +149,14 @@ type
     depth: int
 
 type CachedProtocol = object
-  initialized: bool
+  initialized: Atomic[bool]
   implementation: ProtocolImplementation
   methods: TrieMap[SigilName, DynamicMethod]
   previousMethods: TrieMap[SigilName, DynamicMethod]
   mergedMethods: TrieMap[SigilName, DynamicMethod]
+
+var protocolCacheLock: Lock
+initLock(protocolCacheLock)
 
 proc cacheProtocol(
     cache: var CachedProtocol, implementation: sink ProtocolImplementation
@@ -161,32 +164,26 @@ proc cacheProtocol(
   for binding in implementation.methods:
     if binding.implementation.isNil or rawEnv(binding.implementation) != nil:
       return false
-  cache.implementation = implementation
-  for binding in cache.implementation.methods:
-    cache.methods[binding.selector] = binding.implementation
-  cache.initialized = true
+  withLock protocolCacheLock:
+    if not cache.initialized.load(moRelaxed):
+      cache.implementation = implementation
+      for binding in cache.implementation.methods:
+        cache.methods[binding.selector] = binding.implementation
+      # The implementation and initial method map are immutable after publication.
+      cache.initialized.store(true, moRelease)
   result = true
 
-proc installCachedProtocol(obj: DynamicAgent, cache: var CachedProtocol)
-proc replaceMethods*(obj: DynamicAgent,
-    implementation: ProtocolImplementation):
-    seq[DynamicMethod] {.discardable.}
+template protocolCache(cache: typed) {.pragma.}
 
-proc protocolInstaller(receiver: NimNode, factoryName,
-    installerName: string): NimNode =
-  let factory = ident(factoryName)
-  let install = postfix(ident(installerName), "*")
+proc protocolFactory(receiver: NimNode, name: string,
+    implementation: NimNode): NimNode =
+  let factory = postfix(ident(name), "*")
+  let cache = genSym(nskVar, "cache")
   result = quote do:
-    proc `install`(obj: DynamicAgent, kind: typedesc[`receiver`]) =
-      var cache {.global, threadvar.}: CachedProtocol
-      if not cache.initialized:
-        let implementation = `factory`(kind)
-        if not cache.cacheProtocol(implementation):
-          discard obj.replaceMethods(implementation)
-          return
-        when compileOption("threads"):
-          onThreadDestruction(proc() {.gcsafe, raises: [].} = reset(cache))
-      obj.installCachedProtocol(cache)
+    var `cache` {.global.}: CachedProtocol
+    proc `factory`(_: typedesc[`receiver`]): ProtocolImplementation {.
+        protocolCache: `cache`.} =
+      `implementation`
 
 proc borrowInvocationArgs[A](packed: var A,
     invocation: Invocation): lent A {.inline.} =
@@ -1762,6 +1759,7 @@ proc implementVariant(
     setterStyle = setterStyle,
     observers = observerBindings,
   )
+  let factory = protocolFactory(variantTypeUse, "init", implementation)
 
   var variantDeclaration = quote do:
     type `variantType` = object
@@ -1777,10 +1775,7 @@ proc implementVariant(
     `slotChecks`
     `connectorDefs`
 
-    proc init*(_: typedesc[`variantTypeUse`]): ProtocolImplementation =
-      `implementation`
-
-  result.add protocolInstaller(variantTypeUse, "init", "installNamedProtocol")
+    `factory`
 
 proc protocolRequirementMethod(item: NimNode, firstArg: int): NimNode =
   result = item.copyNimTree()
@@ -2562,14 +2557,11 @@ proc implementProtocolForReceiver(
         setterStyle = setterStyle,
         observers = observerBindings)
     receiverType = receiver.copyNimTree()
+    factory = protocolFactory(receiverType, "proto", implementation)
 
   result = quote do:
     `protocolDecl`
-
-    proc proto*(_: typedesc[`receiverType`]): ProtocolImplementation =
-      `implementation`
-
-  result.add protocolInstaller(receiverType, "proto", "installDefaultProtocol")
+    `factory`
 
 macro protocol*(name: untyped, body: untyped): untyped =
   ## Declare a protocol or a named implementation variant for a protocol.
@@ -3508,15 +3500,17 @@ proc installCachedProtocol(obj: DynamicAgent, cache: var CachedProtocol) =
   if cache.methods.len != 0:
     if obj.protocolMethods.len == 0:
       obj.protocolMethods = cache.methods
-    elif cache.previousMethods == obj.protocolMethods:
-      obj.protocolMethods = cache.mergedMethods
     else:
-      # Remember one composition per implementation. Repeated constructor
-      # chains reuse entire roots and varied chains share unchanged branches.
-      cache.previousMethods = obj.protocolMethods
-      for binding in implementation.methods:
-        obj.protocolMethods[binding.selector] = binding.implementation
-      cache.mergedMethods = obj.protocolMethods
+      withLock protocolCacheLock:
+        if cache.previousMethods == obj.protocolMethods:
+          obj.protocolMethods = cache.mergedMethods
+        else:
+          # Remember one composition per implementation. Repeated constructor
+          # chains reuse entire roots and varied chains share unchanged branches.
+          cache.previousMethods = obj.protocolMethods
+          for binding in implementation.methods:
+            obj.protocolMethods[binding.selector] = binding.implementation
+          cache.mergedMethods = obj.protocolMethods
 
   discard obj.adopt(implementation.protocol)
   obj.installProtocolObservers(implementation.observers)
@@ -3544,24 +3538,38 @@ proc withProtocol*[T: DynamicAgent](
   discard obj.replaceMethods(implementation)
   result = obj
 
+template withCachedFactory(obj: typed, cache: var CachedProtocol,
+    factoryCall: untyped): untyped =
+  block:
+    block install:
+      if not cache.initialized.load(moAcquire):
+        let implementation = factoryCall
+        if not cache.cacheProtocol(implementation):
+          discard obj.replaceMethods(implementation)
+          break install
+      obj.installCachedProtocol(cache)
+    obj
+
+macro withProtocolFactory(obj, factoryCall: typed): untyped =
+  # Use the cache attached to the resolved factory, including inherited overloads.
+  if factoryCall.kind == nnkCall and factoryCall[0].kind == nnkSym:
+    let factory = factoryCall[0].getImpl()
+    if factory.kind == nnkProcDef:
+      let cachePragma = bindSym"protocolCache"
+      for pragma in factory.pragma:
+        if pragma.kind == nnkExprColonExpr and pragma[0] == cachePragma:
+          return newCall(bindSym"withCachedFactory", obj, pragma[1], factoryCall)
+  result = quote do:
+    `obj`.withProtocol(`factoryCall`)
+
 proc withProtocol*[T: DynamicAgent, P](obj: T, _: typedesc[
     P]): T {.discardable.} =
   ## Replace methods from a named protocol implementation and return the object.
-  mixin installNamedProtocol
-  when compiles(installNamedProtocol(obj, P)):
-    installNamedProtocol(obj, P)
-    result = obj
-  else:
-    result = obj.withProtocol(P.init())
+  result = withProtocolFactory(obj, P.init())
 
 proc withProto*[T: DynamicAgent](obj: T): T {.discardable.} =
   ## Replace methods with the default protocol implementation and return the object.
-  mixin installDefaultProtocol
-  when compiles(installDefaultProtocol(obj, T)):
-    installDefaultProtocol(obj, T)
-    result = obj
-  else:
-    result = obj.withProtocol(T.proto())
+  result = withProtocolFactory(obj, T.proto())
 
 proc objectConstructorArg(arg: NimNode): NimNode =
   if arg.kind == nnkExprEqExpr:

@@ -42,6 +42,8 @@ type
   PlainThing = ref object of DynamicAgent
     value: int
 
+  CustomFactoryView = ref object of View
+
   BaseWidget = ref object of DynamicAgent
     log: seq[string]
 
@@ -100,6 +102,9 @@ protocol TitledViewVariant of TitledProtocol:
 
   method setTitle(self: View, value: string) =
     self.name = value
+
+proc proto(_: typedesc[CustomFactoryView]): ProtocolImplementation =
+  TitledViewVariant.init()
 
 protocol FieldTitledViewVariant of TitledProtocol from FieldBackedView:
   ## Implements title access through a receiver field.
@@ -924,6 +929,15 @@ suite "dynamic selectors":
     check not thing.builtWithNew
     check thing.hasAdopted(ExportedThingProtocol)
     check thing.exportedValue == 42
+
+  test "protocol constructors use a subclass's custom factory":
+    let direct = CustomFactoryView(name: "direct").withProto()
+    let constructed = CustomFactoryView.newProto(name = "constructed")
+
+    check direct.trySend(title) == some("direct")
+    check constructed.trySend(title) == some("constructed")
+    check not direct.respondsTo(caption)
+    check not constructed.respondsTo(caption)
 
   test "stacked protocol implementations can call the next selector method":
     let widget = DerivedWidget()
