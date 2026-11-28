@@ -36,11 +36,14 @@ thread and does not measure contention, and no allocation counter is provided.
 
 ## Persistent protocol and slot storage
 
-The Atlas `thetos` feature defines `features.sigils.thetos`. With that feature,
 `withProto()` and `withProtocol(Variant)` share trie roots for generated,
 noncapturing methods. Each thread caches the initial map and the most recent
 composition for each implementation. Per-agent method stacks handle
 swizzling and stateful methods.
+
+The hybrid-table comparisons below were run when Thetos was opt-in. Use
+`git show 9cfc0c6:benchmarks/README.md` for the comparison commands on that
+revision. The commands below use the current default protocol storage.
 
 ### Merenda views
 
@@ -54,25 +57,22 @@ per-view allocations. `-u:useMalloc` selects Nim's allocator for heap accounting
 ```sh
 probe=$(mktemp -d tests/sigilsThetosBench.XXXXXX)
 cp ../sigils/benchmarks/thetosMerenda.nim "$probe/thetosMerenda.nim"
-nim c -d:release -u:useMalloc -u:features.sigils.thetos \
-  --out:/tmp/sigils-merenda-baseline "$probe/thetosMerenda.nim"
-nim c -d:release -u:useMalloc -d:features.sigils.thetos \
+nim c -d:release -u:useMalloc \
   --path:../sigils/deps/thetos/src \
   --out:/tmp/sigils-merenda-thetos "$probe/thetosMerenda.nim"
 for sample in 1 2 3 4 5; do
-  /tmp/sigils-merenda-baseline
   /tmp/sigils-merenda-thetos
 done
 rm "$probe/thetosMerenda.nim"
 rmdir "$probe"
 ```
 
-Five-trial medians on an Apple M3 Pro with Nim 2.2.12, Merenda `8a96a973`,
+Historical five-trial medians on an Apple M3 Pro with Nim 2.2.12, Merenda `8a96a973`,
 and Thetos `30f8c04`, using 20,000 views per trial.
 
 | Protocol storage | Creation time (µs/view) | Retained heap (bytes/view) | Selector dispatch (ns/call) |
 | --- | ---: | ---: | ---: |
-| Existing hybrid table | 20.83 | 21,520 | 231.7 |
+| Hybrid table | 20.83 | 21,520 | 231.7 |
 | Initial trie roots shared | 10.50 | 10,496 | 141.5 |
 | Initial and composed roots shared | 3.80 | 5,696 | 90.6 |
 
@@ -118,41 +118,28 @@ Run from the same Atlas-configured Merenda checkout.
 ```sh
 bench_out=$(mktemp -d /tmp/sigils-merenda-workloads.XXXXXX)
 
-build_pair() {
-  workload=$1
-  shift
-  nim c -d:release -u:features.sigils.thetos "$@" \
-    --nimcache:"$bench_out/cache-baseline-$workload" \
-    --out:"$bench_out/baseline-$workload" "tests/benchmark_$workload.nim" &&
-  nim c -d:release -d:features.sigils.thetos --path:../sigils/deps/thetos/src "$@" \
-    --nimcache:"$bench_out/cache-thetos-$workload" \
-    --out:"$bench_out/thetos-$workload" "tests/benchmark_$workload.nim"
-}
-
-run_workloads() {
-  "$bench_out/$1-layout_pipeline" "$bench_out/$1-layout-$2.csv" &&
-  "$bench_out/$1-collection_rows" > "$bench_out/$1-rows-$2.log"
-}
-
-build_pair layout_pipeline &&
-build_pair collection_rows -d:merendaProfile &&
+nim c -d:release --path:../sigils/deps/thetos/src \
+  --nimcache:"$bench_out/cache-layout" \
+  --out:"$bench_out/layout" tests/benchmark_layout_pipeline.nim &&
+nim c -d:release --path:../sigils/deps/thetos/src -d:merendaProfile \
+  --nimcache:"$bench_out/cache-rows" \
+  --out:"$bench_out/rows" tests/benchmark_collection_rows.nim &&
 for sample in 1 2 3 4 5; do
-  if [ "$((sample % 2))" -eq 1 ]; then
-    run_workloads baseline "$sample" && run_workloads thetos "$sample" || break
-  else
-    run_workloads thetos "$sample" && run_workloads baseline "$sample" || break
-  fi
+  "$bench_out/layout" "$bench_out/layout-$sample.csv" &&
+  "$bench_out/rows" > "$bench_out/rows-$sample.log" || break
 done
 ```
 
 ### Ordinary slots
 
-`thetosSlots.nim` compares the existing sorted subscription sequence with a
-signal-keyed `TrieMap` and immutable boxed subscription buckets. Each trial
-builds at most 20,000 owners and exercises 1, 4, 16, and 64 signal names with
-one to four receivers per signal. Lookup includes walking the matched buckets
-and calling a minimal slot. One quarter of lookups miss. The benchmark uses
-prepared subscriptions and measures registration and lookup primitives.
+`thetosSlots.nim` compares the existing sorted subscription sequence with
+signal-keyed `TrieMap` variants whose buckets use a boxed sequence or
+`TrieVec`. Each trial builds at most 20,000 owners and exercises 1, 4, 16,
+and 64 signal names with one to four receivers per signal. The larger
+buckets use 64 receivers per signal and one or 16 signals. Those cases
+use 62,500 lookups to cap the number of slot calls. Lookup includes walking
+the matched buckets and calling a minimal slot. One quarter of lookups miss.
+The benchmark uses prepared subscriptions and measures registration and lookup primitives.
 The full connect and emit paths also do listener bookkeeping and payload handling.
 
 Run from the Atlas-configured Sigils checkout with Thetos in `deps/thetos`.
@@ -162,14 +149,17 @@ nim c -d:release --mm:arc --threads:on --path:. \
   --out:/tmp/sigils-slots-stack-names benchmarks/thetosSlots.nim
 nim c -d:release --mm:arc --threads:on --path:. -d:features.sigils.sigNameAsString \
   --out:/tmp/sigils-slots-string-names benchmarks/thetosSlots.nim
+nim c -d:release --mm:arc --threads:on --path:. -d:features.sigils.sigNameAsImmStr \
+  --out:/tmp/sigils-slots-immstr-names benchmarks/thetosSlots.nim
 for sample in 1 2 3 4 5; do
   /tmp/sigils-slots-stack-names
   /tmp/sigils-slots-string-names
+  /tmp/sigils-slots-immstr-names
 done
 ```
 
-Five-trial medians on the same machine. Each cell gives the sorted sequence
-followed by the trie.
+Five-trial medians from the boxed-trie comparison. Each cell gives the
+sorted sequence followed by the boxed trie.
 
 | Signals per owner | Receivers per signal | Stack-name lookup (ns) | String-name lookup (ns) | Stack-name retained heap (bytes/owner) | String-name retained heap (bytes/owner) |
 | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -196,3 +186,113 @@ receivers. The small cases favor the sorted sequence. Large groups benefit
 from storing the signal name once per bucket. The sorted sequence's binary
 search also converts stack names to strings, which helps explain the larger
 lookup gaps with stack names. The boxed trie lives in this benchmark.
+
+#### TrieVec buckets
+
+The vector variant runs the same signal-keyed lookup with `TrieVec`
+buckets. The two trie variants append to each bucket in connection order.
+The trie lookup and wildcard handling stay the same across both bucket types.
+
+Five-trial medians with string names. Each cell lists the sorted sequence,
+boxed trie, and vector trie in that order.
+
+| Signals per owner | Receivers per signal | Setup (ns/connection) | Lookup (ns) | Retained heap (bytes/owner) |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 1 | 43 / 94 / 254 | 16 / 47 / 76 | 176 / 272 / 1,792 |
+| 1 | 2 | 45 / 104 / 130 | 22 / 55 / 80 | 272 / 320 / 1,792 |
+| 1 | 3 | 50 / 113 / 138 | 28 / 70 / 83 | 432 / 416 / 1,792 |
+| 16 | 4 | 137 / 136 / 180 | 491 / 151 / 184 | 10,304 / 6,464 / 26,592 |
+| 64 | 4 | 202 / 143 / 193 | 441 / 119 / 153 | 28,736 / 25,824 / 106,288 |
+| 1 | 64 | 162 / 350 / 251 | 806 / 579 / 270 | 10,304 / 8,400 / 3,648 |
+| 16 | 64 | 1,378 / 352 / 252 | 1,007 / 563 / 259 | 102,464 / 132,672 / 56,288 |
+
+`TrieVec` allocates room for 32 entries with the first subscription in a
+bucket. This drove up retained heap in the one-to-four receiver cases.
+With 64 receivers per signal, the vector trie had the fastest lookup and
+lowest retained heap in both measured cases across stack, string, and ImmStr
+names. The allocation tradeoff follows receivers per signal, so 64 signals
+with four receivers each used more vector heap than 16 signals with 64
+receivers each.
+
+### Immutable sigil names
+
+The separate `sigNameAsImmStr` package feature selects Thetos `ImmStr` for
+`SigilName`. Literal names created by Sigils reuse an immutable allocation.
+The experiment provides implicit conversions between a runtime `string` and
+`SigilName`. Each conversion copies the bytes. In Merenda, keep its existing
+`sigNameAsString` feature enabled to satisfy the application's build check.
+`sigNameAsImmStr` takes precedence for the name representation.
+
+To reproduce, add `-d:features.sigils.sigNameAsImmStr` to the Merenda view
+and layout builds above. The third slot benchmark build uses the same flag.
+
+Five-trial medians on the same machine and revisions. Both Merenda builds
+use Thetos protocol storage and the same Merenda source tree.
+
+| Merenda metric | String names | ImmStr names |
+| --- | ---: | ---: |
+| View creation (µs/view) | 3.88 | 5.01 |
+| Retained heap (bytes/view) | 5,696 | 5,600 |
+| Selector dispatch (ns/call) | 92.0 | 89.6 |
+| Edit title with 100-task preview (ms/op) | 25.629 | 26.828 |
+| Reverse 100 tasks with preview (ms/op) | 27.723 | 29.117 |
+| Resize 100-task preview (ms/op) | 37.730 | 38.517 |
+
+Layout output hashes matched across all measured cases. ImmStr saved 96
+retained bytes per view and increased view creation time by about 29%.
+The ordinary slot benchmark showed stronger gains from compact, shared
+names, especially in the sorted sequence.
+
+| Slot storage | Signals per owner | Receivers per signal | String lookup (ns) | ImmStr lookup (ns) | String heap (bytes/owner) | ImmStr heap (bytes/owner) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Sorted sequence | 1 | 2 | 20.3 | 12.0 | 272 | 192 |
+| Sorted sequence | 1 | 3 | 25.1 | 16.4 | 432 | 304 |
+| Sorted sequence | 16 | 3 | 371.1 | 184.8 | 9,792 | 3,664 |
+| Sorted sequence | 64 | 4 | 394.8 | 224.2 | 28,736 | 16,448 |
+| Boxed trie | 64 | 4 | 103.2 | 92.1 | 25,824 | 23,328 |
+
+#### Sorted sequence through the signal API
+
+`seqSlots.nim` uses plain `Agent` objects with their sorted subscription
+sequence in all three name modes. It measures the real `connect`, `emit`,
+and `disconnect` paths using declared signals and a local integer slot.
+Every emit hits a connected signal. The benchmark verifies the delivered
+values and checks that all listener links are removed. The heap delta
+starts after allocating the agents and includes subscription entries,
+listener sets, and endpoints created during connection.
+
+```sh
+nim c -d:release --mm:arc --threads:on --path:. \
+  --out:/tmp/sigils-seq-slots-stack benchmarks/seqSlots.nim
+nim c -d:release --mm:arc --threads:on --path:. -d:features.sigils.sigNameAsString \
+  --out:/tmp/sigils-seq-slots-string benchmarks/seqSlots.nim
+nim c -d:release --mm:arc --threads:on --path:. -d:features.sigils.sigNameAsImmStr \
+  --out:/tmp/sigils-seq-slots-immstr benchmarks/seqSlots.nim
+for sample in 1 2 3 4 5; do
+  if [ "$((sample % 2))" -eq 1 ]; then
+    /tmp/sigils-seq-slots-stack
+    /tmp/sigils-seq-slots-string
+    /tmp/sigils-seq-slots-immstr
+  else
+    /tmp/sigils-seq-slots-immstr
+    /tmp/sigils-seq-slots-string
+    /tmp/sigils-seq-slots-stack
+  fi
+done
+```
+
+Five-trial medians on the same machine. Each cell lists StackString, plain
+string, and ImmStr in that order.
+
+| Signals per source | Receivers per signal | Connect (ns/connection) | Emit (ns/emission) | Disconnect (ns/connection) | Retained heap (bytes/source) |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 1 | 118 / 102 / 101 | 26.0 / 19.0 / 20.3 | 83.0 / 57.2 / 59.1 | 161 / 113 / 97 |
+| 1 | 2 | 171 / 115 / 114 | 85.9 / 71.1 / 75.9 | 95.9 / 66.3 / 68.0 | 306 / 210 / 194 |
+| 1 | 3 | 210 / 124 / 119 | 125 / 99 / 102 | 110 / 74 / 78 | 563 / 371 / 339 |
+| 16 | 3 | 406 / 134 / 125 | 940 / 226 / 200 | 797 / 273 / 339 | 9,493 / 9,493 / 4,901 |
+| 16 | 64 | 1,071 / 287 / 189 | 3,821 / 2,137 / 1,988 | 5,708 / 3,752 / 5,100 | 154,112 / 104,960 / 96,768 |
+| 64 | 4 | 561 / 143 / 140 | 1,356 / 358 / 298 | 2,019 / 992 / 1,355 | 45,200 / 32,912 / 28,816 |
+
+ImmStr reduced retained heap in every case compared with string names.
+It sped up emits on the larger sources and added a small cost in the
+single-signal cases. Disconnecting the larger sources took 24–37% longer.

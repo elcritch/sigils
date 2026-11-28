@@ -66,7 +66,8 @@ suite "scoped protocol selectors":
     let (output, exitCode) = execCmdEx(
       "nim check --hints:off --warnings:off" &
         " -u:sigilsSigilNameString -u:sigils.sigNameAsString" &
-        " -u:features.sigils.sigNameAsString --path:" & quoteShell(repoRoot) & " " &
+        " -u:features.sigils.sigNameAsString -u:features.sigils.sigNameAsImmStr" &
+        " --path:" & quoteShell(repoRoot) & " " &
         quoteShell(sourcePath),
       options = {poStdErrToStdOut, poUsePath},
       workingDir = repoRoot,

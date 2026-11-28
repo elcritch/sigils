@@ -1,7 +1,11 @@
 ## Unreleased
 
 - Release delayed selector arguments after their timer callback completes.
-- Share generated protocol method maps with the optional `thetos` feature.
+- Share generated protocol method maps with Thetos by default. The minimum
+  supported Nim version is now 2.2.12.
+- Add the optional `sigNameAsImmStr` package feature for immutable sigil names.
+- Add `sig"name"` as the preferred sigil name literal and deprecate
+  `sigName"name"` and `sn"name"`.
 
 ## 0.37.3
 

@@ -913,7 +913,7 @@ suite "dynamic selectors":
     second.withProto()
     check second.caption == "second"
     check second.title == "second"
-    when not sigilsSigilNameStringEnabled:
+    when sigilsSigilNameStackEnabled:
       var shortened = toSigilName("captionExtra")
       shortened.setLen("caption".len, writeZerosOnTruncate = false)
       check not second.localMethod(shortened).isNil

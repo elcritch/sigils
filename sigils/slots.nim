@@ -393,7 +393,10 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
     result.add quote do:
       proc `rpcMethod`(`objId`: `firstType`): SigilLocalCall[`firstType`, `signalTyp`] =
         var `signalArgsIdent` = `construct`
-        const name: SigilName = toSigilName(`signalName`)
+        when sigilsSigilNameImmStrEnabled:
+          let name = toSigilName(`signalName`)
+        else:
+          const name: SigilName = toSigilName(`signalName`)
         result = SigilLocalCall[`firstType`, `signalTyp`](
           source: `objId`,
           procName: name,
@@ -409,7 +412,10 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
           `objId`: WeakRef[`firstType`]
       ): SigilLocalCall[WeakRef[`firstType`], `signalTyp`] =
         var `signalArgsIdent` = `construct`
-        const name: SigilName = toSigilName(`signalName`)
+        when sigilsSigilNameImmStrEnabled:
+          let name = toSigilName(`signalName`)
+        else:
+          const name: SigilName = toSigilName(`signalName`)
         result = SigilLocalCall[WeakRef[`firstType`], `signalTyp`](
           source: `objId`,
           procName: name,

@@ -1,12 +1,15 @@
-## Compare the regular subscription lookup with a signal-keyed Thetos prototype.
+## Compare regular subscription lookup with boxed and vector Thetos buckets.
 import std/[monotimes, times]
 import sigils/agents
-import thetos/[box, triemap]
+import thetos/[box, triemap, trievec]
 
 type
-  TrieAgent = ref object of Agent
-    slots: TrieMap[SigilName, Box[seq[Subscription]]]
-    wildcard: Box[seq[Subscription]]
+  BoxedSlots = Box[seq[Subscription]]
+  VectorSlots = TrieVec[Subscription]
+
+  TrieAgent[Bucket] = ref object of Agent
+    slots: TrieMap[SigilName, Bucket]
+    wildcard: Bucket
 
   Receiver = ref object of Agent
     calls: int
@@ -17,38 +20,55 @@ proc receive(agent: Agent, params: SigilParams) =
 proc insert(owner: Agent, signal: SigilName, subscription: Subscription) =
   doAssert owner.subcriptions.addSubscriptionSorted(signal, subscription)
 
-proc insert(owner: TrieAgent, signal: SigilName, subscription: Subscription) =
+proc add(bucket: var BoxedSlots, subscription: Subscription) =
+  var entries = bucket.getOrDefault()
+  entries.add subscription
+  bucket = box.box(move entries)
+
+proc hasSlots(bucket: BoxedSlots): bool {.inline.} =
+  not bucket.isEmpty
+
+proc hasSlots(bucket: VectorSlots): bool {.inline.} =
+  bucket.len != 0
+
+iterator items(bucket: BoxedSlots): lent Subscription =
+  if bucket.hasSlots:
+    for subscription in bucket[]:
+      yield subscription
+
+proc insert[Bucket](
+    owner: TrieAgent[Bucket], signal: SigilName, subscription: Subscription
+) =
   if signal == AnySigilName:
-    var bucket = owner.wildcard.getOrDefault()
-    bucket.add subscription
-    owner.wildcard = box.box(move bucket)
+    owner.wildcard.add subscription
   else:
-    var bucket = owner.slots.getOrDefault(signal).getOrDefault()
+    var bucket = owner.slots.getOrDefault(signal)
     bucket.add subscription
-    owner.slots[signal] = box.box(move bucket)
+    owner.slots[signal] = move(bucket)
 
 iterator matchingSlots(owner: Agent, signal: SigilName): lent Subscription =
   for subscription in owner.getSubscriptions(signal):
     yield subscription
 
-iterator matchingSlots(owner: TrieAgent, signal: SigilName): lent Subscription =
+iterator matchingSlots[Bucket](
+    owner: TrieAgent[Bucket], signal: SigilName
+): lent Subscription =
   let exact =
     if signal != AnySigilName: owner.slots.getOrDefault(signal)
-    else: default(Box[seq[Subscription]])
+    else: default(Bucket)
   let wildcard = owner.wildcard
-  let wildcardFirst = not wildcard.isEmpty and compareSigilName(AnySigilName,
+  let wildcardFirst = wildcard.hasSlots and compareSigilName(AnySigilName,
       signal) < 0
   if wildcardFirst:
-    for subscription in wildcard[]:
+    for subscription in wildcard:
       yield subscription
-  if not exact.isEmpty:
-    for subscription in exact[]:
-      yield subscription
-  if not wildcardFirst and not wildcard.isEmpty:
-    for subscription in wildcard[]:
+  for subscription in exact:
+    yield subscription
+  if not wildcardFirst:
+    for subscription in wildcard:
       yield subscription
 
-proc run[Owner: Agent](signals, fanout: int) =
+proc run[Owner: Agent](backend: static string, signals, fanout: int) =
   let ownerCount = min(20_000, 250_000 div (signals * fanout))
   var receivers = newSeq[Receiver](fanout)
   var subscriptions = newSeq[Subscription](fanout)
@@ -80,7 +100,7 @@ proc run[Owner: Agent](signals, fanout: int) =
   doAssert retainedBytes > 0, "compile with Nim's allocator"
 
   let lookupStart = getMonoTime()
-  const lookups = 1_000_000
+  let lookups = 4 * (250_000 div max(1, fanout div 4))
   var ownerIndex, keyIndex: int
   for i in 0..<lookups:
     let signal = if (i and 3) == 0: missing else: keys[keyIndex]
@@ -96,15 +116,23 @@ proc run[Owner: Agent](signals, fanout: int) =
   let lookupNs = (getMonoTime() - lookupStart).inNanoseconds
   for receiver in receivers:
     doAssert receiver.calls == lookups * 3 div 4
-  echo (when Owner is TrieAgent: "trie" else: "sorted-seq"),
+  echo backend,
     " signals=", signals, " fanout=", fanout,
     " setup_ns_per_connection=", setupNs.float / (ownerCount * signals *
         fanout).float,
     " retained_bytes_per_owner=", retainedBytes.float / ownerCount.float,
     " lookup_ns=", lookupNs.float / lookups.float
 
-echo "string_names=", sigilsSigilNameStringEnabled
+proc compareStores(signals, fanout: int) =
+  run[Agent]("sorted-seq", signals, fanout)
+  run[TrieAgent[BoxedSlots]]("trie", signals, fanout)
+  run[TrieAgent[VectorSlots]]("trie-vector", signals, fanout)
+
+echo "names=", (when sigilsSigilNameImmStrEnabled: "immstr"
+  elif sigilsSigilNameStringEnabled: "string"
+  else: "stack")
 for signals in [1, 4, 16, 64]:
   for fanout in 1..4:
-    run[Agent](signals, fanout)
-    run[TrieAgent](signals, fanout)
+    compareStores(signals, fanout)
+for signals in [1, 16]:
+  compareStores(signals, 64)

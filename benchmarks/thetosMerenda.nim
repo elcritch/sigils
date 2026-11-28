@@ -32,7 +32,9 @@ proc run() =
         inc checksum
   let lookupNs = (getMonoTime() - lookupStart).inNanoseconds
   doAssert checksum == lookupPasses.int64 * viewCount * (viewCount - 1) div 2
-  echo "thetos=", sigilsThetosEnabled, " views=", viewCount,
+  echo "thetos=", sigilsThetosEnabled, " immstr_names=",
+      sigilsSigilNameImmStrEnabled,
+    " views=", viewCount,
     " creation_ns_per_view=", creationNs.float / viewCount.float,
     " retained_bytes_per_view=", retainedBytes.float / viewCount.float,
     " dispatch_ns_per_call=", lookupNs.float / (2 * lookupPasses *

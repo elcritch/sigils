@@ -28,10 +28,10 @@ suite "registry cloneSignals":
     var counter = CloneCounter.new()
     let counterProxy = counter.moveToThread(worker)
     connectThreaded(counterProxy, ping, counterProxy, onPing)
-    registerGlobalName(sn"cloneCounterSignalsTest", counterProxy,
+    registerGlobalName(sig"cloneCounterSignalsTest", counterProxy,
         cloneSignals = true)
 
-    let localProxy = lookupAgentProxy(sn"cloneCounterSignalsTest", CloneCounter)
+    let localProxy = lookupAgentProxy(sig"cloneCounterSignalsTest", CloneCounter)
     doAssert localProxy != nil
     check localProxy.hasSubscription(signalName(ping))
 

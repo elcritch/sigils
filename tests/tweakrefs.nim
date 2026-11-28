@@ -57,7 +57,7 @@ suite "agent weak refs":
       check y.subcriptions.len() == 0
       check y.listening.len() == 1
 
-      check x.getSubscriptions(sigName"valueChanged").toSeq().len() == 1
+      check x.getSubscriptions(sig"valueChanged").toSeq().len() == 1
       check x.listening.len() == 0
 
       echo "block done"
@@ -95,7 +95,7 @@ suite "agent weak refs":
       check y.subcriptions.len() == 0
       check y.listening.len() == 1
 
-      check x.getSubscriptions(sigName"valueChanged").toSeq().len() == 1
+      check x.getSubscriptions(sig"valueChanged").toSeq().len() == 1
       check x.listening.len() == 0
 
       echo "block done"

@@ -265,7 +265,7 @@ when isMainModule:
       connect(o, trackedPayloadChanged, b, setTrackedPayload)
       connect(o, trackedPayloadChanged, b, setTrackedPayload(Counter))
 
-      check o.getSubscriptions(sigName"trackedPayloadChanged").toSeq().len() == 1
+      check o.getSubscriptions(sig"trackedPayloadChanged").toSeq().len() == 1
 
       var payload = MoveTrackedPayload(value: 38, state: LiveMoveTrackedPayload)
       emit o.trackedPayloadChanged(move payload)
@@ -394,12 +394,12 @@ when isMainModule:
 
       check a.subcriptions.len() == 4
       check a.subcriptions[0].signal == AnySigilName
-      check a.subcriptions[1].signal == sigName"doTick"
-      check a.subcriptions[2].signal == sigName"valueChanged"
-      check a.subcriptions[3].signal == sigName"valueChanged"
-      check a.getSubscriptions(sigName"valueChanged").toSeq().len() == 3
-      check a.getSubscriptions(sigName"doTick").toSeq().len() == 2
-      check a.getSubscriptions(sigName"missing").toSeq().len() == 1
+      check a.subcriptions[1].signal == sig"doTick"
+      check a.subcriptions[2].signal == sig"valueChanged"
+      check a.subcriptions[3].signal == sig"valueChanged"
+      check a.getSubscriptions(sig"valueChanged").toSeq().len() == 3
+      check a.getSubscriptions(sig"doTick").toSeq().len() == 2
+      check a.getSubscriptions(sig"missing").toSeq().len() == 1
 
     test "test disconnect":
       connect(a, doTick, c, someTick)
@@ -408,7 +408,7 @@ when isMainModule:
 
       check c.listening.len() == 1
       check a.subcriptions.len() == 3
-      check a.getSubscriptions(sigName"doTick").toSeq().len() == 2
+      check a.getSubscriptions(sig"doTick").toSeq().len() == 2
 
       printConnections(a)
       printConnections(c)
@@ -420,7 +420,7 @@ when isMainModule:
       printConnections(c)
       check a.value == 0
       check a.subcriptions.len() == 2
-      check a.getSubscriptions(sigName"doTick").toSeq().len() == 1
+      check a.getSubscriptions(sig"doTick").toSeq().len() == 1
       check b.value == 137
       check c.listening.len() == 1
 
@@ -441,7 +441,7 @@ when isMainModule:
       emit a.valueChanged(137)
       check a.value == 0
       check a.subcriptions.len() == 1
-      check a.getSubscriptions(sigName"doTick").toSeq().len() == 0 # maybe?
+      check a.getSubscriptions(sig"doTick").toSeq().len() == 0 # maybe?
       check b.value == 137
       check c.listening.len() == 0
 

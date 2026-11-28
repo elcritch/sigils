@@ -151,7 +151,7 @@ proc websocketHandler(websocket: WebSocket, event: WebSocketEvent,
   case event:
   of OpenEvent:
     echo "OpenEvent: ", message
-    let heartbeats = lookupAgentProxy(sn"HeartBeats", HeartBeats)
+    let heartbeats = lookupAgentProxy(sig"HeartBeats", HeartBeats)
     if heartbeats != nil:
       emit heartbeats.doAdd(websocket)
 
@@ -174,7 +174,7 @@ proc websocketHandler(websocket: WebSocket, event: WebSocketEvent,
     echo "CloseEvent: ", message
     withChannel(websocket):
       emit channel.leaving(websocket)
-    let hb = lookupAgentProxy(sn"HeartBeats", HeartBeats)
+    let hb = lookupAgentProxy(sig"HeartBeats", HeartBeats)
     emit hb.doRemove(websocket)
 
 proc upgradeHandler(request: Request) {.gcsafe.} =
@@ -201,7 +201,7 @@ proc main() =
   connectThreaded(hbsProxy, doAdd, hbsProxy, addClient)
   connectThreaded(hbsProxy, doRemove, hbsProxy, removeClient)
   connectThreaded(heartbeatThr, started, hbsProxy, start)
-  registerGlobalName(sn"HeartBeats", hbsProxy, cloneSignals = true)
+  registerGlobalName(sig"HeartBeats", hbsProxy, cloneSignals = true)
   heartbeatThr.start()
 
   var router: Router

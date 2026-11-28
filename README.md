@@ -23,11 +23,16 @@ You need to wrap procs with a `slot` to set up the proc to support receiving sig
 
 Connecting signals and slots is accomplished using `connect`. Note that `connect` is idempotent, meaning that you can call it on the same objects the multiple times without ill effect.
 
+Use `sig"valueChanged"` for a literal `SigilName` and `toSigilName(name)` for a runtime string.
+
+Generated protocols share persistent Thetos method maps across agents. Sigils
+requires Nim 2.2.12 or later. See the [Merenda protocol benchmarks](benchmarks/README.md#persistent-protocol-and-slot-storage).
+
 ## Compile-time Options
 
 - Closure slots: enable `-d:sigilsClosures`, `-d:sigils.closures`, or the `closures` package feature, then import `sigils/closures` to use `connectTo(...) do:`.
 - String sigil names: enable `-d:sigilsSigilNameString`, `-d:sigils.sigNameAsString`, or the `sigNameAsString` package feature to use plain `string` for `SigilName` instead of the default fixed-size `StackString[48]`. The performance profile differs.
-- The experimental `thetos` package feature shares generated protocol method maps across agents. [Benchmarks](benchmarks/README.md#persistent-protocol-and-slot-storage) cover repeated Merenda views and ordinary slots.
+- Enable the `sigNameAsImmStr` package feature or `-d:features.sigils.sigNameAsImmStr` to use Thetos `ImmStr` for `SigilName`. It accepts plain strings at API boundaries and takes precedence when both name features are enabled. See the [immutable name benchmarks](benchmarks/README.md#immutable-sigil-names).
 - Chronos threads: enable the `chronos` package feature to make `SigilChronosThread` available through `sigils/threads`.
 - CBOR-RPC: enable the `cbor` or `ipc` package feature, import `sigils/rpcs/cborRpc`, and choose a selector or Chronos transport. The Chronos transport also requires the `chronos` feature.
 - JSON-RPC: import `sigils/rpcs/jsonrpc` and a desired `sigils/rpcs/json/jr*` transport module directly; `jrStdio` and `jrFraming` provide LSP-compatible stdin/stdout framing; no package feature or compile-time define is required.

@@ -4,15 +4,20 @@ description = "A slot and signals implementation for the Nim programming languag
 license = "MIT"
 srcDir = "."
 
-requires "nim >= 2.0.2"
+requires "nim >= 2.2.12"
 requires "threading >= 0.2.1"
 requires "stack_strings"
 requires "results >= 0.5.1"
+requires "gh:elcritch/thetos >= 0.7.0"
 
+# Accept manifests that request the former opt-in.
 feature "thetos":
-	requires "gh:elcritch/thetos >= 0.7.0"
+  discard
 
 feature "sigNameAsString":
+  discard
+
+feature "sigNameAsImmStr":
   discard
 
 feature "closures":

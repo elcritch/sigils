@@ -230,7 +230,7 @@ suite "threaded agent slots":
         subLocalProxy = Subscription(
           tgt: bp.unsafeWeakRef().asAgent(), packedSlot: setValueGlobal(Counter)
         )
-        subs = a.getSubscriptions(sigName"valueChanged").toSeq()
+        subs = a.getSubscriptions(sig"valueChanged").toSeq()
       doAssert subs.len() >= 1
       #check subs[0] == subLocalProxy
       check bp.listening.contains(a.unsafeWeakRef().asAgent())

@@ -1,13 +1,11 @@
 import std/[macros, options, strutils]
+import thetos/triemap
 
 import agents
 import private/selectorcalls
 import selectorMethodStores
 import signals
 import slots
-
-when sigilsThetosEnabled:
-  import thetos/triemap
 
 export agents
 export options
@@ -126,10 +124,9 @@ type
 
   DynamicAgent* = ref object of Agent
     methods: SelectorMethodStore[DynamicMethod]
-    when sigilsThetosEnabled:
-      # Generated methods have no closure environment. Per-agent stacks own
-      # capturing methods so the runtime can still trace their environments.
-      protocolMethods: TrieMap[SigilName, DynamicMethod]
+    # Generated methods have no closure environment. Per-agent stacks own
+    # capturing methods so the runtime can still trace their environments.
+    protocolMethods: TrieMap[SigilName, DynamicMethod]
     dispatchFrames: seq[DispatchFrame]
     nextResponder: WeakRef[DynamicAgent]
     adoptedProtocols: seq[SigilName]
@@ -151,46 +148,45 @@ type
     selector: SigilName
     depth: int
 
-when sigilsThetosEnabled:
-  type CachedProtocol = object
-    initialized: bool
-    implementation: ProtocolImplementation
-    methods: TrieMap[SigilName, DynamicMethod]
-    previousMethods: TrieMap[SigilName, DynamicMethod]
-    mergedMethods: TrieMap[SigilName, DynamicMethod]
+type CachedProtocol = object
+  initialized: bool
+  implementation: ProtocolImplementation
+  methods: TrieMap[SigilName, DynamicMethod]
+  previousMethods: TrieMap[SigilName, DynamicMethod]
+  mergedMethods: TrieMap[SigilName, DynamicMethod]
 
-  proc cacheProtocol(
-      cache: var CachedProtocol, implementation: sink ProtocolImplementation
-  ): bool {.raises: [].} =
-    for binding in implementation.methods:
-      if binding.implementation.isNil or rawEnv(binding.implementation) != nil:
-        return false
-    cache.implementation = implementation
-    for binding in cache.implementation.methods:
-      cache.methods[binding.selector] = binding.implementation
-    cache.initialized = true
-    result = true
+proc cacheProtocol(
+    cache: var CachedProtocol, implementation: sink ProtocolImplementation
+): bool {.raises: [].} =
+  for binding in implementation.methods:
+    if binding.implementation.isNil or rawEnv(binding.implementation) != nil:
+      return false
+  cache.implementation = implementation
+  for binding in cache.implementation.methods:
+    cache.methods[binding.selector] = binding.implementation
+  cache.initialized = true
+  result = true
 
-  proc installCachedProtocol(obj: DynamicAgent, cache: var CachedProtocol)
-  proc replaceMethods*(obj: DynamicAgent,
-      implementation: ProtocolImplementation):
-      seq[DynamicMethod] {.discardable.}
+proc installCachedProtocol(obj: DynamicAgent, cache: var CachedProtocol)
+proc replaceMethods*(obj: DynamicAgent,
+    implementation: ProtocolImplementation):
+    seq[DynamicMethod] {.discardable.}
 
-  proc protocolInstaller(receiver: NimNode, factoryName,
-      installerName: string): NimNode =
-    let factory = ident(factoryName)
-    let install = postfix(ident(installerName), "*")
-    result = quote do:
-      proc `install`(obj: DynamicAgent, kind: typedesc[`receiver`]) =
-        var cache {.global, threadvar.}: CachedProtocol
-        if not cache.initialized:
-          let implementation = `factory`(kind)
-          if not cache.cacheProtocol(implementation):
-            discard obj.replaceMethods(implementation)
-            return
-          when compileOption("threads"):
-            onThreadDestruction(proc() {.gcsafe, raises: [].} = reset(cache))
-        obj.installCachedProtocol(cache)
+proc protocolInstaller(receiver: NimNode, factoryName,
+    installerName: string): NimNode =
+  let factory = ident(factoryName)
+  let install = postfix(ident(installerName), "*")
+  result = quote do:
+    proc `install`(obj: DynamicAgent, kind: typedesc[`receiver`]) =
+      var cache {.global, threadvar.}: CachedProtocol
+      if not cache.initialized:
+        let implementation = `factory`(kind)
+        if not cache.cacheProtocol(implementation):
+          discard obj.replaceMethods(implementation)
+          return
+        when compileOption("threads"):
+          onThreadDestruction(proc() {.gcsafe, raises: [].} = reset(cache))
+      obj.installCachedProtocol(cache)
 
 proc borrowInvocationArgs[A](packed: var A,
     invocation: Invocation): lent A {.inline.} =
@@ -226,7 +222,7 @@ proc requirement*[A, R](
     required: required,
   )
 
-when sigilsSigilNameStringEnabled:
+when SigilName is string:
   proc protocolSignal*(name: string, signature = ""): ProtocolSignal =
     result = ProtocolSignal(
       name: toSigilName(name),
@@ -598,7 +594,7 @@ proc selectorIdent(name: string, exported: bool): NimNode =
     result = ident(name)
 
 proc checkSigilNameLength(name: string, node: NimNode, kind: string) =
-  when not sigilsSigilNameStringEnabled:
+  when sigilsSigilNameStackEnabled:
     if name.len > sigilsMaxSignalLength:
       error(
         kind & " `" & name & "` is " & $name.len &
@@ -1784,8 +1780,7 @@ proc implementVariant(
     proc init*(_: typedesc[`variantTypeUse`]): ProtocolImplementation =
       `implementation`
 
-  when sigilsThetosEnabled:
-    result.add protocolInstaller(variantTypeUse, "init", "installNamedProtocol")
+  result.add protocolInstaller(variantTypeUse, "init", "installNamedProtocol")
 
 proc protocolRequirementMethod(item: NimNode, firstArg: int): NimNode =
   result = item.copyNimTree()
@@ -2574,8 +2569,7 @@ proc implementProtocolForReceiver(
     proc proto*(_: typedesc[`receiverType`]): ProtocolImplementation =
       `implementation`
 
-  when sigilsThetosEnabled:
-    result.add protocolInstaller(receiverType, "proto", "installDefaultProtocol")
+  result.add protocolInstaller(receiverType, "proto", "installDefaultProtocol")
 
 macro protocol*(name: untyped, body: untyped): untyped =
   ## Declare a protocol or a named implementation variant for a protocol.
@@ -2704,11 +2698,10 @@ proc localMethod*(obj: DynamicAgent, selector: SigilName): DynamicMethod =
   ## Return the top local method for a selector, if one is installed.
   if obj.isNil:
     return nil
-  when sigilsThetosEnabled:
-    if obj.protocolMethods.len != 0:
-      let fn = obj.protocolMethods.getOrDefault(selector)
-      if not fn.isNil:
-        return fn
+  if obj.protocolMethods.len != 0:
+    let fn = obj.protocolMethods.getOrDefault(selector)
+    if not fn.isNil:
+      return fn
   obj.methods.methodTop(selector)
 
 proc localMethod*[A, R](
@@ -2731,10 +2724,9 @@ proc methodStack*(obj: DynamicAgent, selector: SigilName): seq[DynamicMethod] =
   ## Return the local method stack for a selector.
   if obj.isNil:
     return @[]
-  when sigilsThetosEnabled:
-    let fn = obj.protocolMethods.getOrDefault(selector)
-    if not fn.isNil:
-      return @[fn]
+  let fn = obj.protocolMethods.getOrDefault(selector)
+  if not fn.isNil:
+    return @[fn]
   obj.methods.methodStackCopy(selector)
 
 proc methodStack*[A, R](
@@ -3348,18 +3340,16 @@ when sigilsClosuresEnabled:
 
 proc putLocalMethod(obj: DynamicAgent, selector: SigilName,
     fn: DynamicMethod) {.inline.} =
-  when sigilsThetosEnabled:
-    if obj.protocolMethods.len != 0:
-      obj.protocolMethods.del(selector)
+  if obj.protocolMethods.len != 0:
+    obj.protocolMethods.del(selector)
   obj.methods.putMethodStack(selector, @[fn])
 
 proc pushLocalMethod(obj: DynamicAgent, selector: SigilName,
     fn: DynamicMethod): int =
-  when sigilsThetosEnabled:
-    let previous = obj.protocolMethods.getOrDefault(selector)
-    if not previous.isNil:
-      obj.methods.putMethodStack(selector, @[previous])
-      obj.protocolMethods.del(selector)
+  let previous = obj.protocolMethods.getOrDefault(selector)
+  if not previous.isNil:
+    obj.methods.putMethodStack(selector, @[previous])
+    obj.protocolMethods.del(selector)
   obj.methods.pushMethodStack(selector, fn)
 
 proc addMethod*[A, R](
@@ -3399,11 +3389,8 @@ proc replaceMethod*[A, R](
     fn: DynamicMethod,
 ): DynamicMethod {.discardable.} =
   ## Replace the local implementation and return the previous top method, if any.
-  when sigilsThetosEnabled:
-    result = obj.localMethod(selector)
-    obj.putLocalMethod(selector.name, fn)
-  else:
-    result = obj.methods.replaceMethodStack(selector.name, @[fn])
+  result = obj.localMethod(selector)
+  obj.putLocalMethod(selector.name, fn)
 
 when sigilsClosuresEnabled:
   template replaceMethod*[A, R](
@@ -3427,11 +3414,10 @@ proc removeMethod*(obj: DynamicAgent, selector: SigilName): DynamicMethod {.
     discardable.} =
   ## Remove local methods for a selector and return the previous top method.
   if not obj.isNil:
-    when sigilsThetosEnabled:
-      result = obj.protocolMethods.getOrDefault(selector)
-      if not result.isNil:
-        obj.protocolMethods.del(selector)
-        return
+    result = obj.protocolMethods.getOrDefault(selector)
+    if not result.isNil:
+      obj.protocolMethods.del(selector)
+      return
     result = obj.methods.removeMethodStack(selector)
 
 proc removeMethod*[A, R](
@@ -3505,36 +3491,35 @@ proc replaceMethods*(
   result = obj.replaceMethods(implementation.protocol, implementation.methods)
   obj.installProtocolObservers(implementation.observers)
 
-when sigilsThetosEnabled:
-  proc installCachedProtocol(obj: DynamicAgent, cache: var CachedProtocol) =
-    let implementation {.cursor.} = cache.implementation
-    if obj.isNil:
-      discard obj.replaceMethods(implementation)
-      return
-    if not obj.canConformTo(implementation.protocol, implementation.methods):
-      raiseProtocolConformanceError(implementation.protocol,
-        obj.missingRequirements(implementation.protocol,
-            implementation.methods))
+proc installCachedProtocol(obj: DynamicAgent, cache: var CachedProtocol) =
+  let implementation {.cursor.} = cache.implementation
+  if obj.isNil:
+    discard obj.replaceMethods(implementation)
+    return
+  if not obj.canConformTo(implementation.protocol, implementation.methods):
+    raiseProtocolConformanceError(implementation.protocol,
+      obj.missingRequirements(implementation.protocol,
+          implementation.methods))
 
-    if obj.methods.hasMethodStacks:
+  if obj.methods.hasMethodStacks:
+    for binding in implementation.methods:
+      discard obj.methods.removeMethodStack(binding.selector)
+
+  if cache.methods.len != 0:
+    if obj.protocolMethods.len == 0:
+      obj.protocolMethods = cache.methods
+    elif cache.previousMethods == obj.protocolMethods:
+      obj.protocolMethods = cache.mergedMethods
+    else:
+      # Remember one composition per implementation. Repeated constructor
+      # chains reuse entire roots and varied chains share unchanged branches.
+      cache.previousMethods = obj.protocolMethods
       for binding in implementation.methods:
-        discard obj.methods.removeMethodStack(binding.selector)
+        obj.protocolMethods[binding.selector] = binding.implementation
+      cache.mergedMethods = obj.protocolMethods
 
-    if cache.methods.len != 0:
-      if obj.protocolMethods.len == 0:
-        obj.protocolMethods = cache.methods
-      elif cache.previousMethods == obj.protocolMethods:
-        obj.protocolMethods = cache.mergedMethods
-      else:
-        # Remember one composition per implementation. Repeated constructor
-        # chains reuse entire roots and varied chains share unchanged branches.
-        cache.previousMethods = obj.protocolMethods
-        for binding in implementation.methods:
-          obj.protocolMethods[binding.selector] = binding.implementation
-        cache.mergedMethods = obj.protocolMethods
-
-    discard obj.adopt(implementation.protocol)
-    obj.installProtocolObservers(implementation.observers)
+  discard obj.adopt(implementation.protocol)
+  obj.installProtocolObservers(implementation.observers)
 
 proc removeMethods*(
     obj: DynamicAgent, protocol: SigilProtocol
@@ -3562,9 +3547,8 @@ proc withProtocol*[T: DynamicAgent](
 proc withProtocol*[T: DynamicAgent, P](obj: T, _: typedesc[
     P]): T {.discardable.} =
   ## Replace methods from a named protocol implementation and return the object.
-  when sigilsThetosEnabled:
-    mixin installNamedProtocol
-  when sigilsThetosEnabled and compiles(installNamedProtocol(obj, P)):
+  mixin installNamedProtocol
+  when compiles(installNamedProtocol(obj, P)):
     installNamedProtocol(obj, P)
     result = obj
   else:
@@ -3572,9 +3556,8 @@ proc withProtocol*[T: DynamicAgent, P](obj: T, _: typedesc[
 
 proc withProto*[T: DynamicAgent](obj: T): T {.discardable.} =
   ## Replace methods with the default protocol implementation and return the object.
-  when sigilsThetosEnabled:
-    mixin installDefaultProtocol
-  when sigilsThetosEnabled and compiles(installDefaultProtocol(obj, T)):
+  mixin installDefaultProtocol
+  when compiles(installDefaultProtocol(obj, T)):
     installDefaultProtocol(obj, T)
     result = obj
   else:
